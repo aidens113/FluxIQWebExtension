@@ -38,6 +38,11 @@ export type AttemptOutcomeRead = {
   attempt: AttemptOutcomeRecord;
   result?: AttemptResultRecord;
   saved?: { state: "ready" | "partly_works" | "notes_only" | "needs_you"; flowId?: string; stepsDigest?: string };
+  /**
+   * How its replay of the saved Flow was checked (`AutomationStudioTaskOutcomeReplay`, task speed S9, t897): it stood on
+   * its own record with no judge call, or Core's closed word for why it was judged. Absent where it closed no replay.
+   */
+  replay?: { stood: true } | { stood: false; deviation: string };
 };
 
 /** The one Core call these reads make; `ExistingFluxIQControlClient` satisfies it. */

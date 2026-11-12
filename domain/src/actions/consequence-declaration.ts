@@ -40,6 +40,7 @@ export const WEB_AUTOMATION_ACTION_CONSEQUENCE_DECLARATION: Readonly<Record<WebA
   "web.dom.upload": "not_required",
   "web.dom.dialog": "required",
   "web.dom.scroll": "not_required",
+  "web.dom.hover": "not_required",
   "web.dom.wait_for_selector": "not_required",
   "web.dom.wait_for_text": "not_required",
   "web.dom.extract": "not_required",

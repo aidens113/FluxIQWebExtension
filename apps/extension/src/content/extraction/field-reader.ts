@@ -63,6 +63,7 @@ import { trackingFreeLinkIdentity } from "./link-identity";
 import { assertTextDisclosed } from "./text-disclosure";
 import { definitionAssociations } from "./definition-field";
 import { normalizeExtractField } from "./field-spec";
+import { fieldElement } from "./field-element";
 
 type ElementFieldReader = Exclude<ExtractFieldReader, { kind: "column" }>;
 
@@ -81,7 +82,9 @@ function readElement(item: Element, name: string, reader: ElementFieldReader, co
     if (normalized?.kind !== "text" || normalized.definition === undefined) return undefined;
     const association = definitionAssociations(item, normalized.selector).find((pair) => pair.term === normalized.definition!.term);
     element = normalized.definition.part === "term" ? association?.name : association?.value;
-  } else element = reader.selector ? item.querySelector(reader.selector) : item;
+  // `:scope` names the item itself, which `querySelector` never returns (t903); `:scope` with a
+  // condition, the item while it holds; a group, the item's group (`./field-element/`, t885).
+  } else element = fieldElement(item, reader.selector, reader.group);
   if (!element) return undefined;
   if (isWithinSensitiveControl(element)) throw sensitiveFieldRefusal(name);
   switch (reader.kind) {

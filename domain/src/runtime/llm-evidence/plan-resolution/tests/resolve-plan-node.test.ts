@@ -383,7 +383,6 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     [NAVIGATE_NODE, { url: { handle: "t1" } }, "url", TARGET_HINT],
     [SNAPSHOT_NODE, { selector: { handle: "t1" } }, "selector", TARGET_HINT],
     [EXTRACT_LIST_NODE, { selector: { handle: "t1" } }, "selector", EXTRACTION_HINT],
-    [EXTRACT_LIST_NODE, { extractList: { handle: "t1" } }, "extractList", EXTRACTION_HINT],
     [EXTRACT_LIST_NODE, { extractList: { item: { handle: "t1" }, fields: { name: "td" } } }, "extractList.item", EXTRACTION_HINT],
     [CLICK_NODE, { selector: { handle: "extraction.1" } }, "selector", EXTRACTION_HINT],
     ["builtin.policy.action", { outputId: "web.dom.click", parameters: { selector: { handle: "t2" } }, recordOutput: { handle: "t1" } }, "recordOutput", TARGET_HINT]
@@ -391,6 +390,13 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   for (const [node, parameters, position, hint] of misplaced) {
     assert.deepEqual(await resolve(runtime, node, parameters), refusedAt("web.handle.misplaced", position, hint), `${node} ${JSON.stringify(parameters)}`);
   }
+  // An element's own handle as the list's is one element read as a one-row table (t903): bound as the node's target
+  // would be, refused as that is where it names nothing.
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: "t2", fields: { label: "text" } } }), {
+    status: "resolved",
+    parameters: { extractList: { item: "#submit", fields: { label: { selector: ":scope", kind: "text" } }, maxItems: 1 } }
+  });
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: "t9" } }), refusedAt("web.handle.unknown", "extractList.handle"));
   // Core's Run Output node runs its payload as the named web output, so a handle there is resolved as that output's node resolves it.
   assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.click", parameters: { selector: { handle: "t2" } } }), {
     status: "resolved", controlIntent: { intent: "neutral" },

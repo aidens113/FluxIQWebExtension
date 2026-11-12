@@ -1270,6 +1270,55 @@ the work. The 4 s poll stays as the fallback.
 
 Chat can also hold an explicit project scope, independently of the browser recording session. Its list/get/send/answer requests use that project through the existing authenticated conversation relay. Switching projects clears the displayed thread and ignores late reads for the old target; an empty authorized thread list is ready for the first message. Send stays disabled while that scope loads or fails. Question/back navigation preserves the selected project, and activity from another project is excluded. An unsent draft from another project remains behind the existing adoption controls.
 
+**The conversation list** (t900, interface I3). The chat shows every thread the
+paired person can see in a drawer ("Chats" over the thread), with New chat,
+search, and per-thread rename and delete; the component is Core's
+(`ui-components/src/chat/view/thread-list/`, README "Conversation list"), and
+the extension supplies its four optional ports
+(`panel/chat/transport/ports/conversation.ts`). Each is one relayed Core call,
+fields written by name and Core's payload returned as sent:
+
+| Panel message | Core endpoint and body |
+| --- | --- |
+| `panelConversationRead`, `kind: "list-all"` | `list-conversations` `{ projectId ?? null, limit }` (every permitted project when absent) |
+| `panelConversationSend`, `kind: "open"`, `fresh: true` (New chat) | `open-conversation` with `fresh: true`; never shown as "sending" |
+| `panelConversationRename` (`fluxiq.panel.conversationRename`) | `rename-conversation` `{ projectId?, conversationId, title }` |
+| `panelConversationDelete` (`fluxiq.panel.conversationDelete`) | `delete-conversation` `{ projectId?, conversationId }` |
+
+Rename and delete are accepted only from the side panel or popup, like every
+panel message. Core refuses a delete while a run still uses the thread
+(`conversation_run_active`) and answers a thread the caller may not change as
+not found; the panel shows Core's own sentence
+(`transport/reply/thread-change-of.ts`). The thread on screen is remembered per
+window in `chrome.storage.session` (`fluxiq.chatThread.<windowId>`). The
+extension gives the list no `unavailableReason`: its relays name the session's
+project for a message that names none, so the latest chat takes a first message
+before the status names a project. The
+message shapes are `PanelConversation*Request` in `shared/panel-conversation.ts`,
+re-exported from `shared/protocol.ts`.
+
+**Humanness per Flow and per task** (t900; user, 2026-11-11: "humanness slider
+should be for each individual fluxnode/task/flow"). The level is 0-100; a run
+uses its run option, else the task's level, else the Flow's, else the person's
+starting value (Settings, "Starting humanness for new Flows and tasks",
+`FluxIQSettings.humanness`), else 0. Core's `createHumannessControl` draws every
+slider: on a task's answer card in the chat (through the transport's
+`taskSettings` port) and in the open automation's strip, each behind a
+"Humanness · N" disclosure that reads "Uses your starting value (N)" when the
+Flow or task has no level of its own. The relays, panel-only like every panel
+message, one Core call each:
+
+| Panel message | Core endpoint and body |
+| --- | --- |
+| `flowHumannessRead` (`fluxiq.panel.flowHumannessRead`) `{ projectId?, flowId }` | `get-flow-metadata-detail`; answers `metadata.humanness` |
+| `flowHumannessSet` `{ projectId?, flowId, humanness: number \| null }` | `update-flow-settings` `{ projectId, flowId, flow: { flowId, metadata: { humanness } } }`; `null` clears |
+| `taskHumannessSet` `{ projectId?, taskId, humanness: number \| null }` | `update-task-settings` `{ projectId, taskId, humanness }` |
+
+A task's level is read from its `list-project-tasks` row. Core refuses an
+out-of-range level by name; the panel shows Core's sentence and carries its code
+as `coreCode` (`background/connection/core-api.ts`, `panel/state/request.ts`).
+The shapes are in `shared/panel-humanness.ts`, re-exported from `shared/protocol.ts`.
+
 The mounted extension view accepts the bounded project-only navigation event fluxiq:chat-project with exactly { projectId }. It opens the ordinary chat tab and exposes data-fluxiq-chat-project plus data-fluxiq-chat-scope-state (loading, ready, error) for setup validation. Ready follows a successful authorized thread read; the event itself grants no permissions and executes no model capability. The Lab uses this same view and the ordinary composer.
 
 **The chat builds and runs automations** (t198). The background relay
@@ -1471,19 +1520,26 @@ judge by the words it read in that trial (its `value` output), or by nothing,
 never by the saved words (Core `framework/automation-service/service/candidate-trial/step-control.ts`).
 Renaming `readsWords` here silently names read steps by their old words again.
 
-**A press the page answers only with a notice fails (t743).** The click's
+**A press the page answers only with a notice is pressed once more (t743, t898).** The click's
 settled look (`content/action-runtime/ignored-press/settled-look.ts`) leaves
 the page's own notice regions out of its comparison
 (`ignored-press/live-region.ts`: `role="alert"`, `role="status"` or
-`aria-live="assertive"`, never a bare `aria-live="polite"`) and is now asked on
-any control, not only command controls. When nothing else answered the press
-and a notice region holds words it did not hold before, `content/actions/click.ts`
-fails it with `web.action.page_reported_failure` (retryable, `effect:
-"unacted"`, `certainNoEffect`), and the in-page recovery loop leaves it to Core
-(`recovery/fault.ts`), which presses again under its first attempt plus three
-retries. A step whose every attempt ends this way is never a landed act. The
-words are compared, never read or sent; the rule and its limits are in
-[the failure taxonomy](failure-taxonomy.md).
+`aria-live="assertive"`, never a bare `aria-live="polite"`) and is asked on
+any control, not only command controls. When nothing else answered the first press
+and a notice region holds words it did not hold before, that press is certain to have done
+nothing (no request, navigation, focus move or change outside the control's section, its
+markup and field values unchanged once settled), so `content/actions/click.ts` presses it once
+more inside the same command, the same in-command second press a silently ignored press gets
+(t896), with the same aim and watch windows. A second press that lands succeeds. A second
+press answered again only by a notice, or leaving the page exactly as before, fails with
+`web.action.page_reported_failure` (retryable, `effect: "unacted"`, `certainNoEffect`),
+and the in-page recovery loop leaves it to Core (`recovery/fault.ts`), which presses again
+under its first attempt plus three retries. A second press showing no sign at all ends as not
+observed, as t896's path does. A step whose every attempt ends this way is never a landed act.
+Before t898 the notice-only first press failed at once, so a page that swallows the first
+press after each load (company-website's "Show more people") cost every replay one failed
+step and a Core retry. The words are compared, never read or sent; the rule and its limits
+are in [the failure taxonomy](failure-taxonomy.md).
 
 **A looped pass's spot follows its row (t743).** Core hands the host's state
 diff the attempt's inputs, and the domain places a looped step's control in
@@ -2008,7 +2064,12 @@ ranking, text cut or attribute allowlist (`content/rendered-elements.ts`,
 `dom-snapshot.ts`, `describe-element.ts`). Nameless, transparent, small and
 `aria-hidden` elements remain represented when rendered. Repetition,
 front-layer and lead-statement facts annotate elements rather than reorder
-them. Hidden/non-rendered subtrees and the extension's own UI are excluded.
+them. Each described element carries `nodeToken`, a serial its content script
+gives the element the first time a snapshot describes it and keeps for the
+document's life (a `WeakMap`, `dom-snapshot.ts`): a counter, never page
+content, meaningless across documents and frames. The domain reads it so a
+layer's handle names only the layer it was given to within one document
+(`domain/.../stable-handles.ts`, t897). Hidden/non-rendered subtrees and the extension's own UI are excluded.
 The separate stored-state projection still selects at most 1,500 useful
 elements for recording state paths; it does not bound the model's packet.
 Its omission flags are in [page evidence](page-evidence.md#the-four-caps).

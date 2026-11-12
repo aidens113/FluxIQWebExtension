@@ -89,6 +89,10 @@ export class PageElement {
     return false;
   }
 
+  hasAttribute(name: string): boolean {
+    return this.getAttribute(name) !== null;
+  }
+
   matches(selector: string): boolean {
     return parseList(selector).some((complex) => matchesComplex(this, complex, complex.length - 1));
   }

@@ -24,6 +24,17 @@
 // read's render window, measured and settled on 2026-09-25, is neither doubled
 // nor re-litigated here.
 //
+// **A target the page has not shown yet is waited on while the page works (t903).** A
+// target refused as not shown, with nothing scrolled, was waited on the ladder meant for a
+// dismissed dialog to finish leaving -- about 1.35 s -- whatever the page was doing. A replay
+// that reached company-website's "Show more people" 0.7 s after the page loaded gave up while
+// the page was still loading its people behind skeleton cards, and the button showed 4.4 s in
+// (E1, `replay-first-press-failure.md`). Now that wait follows the page's own evidence that it
+// is working (`../reveal/page-work.ts`): the loop looks again while the page shows work, tries
+// as soon as the target shows or the work stops, and stops when a look finds the page showing
+// no work and the target still absent -- waiting then cannot bring it. Its only other bound is
+// the command's own budget (`budget.ts`, `pageWorkBudgetRemainingMs`), never a fixed ladder.
+//
 // The pause is injected rather than taken from a global so a test can drive four
 // attempts in no time at all and still assert what was waited.
 
@@ -31,10 +42,10 @@ import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/clien
 import type { BrowserActionCommand, BrowserActionResult } from "../../types";
 import { clearableLayerOverPage, clearInterference } from "../interference";
 import { CLEAN_RECOVERY_ACCOUNT, type RecoveryAccount, type RecoveryOutcome } from "./account";
-import { recoveryBackoffMs, recoveryBudgetRemainingMs } from "./budget";
+import { pageWorkBudgetRemainingMs, recoveryBackoffMs, recoveryBudgetRemainingMs } from "./budget";
 import { faultMayHideBehindLayer, faultNeedsInterference, recoverableFault, type RecoveryFault } from "./fault";
 import { refusedControl, refusedControlChanging, type RefusedControlState } from "./refused-control";
-import { revealUnshownTarget } from "../reveal";
+import { PAGE_WORK_LOOK_MS, revealUnshownTarget, watchUnshownTargetWork, type PageWork } from "../reveal";
 
 /** One execution's answer, and the account of what reaching it cost. */
 export type RecoveredExecution = {
@@ -73,6 +84,13 @@ export type RecoveryLayerProbe = () => boolean;
 export type RecoveryReveal = (result: BrowserActionResult) => boolean;
 
 /**
+ * The watch over the page's work toward a target the attempt refused as not shown
+ * (`../reveal/page-work.ts`); `undefined` for any other refusal. Injected and defaulted for the
+ * reason `RecoveryIntervention` is.
+ */
+export type RecoveryPageWork = (result: BrowserActionResult) => PageWork | undefined;
+
+/**
  * Runs `attempt` until it answers with something retrying cannot improve, or
  * until the budget is spent, and reports the last answer with the account.
  *
@@ -89,7 +107,8 @@ export async function runWithRecovery(
   now: () => number = Date.now,
   intervene: RecoveryIntervention = (fault) => clearInterference(undefined, faultMayHideBehindLayer(fault) ? "walls" : "any"),
   layerOverPage: RecoveryLayerProbe = () => clearableLayerOverPage(),
-  reveal: RecoveryReveal = revealUnshownTarget
+  reveal: RecoveryReveal = revealUnshownTarget,
+  pageWork: RecoveryPageWork = watchUnshownTargetWork
 ): Promise<RecoveredExecution> {
   const absorbed: RecoveryFault[] = [];
   let waitedMs = 0;
@@ -129,7 +148,10 @@ export async function runWithRecovery(
       disabledBefore = NOT_SEEN;
       looked = false;
     }
-    const allowedMs = recoveryBackoffMs(fault, absorbed.length, action, startedAt, now());
+    // A target not shown yet is waited on while the page works toward it (header); every other
+    // fault keeps its ladder.
+    const work = fault === "obstructed_target" ? pageWork(result) : undefined;
+    const allowedMs = work !== undefined ? positive(pageWorkBudgetRemainingMs(action, startedAt, now())) : recoveryBackoffMs(fault, absorbed.length, action, startedAt, now());
     if (allowedMs === undefined) {
       // The fault was one this loop absorbs and there was no budget left to
       // absorb it with. It is recorded as absorbed all the same: what a reader
@@ -162,14 +184,29 @@ export async function runWithRecovery(
     // unchanged; one that moved nothing woke nothing, and the wait is as before.
     const scrolled = fault === "obstructed_target" && reveal(result);
     if (scrolled) revealed += 1;
-    const backoffMs = scrolled ? recoveryBackoffMs(fault, absorbed.length - 1, action, startedAt, now(), true) ?? allowedMs : allowedMs;
+    const revealMs = scrolled ? recoveryBackoffMs(fault, absorbed.length - 1, action, startedAt, now(), true) : undefined;
+    if (work !== undefined && revealMs === undefined) {
+      const waited = await waitOnPageWork(work, pause, () => pageWorkBudgetRemainingMs(action, startedAt, now()));
+      waitedMs += waited.ms;
+      // The page showed no work and the target is still absent: waiting cannot bring it. The
+      // defence looked and was not enough, and its account follows the reason, as it always has
+      // for a hidden target (`record.ts`).
+      if (!waited.worked && !waited.shown) {
+        return { result, account: account(attempts, absorbed, waitedMs, dismissed, revealed, result) };
+      }
+      if (pageWorkBudgetRemainingMs(action, startedAt, now()) <= 0) {
+        return { result, account: account(attempts, absorbed, waitedMs, dismissed, revealed, result) };
+      }
+      continue;
+    }
+    const backoffMs = revealMs ?? allowedMs;
     waitedMs += backoffMs;
     await pause(backoffMs);
     // A clipped pause can land exactly on the command deadline, and a real
     // scheduler can resume later than requested. In either case the last page
     // result is the honest answer; dispatching another verb would start work
     // after the timeout Core gave this command.
-    if (recoveryBudgetRemainingMs(action, startedAt, now()) <= 0) {
+    if ((work !== undefined ? pageWorkBudgetRemainingMs(action, startedAt, now()) : recoveryBudgetRemainingMs(action, startedAt, now())) <= 0) {
       return { result, account: account(attempts, absorbed, waitedMs, dismissed, revealed, result) };
     }
   }
@@ -193,6 +230,31 @@ function account(attempts: number, absorbed: readonly RecoveryFault[], waitedMs:
  */
 function outcomeOf(attempts: number, absorbed: number): RecoveryOutcome {
   return absorbed < attempts ? "recovered" : "exhausted";
+}
+
+/**
+ * Waits while the page shows it is working toward the target (header): a look every
+ * `PAGE_WORK_LOOK_MS`, ending when the target shows, when a look finds no work, or when the
+ * command's budget is spent. Says how long it waited, whether the page showed work at any look,
+ * and whether the target showed.
+ */
+async function waitOnPageWork(work: PageWork, pause: RecoveryPause, remainingMs: () => number): Promise<{ ms: number; worked: boolean; shown: boolean }> {
+  let ms = 0;
+  let worked = false;
+  for (;;) {
+    const step = Math.min(PAGE_WORK_LOOK_MS, remainingMs());
+    if (step <= 0) return { ms, worked, shown: false };
+    await pause(step);
+    ms += step;
+    if (work.shown()) return { ms, worked, shown: true };
+    if (!work.working()) return { ms, worked, shown: false };
+    worked = true;
+  }
+}
+
+/** A positive time, or `undefined` for none left. */
+function positive(ms: number): number | undefined {
+  return ms > 0 ? ms : undefined;
 }
 
 function sleep(ms: number): Promise<void> {

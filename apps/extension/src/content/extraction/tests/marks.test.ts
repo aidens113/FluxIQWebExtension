@@ -315,3 +315,25 @@ test("an item attribute every item writes with a value of its own is data, not a
   assert.equal(open?.spec.mark, "flag");
   assert.deepEqual(records(yesNo, { open: open!.spec as WebAutomationExtractField }).map((row) => row.open), ["data-open", null, "data-open"]);
 });
+
+// t885, R1: a size picker draws each size as a button, and a size out of stock
+// is `aria-disabled="true"` (or natively disabled); the page view prints it
+// `disabled`, and until the disabled column no read could say which sizes a
+// person can choose.
+test("a run of options, some disabled, offers the disabled column, and is: absent keeps the ones a person can choose", () => {
+  const size = (label: string, disabled: "aria" | "native" | "no") => dom.el("li", { class: "size" },
+    dom.el("button", { class: "pick", ...(disabled === "aria" ? { "aria-disabled": "true" } : disabled === "native" ? { disabled: "" } : { "aria-disabled": "false" }) }, label));
+  const run = [size("EU 40", "no"), size("EU 41", "aria"), size("EU 42", "no"), size("EU 43", "native")];
+  const proposed = inferFields(run[0]!, run);
+  const disabled = proposed.find((field) => field.label.endsWith("(disabled)"));
+  assert.deepEqual(disabled && [disabled.spec.mark, disabled.spec.required, disabled.coverage], ["state", false, 0.5]);
+  const fields = Object.fromEntries(proposed.map((field) => [field.key, field.spec as WebAutomationExtractField]));
+  const stored = records(run, fields);
+  const request = webAutomationExtractListRequestValue({ item: "li.size", fields, where: [{ field: disabled!.key, is: "absent" }] });
+  assert.ok(request, "the domain reads the request");
+  const filter = itemFilterFor(request);
+  const onPage = run.map((item, index) => filter!(item, stored[index]!).length === 0);
+  const inCore = stored.map((row) => webAutomationExtractConditionHolds(request.where![0]!, row[disabled!.key] ?? undefined));
+  assert.deepEqual(onPage, inCore, "the page and Core agree");
+  assert.deepEqual(onPage, [true, false, true, false], "EU 40 and EU 42, the sizes a person can choose");
+});

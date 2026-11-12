@@ -25,6 +25,7 @@ import {
   WEB_AUTOMATION_NEXT_PAGE_TAGS,
   webAutomationNextPageParameters
 } from "./next-page";
+import { WEB_AUTOMATION_HOVER_DESCRIPTION, WEB_AUTOMATION_HOVER_TAGS } from "./hover";
 
 const controlInput: AutomationNodePort = { id: "in", label: "In", valueType: "signal", role: "control" };
 const outputPorts: AutomationNodePort[] = [
@@ -72,7 +73,8 @@ const recordsPathByOutput: Partial<Record<WebAutomationActionType, string>> = {
 const catalogTextByOutput: Partial<Record<WebAutomationActionType, { description: string; tags: readonly string[] }>> = {
   "web.dom.extract": { description: WEB_AUTOMATION_EXTRACT_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_TAGS },
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS },
-  "web.dom.next_page": { description: WEB_AUTOMATION_NEXT_PAGE_DESCRIPTION, tags: WEB_AUTOMATION_NEXT_PAGE_TAGS }
+  "web.dom.next_page": { description: WEB_AUTOMATION_NEXT_PAGE_DESCRIPTION, tags: WEB_AUTOMATION_NEXT_PAGE_TAGS },
+  "web.dom.hover": { description: WEB_AUTOMATION_HOVER_DESCRIPTION, tags: WEB_AUTOMATION_HOVER_TAGS }
 };
 
 /** Secondary operations the action supports, declared independently of its authoring help. */
@@ -174,6 +176,7 @@ const WEB_AUTOMATION_ACTION_EFFECT: Readonly<Record<WebAutomationActionType, "ob
   "web.dom.upload": "mutate",
   "web.dom.dialog": "mutate",
   "web.dom.scroll": "observe",
+  "web.dom.hover": "observe",
   "web.dom.wait_for_selector": "observe",
   "web.dom.wait_for_text": "observe",
   "web.dom.extract": "observe",
@@ -342,7 +345,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     { id: "selector", label: "Selector", valueType: "string", shownToModel: false, targetRefresh: true, ui: { control: "text", placeholder: "CSS selector" } },
     { id: "element", label: "Element", valueType: "object", shownToModel: false, targetRefresh: true, ui: { control: "value" } },
     { id: "visualTarget", label: "Visual Target", valueType: "object", shownToModel: false, ui: { control: "value" } },
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 }
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000, timing: true }
   ];
   // A structured parameter is an `object` whose shape is the matching field of
   // `WebAutomationActionCommand`, declared in `actions/schemas.ts`. The flat
@@ -368,7 +371,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [
     { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 },
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000, timing: true },
     structured("wait", "Condition")
   ];
   if (outputId === "web.dom.capture_snapshot") return [];
@@ -386,6 +389,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
 function iconForOutput(outputId: WebAutomationActionType): string {
   if (outputId === "web.browser.navigate") return "navigation";
   if (outputId === "web.dom.click") return "mouse-pointer-click";
+  if (outputId === "web.dom.hover") return "mouse-pointer";
   if (outputId === "web.dom.type") return "text-cursor-input";
   if (outputId === "web.dom.extract") return "scan-search";
   if (outputId === "web.dom.capture_snapshot") return "camera";

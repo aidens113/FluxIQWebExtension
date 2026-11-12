@@ -42,6 +42,8 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
     properties: {
       kind: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_KINDS] },
       selector: { type: "string", label: "Selector inside the item" },
+      // Read inside the item's nearest ancestor this names, not inside the item (`./request.ts`).
+      group: { type: "string", label: "Group the item sits in" },
       attribute: { type: "string", label: "Attribute" },
       header: { type: "string", label: "Column header" },
       definition: {

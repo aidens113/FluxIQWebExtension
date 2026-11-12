@@ -31,7 +31,7 @@ test("requests Settings stays unavailable under Core's default, a save cannot tu
   await expect(page.getByText("Unavailable in this version.", { exact: true })).toBeVisible();
   await page.getByRole("checkbox", { name: "Reconnect automatically", exact: true }).uncheck();
   await requests.evaluate((element) => { (element as HTMLInputElement).checked = true; element.dispatchEvent(new Event("input", { bubbles: true })); });
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByText("Saved.", { exact: true })).toBeVisible();
   const read = () => page.evaluate(async () => {
     const settings = (await chrome.storage.local.get("fluxiq.settings"))["fluxiq.settings"];

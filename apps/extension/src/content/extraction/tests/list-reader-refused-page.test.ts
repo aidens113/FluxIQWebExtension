@@ -219,3 +219,42 @@ test("where the browser gives no status, a page that lost the list is retried as
     servedWhole.restore();
   }
 });
+
+// t903: a read a paging fault ended says whether the list went on. professional-network's read met
+// the site's security check on page 2 and answered `succeeded` with 10 of 23 people and
+// `truncated: false`. A fault that says the list goes on -- a check or pause (`rate_limited`), or
+// a Next the read cannot press -- makes the read `truncated`, with the move's own words as
+// `pagingFault`. Real page: `e2e/.../professional-network-rotterdam-data-engineers.spec.ts`.
+
+/** A Next drawn as a picture, which is no HTML element and cannot be pressed. */
+function drawnNext(): Element {
+  return {
+    tagName: "svg",
+    localName: "svg",
+    children: [],
+    textContent: "Next",
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getAttribute: (name: string) => (name === "aria-label" ? "Next" : null),
+    hasAttribute: () => false,
+    matches: () => false,
+    closest: () => null,
+    parentElement: null,
+    getClientRects: () => [{ width: 10, height: 10 }],
+    getBoundingClientRect: () => ({ width: 10, height: 10, top: 0, left: 0, right: 10, bottom: 10 })
+  } as unknown as Element;
+}
+
+test("a read whose Next cannot be pressed keeps its rows and says it is incomplete, in the move's own words", async () => {
+  const stood = page(FIFTH_PAGE, { ".next": [drawnNext()] });
+  try {
+    const outcome = await extractList(RESULTS, { timeoutMs: 20_000, pageHost: served(200) });
+    assert.deepEqual(outcome.records, FIFTH_PAGE);
+    assert.equal(outcome.pageFault, true);
+    assert.equal(outcome.paginationStop, "control_not_clickable");
+    assert.equal(outcome.truncated, true, "the list goes on past a Next the read could not press");
+    assert.match(outcome.pagingFault ?? "", /not a clickable element/u);
+  } finally {
+    stood.restore();
+  }
+});

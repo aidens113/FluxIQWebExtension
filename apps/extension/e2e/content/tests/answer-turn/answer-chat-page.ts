@@ -63,6 +63,9 @@ const PAGE_SOURCE = `
     window.__exportsAsked = [];
     const request = async (message) => {
       if (message.type === ACTIVITY_MESSAGES.read) return { ok: true, value: { ok: true, state: window.__activity } };
+      // Core keeps no attempt for a plain run, and says so with an empty list, as listConversationTaskAttempts does;
+      // the adapter asks it on every read (since 6eef0ac87) and refuses a reply without one.
+      if (real && message.type === AUTOMATION_PANEL_MESSAGES.taskOutcomes) return { ok: true, value: { ok: true, payload: { outcomes: [] } } };
       if (real && message.type === AUTOMATION_PANEL_MESSAGES.runDetail) {
         return { ok: true, value: { ok: true, payload: { runDetail: { summary: { runId: real.runId, flowId: real.flowId, status: "succeeded", startedAt: real.startedAt, finishedAt: real.finishedAt },
           datasets: [{ datasetId: real.datasetId, label: real.datasetId, recordCount: real.rows.length }] }, adaptations: [] } } };

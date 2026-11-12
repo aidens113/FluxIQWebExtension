@@ -1,4 +1,4 @@
-// Coverage of panel-control.ts: who may send the panel's requests (the eight
+// Coverage of panel-control.ts: who may send the panel's requests (the ten
 // that reach Core and the two activity ones), what saving settings and opening
 // FluxIQ do, and which overlay preferences are accepted. The load-bearing test is the
 // first: a content script, another extension, or a sender with no page must be
@@ -33,6 +33,11 @@ const PANEL_TYPES = [
   RUNTIME_MESSAGES.panelConversationRead,
   RUNTIME_MESSAGES.panelConversationSend,
   RUNTIME_MESSAGES.panelConversationAnswer,
+  RUNTIME_MESSAGES.panelConversationRename,
+  RUNTIME_MESSAGES.panelConversationDelete,
+  RUNTIME_MESSAGES.panelFlowHumannessRead,
+  RUNTIME_MESSAGES.panelFlowHumannessSet,
+  RUNTIME_MESSAGES.panelTaskHumannessSet,
   RUNTIME_MESSAGES.panelStopRun,
   RUNTIME_MESSAGES.panelTakeOverRun,
   RUNTIME_MESSAGES.panelHandBackRun,
@@ -123,7 +128,7 @@ test("only the side panel and the popup may send any of the panel requests; ever
   for (const type of PANEL_TYPES) {
     for (const sender of senders) {
       const h = harness();
-      const result = await handlePanelControl({ type, flowId: "flow-1", projectId: "other-project", overlay: "hidden", settings: { coreApiUrl: "https://attacker.test" }, text: "hi", runId: "r" }, sender, h.deps);
+      const result = await handlePanelControl({ type, flowId: "flow-1", projectId: "other-project", overlay: "hidden", settings: { coreApiUrl: "https://attacker.test" }, text: "hi", runId: "r", conversationId: "conv-1", title: "Mine now", taskId: "task-1", humanness: 100 }, sender, h.deps);
       assert.deepEqual(result, { handled: true, response: { ok: false, code: "forbidden", error: "Only the FluxIQ panel can do that." } }, `${type} from ${sender.url}`);
       assert.deepEqual(h.touched, [], `${type} touched something for ${sender.url}`);
     }
@@ -305,4 +310,52 @@ test("a message the person sends runs under the activity's starting status; open
   await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationSend, kind: "open", projectId: "project-1" }, sidepanel, deps);
   await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationSend, text: "Find a store", conversationId: "c1" }, { id: "extension-id", url: "https://shop.test/", tab: { id: 4 } } as chrome.runtime.MessageSender, deps);
   assert.deepEqual(sends, ["start", "answered"], "only the one message went under the starting status");
+});
+
+test("the thread list's rename and delete reach Core's own endpoints from the panel, and Core's payload comes back unchanged", async (t) => {
+  installChrome(t);
+  const h = harness();
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationRename, projectId: "project-1", conversationId: "conv-1", title: "Lamps" }, sidepanel, h.deps), {
+    handled: true, response: { ok: true, payload: { from: "rename-conversation" } }
+  });
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationDelete, projectId: "project-1", conversationId: "conv-1" }, popup, h.deps), {
+    handled: true, response: { ok: true, payload: { from: "delete-conversation" } }
+  });
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationRead, kind: "list-all", limit: 25 }, sidepanel, h.deps), {
+    handled: true, response: { ok: true, payload: { from: "list-conversations" } }
+  });
+  assert.deepEqual(h.calls, [
+    { endpoint: "rename-conversation", payload: { projectId: "project-1", conversationId: "conv-1", title: "Lamps" } },
+    { endpoint: "delete-conversation", payload: { projectId: "project-1", conversationId: "conv-1" } },
+    { endpoint: "list-conversations", payload: { projectId: null, limit: 25 } }
+  ]);
+});
+
+test("a Flow's and a task's humanness reach Core's own endpoints from the panel, each as one call", async (t) => {
+  installChrome(t);
+  const h = harness();
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelFlowHumannessRead, flowId: "flow-1" }, sidepanel, h.deps), { handled: true, response: { ok: true, payload: {} } });
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelFlowHumannessSet, flowId: "flow-1", humanness: 30 }, popup, h.deps), { handled: true, response: { ok: true, payload: {} } });
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelTaskHumannessSet, projectId: "project-2", taskId: "task-1", humanness: null }, sidepanel, h.deps), { handled: true, response: { ok: true, payload: {} } });
+  assert.deepEqual(h.calls, [
+    { endpoint: "get-flow-metadata-detail", payload: { projectId: "project-1", flowId: "flow-1" } },
+    { endpoint: "update-flow-settings", payload: { projectId: "project-1", flowId: "flow-1", flow: { flowId: "flow-1", metadata: { humanness: 30 } } } },
+    { endpoint: "update-task-settings", payload: { projectId: "project-2", taskId: "task-1", humanness: null } }
+  ]);
+});
+
+test("New chat is an open, so it never runs under the activity's starting status", async (t) => {
+  installChrome(t);
+  const h = harness();
+  const sends: string[] = [];
+  const sending = async <T>(send: () => Promise<T>): Promise<T> => {
+    sends.push("start");
+    return send();
+  };
+  const deps: PanelControlDeps = { ...h.deps, activity: { ...h.deps.activity, sending } };
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationSend, kind: "open", fresh: true, subjectKind: "panel" }, sidepanel, deps), {
+    handled: true, response: { ok: true, payload: { from: "open-conversation" } }
+  });
+  assert.deepEqual(h.calls, [{ endpoint: "open-conversation", payload: { projectId: "project-1", fresh: true } }]);
+  assert.deepEqual(sends, []);
 });

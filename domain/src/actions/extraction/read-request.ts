@@ -369,6 +369,8 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   if (kind === "attribute" && attribute === undefined) return undefined;
   if (kind === "column" && header === undefined) return undefined;
   const selector = optionalValue(spec.selector, nonEmptyString);
+  // A group is where an element read is read from; a column is read off the item's row, so it is left behind there.
+  const group = kind === "column" ? undefined : optionalValue(spec.group, nonEmptyString);
   const required = optionalValue(spec.required, booleanValue);
   const handling = optionalValue(spec.handling, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS));
   const element = optionalValue(spec.element, fingerprintValue);
@@ -383,11 +385,12 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   const identity = optionalValue(spec.identity, (entry) => entry === "tracking-free" ? entry : undefined);
   // A mark is kept on a kind that reads it and left behind on any other, like a stray `header`.
   const mark = optionalValue(spec.mark, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_MARKS));
-  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED || lines === REFUSED || identity === REFUSED || mark === REFUSED) return undefined;
+  if (selector === REFUSED || group === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED || lines === REFUSED || identity === REFUSED || mark === REFUSED) return undefined;
   if (identity !== undefined && kind !== "link") return undefined;
   const field: WebAutomationExtractFieldSpec = {
     kind,
     ...(selector !== undefined ? { selector } : {}),
+    ...(group !== undefined ? { group } : {}),
     ...(attribute !== undefined ? { attribute } : {}),
     ...(header !== undefined ? { header } : {}),
     ...(definition !== undefined ? { definition: { term, part: part as "term" | "value" } } : {}),

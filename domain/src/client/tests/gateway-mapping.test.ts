@@ -64,8 +64,12 @@ for (const [alias, actionType] of Object.entries(legacyAliases)) {
   assert.deepEqual(normalizeWebAutomationActionType(alias), { ok: true, actionType }, alias);
 }
 
+// Hover is a supported act (t903), under its canonical name and its legacy one.
+assert.deepEqual(normalizeWebAutomationActionType("web.dom.hover"), { ok: true, actionType: "web.dom.hover" });
+assert.deepEqual(normalizeWebAutomationActionType("dom.hover"), { ok: true, actionType: "web.dom.hover" });
+
 // Anything else is rejected with Core's failure record, never rewritten into web.dom.extract.
-for (const unknown of ["web.dom.hover", "dom.hover", "extract", "WEB.DOM.CLICK", " web.dom.click", "web.", ""]) {
+for (const unknown of ["web.dom.teleport", "dom.teleport", "extract", "WEB.DOM.CLICK", " web.dom.click", "web.", ""]) {
   const normalized = normalizeWebAutomationActionType(unknown);
   assert.equal(normalized.ok, false, JSON.stringify(unknown));
   assert.deepEqual(normalized.ok ? undefined : normalized.failure, unsupportedTypeFailure, JSON.stringify(unknown));
@@ -112,17 +116,17 @@ assert.deepEqual(webAutomationActionFromGatewayCommand({
   checkWaitMs: 15_000,
   options: { checkWaitMs: 15_000 }
 });
-const rejected = webAutomationActionFromGatewayCommand({ commandId: "command.hover", actionType: "web.dom.hover", target: { selector: "#menu" } });
+const rejected = webAutomationActionFromGatewayCommand({ commandId: "command.teleport", actionType: "web.dom.teleport", target: { selector: "#menu" } });
 assert.deepEqual(rejected, {
-  commandId: "command.hover",
+  commandId: "command.teleport",
   status: "rejected",
-  actionType: "web.dom.hover",
-  message: "Unsupported web automation action type: web.dom.hover",
+  actionType: "web.dom.teleport",
+  message: "Unsupported web automation action type: web.dom.teleport",
   failure: unsupportedTypeFailure
 });
 assert.equal("selector" in rejected, false, "a rejected command carries nothing to execute");
-assert.equal(webAutomationActionFromGatewayCommand({ commandId: "command.legacy", actionType: "dom.hover" }).actionType, "dom.hover");
-assert.equal("status" in webAutomationActionFromGatewayCommand({ commandId: "command.legacy", actionType: "dom.hover" }), true);
+assert.equal(webAutomationActionFromGatewayCommand({ commandId: "command.legacy", actionType: "dom.teleport" }).actionType, "dom.teleport");
+assert.equal("status" in webAutomationActionFromGatewayCommand({ commandId: "command.legacy", actionType: "dom.teleport" }), true);
 
 // -- The frame an interaction was recorded in, end to end ---------------------
 // A command addressed to a child frame has to know which frame, and the only
@@ -582,7 +586,7 @@ assert.equal(JSON.stringify(several).includes(answeredSentinel), false, "the ref
 assert.equal("status" in webAutomationActionFromGatewayCommand({ commandId: "command.other", actionType: "web.dom.type", parameters: { text: { $state: { path: "web.elements.password" } } } }), false);
 // An unknown action type is still refused as unknown first.
 assert.equal(
-  (webAutomationActionFromGatewayCommand({ commandId: "command.unknown", actionType: "web.dom.hover", parameters: { text: { $state: { path: "web.secret.password" } } } }) as { failure?: { code?: string } }).failure?.code,
+  (webAutomationActionFromGatewayCommand({ commandId: "command.unknown", actionType: "web.dom.teleport", parameters: { text: { $state: { path: "web.secret.password" } } } }) as { failure?: { code?: string } }).failure?.code,
   "web.action.unsupported_type"
 );
 

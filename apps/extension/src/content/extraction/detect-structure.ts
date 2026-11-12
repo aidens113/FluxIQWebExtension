@@ -92,6 +92,11 @@
 // record never displaces a run: on the everything store's cart, a model aimed
 // at the subtotal must still be answered the cart's lines
 // (`run-mulum3x7-18ceeb75`).
+//
+// **A run whose items group controls is also answered as its cells** (t885,
+// R2): a timetable's day columns are the run, and its times, one row each with
+// the day's heading, are sent beside it as `cells` (`cell-run/`). Only the
+// answer given is looked at for them, once, never each run judged on the way.
 
 import type {
   WebAutomationExtractionProposal,
@@ -99,6 +104,7 @@ import type {
   WebAutomationStructureDetectionRequest
 } from "@fluxiq-web-extension/domain/client";
 import { isWithinSensitiveControl } from "../sensitive-text";
+import { cellRunProposal } from "./cell-run";
 import { contentFieldCount } from "./content-fields";
 import { isDeclaredFeed } from "./feed-signal";
 import { inferListFromElement } from "./infer-list";
@@ -132,7 +138,7 @@ const WORTH_WAITING_FOR: ReadonlySet<string> = new Set(["no_repeating_run", "tar
 
 /** Detect the structure the request names, or the page's largest readable one, as the page stands now. */
 export function detectStructure(request: WebAutomationStructureDetectionRequest): WebAutomationStructureDetection {
-  return attempt(request).answer;
+  return withCells(attempt(request).answer);
 }
 
 function attempt(request: WebAutomationStructureDetectionRequest): Attempt {
@@ -149,7 +155,7 @@ export async function detectStructureWhenPresent(
   timeoutMs?: number
 ): Promise<WebAutomationStructureDetection> {
   let current = attempt(request);
-  if (!current.improvable) return current.answer;
+  if (!current.improvable) return withCells(current.answer);
   const deadline = typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? Date.now() + timeoutMs : undefined;
   await waitUntil(
     () => {
@@ -160,7 +166,15 @@ export async function detectStructureWhenPresent(
     STRUCTURE_POLL_MS,
     deadline
   );
-  return current.answer;
+  return withCells(current.answer);
+}
+
+/** The answer with its run's cells beside it, where its items group controls into a grid (header, `cell-run/`). */
+function withCells(answer: WebAutomationStructureDetection): WebAutomationStructureDetection {
+  if (!answer.ok) return answer;
+  const container = queryOne(answer.proposal.container);
+  const cells = container === null ? undefined : cellRunProposal(queryAll(answer.proposal.item), container, answer.proposal);
+  return cells === undefined ? answer : { ...answer, cells };
 }
 
 /**

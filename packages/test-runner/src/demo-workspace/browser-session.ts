@@ -251,7 +251,7 @@ export async function connectExtension(
 
     await checkpoint("settings-save", "extension");
     await evidence.step("extension", "settings-save", "Save extension settings", async () => {
-      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await page.getByRole("button", { name: "Save changes", exact: true }).click();
       await page.getByText("Saved.", { exact: true }).waitFor();
     });
     facts.settingsSaved = true;

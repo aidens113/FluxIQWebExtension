@@ -67,6 +67,9 @@ if (entryPoints.length > 0) await build({
   platform: "node",
   target: ["node22"],
   format: "esm",
+  // A test that imports the panel bundles its CSS, and the brand fonts
+  // (ui-components styles/fonts.css) come with it. Node never draws them.
+  loader: { ".woff2": "empty" },
   external: [
     "fluxiq",
     "fluxiq/*",

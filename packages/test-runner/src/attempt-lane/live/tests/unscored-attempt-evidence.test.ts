@@ -164,3 +164,14 @@ test("a series stopped by a refused judge keeps every ended attempt's lines and 
   assert.equal(record.deterministic.ran, 2);
   assert.equal(record.didNotEnd.started.loggedSteps, 3);
 });
+
+test("attempt.json and the report's header carry the provider and exact model the run was on, a single attempt's record as well as a series'", async (t) => {
+  for (const [attempts, model, header] of [[1, { provider: "anthropic", model: "claude-sonnet-5-5" }, "model claude-sonnet-5-5, provider anthropic"], [2, { provider: "scripted" }, "model none, provider scripted"]] as const) {
+    const { evidence } = await world(t);
+    await writeUnscoredAttemptEvidence({ evidence, model, attempts, kept: new Map([[1, { ended: ended(1, 0.1), cache: null, modelCalls: null }]]), error: THROWN, recorded: false });
+    const record = JSON.parse(await readFile(path.join(evidence, "attempt.json"), "utf8")) as { provider: string; model?: string };
+    assert.equal(record.provider, model.provider);
+    assert.equal(record.model, "model" in model ? model.model : undefined);
+    assert.equal((await readFile(path.join(evidence, "attempt-report.txt"), "utf8")).split("\n")[0], header);
+  }
+});

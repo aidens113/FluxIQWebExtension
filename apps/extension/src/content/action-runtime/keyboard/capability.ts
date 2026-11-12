@@ -10,7 +10,8 @@ import { pressKey, type KeyPressOutcome } from "./press-key";
 import { typeText } from "./type-text";
 
 export type KeyboardCapability = {
-  typeText(element: Element, text: string): void;
+  /** Synchronous and returns nothing without `gapsMs`; with them (humanness above 0), a promise of the typing done at that cadence. */
+  typeText(element: Element, text: string, gapsMs?: readonly number[] | undefined): void | Promise<void>;
   pressKey(target: Element, key: string, modifiers?: WebAutomationKeyModifiers | undefined): KeyPressOutcome;
 };
 

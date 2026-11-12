@@ -8,6 +8,12 @@
 // the content harness -- is not a failure of the move. The move goes on as it
 // would have without one; what is lost is only an answer from a document the
 // press loads.
+//
+// Above humanness 0 (`./pager-press.ts`) every mark carries how the press was
+// made -- the one the step made here, or, in a document a press loaded, the one
+// its mark brought, so a refused landing's reload keeps it -- and a document
+// reached by a press hands that record to the step's own press, which the
+// verb records. A step that was aimed never records otherwise.
 
 import { PAGE_MOVE_MARK_MESSAGE, readPageMoveMark, type PageMoveContinuation, type PageMoveMark, type PageMoveMarkMessage } from "../../../shared/extraction-continuation";
 import type { PageMove } from "./move-outcome";
@@ -31,7 +37,15 @@ export function pageMoveFor(continuation: unknown): PageMove {
   if (typeof token !== "string" || token === "" || (resume !== undefined && mark === undefined)) {
     return () => Promise.reject(new Error("The next-page continuation the worker sent is not one this page can go on from."));
   }
-  return (request, options = {}) => movePage(request, { ...options, resume: mark, mark: (made) => sendMark(token, made) });
+  return (request, options = {}) => {
+    const press = options.press;
+    if (press !== undefined && mark?.press !== undefined) press.resumed(mark.press);
+    const made = (next: PageMoveMark): PageMoveMark => {
+      const pressed = press?.marked() ?? mark?.press;
+      return pressed === undefined ? next : { ...next, press: pressed };
+    };
+    return movePage(request, { ...options, resume: mark, mark: (next) => sendMark(token, made(next)) });
+  };
 }
 
 /** Hands the mark to the worker and waits until it has it, or has said it will not take it. */

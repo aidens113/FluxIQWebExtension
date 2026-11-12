@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { FakeElement, fake, withFakeDocument } from "../../chat/tests/fake-dom";
+import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { PanelStore } from "../../state";
 import type { AutomationsController, AutomationsState } from "../controller";
 import { createAutomationStrip } from "../automation-strip";
@@ -41,7 +42,11 @@ function setup() {
     exportDataset: async (...args) => { calls.push(args.slice(0, 4)); state = { ...state, rows: state.rows.map((row) => ({ ...row, exporting: true })) }; strip.draw(); }
   };
   let requestCalls = 0;
-  const request: PanelStore["request"] = async () => { requestCalls++; return { ok: false, sentence: "Failed", detail: "Try later" }; };
+  // The strip's read of the shown Flow's humanness (`humanness/`) is not one of the requests these tests count.
+  const request: PanelStore["request"] = async (message) => {
+    if (message.type !== RUNTIME_MESSAGES.panelFlowHumannessRead) requestCalls++;
+    return { ok: false, sentence: "Failed", detail: "Try later" };
+  };
   const strip = createAutomationStrip(request, controller);
   strip.show({ flowId: "f", name: "Orders" });
   const root = fake(strip.element);
@@ -198,4 +203,24 @@ test("passive matching-flow names emit once after draw, keep controls, and unsub
   assert.equal(doc.focusCalls, 1);
   stop(); view.update({ name: "Another" });
   assert.equal(heard.length, 1);
+}));
+
+test("the strip carries the shown Flow's own humanness: read when shown, its starting value from each status", async () => withFakeDocument(async () => {
+  const sent: Array<{ type: string; [key: string]: unknown }> = [];
+  const request = (async (message: { type: string; [key: string]: unknown }) => {
+    sent.push(message);
+    return message.type === RUNTIME_MESSAGES.panelFlowHumannessRead ? { ok: true, value: { ok: true, payload: {} } } : { ok: false, sentence: "Failed" };
+  }) as PanelStore["request"];
+  const state: AutomationsState = { ownerRevision: 0, mode: "list", working: false, runInFlight: false, rows: [{ flowId: "f", name: "Orders", lines: [], running: false, stoppable: false, exporting: false, datasets: [] }] };
+  const controller = { state: () => state, observe: () => false, setWorking: () => {}, refresh: async () => {}, focus: async () => {}, run: async () => {}, stop: async () => {}, exportDataset: async () => {} } as AutomationsController;
+  const strip = createAutomationStrip(request, controller);
+  strip.render({ connectionState: "connected", settings: { humanness: 35 } } as unknown as Parameters<typeof strip.render>[0]);
+  strip.show({ flowId: "f", name: "Orders" });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  const section = fake(strip.element).byClass("flow-humanness")[0]!;
+  assert.equal(section.hidden, false);
+  assert.equal(section.byClass("flow-humanness-toggle")[0]!.textContent, "Humanness · 35");
+  assert.deepEqual(sent, [{ type: RUNTIME_MESSAGES.panelFlowHumannessRead, flowId: "f" }]);
+  strip.show(undefined);
+  assert.equal(section.hidden, true);
 }));

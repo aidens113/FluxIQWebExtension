@@ -38,6 +38,14 @@
 // `extraction/structure-detection.ts`) would be left out, and the run answered
 // alone.
 //
+// **A grid of grouped controls is also a list of its controls (t885, R2).** A
+// timetable's days are the run, and each time in them was a positional column
+// of its day's row, so no read could keep one time and not the next. Where the
+// page sends the run's `cells` -- every control of one kind inside its items,
+// each a row carrying its item's heading -- they are split by the same rule
+// into a third handle and binding, and the packet carries them as `cells` with
+// their marks and one closed sentence. The run is still the list.
+//
 // **A list whose section links to more says so.** Circleway's Friends home
 // shows four of eight friend requests under a header whose "See all" opens the
 // rest; the top bar's badge says 4, and the model read the four cards as the
@@ -88,8 +96,8 @@
 // **A column says what kind of value it holds, and a list what its rows carry
 // (t800, contracts CC1-CC3).** Each field with a sample, or a read that says
 // it, carries `type` and its sample `parsed` as that type (`./column-type.ts`).
-// A list whose page proposed marks -- a badge, a flag, a pressed, checked or
-// selected state -- names them in `fieldMarks` by their field keys, with one
+// A list whose page proposed marks -- a badge, a flag, a pressed, checked,
+// selected or disabled state -- names them in `fieldMarks` by their field keys, with one
 // closed sentence, `markNote`; a mark's field holds a value only on the rows
 // that carry it, so `is: "present"` on it keeps exactly those rows. Where the
 // detection's capture can answer, `rowIdentity` names the field that says
@@ -131,11 +139,14 @@ export type WebLlmStructurePaginationMode = (typeof WEB_LLM_STRUCTURE_PAGINATION
 /** What the packet says of a `record`: domain text, never the page's. */
 const RECORD_NOTE = "record is the one item you aimed at, read as a one-row table; name its handle in extractList when the instruction is about that item";
 
+/** What the packet says of `cells`: domain text, never the page's. */
+const CELLS_NOTE = "cells is the same list read one row per control inside its items, each row with its item's heading as group heading; name its handle in extractList when the instruction is about those controls one by one, and keep the rows it wants with where on group heading and the row's own fields";
+
 /** What the packet says of `at`, once, when a field carries one: domain text. */
 const AT_NOTE = "a field's at is the handle of that column's element in the first item that has it, never of the whole column; its line in the page view shows what the column holds. at is that item's own element, so acting on it acts on that item only -- for a control, the item its atItem names by place and words; to act on the rows a listing keeps, use the control inside one of the rows it keeps";
 
 /** What the packet says of `fieldMarks`, once, when the list has any: domain text. */
-const MARK_NOTE = "fieldMarks are the fields that mark a row by being there or not -- a badge, a flag, a pressed, checked or selected state -- each named by its field key as id; a mark's field holds a value only on the rows that carry it, so where {field: id, is: \"present\"} keeps the rows that carry it and is: \"absent\" the rows that do not";
+const MARK_NOTE = "fieldMarks are the fields that mark a row by being there or not -- a badge, a flag, a pressed, checked, selected or disabled state -- each named by its field key as id; a mark's field holds a value only on the rows that carry it, so where {field: id, is: \"present\"} keeps the rows that carry it and is: \"absent\" the rows that do not";
 
 /** What the packet says of `items`, once, when the list has them: domain text. */
 const ITEMS_NOTE = "items are the list's items in page order, the first being item 1: itemKey is the item's identity read from the rowIdentity fields, the same each time the page is read, and marks says of each mark id whether the item carries it (on) or not (off)";
@@ -214,6 +225,18 @@ export type WebLlmStructureRecord = {
   note: string;
 };
 
+/** The list's controls, one row each with its item's heading, under their own handle (t885, R2). */
+export type WebLlmStructureCells = {
+  /** The opaque handle that names this list of controls. Copy it exactly into `extractList`. */
+  handle: string;
+  itemCount: number;
+  fields: WebLlmStructureField[];
+  /** The fields that mark a row by being there or not, as the list's own `fieldMarks`; absent when there are none. */
+  fieldMarks?: WebLlmStructureMark[];
+  /** What the cells are and when to name them. A constant of this module. */
+  note: string;
+};
+
 export type WebLlmRepeatingStructure = {
   schemaVersion: typeof WEB_LLM_STRUCTURE_SCHEMA_VERSION;
   trust: "untrusted-page-evidence";
@@ -239,6 +262,8 @@ export type WebLlmRepeatingStructure = {
   confidence: number;
   /** The one item the target belongs to, when it lies outside the list above. */
   record?: WebLlmStructureRecord;
+  /** The list's controls one row each, when its items group controls into a grid. */
+  cells?: WebLlmStructureCells;
   /** The section's link to more items, when the list here may be partial. */
   continues?: WebLlmStructureContinues;
   /** What a field's `at` is. A constant of this module, present when any field, the record's included, has one. */
@@ -261,6 +286,8 @@ export type WebLlmStructureSplit = {
   binding: WebLlmExtractionBinding;
   /** The record's binding, under `recordHandle`; absent when there is no record or none of its fields is readable. */
   recordBinding: WebLlmExtractionBinding | undefined;
+  /** The cells' binding, under `cellsHandle`; absent when there are no cells or none of their fields is readable. */
+  cellsBinding: WebLlmExtractionBinding | undefined;
 };
 
 type DetectedStructure = Extract<WebAutomationStructureDetection, { ok: true }>;
@@ -270,6 +297,8 @@ export type WebLlmStructurePacketInput = {
   handle: string;
   /** The handle reserved for `detection.record`; ignored when the detection carries none. */
   recordHandle: string | undefined;
+  /** The handle reserved for `detection.cells`; ignored when the detection carries none. */
+  cellsHandle?: string | undefined;
   location: string;
   target: string | undefined;
   /** What the page calls the list (`./list-name.ts`); absent when it gives no name. */
@@ -299,6 +328,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     ? undefined
     : boundList(input, input.recordHandle, record, recordReadable, boundPagination(record.pagination, false), true);
 
+  const cells = cellsOf(input);
   const paginate = boundPagination(proposal.pagination, infiniteScroll);
   const pagination = paginationMode(proposal.pagination, infiniteScroll);
   const rows = webLlmListItems(
@@ -324,10 +354,11 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
       fields: recordReadable.map((field) => field.shown),
       note: RECORD_NOTE
     },
+    cells: cells?.shown,
     continues: continuesOf(input.detection.continues),
-    atNote: [...readable, ...(recordBinding === undefined ? [] : recordReadable)].some((field) => field.shown.at !== undefined) ? AT_NOTE : undefined,
+    atNote: [...readable, ...(recordBinding === undefined ? [] : recordReadable)].some((field) => field.shown.at !== undefined) || cells?.shown.fields.some((field) => field.at !== undefined) === true ? AT_NOTE : undefined,
     fieldMarks: rows.fieldMarks,
-    markNote: rows.fieldMarks === undefined ? undefined : MARK_NOTE,
+    markNote: rows.fieldMarks === undefined && cells?.shown.fieldMarks === undefined ? undefined : MARK_NOTE,
     rowIdentity: rows.rowIdentity,
     items: rows.items,
     itemsNote: rows.items === undefined ? undefined : ITEMS_NOTE
@@ -336,7 +367,22 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
   // construction: a list needs a run of three or a record pair, so only the
   // label/value receipt and a lone record are sent with one item.
   const binding = boundList(input, input.handle, proposal, readable, paginate, proposal.itemCount === 1 && paginate === undefined);
-  return { packet, binding, recordBinding };
+  return { packet, binding, recordBinding, cellsBinding: cells?.binding };
+}
+
+/**
+ * The cells as the model is shown them and the binding their handle keeps, or
+ * `undefined` when the page sent none or none of their fields is readable. They
+ * continue as the run does, so their binding keeps its pagination.
+ */
+function cellsOf(input: WebLlmStructurePacketInput): { shown: WebLlmStructureCells; binding: WebLlmExtractionBinding } | undefined {
+  const cells = input.detection.cells;
+  if (cells === undefined || input.cellsHandle === undefined) return undefined;
+  const readable = readableFields(cells, input.firstItem);
+  if (readable.length === 0) return undefined;
+  const binding = boundList(input, input.cellsHandle, cells, readable, boundPagination(cells.pagination, false), false);
+  const marks = webLlmListItems(cells.itemCount, readable.map((field) => ({ key: field.key, label: field.shown.label, spec: field.spec, coverage: field.coverage })), undefined).fieldMarks;
+  return { shown: present<WebLlmStructureCells>({ handle: binding.handle, itemCount: binding.itemCount, fields: readable.map((field) => field.shown), fieldMarks: marks, note: CELLS_NOTE }), binding };
 }
 
 /** The section link as the model is shown it, or `undefined` when the page sent none or its label screens to nothing. */
@@ -448,6 +494,7 @@ function readableSpec(spec: WebAutomationExtractFieldSpec): WebAutomationExtract
   return present<WebAutomationExtractFieldSpec>({
     kind: spec.kind,
     selector: spec.selector,
+    group: spec.group,
     attribute: spec.attribute,
     header: spec.header,
     definition: spec.definition === undefined ? undefined : { term: spec.definition.term, part: spec.definition.part },

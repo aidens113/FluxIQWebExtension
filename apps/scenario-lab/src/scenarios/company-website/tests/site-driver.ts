@@ -4,6 +4,7 @@ import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-cont
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
 import { closeLabSession } from "../../tests/close-lab-session.js";
 import { diagnoseAction } from "../../tests/diagnose-action.js";
+import { requestsAnswered } from "../../tests/requests-answered.js";
 import { withinPageTime } from "../../tests/within-page-time.js";
 import type { CompanyWebsiteState } from "../types.js";
 
@@ -86,13 +87,20 @@ export function locate(page: Page, target: string): Locator {
 /** A step with no `timeoutMs` of its own gets this much of the page's own time (`withinPageTime`). */
 const DEFAULT_BUDGET_MS = 10_000;
 
-/** Runs a recording script as the Lab's recording lane would, returning what each extract step read. */
+/**
+ * Runs a recording script as the Lab's recording lane would, returning what each extract step read. An act is
+ * done once the page's own requests it led to are answered (`requestsAnswered`).
+ */
 export async function runScript(page: Page, steps: readonly ScenarioStep[]): Promise<Record<string, Array<Record<string, string>>>> {
   const extracted: Record<string, Array<Record<string, string>>> = {};
+  await requestsAnswered(page, DEFAULT_BUDGET_MS, "before the script's first step");
   for (const step of steps) {
     const budget = step.timeoutMs ?? DEFAULT_BUDGET_MS;
     const target = () => locate(page, step.target!);
-    const act = (action: () => Promise<unknown>) => withinPageTime(page, budget, `${step.operation} ${step.target}`, action, () => diagnoseAction(target()));
+    const act = async (action: () => Promise<unknown>) => {
+      await withinPageTime(page, budget, `${step.operation} ${step.target}`, action, () => diagnoseAction(target()));
+      await requestsAnswered(page, budget, `${step.operation} ${step.target}`);
+    };
     try {
       switch (step.operation) {
         case "click": await act(() => target().click({ timeout: 0 })); break;

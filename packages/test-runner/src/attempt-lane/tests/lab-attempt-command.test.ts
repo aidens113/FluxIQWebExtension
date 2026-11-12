@@ -51,3 +51,14 @@ test("it takes exactly one model, its task, and the mode it drives", () => {
   assert.throws(() => parseLabCommand(["attempt", "--task", "x", "--authoring-mode", "answer-first", "--scripted-model"]), /scenario ID/u);
   assert.throws(() => parseLabCommand([...PAID, "--llm-task", "diagnose"]), /--llm-task must be create-flow/u);
 });
+
+test("--humanness takes a whole number from 0 to 100, and absent leaves the command as it was", () => {
+  const level = (args: string[]) => (parseLabCommand(args) as { humanness?: number }).humanness;
+  assert.equal(level(SCRIPTED), undefined);
+  assert.equal("humanness" in parseLabCommand(SCRIPTED), false, "absent writes nothing");
+  for (const good of ["0", "1", "50", "99", "100"]) assert.equal(level([...SCRIPTED, "--humanness", good]), Number(good));
+  assert.equal(level([...PAID, "--humanness", "50", "--attempts", "2"]), 50);
+  assert.deepEqual(parseLabCommand([...SCRIPTED, "--humanness", "0", "--attempts", "2"]), { command: "attempt", scenarioId: "company-website", taskId: "company-website-apprentices", authoringMode: "answer-first", model: { kind: "scripted" }, attempts: 2, humanness: 0 });
+  for (const bad of ["-1", "101", "2.5", "x", "050", "1e2", ""]) assert.throws(() => parseLabCommand([...SCRIPTED, "--humanness", bad]), /--humanness takes a whole number from 0 to 100/u);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--humanness"]), /--humanness|value/u);
+});

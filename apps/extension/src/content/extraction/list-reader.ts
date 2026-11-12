@@ -151,7 +151,7 @@ import type { ExtractionCheckpoint } from "../../shared/extraction-continuation"
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
-import { assertDisclosed, contentKey, fieldReaders, readRecord, recordGaps, type FieldReaders, type ItemRead } from "./item-record";
+import { assertDisclosed, contentKey, fieldReaders, isRenderedItem, readRecord, recordGaps, type FieldReaders, type ItemRead } from "./item-record";
 import { awaitListComplete, awaitPageComplete } from "./list-wait";
 import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continued-read";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
@@ -165,6 +165,7 @@ import {
   BROWSER_PAGE_HOST,
   deadlineFor,
   pageRefusalOf,
+  PaginationFault,
   paginationStopOf,
   RATE_LIMITED_STOP,
   refusedPageWaitMs,
@@ -207,13 +208,14 @@ export type ListExtractionOutcome = {
   itemFaults?: number | undefined;
   /**
    * Whether moving to the next page threw, which ends the read with the pages it
-   * already has rather than with nothing.
-   *
-   * It is not `truncated` and not `timedOut`: no cap was reached and no time ran
-   * out, so overloading either would make a count a reader groups by say
-   * something the read did not do.
+   * already has rather than with nothing. Not `timedOut`; `truncated` (t903) when the
+   * fault says the list goes on -- a check or pause (`rate_limited`), or a control the read
+   * cannot press -- as professional-network's read, stopped at a check on page 2 with 10
+   * of 23 people, did not say. A control the page ignored proves no more rows, so it is not.
    */
   pageFault?: boolean | undefined;
+  /** What stopped the paging, in the move's own words, for a read a page fault ended; absent otherwise. Never on the wire as a word. */
+  pagingFault?: string | undefined;
   /** Whether the page ever showed the list at all (C2): `"never_appeared"` for a read whose `item` selector named nothing, and absent for a continued read, which waits for its predecessor's page rather than for a list. */
   listPresence?: ListPresence | undefined;
   /** What the wait for the list did, for a read that has to say why it found none: what it waited for, how long, and what ended it. Absent wherever `listPresence` is. */
@@ -253,6 +255,12 @@ export type ListExtractionOutcome = {
   incompleteRecords?: number | undefined;
   /** Returned records that yielded no declared field at all: the read found rows and every field read off the wrong element. */
   emptyRecords?: number | undefined;
+  /**
+   * Items the read named that the browser does not render: inside a closed menu,
+   * panel or tab (t903). Sent only when there were any, beside `emptyRecords`, so
+   * an empty read of hidden items says so rather than blaming the fields.
+   */
+  notRenderedItems?: number | undefined;
   /** Items of the run that a `where` condition left out, so they are not records (C5). */
   filtered: number;
   /** What the request's conditions did, in counts alone, or absent for a request that named none. */
@@ -349,7 +357,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const repeatsSoFar = (): number | undefined => (pageByPage && repeatsBefore !== undefined ? repeatsBefore + earlierPageRepeats : undefined);
   const earlierPages = pageByPage || resume ? new Set(records.map((record) => contentKey(record, fields))) : undefined;
   const keyOf = (itemRead: ItemRead): string => (contentAware ? contentKey(itemRead.record, fields) : "");
+  // An item the page does not show has not arrived for a reader (`item-record/rendered-item.ts`, t903).
   const hasUnreadItem = (): boolean => Array.from(document.querySelectorAll(item)).some((element) => {
+    if (!isRenderedItem(element)) return false;
     const seen = read.get(element);
     return seen === undefined || (contentAware && seen !== keyOf(readRecord(element, fields, "visible")));
   });
@@ -393,6 +403,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // answer that is too small is worth more than no answer at all.
   const faultedItems = new Set<Element>();
   let pageFault = false;
+  let pagingFault: string | undefined;
   // "Your item selector names nothing" and "the page holds nothing" are
   // different repairs, and a read of zero records cannot tell them apart (C2).
   let listPresence: ListPresence | undefined;
@@ -445,6 +456,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     const answered = ordered?.rows ?? answer.records;
     const seen = itemsSeen();
     const repeats = repeatsSoFar();
+    const hidden = [...namedItems].filter((element) => element.isConnected && !isRenderedItem(element)).length;
     return {
       records: answered,
       pagesRead: progress.pagesRead,
@@ -453,9 +465,11 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       missingFields: answer.missingFields,
       filtered,
       ...recordGaps(answered, fields),
+      ...(hidden === 0 ? {} : { notRenderedItems: hidden }),
       ...(seen === undefined ? {} : { itemsSeen: seen }),
       ...(faultedItems.size === 0 ? {} : { itemFaults: faultedItems.size }),
       ...(pageFault ? { pageFault: true } : {}),
+      ...(pagingFault === undefined ? {} : { pagingFault }),
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
       ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered, seen: [...seenEach], alone: [...aloneEach], keptValues: keptValuesEach.map((values) => [...values]) } }),
@@ -576,6 +590,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       // read are still the answer. A row that faulted is remembered so a
       // re-queried document does not fault on it again and again.
       if (faultedItems.has(element)) continue;
+      // An item the page does not show is not read, nor marked read: a person opens what holds it first, and
+      // once it shows, this same read takes it. One still hidden at the end is counted, never answered empty (t903).
+      if (!isRenderedItem(element)) continue;
       try {
         const seen = read.get(element);
         if (seen !== undefined && !contentAware) continue;
@@ -690,6 +707,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     } catch (error) {
       pageFault = true;
       paginationStop = paginationStopOf(error);
+      // A fault that says the list goes on makes an incomplete read, which says so (see `pageFault`).
+      truncated = paginationStop === RATE_LIMITED_STOP || paginationStop === "control_not_clickable";
+      if (error instanceof PaginationFault) pagingFault = error.message;
       break;
     }
     if (advance.outcome === "advanced") continue;

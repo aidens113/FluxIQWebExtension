@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ACTIVITY_MESSAGES } from "../../../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../../../shared/constants";
+import { userActivation } from "../../tests/user-activation";
 import { createExtensionChatTransport } from "../create-extension-chat-transport";
 import { sendRecorder } from "./send-recorder";
 
@@ -29,7 +30,9 @@ test("reading a thread sends the conversation read of kind get and answers the r
   assert.deepEqual(result, { ok: true, value: { conversation: { turns: [] } } });
 });
 
-test("sending and answering carry their fields as the panel always sent them", async () => {
+test("sending and answering carry their fields as the panel always sent them", async (t) => {
+  // The answer was pressed by a person, so the panel holds an active user activation.
+  userActivation(t, { isActive: true, hasBeenActive: true });
   const recorder = sendRecorder({ ok: true, value: { ok: true } });
   const transport = createExtensionChatTransport(recorder.request, NO_PUSHES);
   const message = { text: "Run it", conversationId: undefined, projectId: "p1", subjectKind: "flow" as const, subjectId: "f1", title: "Tracker", onScreen: { flowId: "f1", recordingId: "r1" } };

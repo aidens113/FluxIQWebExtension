@@ -11,6 +11,9 @@
 import { webPlanScriptedChoiceMove } from "../plan-resolution/control-fit";
 import type { WebLlmToolRejectionReason } from "../tool-rejection";
 
+/** A read whose items are on the page and not shown (t903): what shows them, then the same read. */
+const NOT_RENDERED_NEXT = "The read found its items, but the page does not show them: they sit inside something closed, such as a menu, a panel or a tab. Show them first, by a hover or a click on the control that opens what holds them, then run the same read again.";
+
 /** The resolver's code for a handle a reload renumbered (`plan-resolution/resolve-plan-node.ts`). */
 const RENUMBERED_BY_RELOAD = "web.handle.renumbered_by_reload";
 
@@ -23,6 +26,7 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
     : reason === "press_had_no_effect" ? "The press left the page unchanged after it settled. Automatic retries have finished. Read the current page for a missing prerequisite or choose another control; the requested effect has not been established."
     : reason === "page_reported_press_failed" ? "The page answered the press only with a notice in its own status or alert region and changed nothing else. Automatic retries have finished. Read what the notice says on the current page before pressing again or choosing another way; the requested effect has not been established."
+    : reason === "items_not_rendered" ? NOT_RENDERED_NEXT
     : reason === "option_not_offered" ? OPTION_NOT_OFFERED_NEXT
     // Read off the field code in `instead`, so a repeat that passes it back says it again.
     : reason === "incomplete_text" ? incompleteTextNext(instead)

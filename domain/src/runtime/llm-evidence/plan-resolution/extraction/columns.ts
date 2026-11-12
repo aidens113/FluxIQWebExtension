@@ -302,6 +302,7 @@ function readColumn(entry: unknown, ownKey: string | undefined, detected: Detect
     field: present<WebAutomationExtractFieldSpec>({
       kind: spec.kind,
       selector: spec.selector,
+      group: spec.group,
       attribute: spec.attribute,
       header: spec.header,
       definition: spec.definition === undefined ? undefined : { term: spec.definition.term, part: spec.definition.part },
@@ -338,6 +339,8 @@ function namedColumn(name: string, attributeGiven: string | undefined, detected:
     field: present<WebAutomationExtractFieldSpec>({
       kind: "attribute",
       selector: spec.selector,
+      // The element is found where the column finds it: in the item's group, for a group's column.
+      group: spec.group,
       attribute,
       header: undefined,
       definition: undefined,

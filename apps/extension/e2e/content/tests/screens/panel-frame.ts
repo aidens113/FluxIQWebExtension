@@ -4,18 +4,30 @@
 import { build } from "esbuild";
 import type { Frame, FrameLocator, Page } from "@playwright/test";
 
-export type PanelBundle = { script: string; css: string };
+/** A font the panel's styles carry as a data URL. A scenario page's CSP refuses a font by URL, so it is loaded through the FontFace API, which the CSP does not govern. */
+export type PanelFont = { family: string; weight: string; data: string };
+export type PanelBundle = { script: string; css: string; fonts?: PanelFont[] };
+
+function withoutFontFaces(css: string): { css: string; fonts: PanelFont[] } {
+  const fonts: PanelFont[] = [];
+  const stripped = css.replace(/@font-face\s*\{[^}]*\}/gu, (rule) => {
+    const family = /font-family:\s*["']?([^";']+)["']?\s*;/u.exec(rule)?.[1];
+    const weight = /font-weight:\s*([^;]+);/u.exec(rule)?.[1] ?? "400";
+    const data = /url\(["']?data:[^;]+;base64,([^"')]+)/u.exec(rule)?.[1];
+    if (family && data) fonts.push({ family: family.trim(), weight: weight.trim(), data });
+    return "";
+  });
+  return { css: stripped, fonts };
+}
 
 /** `entry` is TypeScript resolved from `apps/extension`, usually a call to `startScriptedPanel`. */
 export async function bundlePanel(entry: string): Promise<PanelBundle> {
   const bundled = await build({
     stdin: { resolveDir: process.cwd(), loader: "ts", contents: `import "./src/panel/theme/tokens.css";\n${entry}` },
-    bundle: true, write: false, platform: "browser", format: "iife", outfile: "panel-preview.js", loader: { ".css": "css" }
+    bundle: true, write: false, platform: "browser", format: "iife", outfile: "panel-preview.js", loader: { ".css": "css", ".woff2": "dataurl" }
   });
-  return {
-    script: bundled.outputFiles.find((file) => file.path.endsWith(".js"))!.text,
-    css: bundled.outputFiles.find((file) => file.path.endsWith(".css"))?.text ?? ""
-  };
+  const split = withoutFontFaces(bundled.outputFiles.find((file) => file.path.endsWith(".css"))?.text ?? "");
+  return { script: bundled.outputFiles.find((file) => file.path.endsWith(".js"))!.text, css: split.css, fonts: split.fonts };
 }
 
 export type PanelFrame = { frame: FrameLocator; child: Frame };
@@ -37,6 +49,13 @@ export async function mountPanelFrame(page: Page, bundle: PanelBundle, size: { w
   await frame.locator("#app").waitFor();
   const child = page.frame({ name: "panel-frame" })!;
   await child.addStyleTag({ content: bundle.css });
+  await child.evaluate(async (fonts) => {
+    for (const font of fonts) {
+      const bytes = Uint8Array.from(atob(font.data), (character) => character.charCodeAt(0));
+      const face = new FontFace(font.family, bytes.buffer, { weight: font.weight, display: "swap" });
+      document.fonts.add(await face.load());
+    }
+  }, bundle.fonts ?? []);
   await child.addScriptTag({ content: bundle.script });
   return { frame, child };
 }

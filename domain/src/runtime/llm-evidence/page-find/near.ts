@@ -13,25 +13,27 @@
 // punctuation never counts; short stop words are ignored and a plural `s` is
 // dropped. An element must share at least two of the query's words, so one
 // common word is never close. Ranking is by the share of the query's words
-// held, then page order; at most {@link NEAR_MATCHES_SHOWN} are listed. No
-// edit distance: a word is held or it is not, and the same page and query
-// always give the same answer.
+// held, then page order. No edit distance: a word is held or it is not, and the
+// same page and query always give the same answer.
+//
+// Every close match is answered (t903). Until t903 ten were listed and the rest
+// counted, "search fewer words to narrow them", with no way to see them: a cap
+// on what the model sees of the page. They now follow the exact matches in the
+// search's own pages of fifty (`./search.ts`), so `after` reaches every one.
 
 import type { WebLlmEvidenceElement } from "../elements";
 
-/** The most close matches one answer lists. */
-const NEAR_MATCHES_SHOWN = 10;
 /** Words too common to say anything about which element was meant. */
 const STOP_WORDS: ReadonlySet<string> = new Set(["a", "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with"]);
 
-/** The listed close matches, best first, each with the query words it lacks in the query's spelling, and how many more there were. */
+/** Every close match, best first, each with the query words it lacks in the query's spelling. */
 export function webLlmNearMatches(
   elements: readonly WebLlmEvidenceElement[],
   query: string,
   exact: ReadonlySet<WebLlmEvidenceElement>
-): { shown: Array<{ element: WebLlmEvidenceElement; lacking: string[] }>; more: number } {
+): Array<{ element: WebLlmEvidenceElement; lacking: string[] }> {
   const wanted = queryWords(query);
-  if (wanted.length < 2) return { shown: [], more: 0 };
+  if (wanted.length < 2) return [];
   const keys = new Set(wanted.map((word) => word.key));
   const near = elements.flatMap((element, index) => {
     if (exact.has(element)) return [];
@@ -44,10 +46,7 @@ export function webLlmNearMatches(
     return [{ element, index, holds, lacking: lacking.map((word) => word.word) }];
   });
   near.sort((a, b) => b.holds - a.holds || a.index - b.index);
-  return {
-    shown: near.slice(0, NEAR_MATCHES_SHOWN).map(({ element, lacking }) => ({ element, lacking })),
-    more: Math.max(0, near.length - NEAR_MATCHES_SHOWN)
-  };
+  return near.map(({ element, lacking }) => ({ element, lacking }));
 }
 
 /** The query's significant words, each once, in its own spelling and as compared. */

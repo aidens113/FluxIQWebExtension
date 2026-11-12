@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { installPageWorkWatch } from "..";
-import { PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT, PAGE_WORK_HORIZON_MS, PAGE_WORK_WATCHED_EVENT } from "../../../shared/scheduled-work-event";
+import { PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT, PAGE_WORK_HORIZON_MS, PAGE_WORK_PENDING_EVENT, PAGE_WORK_WATCHED_EVENT } from "../../../shared/scheduled-work-event";
 
 type Entry = { initiatorType: string; name: string };
 type Host = EventTarget & {
@@ -53,6 +53,7 @@ function page(t: TestContext, options: { hidden?: boolean } = {}) {
   return {
     host, Xhr, fetched,
     busy: () => asked(PAGE_WORK_BUSY_EVENT),
+    pending: () => asked(PAGE_WORK_PENDING_EVENT),
     watched: () => asked(PAGE_WORK_WATCHED_EVENT),
     answer: (url: string) => deliver([{ initiatorType: "fetch", name: url }]),
     drained: () => drained
@@ -76,6 +77,23 @@ test("a timer due within the horizon keeps the page busy until its callback has 
   await later(60);
   assert.equal(p.busy(), false);
   assert.equal(p.drained(), 1, "the count falling to none is announced");
+});
+
+test("a deferred one-shot is visible to command readiness without holding ordinary navigation readiness", (t) => {
+  const p = page(t);
+  const token = p.host.setTimeout(() => undefined, PAGE_WORK_HORIZON_MS + 500);
+  assert.equal(p.busy(), false);
+  assert.equal(p.pending(), true, "hydration remains known work even beyond the navigation horizon");
+  p.host.clearTimeout(token);
+  assert.equal(p.pending(), false);
+});
+
+test("an unrelated long interval never becomes deferred one-shot work", (t) => {
+  const p = page(t);
+  const token = p.host.setInterval(() => undefined, PAGE_WORK_HORIZON_MS + 500);
+  assert.equal(p.busy(), false);
+  assert.equal(p.pending(), false);
+  p.host.clearInterval(token);
 });
 
 test("the sort: an address rewritten in place, a short delay, then the results requested -- busy until they answer", async (t) => {
@@ -106,16 +124,21 @@ test("the listing: a panel drawn by a timer that requests it -- busy through the
 test("a callback that schedules itself again recurs: it is counted once, and what it begins after is not", async (t) => {
   const p = page(t);
   let runs = 0;
+  // The fourth run is awaited itself: each run is scheduled only once the one before it has run, so no fixed wait is sure to cover four on a busy machine.
+  let fourth: () => void = () => undefined;
+  const ranFourTimes = new Promise<void>((resolve) => { fourth = resolve; });
   const poll = (): void => {
     runs += 1;
     p.host.fetch("poll.json");
     if (runs < 4) p.host.setTimeout(poll, 10);
+    else fourth();
   };
   p.host.setTimeout(poll, 10);
-  await later(80);
+  await ranFourTimes;
   assert.equal(runs, 4);
   p.answer("https://kerbfind.test/search/poll.json");
   assert.equal(p.busy(), false, "only the first run's request was counted, and it answered");
+  assert.equal(p.pending(), false, "recurring work cannot hold command readiness either");
 });
 
 test("an interval counts until its first run, an animation-frame loop its first frame, and frames not at all in a hidden document", async (t) => {

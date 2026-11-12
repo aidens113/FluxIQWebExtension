@@ -61,10 +61,10 @@ export const SETTING_FIELDS: {
     { key: "coreApiUrl", id: "coreApiUrl", label: "FluxIQ web address", hint: "The address you open FluxIQ at." }
   ],
   toggles: [
-    { key: "autoReconnect", id: "autoReconnect", label: "Reconnect automatically", hint: "Reconnect after the connection drops." },
-    governed({ key: "captureMutations", id: "captureMutations", label: "Record page changes" }, "captureMutations", "Notice when the page updates by itself.", POLICY_OFF),
+    { key: "autoReconnect", id: "autoReconnect", label: "Reconnect automatically", hint: "Reconnects to FluxIQ by itself after the connection drops." },
+    governed({ key: "captureMutations", id: "captureMutations", label: "Record page changes" }, "captureMutations", "Lets FluxIQ notice when a page changes by itself, such as a list that loads more.", POLICY_OFF),
     governed({ key: "captureInputValues", id: "captureInputValues", label: "Record what I type" }, "captureInputValues", "Needed to replay typing. Passwords are never recorded.", POLICY_OFF),
-    governed({ key: "captureSnapshots", id: "captureSnapshots", label: "Record page snapshots" }, "captureSnapshots", "Lets FluxIQ see the page as it was at each step.", POLICY_OFF),
+    governed({ key: "captureSnapshots", id: "captureSnapshots", label: "Record page snapshots" }, "captureSnapshots", "Lets FluxIQ keep a copy of the page as it looked at each step.", POLICY_OFF),
     governed({ key: "requestsEnabled", id: "requestsEnabled", label: "Allow direct requests" }, "directRequests", "Lets a Flow call a site's addresses directly.", "Unavailable in this version.")
   ]
 };

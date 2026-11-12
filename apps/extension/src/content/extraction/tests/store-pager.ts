@@ -111,6 +111,10 @@ export class FakeElement {
     return false;
   }
 
+  hasAttribute(name: string): boolean {
+    return this.getAttribute(name) !== null;
+  }
+
   matches(selector: string): boolean {
     return selector.split(",").some((part) => part.trim() !== ":disabled" && simpleMatches(this, part.trim()));
   }

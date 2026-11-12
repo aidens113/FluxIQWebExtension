@@ -5,9 +5,11 @@ export { readAnswerTurnInDocument, type AnswerTurnDom } from "./answer-turn-dom.
 export { followAttempt, type FollowAttemptInput } from "./follow-attempt.js";
 export { attemptPersonFor, type AttemptPersonInput, type AttemptPersonRecords } from "./attempt-person.js";
 export { liveAttemptDriver, type LiveAttemptDriverInput, type LiveAttemptEnded, type LiveAttemptPerson, type LiveAttemptPersonRun } from "./live-driver.js";
+export { attemptModelRecord, type AttemptModelRecord } from "./model-record.js";
+export { attemptModelHeader } from "./report-model-header.js";
 export { attemptBalanceFailures, type ProviderFailureRecord } from "./balance-failures.js";
 export { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
-export { panelAnswerPort, readPanelAnswerTurn } from "./panel-answer-port.js";
+export { awaitPanelAnswerTurn, panelAnswerPort, readPanelAnswerTurn } from "./panel-answer-port.js";
 export { attemptResultLine } from "./result-line.js";
 export { attemptCanGoOn } from "./can-go-on.js";
 export { runAttemptCommand, type AttemptCommandInput } from "./run-attempt-command.js";

@@ -80,11 +80,12 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
   const body = createElement("div", { id: "extractionBody", className: "extraction-body", hidden: true }, [
     createElement("label", { className: "field" }, [createElement("span", { text: "Dataset name" }), label]),
     summary,
-    sectionHeading("Columns", createElement("span", { text: "Rename, remove, or exclude a column." })),
-    fields,
-    sectionHeading("Pages", pagesNote),
+    // The preview comes before the column editor, so what will be read is in view without scrolling past every column.
     sectionHeading("Preview", previewNote),
-    createElement("div", { className: "extraction-preview-scroll" }, [previewTable])
+    createElement("div", { className: "extraction-preview-scroll" }, [previewTable]),
+    sectionHeading("Pages", pagesNote),
+    sectionHeading("Columns", createElement("span", { text: "Rename, remove, or exclude a column." })),
+    fields
   ]);
 
   const cancelButton = createElement("button", { id: "extractionCancelButton", className: "small-button", text: "Cancel", attrs: { type: "button" } });

@@ -199,7 +199,9 @@ test("each of the seven new action types dispatches under its own output id", as
     const result = await execute(outputId, { selector: "#target" });
     const effect = result.effects?.[0];
     assert.equal(effect?.type, "policy.output.dispatch");
-    assert.deepEqual(effect?.payload, { outputId, parameters: { selector: "#target" } });
+    // A check may reload its page onto a robot check, so of these it alone carries the check allowance (`actions/check-wait.ts`, t885).
+    const parameters = outputId === "web.dom.check" ? { selector: "#target", checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS } : { selector: "#target" };
+    assert.deepEqual(effect?.payload, { outputId, parameters });
   }
 });
 

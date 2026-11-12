@@ -32,7 +32,8 @@ export function webAutomationExtractListParameters(): AutomationNodeParameter[] 
       label: "Timeout",
       description: "Milliseconds for the read of the page.",
       valueType: "number",
-      defaultValue: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS
+      defaultValue: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS,
+      timing: true
     },
     {
       id: "recordOutput",

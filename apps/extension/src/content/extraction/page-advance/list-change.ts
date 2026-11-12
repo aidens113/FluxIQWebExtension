@@ -18,7 +18,9 @@ import { awaitPageRendered } from "../page-render";
 import { linkAddress, sameDocument } from "../pager-reading";
 import { PaginationFault } from "./pagination-fault";
 import type { PageStep, PaginationProgress } from "./types";
+import type { PagerPress } from "./pager-press";
 import { PageMovePersonCheck } from "./person-check";
+import { recordMeaning } from "./record-meaning";
 
 /** How long the list has to change after a control was followed. */
 export const LIST_CHANGE_TIMEOUT_MS = 10_000;
@@ -74,6 +76,15 @@ export async function afterListChange(
   by: WebAutomationNextPageBy
 ): Promise<PageStep> {
   const { item, shown, deadline } = progress;
+  // Above humanness 0, the misclick and the aim come first; the press is then
+  // marked again, so a document a link loads records it as made (`./pager-press.ts`).
+  if (progress.press !== undefined) {
+    do {
+      if (pastDeadline(deadline)) return { outcome: "timed_out", stop: "deadline" };
+      await progress.press.prepare(control);
+      await progress.beforeFollow?.(by);
+    } while (progress.press.ready?.(control) === false);
+  }
   const movedAt = Date.now();
   // Capture before pressing: shown contains live Elements whose fields may be
   // replaced in place. Comparing those Elements after pressing loses page one.
@@ -84,7 +95,7 @@ export async function afterListChange(
   let outcome: WaitOutcome;
   let byAddress = false;
   try {
-    const cancelled = clickNoticingCancel(control);
+    const cancelled = clickNoticingCancel(control, progress.press);
     await PageMovePersonCheck.awaitClear(movedAt, deadline);
     const changed = (): boolean => {
       PageMovePersonCheck.assertClear(movedAt);
@@ -104,6 +115,10 @@ export async function afterListChange(
   }
   await PageMovePersonCheck.awaitClear(movedAt, deadline);
   if (outcome === "unchanged") {
+    // Drawn again holding the same records: the control reached a page, and it
+    // is the page it was on. The read's loop stops there on `page_repeated`, and
+    // a next-page step fails `list_unchanged` (`./move-page.ts`); see `listChanged`.
+    if (redrawn(item, shown)) return { outcome: "advanced", by };
     const also = byAddress ? ", or of going to the address it links to" : "";
     throw new PaginationFault("list_unchanged", `The list did not change within ${LIST_CHANGE_TIMEOUT_MS}ms of ${action}${also}.`);
   }
@@ -129,21 +144,23 @@ function renderedAs(way: WebAutomationNextPageWay | undefined): WebAutomationExt
 }
 
 /**
- * Clicks the control and says whether the page cancelled the click.
+ * Clicks the control and says whether the page cancelled the click: with
+ * `press` above humanness 0 (`./pager-press.ts`), else `control.click()`.
  *
  * The page's own listeners see the click first and may cancel it and stop it
  * propagating, so the event is caught on its way down, at the window, and read
  * once `click()` has returned: dispatch is synchronous, so by then every
  * listener has had its say.
  */
-function clickNoticingCancel(control: HTMLElement): boolean {
+function clickNoticingCancel(control: HTMLElement, press: PagerPress | undefined): boolean {
   let clicked: Event | undefined;
   const notice = (event: Event): void => {
     if (clicked === undefined && event.target instanceof Node && (event.target === control || control.contains(event.target))) clicked = event;
   };
   window.addEventListener("click", notice, true);
   try {
-    control.click();
+    if (press === undefined) control.click();
+    else press.press(control);
   } finally {
     window.removeEventListener("click", notice, true);
   }
@@ -165,25 +182,28 @@ function watchUnload(): { started(): boolean; stop(): void } {
   };
 }
 
+/** Whether the page drew the list's items again in new elements: the first one left the page, or another element is first. */
+function redrawn(itemSelector: string, previous: readonly Element[]): boolean {
+  const first = previous[0];
+  return first !== undefined && (!first.isConnected || document.querySelector(itemSelector) !== first);
+}
+
 /**
- * Whether the list became a different list. A page that replaces its results
- * detaches the old items, and one that appends changes their number, so both
- * are observed without knowing how the page loads. Text/link changes cover
- * records rendered into the same elements. Pager churn alone proves nothing
- * about the records and cannot count as advancement.
+ * Whether the list became a different list: it holds another number of items,
+ * or an item that says something else in its place (`./record-meaning.ts`). A
+ * page that appends changes the number, and one that replaces its results, or
+ * renders new records into the same elements, changes what they say. Which
+ * elements hold the records proves nothing: a page that redraws the same
+ * records detaches every item and has not moved (t885, R5): a booking widget
+ * redraws its calendar on every press, so a Next that only raised a form error
+ * answered "moved" in 5 ms. The wait goes on for the records to change, so a
+ * page that draws the same list again before the next one is not taken for
+ * either; only when the window closes on the same records drawn again is that
+ * the answer (`redrawn`). Pager churn alone proves nothing about the records
+ * either and cannot count as advancement.
  */
 function listChanged(itemSelector: string, previous: readonly Element[], previousRecords: readonly string[]): boolean {
   const current = document.querySelectorAll(itemSelector);
-  const first = previous[0];
-  if (!first) return current.length > 0;
-  return !first.isConnected || current.length !== previous.length || current[0] !== first
-    || Array.from(current).some((record, index) => recordMeaning(record) !== previousRecords[index]);
-}
-
-/** Record meaning only, not animation/style/pager mutations. Kept locally;
- * neither field text nor link addresses are added to wire evidence or logs. */
-function recordMeaning(record: Element): string {
-  const text = (record.textContent ?? "").replace(/\s+/gu, " ").trim();
-  const links = Array.from(record.querySelectorAll?.("a[href]") ?? []).map((link) => link.getAttribute("href"));
-  return JSON.stringify([text, links]);
+  if (previous.length === 0) return current.length > 0;
+  return current.length !== previousRecords.length || Array.from(current).some((record, index) => recordMeaning(record) !== previousRecords[index]);
 }

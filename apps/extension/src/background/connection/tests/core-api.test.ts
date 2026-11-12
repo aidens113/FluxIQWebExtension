@@ -533,3 +533,15 @@ test("a project Core gives no name for has none", async (t) => {
   assert.equal(h.context.currentName(), undefined);
   assert.deepEqual(h.named, []);
 });
+
+test("a Core refusal's own code travels as coreCode beside Core's sentence; an unusable code is dropped", async (t) => {
+  const sentence = "This conversation is still being used by work that is running.";
+  stubFetch(t, () => json(409, { ok: false, error: sentence, errorCode: "conversation_run_active" }));
+  assert.deepEqual(await callCoreProgram(credentials, "delete-conversation", { conversationId: "c1" }), {
+    ok: false, code: "failed", httpStatus: 409, coreCode: "conversation_run_active", error: sentence
+  });
+  stubFetch(t, () => json(409, { ok: false, error: sentence, errorCode: `has spaces ${TOKEN}` }));
+  assert.deepEqual(await callCoreProgram(credentials, "delete-conversation", { conversationId: "c1" }), { ok: false, code: "failed", httpStatus: 409, error: sentence });
+  stubFetch(t, () => json(409, { ok: false, error: sentence, errorCode: `a${"b".repeat(64)}` }));
+  assert.deepEqual(await callCoreProgram(credentials, "delete-conversation", { conversationId: "c1" }), { ok: false, code: "failed", httpStatus: 409, error: sentence });
+});

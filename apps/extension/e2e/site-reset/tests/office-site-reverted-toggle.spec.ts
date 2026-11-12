@@ -1,15 +1,14 @@
 import type { JsonObject } from "fluxiq/core";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test } from "../../fixtures/extension-context";
-import { retiredCodesIn } from "../change-proof";
-import { actsUnder, bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
+import { judgeLog, retiredCodesIn } from "../change-proof";
+import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Start a checkout for one product without the free trial.";
 const SAGE = TIDEWELL_KETTLES.find(product => product.variant?.colour === "Sage Green" && product.variant.capacity === "1.7 L")!;
 /** Checkout's upsell checkbox, ticked whenever the store opens a checkout session (`state/checkout-ops.ts`, `opened`). */
 const PLUS = /^t\d+ checkbox "Yes, start my 30-day FREE .*Plus trial[^"]*" (?:un)?checked$/u;
 const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
-const feedbackSteps = (tested: JsonObject | undefined) => (record(tested?.feedback).steps as JsonObject[] | undefined) ?? [];
 /** The Plus checkbox's line in a page view, or none. */
 const plusLine = (view: string) => view.split("\n").find(line => PLUS.test(line));
 
@@ -52,11 +51,37 @@ test("installed gateway project build settles a toggle the site put back itself 
   /** The Plus box as each named moment's page view showed it. */
   const plusShown: Record<string, string | null> = {};
   const sent: string[] = [];
-  const tests: JsonObject[] = [];
+  const buyTiming: Array<{ kind: string; document: number; elapsed: number; listener?: boolean }> = [];
+  const judge = judgeLog();
+  /** What the supervisor's dispatch answered once the build brief returned: how the brief's trial ended. */
+  let dispatched: JsonObject | undefined;
   let destinationReference = "", buyHandle = "", untickAct = "";
   let baseline: string | undefined;
   let plusCheckedAtEnd: boolean | undefined;
+  let trialActionsStart = -1;
+  let trialTimingStart = -1;
   try {
+    // Observe the deliberately delayed product hydration without waiting for it or changing the press.
+    // Only timings and listener presence cross this binding; no page content, URLs or command identifiers.
+    await page.exposeFunction("__resetBuyTiming", (event: typeof buyTiming[number]) => buyTiming.push(event));
+    await page.addInitScript(() => {
+      const emit = (event: { kind: string; document: number; elapsed: number; listener?: boolean }) =>
+        (window as unknown as { __resetBuyTiming: (event: unknown) => Promise<void> }).__resetBuyTiming(event);
+      const listened = new WeakSet<EventTarget>();
+      const add = EventTarget.prototype.addEventListener;
+      const isBuy = (target: EventTarget) => target instanceof HTMLButtonElement && target.textContent?.trim() === "Buy Now";
+      EventTarget.prototype.addEventListener = function (this: EventTarget, ...args: Parameters<typeof add>) {
+        if (args[0] === "click" && isBuy(this)) {
+          listened.add(this);
+          void emit({ kind: "listener", document: performance.timeOrigin, elapsed: performance.now() });
+        }
+        return add.apply(this, args);
+      };
+      document.addEventListener("click", event => {
+        const button = event.target instanceof Element ? event.target.closest("button") : null;
+        if (button && isBuy(button)) void emit({ kind: "press", document: performance.timeOrigin, elapsed: performance.now(), listener: listened.has(button) });
+      }, true);
+    });
     await openStoreDetail(page, installed.origin, detail);
     await installed.pair();
     const observed = bindInstrumentedRuntime(installed);
@@ -79,7 +104,6 @@ test("installed gateway project build settles a toggle the site put back itself 
         answers[pending] = record([...turn.evidence].reverse().find(entry => entry.callId === pending)?.value);
         clicks[pending]!.after = observed.clicks();
         plusShown[pending] = plusLine(turn.shownPage()) ?? null;
-        if (pending.startsWith("trial.")) tests.push(answers[pending]!);
         pending = "";
       }
       const done = () => {
@@ -125,22 +149,37 @@ test("installed gateway project build settles a toggle the site put back itself 
           const submitted = answers["submit"];
           if (typeof submitted?.revision !== "number" || typeof submitted.digest !== "string") throw new Error("diagnostic.submission_refused");
           candidate = { revision: submitted.revision, digest: submitted.digest };
+          trialActionsStart = observed.actions.length;
+          trialTimingStart = buyTiming.length;
           return send("trial.first", call("trial.first", "core.test_subflow", candidate));
         }
         default:
           return done();
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder });
+    const provider = bindScriptedProvider(installed, {
+      task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify,
+      // The default one-part plan and single build brief, keeping the dispatch's answer, which says how the brief's test ended.
+      supervisor: turn => {
+        if (turn.step === 1) return turn.call("plan", "project.write_plan", turn.plan());
+        if (turn.step === 2) {
+          const brief = { kind: "build", subflowKey: "main", parts: ["p1"], entry: { caseId: "observed-current", predecessors: [] }, permittedActs: ["create_new", "modify_existing"], maxIterations: 20 };
+          return turn.call("dispatch", "project.dispatch", { reason: "Exercise the transport.", briefs: [brief] });
+        }
+        dispatched = turn.last("project.dispatch");
+        return turn.complete(record(dispatched?.complete));
+      }
+    });
     const { ending, failure } = await build.run();
     // The site as the build left it: a checkout session whose Plus box is ticked, as the store opens every session.
     await page.goto(checkout);
     plusCheckedAtEnd = await page.getByRole("checkbox", { name: /Plus trial/u }).isChecked().catch(() => undefined);
     const cartReads = reads.filter(read => read.location?.includes("/everything-store/cart") === true);
     const coded = (callId: string) => answers[callId]?.code ?? answers[callId]?.verdict ?? (answers[callId]?.ok === true ? "ok" : undefined);
-    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, destinationReference, baseline, untickAct, plusShown, plusCheckedAtEnd, clicks, answers, tests, reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
+    const trialActions = observed.actions.slice(trialActionsStart);
+    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, destinationReference, baseline, untickAct, plusShown, plusCheckedAtEnd, clicks, answers, trialActionsStart, trialActions, buyTiming, dispatched, judged: judge.requests, siteChanges: judge.siteChanges(), reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
     await keepDiagnostic(testInfo, "reset-office-toggle.json", diagnostic);
-    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, sent, codes: Object.fromEntries(sent.map(callId => [callId, coded(callId) ?? null])), undo: [answers["undo.toggle"]?.failed ?? null, answers["undo.toggle"]?.canMeet ?? null], actsToUndo: actsUnder(tests[0], "actsToUndo").map(act => [act.act, act.call ?? null]), plusShown: Object.fromEntries(Object.entries(plusShown).map(([call, line]) => [call, line === null ? null : line.endsWith(" unchecked") ? "unchecked" : "checked"])), plusCheckedAtEnd } }));
+    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, sent, codes: Object.fromEntries(sent.map(callId => [callId, coded(callId) ?? null])), undo: [answers["undo.toggle"]?.failed ?? null, answers["undo.toggle"]?.canMeet ?? null], buyTiming, trialActions, plusCheckedAtEnd } }));
 
     // The cart is read complete, its ref issued; Buy Now named it, admitted and pressed once.
     expect(destinationReference).toMatch(/^destination-[1-9][0-9]{0,3}$/u);
@@ -169,16 +208,39 @@ test("installed gateway project build settles a toggle the site put back itself 
     expect(back?.canMeet).toBe("no_call");
     expect(observed.declarations.filter(declaration => declaration.call === "undo.toggle")).toEqual([]);
 
-    // The untick is settled by what the page shows: the test lists it nowhere to undo, and the trial is admitted.
-    expect(tests).toHaveLength(1);
-    expect(actsUnder(tests[0], "actsToUndo").filter(act => act.act === untickAct || act.call === "untick")).toEqual([]);
-    expect(actsUnder(tests[0], "actsToUndo")).toEqual([]);
-    expect(retiredCodesIn(tests, observed.outcomes, provider.receipts, failure)).toEqual([]);
-    expect(trialCode(tests[0])).toBe("yes");
-    expect(tests[0]?.trialRunId).toMatch(/^trial\./u);
-    expect(feedbackSteps(tests[0]).some(step => step.control === "Buy Now" && step.status === "succeeded")).toBe(true);
-    // It did not start with the untick left either: settled, it is listed nowhere.
-    expect(startedWithActs(tests[0]).some(act => act.act === untickAct || act.call === "untick")).toBe(false);
+    // The untick is settled by what the page shows, so the trial is admitted and runs (answering yes). Since Core t811
+    // (2026-10-30) a yes on the judged whole run completes the brief before any further builder turn, so the trial's own
+    // answer never reaches this builder: the builder's ninth turn, the trial, is its last, and the
+    // trial's verdict is read from the supervisor's `project.dispatch` answer instead. The brief returned done on one trial
+    // answered yes, proposing the revision the builder submitted.
+    expect(trialActionsStart).toBeGreaterThanOrEqual(0);
+    expect(trialActions.filter(action => action.action === "web.dom.click")).toEqual([
+      expect.objectContaining({ status: "succeeded", skipped: undefined })
+    ]);
+    expect(trialTimingStart).toBeGreaterThanOrEqual(0);
+    expect(buyTiming.slice(trialTimingStart).some(event => event.kind === "press" && event.listener === true)).toBe(true);
+    expect(provider.builderSteps()).toBe(9);
+    expect(retiredCodesIn([...Object.values(answers)], observed.outcomes, provider.receipts, failure)).toEqual([]);
+    const returned = (dispatched?.returns as JsonObject[] | undefined) ?? [];
+    expect(returned.map(entry => entry.outcome)).toEqual(["done"]);
+    expect((returned[0]?.trialsAnswered as JsonObject[] | undefined)?.map(entry => entry.verdict)).toEqual(["yes"]);
+    expect(record(returned[0]?.proposal).revision).toBe(answers["submit"]?.revision);
+    expect(record(dispatched?.complete).revision).toBe(answers["submit"]?.revision);
+    expect(String(record((returned[0]?.trials as JsonObject[] | undefined)?.[0]).receiptId)).toMatch(/^trial\./u);
+    // What the trial's own answer once said (`startedWith`, `actsToUndo`, the per-step feedback) is what the judge was shown
+    // of that same trial: it was asked twice, the trial and Core's recheck of a yes. The trial began with the two Buy Now presses
+    // the build made (left in place: the cart they act on never changes) and not the untick, which the site had put back and
+    // settlement listed nowhere. Its Flow was the two steps, and it ended on the checkout the Buy Now opened.
+    expect(judge.requests).toHaveLength(2);
+    for (const shown of judge.requests) {
+      const summary = record(record(JSON.parse(shown)).context).resultSummary as JsonObject;
+      const startedWith = ((summary.startedWith as unknown[] | undefined) ?? []).map(String);
+      expect(startedWith.map(entry => entry.match(/\(act-[0-9]+\)/u)?.[0])).toEqual(["(act-1)", "(act-3)"]);
+      expect(startedWith.every(entry => entry.includes('click "Buy Now" button'))).toBe(true);
+      expect(startedWith.some(entry => entry.includes(untickAct) || /checkbox|Plus/u.test(entry))).toBe(false);
+      expect(((summary.flowShape as JsonObject[] | undefined) ?? []).map(step => step.label)).toEqual(["open the product", "start the checkout"]);
+      expect(String(record(record(summary.endView).view).page)).toContain('PAGE "Brightaisle.com Checkout"');
+    }
     expect(ending).toBe("proposed");
     // Final site state: the cart exactly as the build found it, and checkout's box ticked as the store opens it.
     expect(cartReads.length).toBeGreaterThanOrEqual(1);

@@ -319,3 +319,62 @@ test("run muwansvz: the store's last results page, its Next drawn as disabled te
     pageOne.restore();
   }
 }));
+
+// t885, R4: a booking widget pages its calendar with a drawn `<div>Later ›</div>`
+// and steps its form with Back and Next buttons under the calendar; detection
+// proposed the form's Next as the calendar's pager. Here a cinema's showtimes
+// per day stand inside a checkout-style stepper.
+
+/** Three days of showtimes in a stepper: a range line with Earlier or Later where they exist, and the stepper's Back and Next. */
+function showtimes(nav: { earlier: boolean; later: boolean }): { body: PageElement; days: PageElement[]; later: PageElement | undefined; earlier: PageElement | undefined } {
+  const days = ["Mon", "Tue", "Wed"].map((day) => pageEl("div", { class: "day" }, [
+    pageEl("div", { class: "head" }, day),
+    pageEl("button", { class: "time" }, "18:00"),
+    pageEl("button", { class: "time" }, "20:30")
+  ]));
+  const earlier = nav.earlier ? pageEl("div", { onclick: "week(-1)" }, "‹ Earlier") : undefined;
+  const later = nav.later ? pageEl("div", { onclick: "week(1)" }, "Later ›") : undefined;
+  const range = pageEl("div", { class: "range" }, [earlier ?? pageEl("span", {}), pageEl("span", {}, "Mon to Wed"), later ?? pageEl("span", {})]);
+  const actions = pageEl("div", { class: "actions" }, [pageEl("button", { type: "button" }, "Back"), pageEl("button", { type: "button" }, "Next")]);
+  const stepper = pageEl("div", { class: "stepper" }, [pageEl("h2", {}, "Pick a showing"), range, pageEl("div", { class: "days" }, days), pageEl("p", {}, "Pick a showing."), actions]);
+  return { body: pageEl("body", {}, [pageEl("main", {}, [stepper])]), days, later, earlier };
+}
+
+test("a list paged by a drawn Later inside a stepper proposes Later, never the stepper's Next", () => withElementNames(() => {
+  const { body, days, later } = showtimes({ earlier: false, later: true });
+  const stood = page(body);
+  try {
+    const proposal = proposedOn(days, days[0]!.parentElement!);
+    assert.equal(proposal?.mode, "next", JSON.stringify(proposal));
+    assert.deepEqual(named((proposal as { next: string }).next), [later]);
+  } finally {
+    stood.restore();
+  }
+}));
+
+test("the same stepper with no way on proposes no pagination, never the step's Next", () => withElementNames(() => {
+  const { body, days } = showtimes({ earlier: true, later: false });
+  const stood = page(body);
+  try {
+    assert.equal(proposedOn(days, days[0]!.parentElement!), undefined);
+    assert.equal(nextControlOnPage(null, pageElements(days)), undefined, "a next-page step finds no way on: the list has ended");
+  } finally {
+    stood.restore();
+  }
+}));
+
+test("a next-page step finds the drawn Later by its label, and an authored selector that now names Earlier is not followed", () => withElementNames(() => {
+  const { body, days, later, earlier } = showtimes({ earlier: true, later: true });
+  const stood = page(body);
+  try {
+    assert.deepEqual(nextControlOnPage(null, pageElements(days)), { control: later, by: "label" });
+    assert.deepEqual(nextControlOnPage(earlier as unknown as Element, pageElements(days)), { control: later, by: "label" });
+  } finally {
+    stood.restore();
+  }
+}));
+
+test("Later and Older move a dated list on; Earlier, Newer and Back do not", () => {
+  for (const label of ["Later", "Later ›", "Older posts", "older"]) assert.equal(paginationKindForLabel(label, undefined), "next", label);
+  for (const label of ["Earlier", "‹ Newer", "Back", "Later today, maybe tomorrow"]) assert.equal(paginationKindForLabel(label, undefined), undefined, label);
+});

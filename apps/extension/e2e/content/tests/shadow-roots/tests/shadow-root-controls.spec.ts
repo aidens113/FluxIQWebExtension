@@ -160,9 +160,10 @@ test.describe("job-board: the fixture's other widgets", () => {
     expect(covered).toBe(true);
     const reply = await harness.runAction({ commandId: "shadow:under-chat", actionType: "web.dom.click", selector: '[data-probe="under-chat"]', timeoutMs: 1_000 });
     expect(reply.status).toBe("failed");
-    // Both of its controls are drawn `<div>`s, named by their own words: the
-    // minimise control is the dash it shows, and Send.
-    expect(reply.failure?.actual).toMatch(/; it is part of rf-assistant, a layer over the page whose controls are "–", "Send"; /u);
+    // Both of its controls are drawn `<div>`s. Since t792 (328a1a9fe, `interference/own-controls.ts`) a layer's
+    // own controls come header first, and one whose visible content has no letter or digit -- the minimise
+    // control's dash -- is said by where it is, not by the glyph; Send by its words.
+    expect(reply.failure?.actual).toMatch(/; it is part of rf-assistant, a layer over the page whose own controls are a control with no words in the layer's header, "Send"; /u);
   });
 
   test("the job-alert offer in the light document is still closed by its own No thanks, and the click behind it lands", async ({ openHarness, page }) => {

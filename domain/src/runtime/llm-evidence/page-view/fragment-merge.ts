@@ -22,7 +22,7 @@
 // It needs `parent`. Without it there is no common ancestor, and no run joins.
 
 import type { WebLlmEvidenceElement } from "../elements";
-import { normalisedWords, undoubledWords, webLlmViewTraits } from "./element";
+import { normalisedWords, undoubledWords, webLlmRepeatFolds, webLlmViewTraits } from "./element";
 import type { WebLlmPageTree } from "./page-tree";
 import type { WebLlmViewLine } from "./view-line";
 
@@ -130,5 +130,6 @@ function commonAncestor(members: readonly WebLlmEvidenceElement[], tree: WebLlmP
 }
 
 function saysWhatPreviousSays(previous: WebLlmViewLine | undefined, joined: WebLlmViewLine): boolean {
-  return previous?.words !== undefined && joined.words !== undefined && normalisedWords(previous.words) === normalisedWords(joined.words);
+  return previous?.words !== undefined && joined.words !== undefined && normalisedWords(previous.words) === normalisedWords(joined.words)
+    && webLlmRepeatFolds(previous.element, joined.element);
 }

@@ -24,12 +24,17 @@
 // failed ten seconds later as a page that ignored it. A live control that
 // yields nothing in ten seconds fails the move, as `next` does.
 //
-// A normal loader command presses once. Its private original-list checkpoint,
-// settled-page look and healthy request/supported-work observers distinguish
-// a status-only no-effect result from progress or uncertainty. Core owns the
-// counted retries of a proven no-effect command. A pending or unsupported
-// observation never authorizes another blind press here. Page-offered Retry
-// controls and explicit pause/session recovery retain their existing bounds.
+// A loader press is judged by its effect on the list (t903). Its private
+// original-list checkpoint, settled-page look and healthy request observer
+// distinguish a press that did nothing from progress or uncertainty; a click
+// handler the press-work tracker cannot follow (an `async` one) no longer
+// withholds that proof, while work it sees still running does. A press proven
+// to have done nothing is made once more inside the command, as a person
+// presses a loader that ignored them (photo-social's thread swallows its first
+// press); a second proof fails the move with NO_EFFECT, which Core retries as
+// an act that certainly did nothing. A press that advanced, or whose effect is
+// unsure, is never pressed again here. Page-offered Retry controls and explicit
+// pause/session recovery retain their existing bounds.
 //
 // Which control is pressed is decided on the page each time
 // (`./appending-control.ts`): the list's own load-more control found around it,
@@ -51,6 +56,7 @@ import { PaginationFault } from "./pagination-fault";
 import { scrollForMore } from "./scroll-for-more";
 import type { PageStep, PaginationProgress } from "./types";
 import { listGrowth, loadMoreContinuations, loaderSettlement } from "./loader-progress";
+import { MAX_EXTRA_PRESSES } from "../../action-runtime/ignored-press";
 
 /** How many times one load-more press may have its failure retried through the Retry the page offered. */
 const LOAD_RETRIES = 2;
@@ -78,19 +84,38 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
   }
   if (isDisabled(found)) return { outcome: "ended", stop: "control_disabled" };
   if (bound !== undefined && progress.pagesRead >= bound) return { outcome: "truncated", stop: "page_limit" };
-  const control = clickable(found, way.control);
+  let control = clickable(found, way.control);
   await clearCover(control, progress.deadline);
-  if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
-  await progress.beforeFollow?.("loadMore");
-  const binding = loadMoreContinuations.bind(control, progress.item, progress.shown);
-  const settlement = observe(binding, control, progress.deadline);
-  try {
-    control.click();
-    const settled = await settlement.settle();
+  // Above humanness 0, the misclick and the aim before the mark (`./pager-press.ts`).
+  if (progress.press !== undefined) {
+    if (!await preparePress(control, progress)) return { outcome: "timed_out", stop: "deadline" };
+  } else {
+    if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
+    await progress.beforeFollow?.("loadMore");
+  }
+  let binding = loadMoreContinuations.bind(control, progress.item, progress.shown);
+  let settlement = observe(binding, control, progress.deadline);
+  // A press the list's own evidence proves did nothing is made once more, as a person presses a
+  // loader that ignored them (t903, `./loader-progress/settlement.ts`). Only after that proof:
+  // the original rows unchanged and nothing appended, so no press that advanced is ever made twice.
+  for (let extra = 0; ; extra += 1) {
+    let settled: Awaited<ReturnType<typeof settlement.settle>>;
+    try {
+      if (extra > 0 && progress.press !== undefined && !await preparePress(control, progress)) return { outcome: "timed_out", stop: "deadline" };
+      pressControl(control, progress);
+      settled = await settlement.settle();
+    } finally {
+      settlement.stop();
+    }
     if (settled === "advanced") return { outcome: "advanced", by: "loadMore" };
-    if (settled instanceof PaginationFault) throw settled;
-  } finally {
-    settlement.stop();
+    if (!(settled instanceof PaginationFault)) break;
+    // The first press's rows may land after its proof: then the list advanced, and it is not pressed again.
+    if (loadMoreContinuations.state(binding) === "advanced") return { outcome: "advanced", by: "loadMore" };
+    const again = loadMoreContinuations.current(binding);
+    if (extra >= MAX_EXTRA_PRESSES || again === undefined || pastDeadline(progress.deadline)) throw settled;
+    control = clickable(again, way.control);
+    binding = loadMoreContinuations.bind(control, progress.item, progress.shown);
+    settlement = observe(binding, control, progress.deadline);
   }
   // Keep the original semantic checkpoint after observation stops. Pending
   // placeholders or a detached control are not a completed appended page.
@@ -120,7 +145,10 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
       outcome = "changed";
       break;
     }
-    if (paused !== "retried") control.click();
+    if (paused !== "retried") {
+      if (progress.press !== undefined && !await preparePress(control, progress)) return { outcome: "timed_out", stop: "deadline" };
+      pressControl(control, progress);
+    }
     outcome = await waitForMoreItems(control, progress, hasNewItem);
   }
   if (outcome === "unchanged") {
@@ -178,4 +206,21 @@ async function waitForMoreItems(control: HTMLElement, progress: PaginationProgre
     retried += 1;
     offered.retry.click();
   }
+}
+
+/** Presses the load-more control: as the step's humanness asks (`./pager-press.ts`), else `control.click()`. */
+function pressControl(control: HTMLElement, progress: PaginationProgress): void {
+  if (progress.press === undefined) control.click();
+  else progress.press.press(control);
+}
+
+/** Refreshes the aim and continuation before a later load-more press can load another document. */
+async function preparePress(control: HTMLElement, progress: PaginationProgress): Promise<boolean> {
+  if (progress.press === undefined) return true;
+  do {
+    if (pastDeadline(progress.deadline)) return false;
+    await progress.press.prepare(control);
+    await progress.beforeFollow?.("loadMore");
+  } while (progress.press.ready?.(control) === false);
+  return true;
 }

@@ -111,6 +111,19 @@ test("a message into a thread is one append-turn offering the chat's six capabil
   ]);
 });
 
+test("a turn carries the saved humanness only when it is above 0", async () => {
+  const withSaved = async (saved: number | undefined) => {
+    const c = context();
+    await relayConversation({ type: send, conversationId: "c-1", text: "Go" }, { ...c.value, humanness: () => saved });
+    return c.calls[0]?.payload;
+  };
+  assert.equal((await withSaved(35))?.humanness, 35);
+  for (const saved of [0, undefined]) assert.equal("humanness" in ((await withSaved(saved)) ?? {}), false);
+  const bare = context();
+  await relayConversation({ type: send, conversationId: "c-1", text: "Go" }, bare.value);
+  assert.equal("humanness" in (bare.calls[0]?.payload ?? {}), false, "a context with no setting sends none");
+});
+
 test("the capability list is the frozen six ids Core executes", () => {
   assert.deepEqual(CHAT_CAPABILITIES, offered);
   assert.ok(Object.isFrozen(CHAT_CAPABILITIES));
@@ -281,5 +294,42 @@ test("a browser just paired, with no project stored, sends once the project is r
   const refused = await relayConversation({ type: send, text: "What can you do?" }, { ...none.value, projectId: async () => undefined });
   assert.equal(refused?.ok, false);
   assert.equal((refused as { code?: string }).code, "no_project");
+  assert.deepEqual(none.calls, []);
+});
+
+test("the thread list reads the project it names, and every project when it names none -- never the session's in its place", async () => {
+  const c = context();
+  await relayConversation({ type: read, kind: "list-all", limit: 25 }, c.value);
+  await relayConversation({ type: read, kind: "list-all", projectId: "project-2", limit: 50, status: "open", subjectKind: "flow", conversationId: "conv-1" }, c.value);
+  await relayConversation({ type: read, kind: "list-all", projectId: "", limit: 0 }, c.value);
+  assert.deepEqual(c.calls, [
+    { endpoint: "list-conversations", payload: { projectId: null, limit: 25 } },
+    { endpoint: "list-conversations", payload: { projectId: "project-2", limit: 50 } },
+    { endpoint: "list-conversations", payload: { projectId: null } }
+  ]);
+});
+
+test("New chat is open-conversation with fresh: true; a panel subject, or a project one with no id, is the project's own thread", async () => {
+  const c = context();
+  await relayConversation({ type: send, kind: "open", fresh: true, subjectKind: "panel" }, c.value);
+  await relayConversation({ type: send, kind: "open", fresh: true, projectId: "project-2", subjectKind: "project" }, c.value);
+  await relayConversation({ type: send, kind: "open", fresh: true, projectId: "project-2", subjectKind: "flow", subjectId: "flow-1", title: " Lamps ", text: "ignored", conversationId: "conv-1" }, c.value);
+  await relayConversation({ type: send, kind: "open", fresh: true, subjectKind: "project", subjectId: "project-9" }, c.value);
+  assert.deepEqual(c.calls, [
+    { endpoint: "open-conversation", payload: { projectId: "project-session", fresh: true } },
+    { endpoint: "open-conversation", payload: { projectId: "project-2", fresh: true } },
+    { endpoint: "open-conversation", payload: { projectId: "project-2", subjectKind: "flow", subjectId: "flow-1", title: "Lamps", fresh: true } },
+    { endpoint: "open-conversation", payload: { projectId: "project-session", subjectKind: "project", subjectId: "project-9", fresh: true } }
+  ]);
+});
+
+test("an open without fresh: true continues the subject's thread as before, and a fresh open with no project known is refused before Core", async () => {
+  const c = context();
+  await relayConversation({ type: send, kind: "open", fresh: "yes", subjectKind: "flow", subjectId: "flow-1" }, c.value);
+  assert.deepEqual(c.calls, [{ endpoint: "open-conversation", payload: { projectId: "project-session", subjectKind: "flow", subjectId: "flow-1" } }]);
+  const none = context({}, null);
+  assert.deepEqual(await relayConversation({ type: send, kind: "open", fresh: true, subjectKind: "panel" }, none.value), {
+    ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again."
+  });
   assert.deepEqual(none.calls, []);
 });

@@ -2,7 +2,10 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AttemptReportRow, AttemptSeries } from "@fluxiq-web-extension/test-contracts";
 import type { AttemptOutcome } from "../driver.js";
-import { renderAttemptSeries } from "../report.js";
+import { attemptOverheadLine, type AttemptOverhead } from "../overhead/index.js";
+import { renderAttemptReport } from "../report.js";
+import { attemptModelHeader } from "./report-model-header.js";
+import type { AttemptModelRecord } from "./model-record.js";
 import type { AttemptOutcomeRecord } from "./attempt/index.js";
 import type { LiveAttemptEnded } from "./live-driver.js";
 import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
@@ -33,6 +36,10 @@ export type ScoredAttempt = Readonly<{ outcome: AttemptOutcome; row: AttemptRepo
  */
 export async function writeUnscoredAttemptEvidence(input: {
   evidence: string;
+  /** The provider and model the run was on, written first in `attempt.json` and in the report's header; absent for a caller that did not resolve one. */
+  model?: AttemptModelRecord;
+  /** Each attempt's browser calls beside the saved Flow's, from the run's step folders; written into the report when given. */
+  overhead?: readonly AttemptOverhead[];
   attempts: number;
   kept: ReadonlyMap<number, { ended: LiveAttemptEnded; cache: unknown; modelCalls: Record<string, number> | null }>;
   error: unknown;
@@ -54,8 +61,10 @@ export async function writeUnscoredAttemptEvidence(input: {
   const unended = input.didNotEnd ? { ordinal: input.didNotEnd.ordinal, of: input.attempts, reason: notScored, stoodAt: input.didNotEnd.attempt ?? null, ...(input.didNotEnd.started ? { started: input.didNotEnd.started } : {}) } : null;
   if (!input.recorded) {
     const single = input.attempts === 1 && records.length === 1 && !unended;
-    await writeFile(path.join(input.evidence, "attempt.json"), JSON.stringify(single ? records[0] : { notScored, ...(unended ? { didNotEnd: unended } : {}), ...(input.series ? { series: input.series, continuations: input.series.continuations, deterministic: input.series.deterministic } : {}), attempts: records }, null, 2));
-    const lines: string[] = input.series ? [renderAttemptSeries(input.series)] : [];
+    await writeFile(path.join(input.evidence, "attempt.json"), JSON.stringify(single ? { ...input.model, ...records[0] } : { ...input.model, notScored, ...(unended ? { didNotEnd: unended } : {}), ...(input.series ? { series: input.series, continuations: input.series.continuations, deterministic: input.series.deterministic } : {}), attempts: records }, null, 2));
+    const lines: string[] = input.model ? [attemptModelHeader(input.model)] : [];
+    if (input.series) lines.push(renderAttemptReport(input.series, input.overhead ?? []));
+    else if (input.overhead) lines.push(...input.overhead.map(attemptOverheadLine));
     lines.push(...records.map((record) => {
       const ending = `Attempt ${record.ordinal} ended ${record.attempt.status}${record.attempt.waitingFor ? ` for ${record.attempt.waitingFor}` : ""}`;
       return record.scored ? `${ending} and was scored ${record.scored.answer.verdict}.` : `${ending} and was not scored: ${notScored.message}`;

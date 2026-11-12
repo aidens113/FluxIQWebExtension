@@ -62,6 +62,12 @@ export type WebAutomationStructureDetectionRefusal = (typeof WEB_AUTOMATION_STRU
  * list is the inbox's threads. It is sent beside the run and never instead of
  * it; a page with no run at all answers that record as the proposal itself.
  *
+ * `cells` is the same run's grid of grouped controls read one row per control
+ * -- a timetable's times, each with its day's heading -- when its items each
+ * hold controls of one kind that say different things from item to item
+ * (t885, R2; `apps/extension/src/content/extraction/cell-run/`). It is sent
+ * beside the run and never instead of it.
+ *
  * `continues` is the run's own section linking to more of it: a "See all"
  * beside a home page's four friend requests, of eight (t195 w22e). It is a
  * hint for the model and never pagination a read follows by itself; see
@@ -73,6 +79,7 @@ export type WebAutomationStructureDetection =
       proposal: WebAutomationExtractionProposal;
       infiniteScroll?: true | undefined;
       record?: WebAutomationExtractionProposal | undefined;
+      cells?: WebAutomationExtractionProposal | undefined;
       continues?: WebAutomationSectionContinuation | undefined;
     }
   | { ok: false; refused: WebAutomationStructureDetectionRefusal };
@@ -148,6 +155,11 @@ export function webAutomationStructureDetectionValue(value: unknown): WebAutomat
     const record = proposalValue(detection.record);
     if (!record || record.itemCount !== 1) return undefined;
     copied.record = record;
+  }
+  if (detection.cells !== undefined) {
+    const cells = proposalValue(detection.cells);
+    if (!cells) return undefined;
+    copied.cells = cells;
   }
   if (detection.continues !== undefined) {
     const continues = sectionContinuationValue(detection.continues);

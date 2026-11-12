@@ -19,3 +19,12 @@
 
 /** Dispatched on an element by the content script; cancelled by the page world when the page listens for presses on it. */
 export const PRESS_PROBE_EVENT = "fluxiq:press-probe";
+
+/** Marks the current registration generation before a press; cancelled when the page world made the mark. */
+export const PRESS_BINDING_MARK_EVENT = "fluxiq:press-binding-mark";
+
+/** Cancelled when a scoped element in this probe's composed path gained a press binding after its mark. */
+export const PRESS_BINDING_SINCE_EVENT = "fluxiq:press-binding-since";
+
+/** Releases a readiness mark. All binding events carry only an opaque per-watch string in CustomEvent.detail. */
+export const PRESS_BINDING_RELEASE_EVENT = "fluxiq:press-binding-release";

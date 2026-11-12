@@ -3,15 +3,12 @@ import { postingById } from "../../../../scenario-lab/src/scenarios/job-board/ca
 import { viewJobHref } from "../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../fixtures/extension-context";
 import { judgeLog, retiredCodesIn } from "../change-proof";
-import { actsUnder, bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, pageHandleWhere, projectBuild, rowControl, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
+import { bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, pageHandleWhere, projectBuild, rowControl, rowTitles, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Save three jobs to my saved jobs.";
 /** Three jobs nobody saved: the build saves each, so three lasting acts stand on the saved-jobs list. */
 const TARGETS = [postingById("m1"), postingById("d1"), postingById("m2")];
 const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
-/** The acts an answer's `actsUnsettleable` names, with the reason and the failed condition Core gave them. */
-const unsettleable = (answer: JsonObject | undefined) => (Array.isArray(answer?.actsUnsettleable) ? answer.actsUnsettleable : []).map(record).map(entry => ({ act: String(entry.act ?? ""), reason: entry.reason ?? null, failed: entry.failed ?? null }));
-const toStillOpen = (answer: JsonObject | undefined) => actsUnder(answer, "actsToUndo").map(entry => entry.act).sort();
 
 /**
  * Job-board rerun round 6 (`run-mvrj7qg9-b6dc94f6`, root cause 1): My jobs is
@@ -26,14 +23,19 @@ const toStillOpen = (answer: JsonObject | undefined) => actsUnder(answer, "actsT
  * can still undo under `actsUnsettleable`; after a load the undone act settles
  * and the other two stay in `actsToUndo`; the reset completes once each is
  * undone, and the trial is then admitted.
+ *
+ * Since Core t811 (2026-10-30) a yes on the judged whole run completes the brief before any further builder turn, so a
+ * build holds one judged trial, not the two this script once ran in a row. Each of the two moments the spec proves is
+ * therefore its own test, with the same script up to its trial: the trial run after two undos with the third act still in
+ * place, and the trial run after the last undo on the restored site. Each trial's verdict is read from the supervisor's
+ * `project.dispatch` answer, since its own answer no longer reaches the builder. Core also refuses a save step on the heart
+ * without `ensureState` (`candidate.toggle_state_required`, 2026-10-30): the step names the state the press left.
  */
-test("installed gateway project build keeps the other acts undoable after an undo that the list redraws only on load", async ({ extensionSession }, testInfo) => {
-  // KNOWN GAP (t772 w11): Core's part holds (no act is listed unsettleable from the in-place read, and an act whose own
-  // undo landed settles once a load shows its row gone and every other differing row is another act's own row). The per-act
-  // expectations below still fail on two defects outside t772: (1) the extension records each save's subject from the
-  // "Apply on company site" link beside the save control, not the posting's heading (`record.ts` `nearestTitle`), so no act
-  // owns its row until its undo lands; (2) the domain's press-again rule (t513, `press-effect/settled.ts`) pressed the
-  // second undo twice because the list redraws only on load, saving that job again. Remove this line once both are fixed.
+const VARIANTS = [
+  { name: "installed gateway project build keeps the other acts undoable after an undo that the list redraws only on load", restored: false },
+  { name: "installed gateway project build admits the trial on the restored site once the last undo lands after a list that redraws only on load", restored: true }
+];
+for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, testInfo) => {
   test.setTimeout(420_000);
   const installed = await startInstalledBuild(extensionSession);
   const { page } = installed;
@@ -42,10 +44,16 @@ test("installed gateway project build keeps the other acts undoable after an und
   const build = projectBuild(installed, "Installed reset job redraw", TASK, () => installed.page.url());
   const pages: Record<string, string> = {};
   const answers: Record<string, JsonObject> = {};
-  const tests: JsonObject[] = [];
   const judge = judgeLog();
   const clicks: Record<string, { before: number; after?: number }> = {};
   let destinationReference = "", heartHandle = "";
+  /** My jobs as the build found it, before any save. */
+  let baselineTitles: string[] = [];
+  /** The heart's state after a save's press, as that save's answer observed it: the save step's `ensureState`. */
+  let savedState: JsonObject = {};
+  /** What the supervisor's dispatch answered once the build brief returned: how the brief's trial ended. */
+  let dispatched: JsonObject | undefined;
+  let trialActionsStart = -1;
   /** Core numbers acts from 1 in the order the build made them and never reuses a number. */
   const acts = ["act-1", "act-2", "act-3"];
   try {
@@ -59,10 +67,11 @@ test("installed gateway project build keeps the other acts undoable after an und
     let pending = "";
     const send = (callId: string, made: ScriptedAnswer) => {
       pending = callId;
+      if (callId.startsWith("trial.")) trialActionsStart = observed.actions.length;
       clicks[callId] = { before: observed.clicks() };
       return made;
     };
-    const flow = () => [`flow: Save job`, `step open: open the job`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(viewJobs[0])}`, `step save: save the job`, `  node: web.dom.click`, `  target: ${heartHandle}`, `  consequences: modify_existing`].join("\n");
+    const flow = () => [`flow: Save job`, `step open: open the job`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(viewJobs[0])}`, `step save: save the job`, `  node: web.dom.click`, `  target: ${heartHandle}`, `  consequences: modify_existing`, `  ensureState: ${JSON.stringify(savedState)}`].join("\n");
     /** What the builder does next, in order; each makes one call when its turn comes. */
     const queue: Array<(turn: BuilderTurn) => ScriptedAnswer> = [];
     const open = (id: string, url: string) => queue.push(turn => send(id, turn.node(id, "web.output.browser-navigate", { url })));
@@ -91,13 +100,24 @@ test("installed gateway project build keeps the other acts undoable after an und
       if (typeof submitted?.revision !== "number" || typeof submitted.digest !== "string") throw new Error("diagnostic.submission_refused");
       return { revision: submitted.revision, digest: submitted.digest };
     };
-    queue.push(turn => send("submit", turn.call("submit", "core.submit_subflow", { flow: flow() })));
-    // The first trial after two undos landed on a list that redraws only on load (t775: it runs, with the third act in place).
-    queue.push(turn => send("trial.mid", turn.call("trial.mid", "core.test_subflow", candidate())));
-    open("list.reload", myJobs);
-    undoRow("undo.third", 2, () => acts[2]!);
-    open("list.final", myJobs);
-    queue.push(turn => send("trial.final", turn.call("trial.final", "core.test_subflow", candidate())));
+    const submit = () => queue.push(turn => {
+      // Core refuses a step on a toggling control without `ensureState` (`candidate.toggle_state_required`, 2026-10-30): the save step names the state the press left, copied from the save's own answer.
+      savedState = record(record(answers["save.0"]?.toggle).signature);
+      if (!Object.keys(savedState).length) throw new Error("diagnostic.observed_toggle_state_missing");
+      return send("submit", turn.call("submit", "core.submit_subflow", { flow: flow() }));
+    });
+    if (variant.restored) {
+      // The last undo lands after a load, and the one trial runs on the restored site.
+      open("list.reload", myJobs);
+      undoRow("undo.third", 2, () => acts[2]!);
+      open("list.final", myJobs);
+      submit();
+      queue.push(turn => send("trial.final", turn.call("trial.final", "core.test_subflow", candidate())));
+    } else {
+      // The one trial runs after two undos landed on a list that redraws only on load (t775: it runs, with the third act in place).
+      submit();
+      queue.push(turn => send("trial.mid", turn.call("trial.mid", "core.test_subflow", candidate())));
+    }
     const builder = (turn: BuilderTurn) => {
       pages[`step-${turn.step}`] = turn.shownPage();
       if (pending) {
@@ -111,19 +131,36 @@ test("installed gateway project build keeps the other acts undoable after an und
         const reference = destinations?.[0]?.ref;
         if (typeof reference !== "string") throw new Error("diagnostic.plain_list_ref_missing");
         destinationReference = reference;
+        baselineTitles = rowTitles(turn.shownPage());
       }
       const next = queue.shift();
       if (next) return next(turn);
-      tests.push(answers["trial.mid"] ?? {}, answers["trial.final"] ?? {});
       return turn.complete({ subflowKey: "main", ...(answers["submit"] ? candidate() : {}) });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 30, maxCallsPerRun: 40, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 30, maxCallsPerRun: 40, builder, verify: judge.verify,
+      supervisor: turn => {
+        if (turn.step === 1) return turn.call("plan", "project.write_plan", turn.plan());
+        if (turn.step === 2) {
+          const brief = { kind: "build", subflowKey: "main", parts: ["p1"], entry: { caseId: "observed-current", predecessors: [] }, permittedActs: ["modify_existing"], maxIterations: 30 };
+          return turn.call("dispatch", "project.dispatch", { reason: "Exercise the transport.", briefs: [brief] });
+        }
+        dispatched = turn.last("project.dispatch");
+        return turn.complete(record(dispatched?.complete));
+      }
+    });
     const { ending, failure } = await build.run();
+    const trialActions = observed.actions.slice(trialActionsStart);
+    // The site as the build left it: My jobs, loaded fresh, says which of the three saves still stand.
+    await page.goto(myJobs);
+    const standing = await Promise.all(TARGETS.map(async posting => (await page.getByText(posting.title, { exact: true }).count()) > 0));
+    const baselineStanding = await Promise.all(baselineTitles.map(async title => (await page.getByText(JSON.parse(title) as string, { exact: true }).count()) > 0));
     // `pressedAgain`: the runtime pressed the control a second time because the first changed nothing it could see.
-    const summary = Object.fromEntries(Object.entries(answers).map(([id, answer]) => [id, { ok: answer.ok ?? null, code: answer.code ?? answer.verdict ?? null, failed: answer.failed ?? null, toUndo: toStillOpen(answer), unsettleable: unsettleable(answer), ...(typeof answer.pressedAgain === "string" ? { pressedAgain: true } : {}) }]));
+    const summary = Object.fromEntries(Object.entries(answers).map(([id, answer]) => [id, { ok: answer.ok ?? null, code: answer.code ?? answer.verdict ?? null, failed: answer.failed ?? null,
+      stillOpen: (record(answer.resetSettlement).actsStillOpen as JsonObject[] | undefined)?.map(act => act.act),
+      ...(typeof answer.pressedAgain === "string" ? { pressedAgain: true } : {}) }]));
     // What each lasting call was declared about: an undo is tied to its act's row only through these subjects.
     const subjects = Object.fromEntries(observed.declarations.filter(declaration => Array.isArray(declaration.consequences) && declaration.consequences.length > 0).map(declaration => [declaration.call, { subject: declaration.subject ?? null, page: declaration.page ?? null }]));
-    await keepDiagnostic(testInfo, "reset-job-redraw.json", { ending, failure, builderStep: provider.builderSteps(), acts, destinationReference, clicks, answers, tests, reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
+    await keepDiagnostic(testInfo, "reset-job-redraw.json", { ending, failure, builderStep: provider.builderSteps(), acts, destinationReference, clicks, answers, dispatched, trialActionsStart, trialActions, baselineTitles, standing, judged: judge.requests, siteChanges: judge.siteChanges(), reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
     console.log(JSON.stringify({ resetDiagnostic: { ending, failure, acts, summary, subjects } }));
 
     // Three lasting acts stand: each save named the ref of the list read before them and was admitted.
@@ -133,26 +170,51 @@ test("installed gateway project build keeps the other acts undoable after an und
     }
     // The first undo landed from the list page, which redraws only on load.
     expect(answers["undo.first"]?.ok).toBe(true);
+    expect(answers["undo.first"]?.resetSettlement).toMatchObject({ open: acts[0],
+      actsStillOpen: acts.map(act => expect.objectContaining({ act, settle: expect.any(String) })) });
     expect(clicks["undo.first"]?.after).toBe(clicks["undo.first"]!.before + 1);
     // The second undo, aimed at another act on the same unreloaded list, is admitted too.
     expect(answers["undo.second"]?.ok).toBe(true);
-    // The trial after them, on the list as the board now draws it: the two undone acts settled, so the third is the one act left in
-    // place. t775: the trial is no longer refused for it. It runs, the judge's `siteChange` lists that one act under `leftFromEarlier`,
-    // and the answer never lists an act no call can settle.
-    const mid = tests[0];
-    expect(unsettleable(mid)).toEqual([]);
-    expect(mid?.failed).not.toBe("acts_unsettleable");
-    expect(trialCode(mid)).toBe("yes");
+    expect(answers["undo.second"]?.resetSettlement).toMatchObject({ open: acts[1],
+      actsStillOpen: acts.map(act => expect.objectContaining({ act, settle: expect.any(String) })) });
+    expect(clicks["undo.second"]?.after).toBe(clicks["undo.second"]!.before + 1);
     expect(retiredCodesIn(answers, observed.outcomes, provider.receipts)).toEqual([]);
+    expect(trialActionsStart).toBeGreaterThanOrEqual(0);
+    expect(trialActions.filter(action => action.action === "web.dom.click")).toEqual([expect.objectContaining({ status: "succeeded", skipped: undefined })]);
+    // Core completes the brief on the trial's yes, so its answer is the dispatch's: one trial, answered yes, for the submitted revision.
+    const returned = (dispatched?.returns as JsonObject[] | undefined) ?? [];
+    expect(returned.map(entry => entry.outcome)).toEqual(["done"]);
+    expect((returned[0]?.trialsAnswered as JsonObject[] | undefined)?.map(entry => entry.verdict)).toEqual(["yes"]);
+    expect(record(returned[0]?.proposal).revision).toBe(answers["submit"]?.revision);
+    expect(record(dispatched?.complete).revision).toBe(answers["submit"]?.revision);
+    expect(judge.requests).toHaveLength(2);
+    expect(judge.siteChanges()).toHaveLength(1);
     const left = judge.siteChanges()[0]?.leftFromEarlier;
-    expect(Array.isArray(left) ? left.length : -1).toBe(1);
-    // The reset completes once the last is undone: the undo is admitted, and the trial is admitted on the restored site.
-    expect(answers["undo.third"]?.ok).toBe(true);
-    const final = tests[1];
-    expect(unsettleable(final)).toEqual([]);
-    expect(actsUnder(final, "actsToUndo")).toEqual([]);
-    expect(trialCode(final)).toBe("yes");
-    expect(judge.siteChanges()[1]?.leftFromEarlier ?? []).toEqual([]);
+    expect(Array.isArray(left)).toBe(true);
+    for (const shown of judge.requests) {
+      const summary = record(record(JSON.parse(shown)).context).resultSummary as JsonObject;
+      const inherited = ((summary.startedWith as unknown[] | undefined) ?? []).map(String);
+      expect(inherited.map(entry => entry.match(/\(act-[0-9]+\)/u)?.[0]).filter(Boolean)).toEqual(variant.restored ? [] : ["(act-3)"]);
+    }
+    if (!variant.restored) {
+      // The trial after the two undos, on the list as the board now draws it: the two undone acts settled, so the third is the one act left in
+      // place. t775: the trial is no longer refused for it. It runs, and the judge's `siteChange` lists that one act under `leftFromEarlier`.
+      expect(Array.isArray(left) ? left.length : -1).toBe(1);
+    } else {
+      // The reset completes once the last is undone: the undo is admitted, and the trial is admitted on the restored site, leaving nothing in place.
+      expect(answers["undo.third"]?.ok).toBe(true);
+      expect(answers["undo.third"]?.resetSettlement).toMatchObject({ open: acts[2],
+        actsStillOpen: acts.map(act => expect.objectContaining({ act, settle: expect.any(String) })) });
+      expect(left).toEqual([]);
+    }
+    // The site's own state is where the undone acts are proven settled, which the trial's answer (`actsToUndo`, `unsettleable`)
+    // once showed and no longer reaches this builder (Core t811). Every row the build found is still there, and none of the
+    // three jobs was there before the build. The first and second acts were undone and the trial's own save made the first
+    // again; the third stands when the trial ran with it in place and is undone otherwise.
+    expect(baselineTitles.length).toBeGreaterThan(0);
+    expect(baselineStanding.every(Boolean)).toBe(true);
+    for (const title of TARGETS.map(posting => JSON.stringify(posting.title))) expect(baselineTitles).not.toContain(title);
+    expect(standing).toEqual([true, false, !variant.restored]);
     expect(ending).toBe("proposed");
   } finally {
     await build.stop();

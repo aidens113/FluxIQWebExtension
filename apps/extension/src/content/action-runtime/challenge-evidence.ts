@@ -95,7 +95,7 @@ export function challengeIn(root: Element, scope: "dialog" | "page"): ChallengeK
 export function robotCheckIn(root: Element, scope: "dialog" | "page"): RobotCheckKind | undefined {
   const text = scopeText(root, scope);
   if (renderedMatch(root, PICTURE_CHECK_SELECTOR) || PICTURE_WORDS.test(text)) return "person_only";
-  if (SELF_CLEARING_WORDS.test(text) || checkingControlIn(root, text)) return "self_clearing";
+  if (SELF_CLEARING_WORDS.test(text) || checkingControlIn(root, text) || retriesByItselfIn(root, text)) return "self_clearing";
   if (renderedMatch(root, CAPTCHA_SELECTOR) || PERSON_WORDS.test(text)) return "person_only";
   return undefined;
 }
@@ -144,6 +144,22 @@ const PERSON_WORDS = /\bcaptcha\b|\bnot an? (?:robot|bot)\b|\b(?:verify|confirm|
  * page after a form says that too.
  */
 const SELF_CLEARING_WORDS = /\bchecking (?:that |if |whether )?your browser\b|\b(?:checking|verifying) (?:that |if |whether )?you(?:['’]re| are) (?:a )?human\b|\bcheck (?:your browser |you )?again automatically\b/iu;
+
+/**
+ * A page that says it will try again by itself (t903): a verb of trying again -- try, retry,
+ * check, verify, reload, refresh, continue, redirect -- in the same sentence as "automatically",
+ * "by itself" or "on its own". professional-network's check says "I'm not a robot ... Or wait a
+ * few seconds and we'll try again automatically", and only "check ... again automatically" was
+ * known, so the check was handed to a person and the read stopped at 10 of 23 people. The page's
+ * own promise is the signal, not one phrase of it.
+ *
+ * Read only inside a robot check's context (`retriesByItselfIn`): "Trying again in 2 seconds" on
+ * a team page loading its people is no check at all. And it never outranks a picture check, which
+ * only a person can read. A check that says it will clear and does not is still handed to the
+ * person once its wait is spent (`robot-check/robot-check-watch.ts`): a real person check is
+ * never waited out.
+ */
+const RETRIES_BY_ITSELF_WORDS = /\b(?:try|trying|tries|retry|retrying|retries|check|checking|verify|verifying|reload|reloading|refresh|refreshing|continue|continuing|redirect|redirecting)\b[^.!?\n]*\b(?:automatically|by itself|on its own)\b/iu;
 
 /** A control's own words that a check is still running. */
 const CHECKING_CONTROL_WORDS = /\b(?:checking|verifying)\b/iu;
@@ -234,6 +250,16 @@ function regionText(root: Element): string {
 function checkingControlIn(root: Element, text: string): boolean {
   if (!CHECK_CONTEXT_WORDS.test(text)) return false;
   return renderedMatches(root, DISABLED_CONTROL_SELECTOR).some((control) => CHECKING_CONTROL_WORDS.test(control.textContent ?? ""));
+}
+
+/**
+ * Whether the page promises to try again by itself (`RETRIES_BY_ITSELF_WORDS`), inside a robot
+ * check's context: it asks whether the visitor is human or a robot, names a security check or the
+ * browser, or draws a captcha. Outside that context the words are any page's.
+ */
+function retriesByItselfIn(root: Element, text: string): boolean {
+  if (!RETRIES_BY_ITSELF_WORDS.test(text)) return false;
+  return PERSON_WORDS.test(text) || CHECK_CONTEXT_WORDS.test(text) || renderedMatch(root, CAPTCHA_SELECTOR);
 }
 
 /** Every painted element under the root, open shadow roots included, that matches. An unsupported selector matches nothing. */

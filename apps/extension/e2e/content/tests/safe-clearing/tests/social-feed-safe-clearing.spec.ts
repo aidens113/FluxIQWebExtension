@@ -75,7 +75,9 @@ test("a rate-limit notice offering OK and Try again is closed by its OK; the nod
   expect(after.rateLimited).toBe(1);
   // What the clearing pressed is said on the result in closed words, and the OK it pressed is described as a capture
   // describes an element, for the domain to name by a handle in the trial's feedback (t470).
-  expect(retried.clearedLayers).toEqual([{ kind: "rate_limit", control: "OK", name: "You're going too fast", controlName: "OK", wayOut: {
+  // Since W6 (de843929d, t799) a cleared layer carries Core's generic kind (`obstruction/generic-kind.ts`), a stable `id` and the pressed control's `controlRef`.
+  expect(retried.clearedLayers).toEqual([{ kind: "rate_limit", id: expect.stringMatching(/^layer:/u), control: "OK", name: "You're going too fast", controlName: "OK",
+    controlRef: { selector: expect.any(String), element: expect.objectContaining({ selector: expect.any(String), role: "button", visibleText: "OK" }) }, wayOut: {
     url: expect.stringContaining("/friends/requests/"),
     element: expect.objectContaining({ selector: expect.any(String), role: "button", visibleText: "OK" })
   } }]);

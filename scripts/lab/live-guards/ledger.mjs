@@ -10,7 +10,8 @@
 // run that failed on the facility before any provider call, that failure
 // (`facilityFailureBeforeProvider`; absent otherwise). Both kinds carry the
 // launch's `authoringMode` (`legacy`, `candidate` or `project`; absent on
-// entries written before 2026-10-14). The loop rule counts starts, so a run that
+// entries written before 2026-10-14) and the `provider` and exact `model` it
+// resolved to (absent on entries written before 2026-11-11). The loop rule counts starts, so a run that
 // crashes still counts; finishes carry each run's cost, so spend stays
 // visible for reporting (`windowSpend`) without limiting any run. A start whose process is gone
 // and has no finish is closed by `reconcileLedger` before the next admission.
@@ -22,8 +23,8 @@ import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * @typedef {{ event: "start", launchId: string, at: string, pid: number, instance: string, scenarioId: string, task: string, authoringMode?: string, fingerprint: string, repositoryRoot: string, runsDirectory: string, overridden: string[] }} StartEntry
- * @typedef {{ event: "finish", launchId: string, at: string, runId: string | null, instance: string, task: string, authoringMode?: string, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd?: number | null, maxBuildCostUsd?: number | null, buildsOverCeiling?: number | null, balanceFailure: Record<string, unknown> | null, facilityFailureBeforeProvider?: import("./run-outcomes.mjs").FacilityFailureBeforeProvider, fingerprint: string, exitCode: number | null, reconciled?: true, killed?: true, unpublished?: true }} FinishEntry
+ * @typedef {{ event: "start", launchId: string, at: string, pid: number, instance: string, scenarioId: string, task: string, authoringMode?: string, provider?: string, model?: string, fingerprint: string, repositoryRoot: string, runsDirectory: string, overridden: string[] }} StartEntry
+ * @typedef {{ event: "finish", launchId: string, at: string, runId: string | null, instance: string, task: string, authoringMode?: string, provider?: string, model?: string, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd?: number | null, maxBuildCostUsd?: number | null, buildsOverCeiling?: number | null, balanceFailure: Record<string, unknown> | null, facilityFailureBeforeProvider?: import("./run-outcomes.mjs").FacilityFailureBeforeProvider, fingerprint: string, exitCode: number | null, reconciled?: true, killed?: true, unpublished?: true }} FinishEntry
  * @typedef {StartEntry | FinishEntry} LedgerEntry
  */
 

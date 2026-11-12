@@ -75,6 +75,23 @@ test("F3: a text line saying what the line before it says is folded, case and sp
   ]), ["t1 link \"$39.99\" ~/item", "t4 \"Free DELIVERY\""]);
 });
 
+// t885, S1: a stepper's Next pressed with nothing chosen drew its red error
+// straight after a grey note saying the same words; F3 folded the error away.
+test("F3 keeps a repeat the last act just raised, and one in another landmark or dialog", () => {
+  assert.deepEqual(bodyLines([
+    { tag: "p", text: "Choose an option." },
+    { tag: "div", text: "Choose an option.", changed: true }
+  ]), ["t1 \"Choose an option.\"", "t2 \"Choose an option.\""], "the message the press raised stays");
+  assert.deepEqual(bodyLines([
+    { tag: "p", text: "Choose an option.", changed: true },
+    { tag: "div", text: "Choose an option.", changed: true }
+  ]), ["t1 \"Choose an option.\""], "two lines drawn together still fold");
+  assert.deepEqual(bodyLines([
+    { tag: "p", text: "Saved", landmark: "main" },
+    { tag: "div", text: "Saved", dialog: "Saved" }
+  ]).filter((line) => !line.startsWith("[")).length, 2, "a dialog saying the page's words is its own line");
+});
+
 test("4: an image prints its alt unless a line of its item already says it, or F1 folds it", () => {
   const item = { index: 1, total: 2 };
   assert.deepEqual(bodyLines([

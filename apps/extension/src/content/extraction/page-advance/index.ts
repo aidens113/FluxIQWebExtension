@@ -12,6 +12,7 @@ export { pageMoveFor } from "./continued-move";
 export { loaderSettlement } from "./loader-progress";
 export { PageMovePersonCheck } from "./person-check";
 export type { PageMove, PageMoveOptions, PageMoveOutcome } from "./move-outcome";
+export type { PagerPress } from "./pager-press";
 
 // The read's paged loop.
 export { stepPage } from "./step-page";

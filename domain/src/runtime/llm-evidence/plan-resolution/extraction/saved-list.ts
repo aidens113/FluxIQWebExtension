@@ -21,6 +21,11 @@
 // selectors it was never shown. A step it wrote or rewrote names its list by a handle
 // the store must know, as ever.
 //
+// **A read of one element is kept by its list, never by its `tN` (t903).** A read that named
+// an element by its own handle read the one-record list the resolver issued for it
+// (`./element-record.ts`); the step names that list's handle in place of the `tN`, and holds
+// its binding like any other, so it runs again where the `tN` names nothing.
+//
 // **Drafts saved before this hold no binding.** They read as they did: known to the
 // store in the process that detected them, and otherwise refused, which sends the
 // attempt to repair them, on its purse. Nothing reads one as a failed task.
@@ -29,6 +34,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmExtractionBinding, WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
+import { canonicalWebLlmTargetHandle } from "../../handle-spelling";
 import { webPlanHandleKind } from "../handle-tokens";
 
 /** Where a saved read keeps what its handle stood for. A denied evidence key (`../../denied-keys.ts`). */
@@ -62,15 +68,29 @@ export function webPlanSavedExtractionBinding(value: Record<string, unknown>, ha
 export function webPlanWithExtractionBinding(parameters: JsonObject, scope: WebLlmExtractionHandleScope, extractions: WebLlmExtractionHandles): JsonObject {
   const list = parameters[LIST_PARAMETER];
   if (!isJsonRecord(list) || Object.hasOwn(list, WEB_PLAN_EXTRACTION_BINDING_KEY)) return parameters;
-  const handle = handleOf(list);
+  // An element named by its own handle is kept as the list read for it (header).
+  const record = elementRecordOf(list, scope, extractions);
+  const handle = record ?? handleOf(list);
   if (handle === undefined) return parameters;
   const found = extractions.resolve(scope, handle);
   if (!found.ok) return parameters;
   const { binding } = found;
   const held = present<Omit<WebLlmExtractionBinding, "handle">>({ location: binding.location, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, extractList: binding.extractList, itemCount: binding.itemCount, oneRecord: binding.oneRecord });
   const saved = structuredClone(parameters);
-  (saved[LIST_PARAMETER] as JsonObject)[WEB_PLAN_EXTRACTION_BINDING_KEY] = held as unknown as JsonValue;
+  const savedList = saved[LIST_PARAMETER] as JsonObject;
+  if (record !== undefined) {
+    savedList.handle = record;
+    delete savedList.location;
+  }
+  savedList[WEB_PLAN_EXTRACTION_BINDING_KEY] = held as unknown as JsonValue;
   return saved;
+}
+
+/** The one-record list the resolver issued for the element a read's own `handle` names by its `tN`, while it is retained. */
+function elementRecordOf(list: Record<string, unknown>, scope: WebLlmExtractionHandleScope, extractions: WebLlmExtractionHandles): string | undefined {
+  if (webPlanHandleKind(list.handle) !== "target") return undefined;
+  const named = canonicalWebLlmTargetHandle(list.handle);
+  return named === undefined ? undefined : extractions.elementRecordOf(scope, named);
 }
 
 /** The handle a read's value names: its own, its item's, or a field's, as the slot reads them. */

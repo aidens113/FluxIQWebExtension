@@ -24,7 +24,7 @@ test("the Lab's driver opens Advanced and fills Settings in the real extension",
       const checkbox = page.getByLabel(label, { exact: true });
       if (!await checkbox.isChecked()) await checkbox.check();
     }
-    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
     await page.getByText("Saved.", { exact: true }).waitFor();
     await expect(page.getByRole("button", { name: "Forget this pairing", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Chat", exact: true }).click();

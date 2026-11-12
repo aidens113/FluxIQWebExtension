@@ -643,6 +643,18 @@ test("a read of one page whose list offers more says it continues, and the same 
   assert.equal(ended.listContinues, undefined);
 });
 
+// t903: an item the page does not show is not read, nor answered as an empty record; it is counted. A person
+// opens what holds it before reading it (a hover or a click), and once it shows the same read takes it.
+test("an item the browser does not render is not read, and the read counts it", async () => {
+  const body = archive("spent");
+  const hidden = body.children[0]!.children[0]!.children[2]!;
+  Object.assign(hidden, { checkVisibility: () => false });
+  const read = await readArchive(body);
+  assert.deepEqual(read.records.map((record) => record.name), ["Lentil soup", "Barley salad", "Leek pie"]);
+  assert.equal(read.notRenderedItems, 1);
+  assert.equal(read.emptyRecords ?? 0, 0, "the hidden item is not answered as an empty record");
+});
+
 // And a feed the read reveals by scrolling (`list-wait.ts`): a declared feed
 // says it continues only where it was still growing when the read ran out of
 // reveals. One that stopped growing -- nothing more, or an end note under its

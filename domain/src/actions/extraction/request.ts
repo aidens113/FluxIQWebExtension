@@ -36,8 +36,22 @@ export type WebAutomationExtractFieldHandling = "include" | "exclude" | "encrypt
 
 export type WebAutomationExtractFieldSpec = {
   kind: WebAutomationExtractFieldKind;
-  /** Where inside the item the value is read; absent, the item itself. */
+  /**
+   * Where inside the item the value is read; absent, or `:scope` alone, the
+   * item itself. `:scope` followed at once by more of one compound
+   * (`:scope[aria-disabled="true"]`) is the item itself while it matches the
+   * rest, and nothing otherwise: how a state mark reads the item's own state.
+   */
   selector?: string | undefined;
+  /**
+   * The group the item sits in, as a selector of its nearest ancestor that
+   * matches it: the field reads `selector` inside that group instead of inside
+   * the item. Never on a `column` field. A grid of grouped controls read one row
+   * per control -- a timetable's times under each day -- carries each group's
+   * heading on every row of it so (t885, R2); a group the item is not in reads
+   * nothing.
+   */
+  group?: string | undefined;
   /** The attribute an `attribute` field reads. Required by that kind and refused on every other. */
   attribute?: string | undefined;
   /** The header text a `column` field reads under. Required by that kind and refused on every other. */
@@ -96,9 +110,9 @@ export type WebAutomationExtractFieldSpec = {
  * What kind of mark a field reads (contract CC2): something a row carries or
  * not that is not a text cell -- `badge`, an icon the page names and no more
  * (an `attribute` or `text` field); `flag`, an attribute the item states about
- * itself (an `attribute` field); `state`, a control's pressed, checked or
- * selected state, whose selector names the element only while the state is on
- * (an `attribute` or `text` field). Left behind on any other kind.
+ * itself (an `attribute` field); `state`, a control's pressed, checked,
+ * selected or disabled state, whose selector names the element only while the
+ * state is on (an `attribute` or `text` field). Left behind on any other kind.
  *
  * **A mark's column holds a value only where the row carries the mark**: the
  * mark's own words, or the attribute's name where it has none, and nothing

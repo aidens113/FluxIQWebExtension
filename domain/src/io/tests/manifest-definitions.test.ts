@@ -31,6 +31,8 @@ const ELEMENT_TARGETED_OUTPUTS: readonly WebAutomationActionType[] = [
   "web.dom.clear",
   "web.dom.click",
   "web.dom.extract",
+  // A hover points at its element and cannot run without one (t903).
+  "web.dom.hover",
   "web.dom.select",
   "web.dom.type",
   "web.dom.upload",

@@ -190,7 +190,7 @@ test("output payloads preserve visual targets and prefer reviewed target candida
 
 test("output node definitions satisfy runtime and schema contracts", async () => {
   const outputNodeDefinitions = listWebAutomationOutputNodeDefinitions();
-  assert.equal(outputNodeDefinitions.length, 19);
+  assert.equal(outputNodeDefinitions.length, 20);
   const clickNodeDefinition = outputNodeDefinitions.find((definition) => definition.outputAction?.fixedOutputId === "web.dom.click");
   assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
   assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition!).ok, true);

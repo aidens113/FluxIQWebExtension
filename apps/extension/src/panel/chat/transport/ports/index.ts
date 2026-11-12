@@ -5,3 +5,4 @@ export { modelsPort } from "./models";
 export { recordingsPort } from "./recordings";
 export { runsPort } from "./runs";
 export { resultsPort } from "./results";
+export { taskSettingsPort } from "./task-settings";

@@ -32,7 +32,8 @@ export const WEB_AUTOMATION_EXTRACT_TAGS: readonly string[] = ["read", "value", 
 export const WEB_AUTOMATION_EXTRACT_DESCRIPTION = [
   "Read one value off one element of the page.",
   "A later step reads it as $step.<label>.value.",
-  "Name the element by its handle in target; extract says which value. For rows of a list, use Extract List."
+  // A row, even a table's one row, is Extract List's: this value is no row (t903, `run-mwbkuxqt-c57f42cb`).
+  "Name the element by its handle in target; extract says which value. For rows, even one row, use Extract List."
 ].join(" ");
 
 /** What each mode reads, said once per mode (header). */

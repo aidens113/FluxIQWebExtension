@@ -10,12 +10,16 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
+/* The page is the panel: the canvas colour fills the whole side panel page, with no margin,
+   radius or border of our own around it. */
+html { margin: 0; background: var(--canvas); }
 html, body { height: 100%; }
 body {
   min-width: 320px;
   margin: 0;
   background: var(--canvas);
   color: var(--text);
+  font-family: var(--font-sans);
   overflow: hidden;
 }
 /* The popup is 380px wide and as tall as the browser lets a popup be; the side
@@ -45,40 +49,32 @@ h2 { font-size: 13px; }
   background: var(--surface);
 }
 .top-brand { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  background: var(--accent);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 800;
-}
-.top-name { font-size: 14px; font-weight: 750; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 24px; height: 24px; color: var(--text); }
+.brand-mark svg { display: block; }
+.brand-mark .logo-node { fill: var(--accent); }
+.top-name { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
 .top-tabs { display: flex; flex: 1 1 auto; justify-content: center; gap: 2px; min-width: 0; }
 .top-tab {
   min-height: 30px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-dim);
   padding: 4px 9px;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 500;
   white-space: nowrap;
 }
-.top-tab:hover { background: var(--hover); color: var(--text); }
-.top-tab.active { background: var(--surface-raised); color: var(--text); }
+.top-tab:hover { background: var(--hover); color: var(--text-soft); }
+.top-tab.active { background: transparent; color: var(--text); font-weight: 600; }
 .top-actions { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
 .top-actions .icon-button { width: 30px; min-height: 30px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
 .top-actions .icon-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-.top-actions .icon-button.active { background: var(--surface-raised); color: var(--text); }
-.top-dot { margin: 0 5px; width: 8px; height: 8px; }
+.top-actions .icon-button.active { background: transparent; color: var(--accent-text); }
+.top-dot { margin: 0 5px; width: 6px; height: 6px; }
 /* The Open FluxIQ icon's failure line drops below the bar instead of widening it. */
 .top-actions .open-fluxiq { position: static; }
-.top-actions .open-fluxiq .notice { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 240px; box-shadow: var(--shadow-sm); }
+.top-actions .open-fluxiq .notice { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 240px; border: 1px solid var(--edge); }
 
 .app-main { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; }
 .chat-screen { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
@@ -87,18 +83,18 @@ h2 { font-size: 13px; }
 /* Shared primitives. */
 .icon-button, .small-button, .primary-button {
   min-height: 32px;
-  border: 1px solid var(--divider);
+  border: 1px solid var(--edge);
   border-radius: 8px;
-  background: var(--surface-raised);
+  background: transparent;
   color: var(--text);
   padding: 6px 12px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .icon-button { display: grid; place-items: center; width: 32px; padding: 0; line-height: 1; }
 .icon-button:hover:not(:disabled), .small-button:hover:not(:disabled) { background: var(--hover); }
-.primary-button { min-height: 36px; border-color: var(--accent); background: var(--accent); color: #ffffff; font-size: 13px; }
-.primary-button:hover:not(:disabled) { filter: brightness(1.08); }
+.primary-button { min-height: 36px; border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-size: 13px; }
+.primary-button:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
 .link-button {
   justify-self: start;
   border: 0;
@@ -113,8 +109,8 @@ h2 { font-size: 13px; }
 .link-button:hover:not(:disabled) { color: var(--accent); }
 .open-fluxiq { display: inline-grid; gap: 4px; justify-items: start; }
 
-.card { display: grid; gap: var(--space-2); border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); padding: var(--space-3); }
-.card-title { font-size: 14px; font-weight: 750; }
+.card { display: grid; gap: var(--space-2); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: var(--space-3); }
+.card-title { font-size: 14px; font-weight: 600; }
 .card-line { color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .card-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .card-actions:empty { display: none; }

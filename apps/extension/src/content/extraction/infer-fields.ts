@@ -129,9 +129,10 @@ import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensi
 import { badgeNaming, constantBadgeName } from "./badge-name";
 import { composesValue, isComposedPiece } from "./composed-value";
 import { readField } from "./field-reader";
+import { fieldElement } from "./field-element";
 import { itemAttributeSources } from "./item-attributes";
 import { offersOwnLink } from "./item-link";
-import { stateMarkSources } from "./item-mark";
+import { ownStateMarkSources, stateMarkSources } from "./item-mark";
 import { pruneEquivalentFieldPaths } from "./path-equivalence";
 import { keptSources } from "./field-budget";
 import { itemShape } from "./item-shape";
@@ -224,8 +225,7 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
   // sources survive the bound, not the order the page offers them in: an item's
   // first descendants are its chrome and its value is further down. The kept
   // ones return to document order (`field-budget/`).
-  // A state column's selector names its element only while the state is on, so
-  // the split by kind, which rewrites and widens selectors, never sees it (`item-mark/`).
+  // A state column's selector names its element only while on, so the split by kind, which widens selectors, never sees it (`item-mark/`).
   const found = fieldSources(item, run);
   const sources = [...separateKinds(found.filter((source) => source.mark !== "state"), run, (owner, element) => pathWithinItem(owner, element)?.label), ...found.filter((source) => source.mark === "state")];
   const measured = sources.map((source, position) => ({ source, position, coverage: coverageOf(source, run) }));
@@ -318,7 +318,7 @@ function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
       walkedShapes.add(shape);
     }
     let position = 0;
-    const offered: FieldSource[] = [...ownLinkSources(candidate), ...itemAttributeSources(candidate, run), ...elementSources(candidate, peers)];
+    const offered: FieldSource[] = [...ownLinkSources(candidate), ...itemAttributeSources(candidate, run), ...ownStateMarkSources(candidate), ...elementSources(candidate, peers)];
     for (const source of offered) {
       position += 1;
       const identity = JSON.stringify([source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? "", source.lines === true,
@@ -448,8 +448,8 @@ function elementSources(item: Element, peers: readonly Element[]): FieldSource[]
     if (sources.length > offered && tag !== "img" && !VALUE_TAGS.has(tag)) {
       for (const attribute of statedAttributes(element, selector, peers)) sources.push({ kind: "attribute", label: `${label} ${attribute}`, selector, attribute, sensitive });
     }
-    // A control's pressed, checked or selected state, read only while it is on (`item-mark/`).
-    if (!VALUE_TAGS.has(tag)) sources.push(...stateMarkSources(element, named, sensitive));
+    // A control's pressed, checked, selected or disabled state, read only while it is on (`item-mark/`).
+    sources.push(...stateMarkSources(element, named, sensitive));
   }
   return sources;
 }
@@ -787,7 +787,7 @@ function resolvesIn(source: FieldSource, item: Element): boolean {
     const cells = (item as HTMLTableRowElement).cells;
     return source.columnIndex !== undefined && cells !== undefined && cells[source.columnIndex] !== undefined;
   }
-  const element = source.selector ? item.querySelector(source.selector) : item;
+  const element = fieldElement(item, source.selector);
   if (!element) return false;
   if (source.kind === "attribute") return source.attribute !== undefined && element.hasAttribute(source.attribute);
   if (source.kind === "link") return element.getAttribute("href") !== null;

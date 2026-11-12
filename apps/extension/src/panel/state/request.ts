@@ -13,6 +13,9 @@ import type { PanelResult } from "./result";
 /** What the background answers for a message type it does not know. */
 export const UNKNOWN_MESSAGE_ERROR = "Unknown FluxIQ extension message.";
 
+/** What a Core refusal code looks like; anything else is dropped. */
+const CORE_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+
 /** A message to the background worker: a `type` and its fields. */
 export type PanelMessage = { type: string; [key: string]: unknown };
 
@@ -27,7 +30,7 @@ export async function panelRequest<T>(message: PanelMessage): Promise<PanelResul
   if (reply === null || typeof reply !== "object") {
     return { ok: false, sentence: EXTENSION_RESTARTED, detail: "The extension's background worker gave no answer." };
   }
-  const typed = reply as { ok?: unknown; error?: unknown; code?: unknown; diagnosticCode?: unknown };
+  const typed = reply as { ok?: unknown; error?: unknown; code?: unknown; diagnosticCode?: unknown; coreCode?: unknown };
   if (typed.ok === true) return { ok: true, value: reply as T };
   if (typed.diagnosticCode === "automation.instructions_required" || typed.diagnosticCode === "automation.instruction_led_authoring_required") {
     return { ok: false, code: typed.diagnosticCode, sentence: "Author task instructions in FluxIQ before this automation can run or resume." };
@@ -41,6 +44,10 @@ export async function panelRequest<T>(message: PanelMessage): Promise<PanelResul
   }
   // The background's own failure code travels with the sentence, so a view can
   // tell `refused` from `unreachable` without reading words.
-  const code = typeof typed.code === "string" ? { code: typed.code } : {};
+  const code = {
+    ...(typeof typed.code === "string" ? { code: typed.code } : {}),
+    // Core's own refusal code, kept apart from `code` so it never reads as a relay failure.
+    ...(typeof typed.coreCode === "string" && CORE_CODE.test(typed.coreCode) ? { coreCode: typed.coreCode } : {})
+  };
   return raw === undefined ? { ok: false, sentence: errorSentence(""), ...code } : { ok: false, sentence: errorSentence(raw), detail: raw, ...code };
 }

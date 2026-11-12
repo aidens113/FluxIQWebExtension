@@ -29,7 +29,8 @@ export function webAutomationNextPageParameters(): AutomationNodeParameter[] {
       label: "Timeout",
       description: "Milliseconds for the step: the press and the wait for the list to change.",
       valueType: "number",
-      defaultValue: WEB_AUTOMATION_NEXT_PAGE_TIMEOUT_MS
+      defaultValue: WEB_AUTOMATION_NEXT_PAGE_TIMEOUT_MS,
+      timing: true
     }
   ];
 }

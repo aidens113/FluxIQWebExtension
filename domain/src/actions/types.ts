@@ -27,6 +27,7 @@ import type { WebToggleSignature } from "./toggle-signature";
 export type WebAutomationActionType =
   | "web.browser.navigate"
   | "web.dom.click"
+  | "web.dom.hover"
   | "web.dom.type"
   | "web.dom.clear"
   | "web.dom.select"
@@ -358,6 +359,15 @@ export type WebAutomationActionCommand = {
   actionType: WebAutomationActionType;
   tabId?: number | undefined;
   frameId?: number | undefined;
+  /** The run's humanness level, 0-100; absent means 0. The content script's click, type and scroll read it; a later step sets it. */
+  humanness?: number | undefined;
+  /**
+   * Core's mark that this command's step is known not to be lasting (it declared
+   * no consequence and nothing marks it as acting), sent only above humanness 0:
+   * the click verb may precede its press with one misclick on an inert point
+   * beside the target. Absent, the verb never misclicks.
+   */
+  humannessMisclick?: true | undefined;
   /**
    * The pathname of the child-frame document the action was recorded in,
    * lifted from the node parameter `browserFrameUrlPath`. Chrome renumbers a
@@ -589,6 +599,11 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   /** `web.dom.click` with `ensureState`: the target already showed that state, so nothing was pressed. */
   skipped?: "already_in_state" | undefined;
   /**
+   * Set only on a click, type or scroll run above humanness 0: the level it ran at, whether the press
+   * point came from the humanness aim, and the point of the one misclick made before the press. Absent at 0.
+   */
+  humanness?: { level: number; aimed: boolean; misclick?: { x: number; y: number } | undefined } | undefined;
+  /**
    * `web.dom.click` made in place: what the press changed about its own
    * control, read from the control just before and just after it
    * (`./toggle-signature/`), when it flipped one and the page stayed where it
@@ -662,6 +677,7 @@ export const WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4_194_304;
 export const WEB_AUTOMATION_ACTION_TYPES: WebAutomationActionType[] = [
   "web.browser.navigate",
   "web.dom.click",
+  "web.dom.hover",
   "web.dom.type",
   "web.dom.clear",
   "web.dom.select",
@@ -690,6 +706,7 @@ export const WEB_AUTOMATION_ACTION_TYPES: WebAutomationActionType[] = [
 export const WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.navigate": "browser.navigate",
   "web.dom.click": "dom.click",
+  "web.dom.hover": "dom.hover",
   "web.dom.type": "dom.type",
   "web.dom.clear": "dom.clear",
   "web.dom.select": "dom.select",

@@ -135,6 +135,9 @@ test("start and finish entries carry the launch's authoring mode, and a failed p
     await lab.writeRun(runId, { startedAt: new Date(lab.now()).toISOString(), cost: 0.05 });
     const { finishes } = await recordLiveRunFinish(admission, start, { exitCode: 1, now: lab.now() });
     assert.equal(finishes[0].authoringMode, "project");
+    // The exact model and provider the launch resolved to (the Lab default here, as ARGS names neither), on both entries.
+    assert.deepEqual([start.provider, start.model, finishes[0].provider, finishes[0].model], ["anthropic", "claude-sonnet-5-5", "anthropic", "claude-sonnet-5-5"]);
+    assert.deepEqual((await lab.ledger()).map((entry) => [entry.event, entry.provider, entry.model]), [["start", "anthropic", "claude-sonnet-5-5"], ["finish", "anthropic", "claude-sonnet-5-5"]]);
     assert.deepEqual((await lab.ledger()).map((entry) => [entry.event, entry.authoringMode]), [["start", "project"], ["finish", "project"]]);
     await writeFile(path.join(lab.root, DEBUG_DIRECTORY, `${runId}.md`), "# debug\n", "utf8");
     lab.advance(MINUTE);

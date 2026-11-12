@@ -153,6 +153,17 @@ export function recoveryBackoffMs(
   return Math.min(backoff, left);
 }
 
+/**
+ * Time still available to wait on the page's own work toward a target it has not shown (t903,
+ * `../reveal/page-work.ts`): the command's own budget, which Core gave the node, when it named
+ * one, and the defence's otherwise. A page that shows it is still working is waited on while it
+ * works, never on a fixed ladder; what bounds that is the time the command was given.
+ */
+export function pageWorkBudgetRemainingMs(action: BrowserActionCommand, startedAt: number, now: number): number {
+  const command = commandBudgetMs(action);
+  return (Number.isFinite(command) ? command : RECOVERY_BUDGET_MS) - (now - startedAt);
+}
+
 /** Time still available before either the defence or command deadline closes. */
 export function recoveryBudgetRemainingMs(action: BrowserActionCommand, startedAt: number, now: number): number {
   return Math.min(RECOVERY_BUDGET_MS, commandBudgetMs(action)) - (now - startedAt);

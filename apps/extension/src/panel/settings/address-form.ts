@@ -13,6 +13,8 @@ import { toggleView } from "./toggle-view";
 /** The form, a way to read and fill it, and to point at the field that stopped a save. */
 export type SettingsForm = {
   readonly element: HTMLElement;
+  /** The pieces, so the screen can place each in its own group: the addresses, the reconnect switch, the capture and request switches. */
+  readonly parts: { readonly addresses: HTMLElement; readonly reconnect: HTMLElement; readonly permissions: HTMLElement };
   read(): FluxIQSettings;
   fill(settings: FluxIQSettings): void;
   /** Applies what Core's policy allows; undefined is Core's default. A switch it forbids turns off. */
@@ -40,20 +42,22 @@ export function createSettingsForm(): SettingsForm {
   // Whether each switch is forbidden now; starts as Core's default lists it.
   const forbiddenNow = new Map(toggles.map(({ field }) => [field.key, field.disabled === true]));
 
-  const element = createElement("div", { className: "settings-form" }, [
-    ...addresses.map(({ field, input }) => createElement("div", { className: "field" }, [
-      createElement("label", { text: field.label, attrs: { for: field.id } }),
-      input,
-      createElement("p", { id: `${field.id}Hint`, className: "field-hint", text: field.hint })
-    ])),
-    createElement("div", { className: "toggles" }, toggles.map(({ field, input, hint }) => createElement("div", { className: "toggle" }, [
-      createElement("label", {}, [input, createElement("span", { text: field.label })]),
-      hint
-    ])))
+  const toggleRow = ({ field, input, hint }: (typeof toggles)[number]): HTMLElement => createElement("div", { className: "toggle" }, [
+    createElement("label", {}, [input, createElement("span", { text: field.label })]),
+    hint
   ]);
+  const addressRows = createElement("div", { className: "settings-form" }, addresses.map(({ field, input }) => createElement("div", { className: "field" }, [
+    createElement("label", { text: field.label, attrs: { for: field.id } }),
+    input,
+    createElement("p", { id: `${field.id}Hint`, className: "field-hint", text: field.hint })
+  ])));
+  const reconnectRow = createElement("div", { className: "toggles" }, toggles.filter(({ field }) => field.key === "autoReconnect").map(toggleRow));
+  const permissionRows = createElement("div", { className: "toggles" }, toggles.filter(({ field }) => field.key !== "autoReconnect").map(toggleRow));
+  const element = createElement("div", { className: "settings-form" }, [addressRows, reconnectRow, permissionRows]);
 
   return {
     element,
+    parts: { addresses: addressRows, reconnect: reconnectRow, permissions: permissionRows },
     read() {
       const values = {} as FluxIQSettings;
       for (const { field, input } of addresses) values[field.key] = input.value;

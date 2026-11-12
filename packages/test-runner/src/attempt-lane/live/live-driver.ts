@@ -35,8 +35,11 @@ async function siteOrWhyUnread<Site>(read: () => Promise<Site>): Promise<Site | 
 /** One attempt's Lab person, running until `finish` (`./attempt-person.ts`). */
 export type LiveAttemptPersonRun = { finish(): Promise<void> };
 
-/** The Lab's way of playing the scenario's declared person: `playable` says there is one to wait for, and `start` begins it for one attempt. */
-export type LiveAttemptPerson = { playable: boolean; start(ordinal: number): Promise<LiveAttemptPersonRun> };
+/**
+ * The Lab's way of playing the scenario's declared person: `playable` says there is one to wait for at a check,
+ * `answersPermissions` that it answers each permission question as it comes, and `start` begins it for one attempt.
+ */
+export type LiveAttemptPerson = { playable: boolean; answersPermissions?: boolean; start(ordinal: number): Promise<LiveAttemptPersonRun> };
 
 export type LiveAttemptDriverInput = {
   control: AttemptReadControl & RunDatasetControl;
@@ -145,6 +148,7 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
           control: input.control, projectId: input.projectId, conversationId, known,
           ...(input.progress ? { progress: input.progress } : {}),
           ...(input.person?.playable ? { personPlaying: true } : {}),
+          ...(input.person?.answersPermissions ? { permissionsAnswered: true } : {}),
           describeChat: () => input.session.panel?.text() ?? Promise.resolve(""),
           onChange: (line) => log(`[attempt] ${line}`),
           ...(input.stallMs === undefined ? {} : { stallMs: input.stallMs }),

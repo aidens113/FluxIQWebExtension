@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
+import { CORE_PACKAGES } from "../../../../worktree/index.mjs";
 
 const repository = fileURLToPath(new URL("../../../../../", import.meta.url));
 const CORE = path.resolve(repository, "../!FluxIQ");
@@ -45,7 +46,8 @@ export async function fixture(t) {
   await writeFile(path.join(root, ".gitignore"), "node_modules/\ndist/\nstate/\n");
   await writeFile(path.join(root, "pnpm-workspace.yaml"), 'packages:\n  - "packages/*"\n');
   await writeFile(path.join(root, "package.json"), '{"type":"module"}');
-  for (const [dir, name] of [["contracts", "@fluxiq/contracts"], ["fluxiq", "fluxiq"], ["client-gateway-websocket", "@fluxiq/client-gateway-websocket"], ["ui-components", "@fluxiq/ui-components"]]) {
+  // Every library the lease takes, as the lease reads them: a Core missing one is refused as unsupported.
+  for (const { directory: dir, filter: name } of CORE_PACKAGES) {
     const pkg = path.join(root, "packages", dir);
     await mkdir(path.join(pkg, "src"), { recursive: true });
     await writeFile(path.join(pkg, "package.json"), JSON.stringify({ name, scripts: { build: "node ../../scripts/build-cache/cli.mjs" } }));

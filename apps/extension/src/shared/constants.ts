@@ -39,7 +39,14 @@ export const RUNTIME_MESSAGES = {
   panelConversationRead: "fluxiq.panel.conversationRead",
   panelConversationSend: "fluxiq.panel.conversationSend",
   panelConversationAnswer: "fluxiq.panel.conversationAnswer",
-  panelStopRun: "fluxiq.panel.stopRun",
+  // The chat's thread list: a person's own name for a thread, and deleting one (`background/panel/thread-change-relay.ts`).
+  panelConversationRename: "fluxiq.panel.conversationRename",
+  panelConversationDelete: "fluxiq.panel.conversationDelete",
+  // One Flow's or one task's own humanness: read a Flow's, and set or clear either (`background/panel/humanness-relay.ts`).
+  panelFlowHumannessRead: "fluxiq.panel.flowHumannessRead",
+  panelFlowHumannessSet: "fluxiq.panel.flowHumannessSet",
+  panelTaskHumannessSet: "fluxiq.panel.taskHumannessSet",
+  panelStopRun:"fluxiq.panel.stopRun",
   // Take over / Hand back: pause a run with the page handed to the person, and let it go on.
   panelTakeOverRun: "fluxiq.panel.takeOverRun",
   panelHandBackRun: "fluxiq.panel.handBackRun",

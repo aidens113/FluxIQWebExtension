@@ -313,3 +313,32 @@ test("everything-store's robot check, served once a search is flagged, is still 
   assert.equal(pageRobotCheck(page), "person_only");
   assert.equal(pageChallenge(page), "captcha");
 });
+
+// t903: professional-network's check on page 2 of its results. It draws "I'm not a robot" and
+// says it will try again by itself; only "check ... again automatically" was known, so it was
+// handed to a person and the read stopped at 10 of 23 people. The page's own promise is read.
+const TRIES_AGAIN_BY_ITSELF = el("body",
+  el("div", el("div",
+    el("h2", "Quick security check"),
+    el("p", "We noticed a lot of searches from your connection."),
+    el("label", el("span"), "I'm not a robot"),
+    el("p", "Or wait a few seconds and we'll try again automatically."))));
+
+test("a check that says it will try again by itself clears by itself, in any words of trying again", () => {
+  assert.equal(pageRobotCheck(TRIES_AGAIN_BY_ITSELF), "self_clearing");
+  const reloads = el("body", el("div", el("div", el("h1", "Are you a robot?"), el("p", "This page will reload on its own once we have checked your connection."))));
+  assert.equal(pageRobotCheck(reloads), "self_clearing");
+});
+
+test("words of trying again by itself are no check without a robot check's context", () => {
+  // A team page loading its people, waiting out its own 429.
+  const loading = el("body", el("h1", "Meet the team"), withAttributes("p", { role: "status" }, "We are getting a lot of requests right now. We will try again automatically in 2 seconds."));
+  assert.equal(pageRobotCheck(loading), undefined);
+});
+
+test("a picture check that also says it will try again by itself is still the person's", () => {
+  const page = el("body", el("div", el("div",
+    el("h4", "Type the characters you see in the image"),
+    el("p", "Or wait and we'll try again automatically."))));
+  assert.equal(pageRobotCheck(page), "person_only");
+});

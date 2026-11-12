@@ -15,6 +15,8 @@ export { resolveWebExtractionSlot, type WebExtractionSlotIssue, type WebExtracti
 export { webPlanSlotRefusal, type WebPlanSlotRefusal } from "./slot-refusal";
 // What a saved read holds of its list, so it needs no handle in memory (t869).
 export { WEB_PLAN_EXTRACTION_BINDING_KEY, webPlanWithExtractionBinding } from "./saved-list";
+// One element named by its own handle, read as a one-row table (t903).
+export { webPlanElementRecord, type WebPlanBoundRecordElement, type WebPlanElementRecord } from "./element-record";
 // The step's record output read as its dispatch reads it (t489).
 export { webPlanStoredColumns, webPlanUndispatchable, type WebPlanUndispatchable } from "./stored-columns";
 // The record output the step saves: the one its dispatch runs (t510).

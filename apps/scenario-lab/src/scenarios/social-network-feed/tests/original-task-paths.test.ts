@@ -5,6 +5,7 @@ import { chromium, type Browser, type BrowserContext, type Locator, type Page } 
 import { resolveScenarioWorkflow, type ExpectedFact, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
 import { closeLabSession } from "../../tests/close-lab-session.js";
+import { requestsAnswered } from "../../tests/requests-answered.js";
 import { fullDateText } from "../content/index.js";
 import { socialNetworkFeedScenario as scenario } from "../scenario.js";
 import type { FeedMode } from "../types.js";
@@ -85,8 +86,12 @@ async function extract(page: Page, step: ScenarioStep): Promise<Row[]> {
 /** One step as the Lab performs it; an extract step's rows come back, every other step's nothing. */
 async function perform(page: Page, step: ScenarioStep): Promise<Row[] | undefined> {
   const timeout = step.timeoutMs ?? 5000;
-  if (step.operation === "click") return void await locate(page, step.target!).click({ timeout });
-  if (step.operation === "type") return void await locate(page, step.target!).fill(String(step.value ?? ""), { timeout });
+  // An act is done once the page's own requests it led to are answered (`requestsAnswered`).
+  if (step.operation === "click" || step.operation === "type") {
+    const target = locate(page, step.target!);
+    await (step.operation === "click" ? target.click({ timeout }) : target.fill(String(step.value ?? ""), { timeout }));
+    return void await requestsAnswered(page, timeout, `${step.id} (${step.operation})`);
+  }
   if (step.operation === "waitForState") return void await locate(page, step.target!).waitFor({ state: "visible", timeout });
   if (step.operation === "checkpoint") return undefined;
   if (step.operation === "extract") return extract(page, step);
@@ -98,6 +103,7 @@ async function perform(page: Page, step: ScenarioStep): Promise<Row[] | undefine
 
 async function run(page: Page, script: readonly ScenarioStep[]): Promise<Map<string, Row[]>> {
   const read = new Map<string, Row[]>();
+  await requestsAnswered(page, 5000, "before the script's first step");
   for (const step of script) {
     try {
       const rows = await perform(page, step);

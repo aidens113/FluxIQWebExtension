@@ -44,3 +44,10 @@ test("what it changed is named, and a proof that was refused says so", () => {
   assert.match(line, /then explored on from where that stopped/u);
   assert.match(line, /is not proven/u);
 });
+
+test("an attempt that drove the browser by hand says its calls beside the saved Flow's, its repeats and its whole-Flow runs", () => {
+  const overhead = { attempt: 1, liveBrowserCalls: 36, flowBrowserCalls: 8, overhead: 4.5, repeatedCalls: 18, wholeFlowRuns: 2, decisions: { describe: 3, providerFormatError: 1, refused: 2, look: 1, step: 13 } };
+  const line = attemptResultLine({ row: ROW, answer: ANSWER, status: "achieved", overhead });
+  assert.ok(line.endsWith(" Browser calls 36 / 8 = 4.5x, 18 repeated, 2 whole-Flow runs from step 1."), line);
+  assert.doesNotMatch(attemptResultLine({ row: LATER, answer: ANSWER, status: "achieved", overhead: { ...overhead, liveBrowserCalls: 0, overhead: null } }), /Browser calls/u);
+});

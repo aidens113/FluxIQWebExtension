@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "FluxIQ Web Automation Client",
+  "name": "FluxIQ",
   "description": "Ask FluxIQ for a task in plain words and get the result. Connects only to the FluxIQ runtime you run and pair.",
   "version": "0.1.0",
   "minimum_chrome_version": "116",

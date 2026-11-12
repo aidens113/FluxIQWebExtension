@@ -73,7 +73,7 @@ function recordedOutputParameters(outputId: string, payload: JsonObject): JsonOb
   const target = compact({ ...(element ? { element } : {}), ...(visualTarget ? { visualTarget } : {}) });
   const hasTarget = Object.keys(target).length > 0;
   if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
-  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...(hasTarget ? target : {}) });
+  if (outputId === "web.dom.click" || outputId === "web.dom.clear" || outputId === "web.dom.hover") return compact({ selector, ...(hasTarget ? target : {}) });
   if (outputId === "web.dom.type") return compact({ selector, text: recordedTypedText(payload), ...(hasTarget ? target : {}) });
   if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...(hasTarget ? target : {}) });
   if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...(hasTarget ? target : {}) });

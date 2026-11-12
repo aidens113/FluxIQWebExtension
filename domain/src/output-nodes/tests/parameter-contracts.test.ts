@@ -78,3 +78,21 @@ test("the implementation bundle hands Core the extraction contract, so a bad pla
   // A host extension may add to the bundle, but the contracts are still there.
   assert.equal(createWebAutomationOutputNodeImplementationBundle({}).parameterContracts?.[id], webAutomationExtractListParameterContract);
 });
+
+// A wait bound says how long a node waits for its act, not what it asks, so
+// Core's repeat guard leaves it out of a call's identity only when the node
+// declares it as timing (Core `runtime/llm/repeat-guard/timing-free.ts`; run
+// `run-mwc6ut8u-52e3c1b3`, where a refused press ran again thirteen times with
+// a changed `timeoutMs`). Every web node's wait bound is declared that way, and
+// nothing that names what the act does is.
+test("every web node declares its wait bound as timing, and only its wait bound", () => {
+  const timing = webAutomationOutputNodeDefinitions.flatMap((definition) => definition.parameters.filter((parameter) => parameter.timing === true).map((parameter) => `${definition.id}:${parameter.id}`));
+  assert.ok(timing.length > 0);
+  for (const entry of timing) assert.match(entry, /:timeoutMs$/);
+  for (const definition of webAutomationOutputNodeDefinitions) {
+    const bound = definition.parameters.find((parameter) => parameter.id === "timeoutMs");
+    if (bound) assert.equal(bound.timing, true, definition.id);
+  }
+  assert.ok(timing.includes(`${webAutomationOutputNodeId("web.dom.extract_list")}:timeoutMs`));
+  assert.ok(timing.includes(`${webAutomationOutputNodeId("web.dom.click")}:timeoutMs`));
+});

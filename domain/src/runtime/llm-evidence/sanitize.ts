@@ -182,6 +182,15 @@ export type WebLlmSnapshotBinding = {
    * Absent for a page with no query.
    */
   pageQuery?: ReadonlyArray<readonly [string, string]>;
+  /**
+   * Opaque handle to the element's serial in its document, as the capture gave
+   * it (`DomElementDescriptor.nodeToken`, t897): one token, one element of that
+   * document. A counter, never page content, and like the selectors it never
+   * leaves the domain. `stable-handles.ts` reads it so a number is never handed
+   * to a different element of the document its control was last seen in.
+   * Optional because a binding built before it existed, or by hand, has none.
+   */
+  nodeTokens?: Map<string, number>;
 };
 
 export type WebLlmSanitizeOptions = {
@@ -223,6 +232,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const drawings = new Map<string, string>();
   const subjects = new Map<string, string>();
   const cardWords = new Map<string, string>();
+  const nodeTokens = new Map<string, number>();
   let pageSubject: string | undefined;
   // What tells a look-alike apart, kept beside the packet and published only
   // on an element that needs it.
@@ -262,6 +272,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     if (described.drawing !== undefined) drawings.set(described.element.target, described.drawing);
     if (described.subject !== undefined) subjects.set(described.element.target, described.subject);
     if (described.within !== undefined) cardWords.set(described.element.target, described.within);
+    const token = nodeTokenOf(raw);
+    if (token !== undefined) nodeTokens.set(described.element.target, token);
     // What the page is about: its first shown main heading, in the top frame and in no dialog (Core t719).
     if (pageSubject === undefined && described.subject !== undefined && described.element.tag === "h1" && described.element.hidden !== true
       && described.element.frameId === undefined && described.dialog === undefined && dialogOf(raw) === undefined) pageSubject = described.subject;
@@ -307,7 +319,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   tellWebLlmLookAlikesApart(evidence.elements.filter((element) => element.hidden !== true), cues);
   // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
   const pageQuery = [...url.searchParams];
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: undefined, shadowHosts, dialogNames, drawings, subjects, pageSubject, cardWords, resetResource: undefined, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: undefined, shadowHosts, dialogNames, drawings, subjects, pageSubject, cardWords, resetResource: undefined, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined, nodeTokens: nodeTokens.size > 0 ? nodeTokens : undefined });
 }
 
 /**
@@ -390,4 +402,10 @@ function markFailedTarget(evidence: WebLlmPageEvidence, selectors: Map<string, s
   const handle = [...selectors.entries()].find(([, selector]) => selector === failedAction.selector)?.[0];
   if (handle === undefined) evidence.failedTargetMissing = true;
   else evidence.failedTarget = handle;
+}
+
+/** A raw descriptor's serial in its document (`DomElementDescriptor.nodeToken`), where it carries a whole positive one. */
+function nodeTokenOf(raw: unknown): number | undefined {
+  const token = typeof raw === "object" && raw !== null ? (raw as { nodeToken?: unknown }).nodeToken : undefined;
+  return typeof token === "number" && Number.isSafeInteger(token) && token > 0 ? token : undefined;
 }

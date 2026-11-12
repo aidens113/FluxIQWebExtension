@@ -8,12 +8,12 @@ const identity = ["--live-llm", "--llm-profile", "production", "--llm-provider",
 
 test("a live create-flow run is guarded under its instance and instruction task", () => {
   const args = ["run", "bigbox-retail", "--variant", "sale", ...identity, "--llm-task", "create-flow", "--instruction-task", "bigbox-retail-pickup-cart"];
-  assert.deepEqual(describeLiveLaunch(args, { FLUXIQ_LAB_INSTANCE: "t174-slot-1" }), { instance: "t174-slot-1", scenarioId: "bigbox-retail", task: "bigbox-retail/bigbox-retail-pickup-cart/variant=sale", authoringMode: "project" });
+  assert.deepEqual(describeLiveLaunch(args, { FLUXIQ_LAB_INSTANCE: "t174-slot-1" }), { instance: "t174-slot-1", scenarioId: "bigbox-retail", task: "bigbox-retail/bigbox-retail-pickup-cart/variant=sale", authoringMode: "project", provider: "deepseek", model: "deepseek-flash" });
 });
 
 test("a live repair run is named by its llm task and workflow; no instance is 'default'", () => {
   const args = ["run", "job-board", "--workflow", "apply", "--flow", ...identity, "--llm-task", "repair"];
-  assert.deepEqual(describeLiveLaunch(args, {}), { instance: "default", scenarioId: "job-board", task: "job-board/repair/workflow=apply", authoringMode: "project" });
+  assert.deepEqual(describeLiveLaunch(args, {}), { instance: "default", scenarioId: "job-board", task: "job-board/repair/workflow=apply", authoringMode: "project", provider: "deepseek", model: "deepseek-flash" });
 });
 
 test("a live matrix names its one scenario", () => {
@@ -39,5 +39,18 @@ test("only --live-llm makes lab attempt a live run: the scripted form and a dry 
   const attempt = ["attempt", "company-website", "--task", "company-website-apprentices", "--authoring-mode", "answer-first"];
   assert.equal(describeLiveLaunch([...attempt, "--scripted-model"], {}), null);
   assert.equal(describeLiveLaunch([...attempt, "--live-llm", "--llm-max-cost-usd", "5", "--dry-run"], {}), null);
-  assert.deepEqual(describeLiveLaunch([...attempt, "--live-llm", "--llm-max-cost-usd", "5"], { FLUXIQ_LAB_INSTANCE: "t869-slot-1" }), { instance: "t869-slot-1", scenarioId: "company-website", task: "company-website/company-website-apprentices", authoringMode: "answer-first" });
+  assert.deepEqual(describeLiveLaunch([...attempt, "--live-llm", "--llm-max-cost-usd", "5"], { FLUXIQ_LAB_INSTANCE: "t869-slot-1" }), { instance: "t869-slot-1", scenarioId: "company-website", task: "company-website/company-website-apprentices", authoringMode: "answer-first", provider: "anthropic", model: "claude-sonnet-5-5" });
+});
+
+test("a launch names the provider and exact model it resolves to: the flags, else the provider's Lab default", () => {
+  const args = ["attempt", "company-website", "--task", "company-website-apprentices", "--live-llm"];
+  const of = (extra, env = {}) => {
+    const launch = describeLiveLaunch([...args, ...extra], env);
+    return [launch?.provider, launch?.model];
+  };
+  assert.deepEqual(of([]), ["anthropic", "claude-sonnet-5-5"]);
+  assert.deepEqual(of(["--llm-provider", "deepseek"]), ["deepseek", "deepseek-flash"]);
+  assert.deepEqual(of(["--llm-provider", "anthropic", "--llm-model", "claude-haiku-5-5"]), ["anthropic", "claude-haiku-5-5"]);
+  // The Lab's own environment never picks a model.
+  assert.deepEqual(of([], { FLUXIQ_LLM_DEFAULT_MODEL: "deepseek-flash" }), ["anthropic", "claude-sonnet-5-5"]);
 });

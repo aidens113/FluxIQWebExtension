@@ -3,11 +3,25 @@ import { AttemptProofStuck, AttemptScriptRefused, readThreadAttempts, type Attem
 /** The statuses an attempt always stops on. */
 const ENDINGS: ReadonlySet<AttemptOutcomeRecord["status"]> = new Set(["achieved", "finished_unchecked", "budget_out", "stopped_by_person"]);
 
+/** Core's word for a wait on the person's answer to a permission question (`AutomationStudioTaskAttempt.waitingFor`). */
+const PERMISSION_WAIT = "permission";
+
 /**
  * `waiting_for_person` is not an ending to Core: its wait has no deadline and a person's Continue ends it. It is
  * where a proof with no person playing stops and says so, and a wait to follow through where the Lab plays one.
+ *
+ * **Which waits the Lab plays is by what is awaited (t897).** A permission question is answered by the Lab's person
+ * on every run that answers them, whether or not the scenario declares a person for its checks, so a wait for one is
+ * followed on. Run `run-mwb5cnxg-003415b4` stopped here on the second and fourth attempts: each saved Flow's run asks
+ * once before it starts, the Lab answered in the chat within 1.3 s, and a poll that landed in that window read the
+ * wait as where the proof stops. It then read a row mid-run (working, one live step) and took the answer turn before
+ * Core wrote it, so both attempts read as ended with no answer while Core went on and answered them.
  */
-const stopsOn = (status: AttemptOutcomeRecord["status"], personPlaying: boolean): boolean => ENDINGS.has(status) || (status === "waiting_for_person" && !personPlaying);
+function stopsOn(attempt: AttemptOutcomeRecord, plays: { person: boolean; permissions: boolean }): boolean {
+  if (ENDINGS.has(attempt.status)) return true;
+  if (attempt.status !== "waiting_for_person") return false;
+  return !(plays.person || (plays.permissions && attempt.waitingFor === PERMISSION_WAIT));
+}
 
 /** Nothing moved for this long: no new read of the attempt differs, no new call. It stops the proof and says where it stood; it never calls an attempt a failure. */
 const DEFAULT_STALL_MS = 10 * 60_000;
@@ -27,6 +41,8 @@ export type FollowAttemptInput = {
   progress?: () => Promise<{ marker: string; refused?: string }>;
   /** The Lab is playing the scenario's declared person, so an attempt waiting for a person is waiting for it and is followed on. */
   personPlaying?: boolean;
+  /** The Lab's person answers each permission question as it comes, so an attempt waiting on one is followed on (`stopsOn`). */
+  permissionsAnswered?: boolean;
   /** What a stuck proof says it last saw of the chat. */
   describeChat?: () => Promise<string>;
   onChange?: (line: string) => void;
@@ -66,7 +82,7 @@ export async function followAttempt(input: FollowAttemptInput): Promise<AttemptO
     } catch (error) {
       readFailure = error instanceof Error ? error.message : String(error);
     }
-    if (current && stopsOn(current.attempt.status, input.personPlaying === true)) return current;
+    if (current && stopsOn(current.attempt, { person: input.personPlaying === true, permissions: input.permissionsAnswered === true })) return current;
     const seen = `${current ? spoken(current.attempt) : "no attempt yet"} | ${progress?.marker ?? ""}`;
     if (seen !== last) {
       last = seen;

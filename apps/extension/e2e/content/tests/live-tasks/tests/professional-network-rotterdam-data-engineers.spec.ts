@@ -516,11 +516,17 @@ test.describe("professional-network: the premium-upsell variant (professional-ne
     await harness.page.getByText("Start free trial", { exact: true }).waitFor({ state: "visible", timeout: 15_000 });
     const reply = await act(harness, { actionType: "web.dom.extract_list", timeoutMs: 60_000, extractList: RECORDED_READ }, "recorded read under the offer");
     log("read under the offer", { extraction: reply.extraction, rows: (reply.extracted as Row[] | undefined)?.length });
-    // The read presses the pager's buttons with element.click(), which no
-    // scrim intercepts, so it reads every page under an aria-modal offer that
-    // stays open: a Flow that never met the offer still returns the dataset.
+    // A pager button under the aria-modal offer is covered, and a person could
+    // not press it. Since t762 (255841933) the read never clicks through the
+    // scrim: it presses the offer's way out from the interference defence's
+    // allow-list ("No thanks", never "Start free trial") and then moves the
+    // list (`page-advance/covered-press/clear-cover.ts`). So a Flow that never
+    // met the offer still returns the dataset, and the offer is answered and
+    // gone, the way a person would leave it.
     expect(reply).toMatchObject({ status: "succeeded", extraction: { recordCount: EXPECTED.length, pagesRead: 3 } });
     expect(reply.extracted).toEqual(EXPECTED);
-    await expect(harness.page.getByText("Start free trial", { exact: true })).toBeVisible();
+    await expect(harness.page.getByText("Start free trial", { exact: true })).toBeHidden();
+    await expect.poll(async () => ((await harness.finalState()).state as { upsellDismissed: boolean }).upsellDismissed, { message: "the offer was declined through the site, not hidden" }).toBe(true);
+    expect(harness.page.url(), "no trial was started").not.toContain("premium/checkout");
   });
 });
