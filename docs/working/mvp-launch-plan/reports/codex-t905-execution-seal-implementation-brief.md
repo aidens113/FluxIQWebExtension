@@ -18,3 +18,7 @@ No getter/value normalization, redacted-value equality, new hashes, false rollba
 First reproduce the design's causal regressions, then run adjacent tests, affected Core typecheck and unchanged audit through heavy-slot, one job at a time.
 No full suite, browser, provider, external writes or git. Freeze source and return exact command/output endpoints.
 Return Outcome / Changed / Validation / Not verified / Report / Notes. Lead independently accepts.
+
+Lead review additions: exposed session.port must be a methodless opaque capability. Direct enter/initialize/complete calls must not install sealed evidence on arbitrary trace objects without graph execution; test that exact public-API sequence, not just copied JSON. Internal engine adapters may resolve private session-owned controllers, but no ambient/global authority selection or caller-visible recording methods. Whitelist the existing childOverrides.currentSubflowId field so overrides cannot inject an inherited/foreign inputUse port.
+
+Final freshness cancellation invalidates evidence without erasing an already-produced graph trace or landed-act evidence. Preserve the actual aborted signal/reason for existing cancellation handling and distinguish this optional-evidence boundary from preparation cancellation. Seeded resume must compare against a valid equivalent run without inputUse, keep execution semantics and remain unknown for proof.
