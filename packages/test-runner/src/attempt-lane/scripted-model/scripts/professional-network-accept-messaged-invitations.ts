@@ -19,7 +19,10 @@ const READ_NODE = "web.output.dom-extract_list";
 const PRESS_NODE = "web.output.dom-click";
 
 type Field = { key: string; sample?: string; label?: string };
-type DraftStep = { step: number; actionId: string; disposition?: string; written?: boolean };
+type DraftStep = {
+  step: number; actionId: string; callId?: string; disposition?: string; written?: boolean; replacedBy?: number;
+  input?: { parameters?: { recordOutput?: { purpose?: string } }; recordOutput?: { purpose?: string } };
+};
 
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
 
@@ -81,6 +84,20 @@ function stepOf(request: ScriptedModelRequest, actionId: string): number {
   return last.step;
 }
 
+/** Take the chosen read's actual call into the Flow; an unrelated look is never its substitute. */
+function finishFromRead(request: ScriptedModelRequest, callId: string, summary: string): Record<string, unknown> {
+  const calls = evidenceOf(request).filter((entry) => entry.callId === callId && entry.toolId === "core.run_node");
+  if (calls.length !== 1 || calls[0]!.value.ok !== true) throw new Error(`There is no successful final read ${callId} to keep`);
+  const matches = draftSteps(request).filter((step) => step.callId === callId);
+  if (matches.length !== 1) throw new Error(`The draft has no unique call identity for final read ${callId}`);
+  const step = matches[0]!;
+  const output = step.input?.parameters?.recordOutput ?? step.input?.recordOutput;
+  if (step.actionId !== READ_NODE || step.written === true || step.replacedBy !== undefined || output?.purpose === "intermediate") throw new Error(`The final read ${callId} is not an available result step`);
+  if (step.disposition === "kept") return finish(summary);
+  if (step.disposition !== "taken") throw new Error(`The final read ${callId} is ${step.disposition ?? "not identified as taken"}`);
+  return { kind: "evidence_tool_decision", summary: "Keep the chosen result read in the Flow.", decision: { kind: "amend_draft", amendments: [{ change: "take", call: callId }] } };
+}
+
 /** What stands over the page on a first visit, each only while it shows. */
 function clearAndArrive(request: ScriptedModelRequest, page: string): Record<string, unknown> | undefined {
   if (pageLine(page, /"Not now"/u)) return pressOf(request, "Put off the app prompt.", `not-now-${request.ordinal}`, /"Not now"/u);
@@ -96,7 +113,6 @@ function readBack(request: ScriptedModelRequest, page: string): Record<string, u
   const forward = latestOf(request, "core.run_flow");
   if (forward && forward.value.passed !== true) throw new Error(`The forward run did not pass: ${JSON.stringify(forward.value).slice(0, 1500)}`);
   const made = callsMade(request);
-  if (made.has("read-accepted")) return finish("Accepted the three invitations with a message, and listed them.");
   const detected = evidenceOf(request).filter((entry) => entry.toolId === "web.detect_repeating_structure").at(-1);
   if (!made.has("detect-after")) {
     const card = pageLine(page, /"Lucia Romano View/u);
@@ -134,26 +150,25 @@ function readNotesBack(request: ScriptedModelRequest, page: string): Record<stri
   const message = [...fields].filter((field) => !(field.sample ?? "").includes(nameField.sample ?? " ")).sort((left, right) => (right.sample ?? "").length - (left.sample ?? "").length)[0];
   if (!message) throw new Error("The conversations' fields hold no message apart from the whole row");
   const name = nameField.key;
-  if (!made.has("back-read")) {
-    return toolCall("Read the new connections' conversations, name and first message.", "back-read", "core.run_node", readOf(detected, { name, message: message.key }, [{ field: tag, contains: "New connection" }], {
-      recordOutput: { datasetId: "accepted", schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "name", valueType: "string" }, { id: "message", label: "message", valueType: "string" }] }, writeMode: "append" },
-    }));
-  }
-  return finish("Read the three accepted people and their notes from Messaging, pressing nothing.");
+  return toolCall("Read the new connections' conversations, name and first message.", "back-read", "core.run_node", readOf(detected, { name, message: message.key }, [{ field: tag, contains: "New connection" }], {
+    recordOutput: { datasetId: "accepted", schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "name", valueType: "string" }, { id: "message", label: "message", valueType: "string" }] }, writeMode: "append" },
+  }));
 }
 
 /** The first attempt has left the invitations answered: no invitation row of the person it began with is left to press. */
 function afterAnAnswer(request: ScriptedModelRequest, page: string): boolean {
   const mine = [...callsMade(request)].some((callId) => callId.startsWith("back-"));
-  return mine || (/^PAGE "(Received invitations|My Network)/mu.test(page) && !pageLine(page, /"Ximena Ruiz View/u) && !evidenceOf(request).some((entry) => entry.toolId === "web.detect_repeating_structure"));
+  return mine || /^PAGE "Messaging/mu.test(page) || (/^PAGE "(Received invitations|My Network)/mu.test(page) && !pageLine(page, /"Ximena Ruiz View/u) && !evidenceOf(request).some((entry) => entry.toolId === "web.detect_repeating_structure"));
 }
 
 const decideOf = (form: AcceptMessagedForm): ScriptedReply => (request) => {
+  const made = callsMade(request);
+  if (form === "notes-back" && made.has("back-read")) return finishFromRead(request, "back-read", "Read the three accepted people and their notes from Messaging, pressing nothing.");
+  if (made.has("read-accepted")) return finishFromRead(request, "read-accepted", "Accepted the three invitations with a message, and listed them.");
   const page = currentPageOf(request);
   if (form === "notes-back" && afterAnAnswer(request, page)) return readNotesBack(request, page);
   const arriving = clearAndArrive(request, page);
   if (arriving) return arriving;
-  const made = callsMade(request);
   const structure = evidenceOf(request).find((entry) => entry.toolId === "web.detect_repeating_structure");
   if (!structure) {
     const card = pageLine(page, /"Ximena Ruiz View/u);
