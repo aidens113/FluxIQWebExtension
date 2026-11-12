@@ -113,9 +113,19 @@ function columnElement(walk: WebLlmCaptureWalk, spec: WebAutomationExtractionPro
   for (const item of walk.items) {
     const nodes = walk.elementsOf(item, spec);
     if (nodes === undefined) return undefined;
-    if (nodes.length > 0) return single(nodes);
+    if (nodes.length === 0) continue;
+    const one = single(nodes);
+    // An attribute column is placed in the first item whose element carries the attribute: its sample is that value.
+    if (one === undefined || carries(one, spec)) return one;
   }
   return undefined;
+}
+
+/** Whether an attribute column's element has its attribute; any other column's element has what it reads. */
+function carries(node: WebLlmTreeNode, spec: WebAutomationExtractionProposalFieldSpec): boolean {
+  if (spec.kind !== "attribute" || spec.attribute === undefined) return true;
+  const name = spec.attribute.toLowerCase();
+  return name in node.attributes;
 }
 
 function single(nodes: readonly WebLlmTreeNode[]): WebLlmTreeNode | undefined {

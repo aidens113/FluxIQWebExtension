@@ -19,11 +19,11 @@ function listings(count = 4): { list: PageElement; rows: PageElement[] } {
   return { list: el("ul", { class: "showings" }, rows), rows };
 }
 
-function placeOn(body: PageElement, rows: PageElement[], url: string, extra: { appended?: boolean; firstReturned?: number } = {}) {
+function placeOn(body: PageElement, rows: PageElement[], url: string, extra: { appended?: boolean; firstReturned?: number; noncontinuing?: boolean; whole?: boolean } = {}) {
   const stood = page(body);
   stood.document.URL = url;
   try {
-    return readPlace({ item: "li.showing", run: asElements(rows), listContinues: "load_more", itemsAtStart: extra.appended ? asElements(rows.slice(0, 2)) : asElements(rows), whole: true, firstReturned: extra.firstReturned });
+    return readPlace({ item: "li.showing", run: asElements(rows), listContinues: extra.noncontinuing ? undefined : "load_more", itemsAtStart: extra.appended ? asElements(rows.slice(0, 2)) : asElements(rows), whole: extra.whole ?? true, firstReturned: extra.firstReturned });
   } finally {
     stood.restore();
   }
@@ -96,4 +96,51 @@ test("growth by appending needs the earlier items kept in place with more after 
   } finally {
     stood.restore();
   }
+});
+
+test("a whole static list declares its observed origin, even when the conditions kept no row", () => {
+  const { list, rows } = listings();
+  const body = el("body", {}, [el("main", {}, [list])]);
+  assert.deepEqual(placeOn(body, rows, BASE, { noncontinuing: true, firstReturned: 2 }), { kind: "offset", value: 0 });
+  assert.deepEqual(placeOn(body, rows, BASE, { noncontinuing: true }), { kind: "offset", value: 0 });
+  assert.equal(placeOn(el("body", {}, []), [], BASE, { noncontinuing: true }), undefined);
+});
+
+test("a partial or growing window cannot claim the static list origin", () => {
+  const { list, rows } = listings();
+  const body = el("body", {}, [el("main", {}, [list])]);
+  assert.equal(placeOn(body, rows, BASE, { noncontinuing: true, whole: false }), undefined);
+  assert.equal(placeOn(body, rows, BASE), undefined);
+});
+
+test("a declared feed or virtual grid cannot claim an origin merely because it stopped growing", () => {
+  for (const attributes of [{ role: "feed" }, { role: "grid", "aria-rowcount": "240" }]) {
+    const rows = Array.from({ length: 3 }, (_, index) => el("li", { class: "showing" }, `Showing ${index + 1}`));
+    const list = el("ul", attributes, rows);
+    assert.equal(placeOn(el("body", {}, [list]), rows, BASE, { noncontinuing: true }), undefined);
+  }
+});
+
+test("declared set size and row positions distinguish a mounted window from the whole list", () => {
+  for (const attributes of [{ "aria-setsize": "240" }, { "aria-posinset": "41" }, { "aria-rowindex": "41" }, { "aria-setsize": "-1" }]) {
+    const rows = [el("li", { class: "showing", ...attributes }, "One mounted row")];
+    const list = el("ul", {}, rows);
+    assert.equal(placeOn(el("body", {}, [list]), rows, BASE, { noncontinuing: true }), undefined);
+  }
+});
+
+test("an unnumbered pager's final page cannot claim a static origin when only Earlier remains", () => {
+  for (const control of [el("button", {}, "‹ Earlier"), el("div", { onclick: "previous()" }, "‹ Earlier"), el("a", { href: "/previous", rel: "prev" }, "‹")]) {
+    const { list, rows } = listings();
+    const body = el("body", {}, [el("main", {}, [list, el("nav", {}, [control])])]);
+    assert.equal(placeOn(body, rows, BASE, { noncontinuing: true }), undefined);
+  }
+});
+
+test("row-owned Earlier controls and a form's Back/Next do not turn a whole static list into a pager", () => {
+  const rows = [el("li", { class: "showing" }, [el("span", {}, "Showing"), el("button", {}, "Earlier")])];
+  const list = el("ul", {}, rows);
+  const stepper = el("div", {}, [el("button", {}, "Back"), el("button", {}, "Next")]);
+  const body = el("body", {}, [el("main", {}, [list, stepper])]);
+  assert.deepEqual(placeOn(body, rows, BASE, { noncontinuing: true }), { kind: "offset", value: 0 });
 });
