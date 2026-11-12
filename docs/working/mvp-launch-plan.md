@@ -175,6 +175,16 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 
 ## Work Ledger
 
+### 2026-11-12 - Independent continuation checks and final host review
+
+- Agent: Codex lead; result_evidence_resume, act_scope_resume, host_integration_review, t893_inventory.
+- Validation: lead save/carrier Vitest group (draft-save, save-checks, person-cleared, steps-ran/replay/interruption) -> 6 files / 35 passed, 77.91s. Lead combined host/runtime group (managed-hosts, registry shutdown, act scope, idempotency, corrupt memory, pinned scope) -> 6 files / 31 passed, 123.41s; Core check passed in 109.610s; structure audit passed with 544 warnings / 916 baselined. Logs TEMP/fluxiq-codex-t905-save-carrier.log and fluxiq-codex-t907-combined-core.log.
+- Validation: lead t885 domain ownership/draft-control/answered-layer group -> 46 passed, 3.742s; Core sometimes-present -> 15 passed, 7.97s; package check matched its valid stamp and structure audit passed (249 warnings / 552 baselined). Bounded correction committed locally as 9e49d0db4; broader browser acceptance remains open.
+- Findings: final t907 static review found close could conceal execution-owner cleanup failure and nested pipeline leaves lacked preadmission runtime validation. Both are assigned as failing regressions and scoped fixes; integration waits for independent acceptance.
+- Coordination: t893 historical process/ports are clear, current dev merged cleanly, guarded shared-Core sync/build is running. t902 bounded local fix passed lead 49 cases and remains committed only locally; package compilation waits for its Core build reconciliation. No t902 source/report transfer or push.
+- Remaining: t905 exact saved executable/input/result proof and generic post-clearance witness, post-fix browser continuations, host fixes/integration, readiness replay, broader security and P2c/P3b/simulation gates. No paid calls, full sweep or main promotion.
+
+
 ### 2026-11-12 - t909 integrated; complete managed-host proof passed
 
 - Agent: lead, act_scope/act_scope_resume, browser_host/browser_host_resume and result_evidence workers; t893_inventory read-only.
