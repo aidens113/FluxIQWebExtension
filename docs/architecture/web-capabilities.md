@@ -1207,3 +1207,21 @@ page order, mixed-template separation, partial-field reservations, positional
 line groups and sensitive-field exclusions remain in effect; no value or field
 meaning receives preference. If template separation expands the source set past
 64, coverage and partial/group retention choose within that same proposal bound.
+
+
+### Next page humanness
+
+Above humanness 0, Next page uses the click gesture at an accepted point near
+its control's centre. A refused aim keeps the direct click. The existing
+permission from Core is required for an optional inert misclick, at most once
+per step; robot checks and the page's load pace retain their ordinary handling.
+Each press refreshes its aim and continuation mark, including a replacement
+load-more control after a proven no-effect press. After the worker acknowledges
+the mark, the exact prepared point is hit-tested again before dispatch. A stale
+point is prepared and marked afresh within the existing command deadline; no
+stale gesture is sent. A mark authorizes continuation, rather than certifying
+that a click happened. The mark carries only whether
+all presses were aimed and the optional misclick coordinates. The document a
+link loads, and any refused landing it reloads, preserve that record in the
+result without pressing again. A step that presses nothing records aimed false.
+At level 0, direct clicks, marks and results keep their previous shape.

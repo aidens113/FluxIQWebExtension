@@ -87,9 +87,12 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
   let control = clickable(found, way.control);
   await clearCover(control, progress.deadline);
   // Above humanness 0, the misclick and the aim before the mark (`./pager-press.ts`).
-  await progress.press?.prepare(control);
-  if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
-  await progress.beforeFollow?.("loadMore");
+  if (progress.press !== undefined) {
+    if (!await preparePress(control, progress)) return { outcome: "timed_out", stop: "deadline" };
+  } else {
+    if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
+    await progress.beforeFollow?.("loadMore");
+  }
   let binding = loadMoreContinuations.bind(control, progress.item, progress.shown);
   let settlement = observe(binding, control, progress.deadline);
   // A press the list's own evidence proves did nothing is made once more, as a person presses a
@@ -98,6 +101,7 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
   for (let extra = 0; ; extra += 1) {
     let settled: Awaited<ReturnType<typeof settlement.settle>>;
     try {
+      if (extra > 0 && progress.press !== undefined && !await preparePress(control, progress)) return { outcome: "timed_out", stop: "deadline" };
       pressControl(control, progress);
       settled = await settlement.settle();
     } finally {
@@ -141,7 +145,10 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
       outcome = "changed";
       break;
     }
-    if (paused !== "retried") pressControl(control, progress);
+    if (paused !== "retried") {
+      if (progress.press !== undefined && !await preparePress(control, progress)) return { outcome: "timed_out", stop: "deadline" };
+      pressControl(control, progress);
+    }
     outcome = await waitForMoreItems(control, progress, hasNewItem);
   }
   if (outcome === "unchanged") {
@@ -205,4 +212,15 @@ async function waitForMoreItems(control: HTMLElement, progress: PaginationProgre
 function pressControl(control: HTMLElement, progress: PaginationProgress): void {
   if (progress.press === undefined) control.click();
   else progress.press.press(control);
+}
+
+/** Refreshes the aim and continuation before a later load-more press can load another document. */
+async function preparePress(control: HTMLElement, progress: PaginationProgress): Promise<boolean> {
+  if (progress.press === undefined) return true;
+  do {
+    if (pastDeadline(progress.deadline)) return false;
+    await progress.press.prepare(control);
+    await progress.beforeFollow?.("loadMore");
+  } while (progress.press.ready?.(control) === false);
+  return true;
 }

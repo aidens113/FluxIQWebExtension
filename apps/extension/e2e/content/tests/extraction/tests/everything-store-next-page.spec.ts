@@ -236,7 +236,16 @@ test("at humanness 100 every Next page press is aimed inside its control, and ev
       expect(event.y, `${event.type} at step ${step} is inside the control`).toBeGreaterThanOrEqual(event.box.top);
       expect(event.y).toBeLessThan(event.box.bottom);
     }
-    expect(new Set(press.map((event) => `${event.x},${event.y}`)).size, "every event of one press is at the same point").toBe(1);
+    const point = press[0]!;
+    // Chromium keeps fractional PointerEvent coordinates and floors MouseEvent coordinates.
+    // Assert that exact constructor conversion, rather than accepting unrelated nearby points.
+    for (const event of press) {
+      const pointer = event.type.startsWith("pointer");
+      expect({ x: event.x, y: event.y }, `${event.type} uses the shared press point`).toEqual({
+        x: pointer ? point.x : Math.floor(point.x),
+        y: pointer ? point.y : Math.floor(point.y)
+      });
+    }
   }
 
   // The same five pages, the same ending, as at humanness 0.

@@ -79,8 +79,11 @@ export async function afterListChange(
   // Above humanness 0, the misclick and the aim come first; the press is then
   // marked again, so a document a link loads records it as made (`./pager-press.ts`).
   if (progress.press !== undefined) {
-    await progress.press.prepare(control);
-    await progress.beforeFollow?.(by);
+    do {
+      if (pastDeadline(deadline)) return { outcome: "timed_out", stop: "deadline" };
+      await progress.press.prepare(control);
+      await progress.beforeFollow?.(by);
+    } while (progress.press.ready?.(control) === false);
   }
   const movedAt = Date.now();
   // Capture before pressing: shown contains live Elements whose fields may be

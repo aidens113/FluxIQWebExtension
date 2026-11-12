@@ -15,8 +15,8 @@ import { commandHumanness, type CommandHumanness } from "../command-humanness";
 import { humanPagerPress } from "../pager-press";
 
 const HUMAN = commandHumanness({ commandId: "cmd-next-page", humanness: 100 }) as CommandHumanness;
-const ACTIONABLE = { actionable: true, point: { x: 50, y: 20 } } as unknown as ActionabilityReport;
-const REFUSED = { actionable: false, code: "TARGET_COVERED", detail: "covered", point: { x: 50, y: 20 } } as unknown as ActionabilityReport;
+const ACTIONABLE = { actionable: true, point: { x: 50, y: 20 }, detail: "reachable" } satisfies ActionabilityReport;
+const REFUSED = { actionable: false, code: "covered", detail: "covered", point: { x: 50, y: 20 } } satisfies ActionabilityReport;
 
 /** A control that counts `click()` calls, the press made at humanness 0. */
 function control(): HTMLElement & { clicks: number } {
@@ -32,13 +32,14 @@ function pressing(options: { marked?: boolean; aimAt?: { x: number; y: number } 
   const press = humanPagerPress(action, HUMAN, 0, () => options.gate ?? ACTIONABLE, {
     aim: () => {
       log.push("aim");
-      return options.aimAt === undefined ? undefined : ({ actionable: true, point: options.aimAt } as never);
+      return options.aimAt === undefined ? undefined : ({ ...ACTIONABLE, point: options.aimAt });
     },
     gesture: (_element, point) => {
       log.push("gesture");
       gestures.push(point);
       return true;
     },
+    valid: () => true,
     misclick: async (_target, _action, _startedAt, onMisclick) => {
       log.push("misclick");
       if (options.misclickAt === undefined) return "none";
@@ -111,8 +112,9 @@ test("any press that falls back to control.click() makes the step's record not a
   let accepts = true;
   const log: string[] = [];
   const press = humanPagerPress({ commandId: "c", humanness: 100 }, HUMAN, 0, () => ACTIONABLE, {
-    aim: () => (accepts ? ({ actionable: true, point: { x: 1, y: 1 } } as never) : undefined),
+    aim: () => (accepts ? ({ ...ACTIONABLE, point: { x: 1, y: 1 } }) : undefined),
     gesture: () => log.push("gesture"),
+    valid: () => true,
     misclick: async () => "none"
   });
   const next = control();
@@ -134,4 +136,65 @@ test("a document a press loaded records the press its mark brought: an aimed pre
 test("a step that made no press records not aimed", () => {
   const { press } = pressing();
   assert.deepEqual(press.record(), { aimed: false });
+});
+
+
+test("a later press refreshes its mark for the current control and preserves an earlier unaimed press", async () => {
+  let accepts = true;
+  const press = humanPagerPress({ commandId: "c", humanness: 100, humannessMisclick: true }, HUMAN, 0, () => ACTIONABLE, {
+    aim: () => (accepts ? ({ ...ACTIONABLE, point: { x: 1, y: 1 } }) : undefined),
+    gesture: () => undefined,
+    valid: () => true,
+    misclick: async () => "none"
+  });
+  const first = control();
+  await press.prepare(first);
+  assert.deepEqual(press.marked(), { aimed: true });
+  press.press(first);
+  accepts = false;
+  const replacement = control();
+  await press.prepare(replacement);
+  assert.deepEqual(press.marked(), { aimed: false }, "a navigation must carry this press's fallback, not the previous aim");
+  press.press(replacement);
+  accepts = true;
+  await press.prepare(replacement);
+  assert.deepEqual(press.marked(), { aimed: false }, "a later aim cannot erase an earlier fallback");
+  press.press(replacement);
+  assert.deepEqual(press.record(), { aimed: false });
+});
+
+
+test("a resumed fallback and misclick remain part of any later press", async () => {
+  const { press, log } = pressing({ marked: true, aimAt: { x: 47, y: 22 }, misclickAt: { x: 9, y: 9 } });
+  press.resumed({ aimed: false, misclick: { x: 5, y: 5 } });
+  const next = control();
+  await press.prepare(next);
+  assert.deepEqual(log, ["aim"], "the resumed step already considered its one misclick");
+  assert.deepEqual(press.marked(), { aimed: false, misclick: { x: 5, y: 5 } });
+  press.press(next);
+  assert.deepEqual(press.record(), { aimed: false, misclick: { x: 5, y: 5 } });
+});
+
+
+test("a point that goes stale while its mark is acknowledged is prepared again before dispatch", async () => {
+  let valid = true;
+  let aims = 0;
+  const gestures: { x: number; y: number }[] = [];
+  const press = humanPagerPress({ commandId: "c", humanness: 100 }, HUMAN, 0, () => ACTIONABLE, {
+    aim: () => ({ ...ACTIONABLE, point: { x: ++aims, y: 1 } }),
+    gesture: (_control, point) => gestures.push(point),
+    valid: () => valid,
+    misclick: async () => "none"
+  });
+  const next = control();
+  await press.prepare(next);
+  valid = false;
+  assert.equal(press.ready?.(next), false);
+  assert.deepEqual(gestures, [], "the stale point never dispatches");
+  await press.prepare(next);
+  valid = true;
+  assert.equal(press.ready?.(next), true);
+  assert.deepEqual(press.marked(), { aimed: true });
+  press.press(next);
+  assert.deepEqual(gestures, [{ x: 2, y: 1 }]);
 });

@@ -21,8 +21,8 @@
 // `control.click()` as before.
 
 import type { PageMovePress } from "../../../shared/extraction-continuation";
-import type { PagerPress } from "../../extraction/page-advance/pager-press";
-import type { ActionabilityReport } from "../actionability";
+import type { PagerPress } from "../../extraction/page-advance";
+import { aimWithinTarget, type ActionabilityReport } from "../actionability";
 import { dispatchClickGesture, type ClickPoint } from "../click-gesture";
 import { aimPress } from "./aim-press";
 import type { CommandHumanness } from "./command-humanness";
@@ -42,9 +42,13 @@ type PagerPressParts = {
   aim: typeof aimPress;
   gesture: (element: Element, point: ClickPoint) => unknown;
   misclick: typeof misclickBefore;
+  valid: (element: Element, gate: ActionabilityReport, point: ClickPoint) => boolean;
 };
 
-const PARTS: PagerPressParts = { aim: aimPress, gesture: dispatchClickGesture, misclick: misclickBefore };
+const PARTS: PagerPressParts = {
+  aim: aimPress, gesture: dispatchClickGesture, misclick: misclickBefore,
+  valid: (element, gate, point) => gate.actionable && aimWithinTarget(element, gate, () => point) !== undefined
+};
 
 /** A step's press, and what the step's result records of it. */
 export type HumanPagerPress = PagerPress & {
@@ -60,11 +64,11 @@ export function humanPagerPress(
   check: (element: Element) => ActionabilityReport,
   parts: PagerPressParts = PARTS
 ): HumanPagerPress {
-  // The first press's decision, made in `prepare` and used by that press alone, so the mark says what the press does.
+  // Each press's decision, made in `prepare` and used by that press alone, so the mark says what the press does.
   let prepared: { control: HTMLElement; point: ClickPoint | undefined; pending: boolean } | undefined;
+  let misclickChecked = false;
   let misclick: { x: number; y: number } | undefined;
   let aimed: boolean | undefined;
-  let carried: PageMovePress | undefined;
 
   const aimAt = (control: HTMLElement): ClickPoint | undefined => {
     const gate = check(control);
@@ -74,14 +78,23 @@ export function humanPagerPress(
 
   return {
     async prepare(control) {
-      if (prepared !== undefined) return;
+      if (prepared?.pending === true && prepared.control === control) return;
       prepared = { control, point: undefined, pending: false };
-      if (action.humannessMisclick === true) await parts.misclick(control, action, startedAt, (point) => (misclick = point));
+      if (!misclickChecked) {
+        misclickChecked = true;
+        if (action.humannessMisclick === true) await parts.misclick(control, action, startedAt, (point) => (misclick = point));
+      }
       // Aimed after the misclick, on the control as it then stands.
       prepared = { control, point: aimAt(control), pending: true };
     },
+    ready(control) {
+      if (prepared?.pending !== true || prepared.control !== control) return false;
+      if (prepared.point === undefined || parts.valid(control, check(control), prepared.point)) return true;
+      prepared.pending = false;
+      return false;
+    },
     press(control) {
-      // The prepared decision serves the first press only; a press made once more is aimed afresh.
+      // A prepared decision serves one press only; an unprepared press is aimed afresh.
       const first = prepared?.pending === true && prepared.control === control;
       const point = first ? prepared?.point : aimAt(control);
       if (prepared !== undefined) prepared = { ...prepared, pending: false };
@@ -95,13 +108,14 @@ export function humanPagerPress(
     },
     marked() {
       if (prepared === undefined) return undefined;
-      return withMisclick({ aimed: aimed ?? prepared.point !== undefined });
+      return withMisclick({ aimed: aimed !== false && (!prepared.pending || prepared.point !== undefined) });
     },
     resumed(press) {
-      carried = { ...press };
+      aimed = press.aimed;
+      misclick = press.misclick === undefined ? undefined : { ...press.misclick };
+      misclickChecked = true;
     },
     record() {
-      if (carried !== undefined && aimed === undefined) return carried;
       return withMisclick({ aimed: aimed === true });
     }
   };

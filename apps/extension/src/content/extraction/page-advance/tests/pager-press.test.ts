@@ -17,6 +17,8 @@ import { PAGE_MOVE_MARK_MESSAGE, type PageMoveMark, type PageMovePress } from ".
 import { nthPagerLink, STORE_ITEM, storePage } from "../../tests/store-pager";
 import { movePage, pageMoveFor, type PagerPress, type PageMoveOptions, type RefusedPageHost } from "..";
 import { pressLoadMore } from "../load-more";
+import { PaginationFault } from "../pagination-fault";
+import { loadMoreContinuations } from "../loader-progress";
 import type { PaginationProgress } from "../types";
 
 /** A press that logs each call, presses with `click()` as the store answers it, and says it was aimed once prepared. */
@@ -152,7 +154,7 @@ test("across documents: a refused landing's reload mark keeps the press its mark
   }
 });
 
-test("a load-more press is prepared before its mark, and every press of it is the step's press", async () => {
+for (const presses of [1, 2]) test(`a load-more press is prepared and marked on each of ${presses} presses`, async () => {
   const globals = globalThis as Record<string, unknown>;
   const saved = { document: globals.document, element: globals.HTMLElement, input: globals.HTMLInputElement };
   class FakeElement {}
@@ -166,7 +168,11 @@ test("a load-more press is prepared before its mark, and every press of it is th
     }
   };
   append(3);
-  const control = Object.assign(new FakeElement(), { isConnected: true, matches: () => false, getAttribute: () => null, click: () => append(2) });
+  let clicked = 0;
+  const control = Object.assign(new FakeElement(), { isConnected: true, matches: () => false, getAttribute: () => null, click: () => { if (++clicked === presses) append(2); } });
+  // This test owns preparation/mark ordering; continuation provenance is proven beside that module.
+  const current = loadMoreContinuations.current;
+  loadMoreContinuations.current = () => control as unknown as Element;
   globals.document = {
     readyState: "complete",
     querySelectorAll: (selector: string) => (selector === ".row" ? items : []),
@@ -187,13 +193,40 @@ test("a load-more press is prepared before its mark, and every press of it is th
       },
       press: loggingPress(log)
     };
-    const step = await pressLoadMore({ mode: "loadMore", control: ".more" }, progress, undefined);
+    const step = await pressLoadMore({ mode: "loadMore", control: ".more" }, progress, undefined, () => ({
+      settle: async () => clicked < presses ? new PaginationFault("list_unchanged", "Proven no effect") : "advanced",
+      stop: () => undefined,
+      state: () => undefined,
+      rejection: () => undefined
+    }));
     assert.deepEqual(step, { outcome: "advanced", by: "loadMore" });
     assert.equal(items.length, 5);
-    assert.deepEqual(log, ["prepare", "mark loadMore", "press"]);
+    assert.deepEqual(log, Array.from({ length: presses }, () => ["prepare", "mark loadMore", "press"]).flat());
   } finally {
+    loadMoreContinuations.current = current;
     globals.document = saved.document;
     globals.HTMLElement = saved.element;
     globals.HTMLInputElement = saved.input;
+  }
+});
+
+
+test("a Next re-prepares and re-marks after acknowledgement invalidates its aim", async () => {
+  const shown = storePage(1);
+  try {
+    const log: string[] = [];
+    const marks: PageMoveMark[] = [];
+    const press = loggingPress(log);
+    let checked = 0;
+    const answer = await movePage({ item: STORE_ITEM }, {
+      timeoutMs: 20_000,
+      mark: marking(log, marks),
+      press: { ...press, ready: () => ++checked > 1 }
+    });
+    assert.equal(answer.outcome, "moved");
+    assert.deepEqual(shown.followed, [2]);
+    assert.deepEqual(log, ["mark next", "prepare", "mark next", "prepare", "mark next", "press"]);
+  } finally {
+    shown.restore();
   }
 });
