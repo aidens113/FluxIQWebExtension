@@ -19,7 +19,9 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 **Dependency verification (2026-11-11, late).** Snapshot API/SQL tests passed independently in t909, but real services exposed older private migration lists appended after new administration migrations. t905's ordered-composition fix preserves strict validation; lead transferred it to t909 and independently passed the three ordering plus six previously failing action tests. Snapshot source folders have also moved into audited paths. The original snapshot commit `9167d7141` remains a local dependency, not full lane acceptance. t909's ownership/resume and pre-next-call persistence repairs passed 433 tests; its only six failures were that now-fixed composition defect. Final package/structure gates and source-adapter proof remain.
 
-**Host and capture verification.** Lead independently passed t907's 73 extension, 16 browser-host, 23 domain and 40 Core authorization/host tests. A company-website lifecycle-only diagnostic is authorized after package/source gates, with zero model calls and Flow/continuation explicitly NOT RUN; no browser has launched yet. t885 passed domain check, runner build and 22 scripts after an obsolete single-attempt assertion was fixed. Capture review then reproduced and fixed two scoped-group mismatches; 78 structure tests, domain typecheck and audit passed (`b5278e377`, local). Its seven capture source/test files and the earlier Saturday script were transferred to t905; broader replay work remains.
+**Host and capture verification.** Lead independently passed t907's 73 extension, 16 browser-host, 23 domain and 40 Core authorization/host tests. The company-website lifecycle-only diagnostic launched two real hosts and exercised crash/reaper-loss replacement, but failed normal shutdown: a disconnected IPC send crashed the engine, and the harness then waited for an impossible child close event. The owned stuck runner was stopped after confirming product children had exited; the worker is adding regressions before relaunch. Model calls were zero; Flow/continuation were NOT RUN. t885 passed domain check, runner build and 22 scripts after an obsolete single-attempt assertion was fixed. Capture review then reproduced and fixed two scoped-group mismatches; 78 structure tests, domain typecheck and audit passed (`b5278e377`, local). Its seven capture source/test files and the earlier Saturday script were transferred to t905; broader replay work remains.
+
+**Action ownership verification (late).** Lead independently passed 83 tests across seven files for keyed execution, restart/resume, durable act records and persistence before the next call. The four-attempt case used the predecessor's saved Flow with zero calls on continuations. Nine structure violations remain under repair, followed by dynamic source-adapter acceptance; this is not full t909 acceptance.
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
@@ -158,6 +160,13 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-11 - Independent action checks and failed host shutdown diagnostic
+
+- Agent: lead; act_scope and browser_host (Sol Max).
+- Validation: in t909 Core, `pnpm --filter fluxiq exec vitest run src/framework/automation-service/service/fluxnode/tests/act-scope.test.ts src/framework/automation-service/service/fluxnode/tests/idempotency.test.ts src/runtime/answer-first/act-record/tests/record.test.ts src/runtime/answer-first/act-record/gate/tests src/framework/automation-service/service/answer-first/run-acts/tests/settled-before-return.test.ts --maxWorkers=1 --minWorkers=1` -> 7 files, 83 passed, 94.39s, exit 0 (lead).
+- Validation: `pnpm lab fluxnode-host --scenario company-website --task company-website-apprentices --hosts 2 --scripted-model --attempts 4 --lifecycle-only` -> worker observed both hosts enroll and replacements after browser crash/reaper loss; normal shutdown failed with closed IPC, engine exit 1, followed by harness waiting for ChildProcess.close despite observed exit. Owned runner stopped after product children exited; artifacts retained. No model calls; Flow/continuation not run.
+- Next: repair IPC/observed-exit lifecycle handling with regressions and a debug note before relaunch; resolve t909 audit findings and source-adapter proof. Neither lane is accepted or pushed.
 
 ### 2026-11-11 - Persistence boundaries and audit coverage
 
