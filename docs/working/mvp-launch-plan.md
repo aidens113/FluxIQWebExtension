@@ -155,6 +155,16 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 
 ## Work Ledger
 
+### 2026-11-11 - Resume the remaining structural lanes
+
+- Agent: lead; result_evidence, browser_host and act_scope (Sol Max), one worker per lane.
+- Changed: lead synced t905/t907/t909 in both repositories. t905 conflicts preserve both result-feed batch collection and dev humanness precedence. t885 is prepared next; its script merge preserves variants plus four-attempt replies. All source changes remain on their lane branches, unaccepted until scoped checks pass.
+- Findings: t905's old checkpoint omitted later WIP; result publication can point at the last page while the answer combines pages. t907 lacks CLI/pool/proofs and requires authenticated, lease-restricted machine authority plus headless routes, not relaxed person checks. t909's interleaved-key persistence and explore-resume gaps are inferred and under regression, not yet verified.
+- Ownership: t909 holds shared attempt/run-attempt.ts until its minimal scoped-persistence seam is stable; t905 continues elsewhere. t909 also holds FluxNode create/run files before t907's host wiring. Machine IAM/cache and upload authorization need adversarial tests. P3b remains the owner of production key custody.
+- Validation: t905 mocked ledger baseline -> 11 files, 80 tests passed (worker); t907 build registry -> 9 tests passed (worker). Lead checked merge resolutions and source path overlaps; no implementation acceptance or new full sweep claimed.
+- Next: finish these units, then resume t885, held t893, local-only t902, simulation work and remaining P2c/P3b gates; do not stop at an intermediate lane report.
+
+
 ### 2026-11-11 - Final readiness and hosted continuation acceptance
 
 - Agent: lead; click_readiness and hosted_panel (Sol Max); independent hosted_security_review (Sol Max).
