@@ -13,6 +13,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 ## Current State
 
+**Codex continuation (2026-11-11).** Intake finished; one implementation worker per lane now owns t908 (pager humanness and continuation truth), t906 (meaningful site-reset assertions and Buy Now diagnosis), and t901 (hosted-panel WIP validation and atomic username casing). The lead verifies and integrates. t902 stays local and off GitHub; t898's private-run-context.md and the main checkout's pre-existing uncommitted instructions/debug note remain untouched. Intake reports are in t901, t905 and t906 respectively. t898/t899/t900 are already integrated; t909 has Core-only unvalidated work. t843's runtime reset plan is superseded. No paid run or full sweep has been started by Codex. Shared detached Core was brought to dev with guarded library-only preparation for t906.
+
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
@@ -151,6 +153,13 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-11 - Codex continuation intake and preparation
+
+- Agent: lead; discovery workers inventory_product, inventory_runtime, inventory_validation; implementation workers hosted_panel (Sol Max), reset_assertions (Sol High), pager_humanness (Sol Medium).
+- Changed: continuation ownership; t906 and t901 extension branches merged with dev; shared detached Core updated through the task tooling's guarded move with only its four library packages, all restored from cache. No private notes or pre-existing user edits staged.
+- Validation: `node scripts/structure-audit.mjs` -> passed (249 warnings, 552 baselined); `node scripts/check/core-build.mjs` in t906 -> Core build current with source. The first direct `pnpm` invocation was blocked by PowerShell's script policy; use `pnpm.cmd`. A stale root git index lock was removed only after confirming no git process was running; the ownership-doc commit was pushed to dev.
+- Outcome: workers repairing evidenced pager metadata and test-observability defects; hosted-panel worker investigating a casing/write race. Acceptance and integration pending; no full sweep, live model call or main promotion.
 
 ### 2026-11-10 - Plan
 
