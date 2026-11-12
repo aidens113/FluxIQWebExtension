@@ -13,6 +13,7 @@ process.on("message", message => {
   if (!isReaperMessage(message)) return;
   if (message.type === "register") held.set(message.directory, message.fresh);
   else held.delete(message.directory);
+  if (process.connected) process.send?.({ type: "ack", requestId: message.requestId });
 });
 
 process.on("disconnect", () => {

@@ -78,6 +78,15 @@ describe("order", () => {
     assert.equal(cache.calls.some((call) => call.step === "domain:host-build"), false);
     assert.equal(copied, false);
   });
+
+  test("a managed-host proof builds its host module before the domain and extension without starting a panel", async () => {
+    const cache = fakeCache();
+    await phase({ runStep: cache.runStep, managedHosts: true }).run();
+    const steps = cache.calls.map((call) => call.step);
+    assert.equal(steps.filter((step) => step === "domain:host-build").length, 1);
+    assert.ok(steps.indexOf("domain:host-build") < steps.indexOf("domain:build"));
+    assert.ok(steps.indexOf("domain:build") < steps.indexOf("extension:build"));
+  });
 });
 
 describe("failure", () => {

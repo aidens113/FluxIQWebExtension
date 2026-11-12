@@ -1,0 +1,18 @@
+# Managed-host lead acceptance, 2026-11-12
+
+The lead ran the complete provider-free proof on the frozen t907 Core/extension pair after independently reviewing and testing the script fixes. This accepts the tested source; integration with the later t909 dependency is still pending.
+
+Command: `pnpm lab fluxnode-host --scenario company-website --task company-website-apprentices --hosts 2 --scripted-model --attempts 4`, through heavy-slot label lead-t907-held-read-proof, instance t907-host-slot-1. Observed exit 0. Log: local TEMP/fluxiq-codex-t907-held-read-proof.log. Report: ignored test-runs/fluxnode-host-proof/7bda2559-3d0f-4a9e-b028-541debe9d7ef/report.json.
+
+The report says flowAcceptance passed; all 14 checks true. Ten executions completed: two explorations (12 and 14 actual scripted requests), then four saved-Flow runs for each host, including the extra parallel pair. All eight later runs made zero engine decisions and zero actual scripted provider requests, had continuationProven true, and retained their predecessor Flow id/version/steps digest. The lead inspected every record and the proof's strict ordered row/column equality and predecessor checks. Every execution returned the exact four-row oracle. Replay SDK times ranged 14.458-21.547s. Provider accounting reconciles 26 requests, zero unknown/unattributed requests, ten distinct run IDs; paid requests and billed cost are 0.
+
+Lifecycle assertions passed: concurrent isolation, no lease failures, crash recovery/isolation, reaper-loss protection, normal shutdown, hard-death reaping, named retention/resume, network containment, script acceptance and attribution. Chromium e2e-chromium build; unchanged company-website fixture/task. Setup reused all matching builds in 24.534s.
+
+Lead also independently passed 85 script/correlation/proof tests before the final view-reference correction, then the changed apprentices file 10/10 in 6.366s after that correction. The worker's final 87-case group, package check/build and structure audit passed. Earlier failures and fixes remain documented in codex-t907-resume.md.
+
+Cleanup: after process exit, a marker-specific Node/Chrome scan found 0 remaining processes. Verified exited runner PID 5884 was cleared from slot 1; task/instance reservation retained. No profiles/artifacts were manually deleted. No paid run, user-panel management, full sweep or main promotion occurred.
+
+Remaining: integrate the independently validated final t909 storage/target delta without overwriting host shutdown; verify the combined source; commit/merge both repositories under their task gates. Production model custody remains P3b and is not claimed by this provider-free proof.
+
+
+Final dependency gate: after the lead transferred the 34-path t909 delta and resolved the three create-service admission overlaps, `pnpm --filter fluxiq exec vitest run src/framework/automation-service/service/fluxnode/tests/managed-hosts.test.ts src/framework/automation-service/service/fluxnode/tests/run-registry-shutdown.test.ts src/framework/automation-service/service/fluxnode/tests/act-scope.test.ts src/framework/automation-service/service/fluxnode/tests/idempotency.test.ts src/framework/automation-service/service/fluxnode/tests/corrupt-scoped-memory.test.ts src/framework/automation-service/service/fluxnode/tests/pin-act-scope.test.ts --maxWorkers 1 --minWorkers 1` -> 6 files / 31 passed, 123.41s. `pnpm --filter fluxiq check` -> exit 0, 109.610s. `node scripts/structure-audit.mjs` -> passed, 544 advisory warnings / 916 baselined (one stale entry can lower). Whole coordinated job exit 0; log TEMP/fluxiq-codex-t907-combined-core.log. A final read-only host/admission review is underway before branch sync and integration.

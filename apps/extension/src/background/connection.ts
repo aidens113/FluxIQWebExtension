@@ -66,6 +66,7 @@ import {
   RuntimeStatusTracker,
   ScriptedNavigationIntent,
   ServerCommandChannel,
+  SessionWrites,
   StateAssetStore,
   TabRecorder,
   type CoreApiCredentials,
@@ -101,6 +102,7 @@ export class FluxIQConnection {
   private readonly commands: ServerCommandChannel;
   private readonly activity: ActivityRelay;
   private readonly capturePolicy: CapturePolicySource;
+  private readonly sessionWrites = new SessionWrites(() => this.session, writeSession);
 
   // Construction order is dependency order: a collaborator handed to another as
   // an instance is built first. Anything reached through a closure is read when
@@ -150,6 +152,7 @@ export class FluxIQConnection {
       reportError: (message) => { this.lastError = message; },
       clearError: () => { this.lastError = undefined; },
       beforeConnect: () => this.page.refresh(),
+      onHostLease: () => this.projects.invalidate(),
       // Session storage (worker memory without it): queued page data never
       // outlives the browser session that recorded it.
       outbox: new ClientGatewayOutbox(
@@ -570,7 +573,7 @@ export class FluxIQConnection {
 
   private async persistSession(session: FluxIQSession): Promise<void> {
     this.session = session;
-    await writeSession(this.session);
+    await this.sessionWrites.save();
   }
 
   /**

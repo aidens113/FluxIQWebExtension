@@ -17,6 +17,7 @@ import test, { type TestContext } from "node:test";
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
 import { callCoreProgram, fetchProjectFromCoreSnapshot, fetchProjectIdFromCoreSnapshot, uploadTraceArtifact } from "../core-api";
 import { ProjectContext } from "../project-context";
+import { SessionWrites } from "../session";
 
 const TOKEN = "secret-pairing-token";
 const credentials = { coreApiUrl: "http://127.0.0.1:3000", token: TOKEN };
@@ -381,6 +382,71 @@ function contextWith(session: Partial<FluxIQSession>) {
 function coreNamingNone(firstProject: () => Response) {
   return (url: string) => url.endsWith("/first-project") ? firstProject() : json(200, { ok: true, payload: { sessions: [], webRuntime: { automationStudio: { activeProjectId: null } } } });
 }
+
+test("a new host lease refreshes project context immediately instead of reusing another run's cached project", async (t) => {
+  let project = "project-one";
+  const requests = stubFetchByUrl(t, () => json(200, { ok: true, payload: { sessions: [{ sessionId: "session", clientId: "client-1", status: "ready", projectId: project }] } }));
+  const { context, adopted } = contextWith({ sessionId: "session" });
+  assert.equal(await context.resolve("first run"), "project-one");
+  project = "project-two";
+  context.invalidate();
+  assert.equal(await context.resolve("second run"), "project-two");
+  assert.equal(requests.length, 2);
+  assert.deepEqual(adopted, ["project-one", "project-two"]);
+});
+
+test("a prior lease's pending lookup cannot adopt its project after the new lease has resolved", async (t) => {
+  const original = globalThis.fetch;
+  let firstReply: (response: Response) => void = () => undefined;
+  let secondReply: (response: Response) => void = () => undefined;
+  const first = new Promise<Response>((resolve) => { firstReply = resolve; });
+  const second = new Promise<Response>((resolve) => { secondReply = resolve; });
+  let calls = 0;
+  globalThis.fetch = (async () => ++calls === 1 ? first : second) as typeof fetch;
+  t.after(() => { globalThis.fetch = original; });
+  const { context, adopted } = contextWith({ sessionId: "session" });
+  const oldLookup = context.resolve("old lease");
+  context.invalidate();
+  const newLookup = context.resolve("new lease");
+  const answer = (projectId: string) => json(200, { ok: true, payload: { sessions: [{ sessionId: "session", clientId: "client-1", status: "ready", projectId }] } });
+  secondReply(answer("new-project"));
+  assert.equal(await newLookup, "new-project");
+  firstReply(answer("old-project"));
+  assert.equal(await oldLookup, undefined);
+  assert.deepEqual(adopted, ["new-project"]);
+});
+
+test("a lease change during persistence cannot return the old project or overwrite the new durable session", async (t) => {
+  let project = "old-project";
+  stubFetchByUrl(t, () => json(200, { ok: true, payload: { sessions: [{ sessionId: "session", clientId: "client-1", status: "ready", projectId: project }], webRuntime: { automationStudio: { activeProjectId: project, activeProjectName: project } } } }));
+  let session = { clientId: "client-1", sessionId: "session", token: TOKEN } as FluxIQSession;
+  let stored: FluxIQSession | undefined;
+  let release = (): void => undefined;
+  let adoptionStarted = (): void => undefined;
+  const oldStored = new Promise<void>((resolve) => { release = resolve; });
+  const adoption = new Promise<void>((resolve) => { adoptionStarted = resolve; });
+  const writes = new SessionWrites(() => session, async (snapshot) => {
+    if (snapshot.projectId === "old-project") await oldStored;
+    stored = snapshot;
+  });
+  const context = new ProjectContext({ settings: () => ({ coreApiUrl: credentials.coreApiUrl }) as FluxIQSettings, session: () => session,
+    adoptProjectId: (projectId) => {
+      session = { ...session, projectId };
+      adoptionStarted();
+      return writes.save();
+    }, onActivity: () => undefined, lookupBoundMs: 5_000 });
+  const oldLookup = context.resolve("old lease");
+  await adoption;
+  context.invalidate();
+  project = "new-project";
+  const newLookup = context.resolve("new lease");
+  release();
+  assert.equal(await oldLookup, undefined);
+  assert.equal(await newLookup, "new-project");
+  assert.equal(session.projectId, "new-project");
+  assert.equal(stored?.projectId, "new-project");
+  assert.equal(context.currentName(), "new-project");
+});
 
 function stubFetchByUrl(t: TestContext, respond: (url: string) => Response) {
   const requests: Array<{ url: string; init: RequestInit }> = [];

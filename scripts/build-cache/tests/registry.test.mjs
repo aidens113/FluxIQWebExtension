@@ -119,7 +119,7 @@ test("every registered step belongs to a workspace package", () => {
 test("the test-runner build order puts every workspace dependency first", () => {
   const order = buildOrder("test-runner:build");
   assert.equal(order.at(-1), "test-runner:build");
-  for (const dependency of ["domain:build", "test-contracts:build", "test-evidence:build"]) {
+  for (const dependency of ["domain:build", "browser-host:build", "test-contracts:build", "test-evidence:build"]) {
     assert.ok(order.includes(dependency), `${dependency} missing from ${order.join(", ")}`);
   }
   assert.ok(order.indexOf("test-contracts:build") < order.indexOf("test-evidence:build"), order.join(", "));

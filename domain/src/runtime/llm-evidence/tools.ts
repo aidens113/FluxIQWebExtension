@@ -36,7 +36,7 @@ import type { WebAutomationLlmEvidenceRuntime } from "./runtime-contract";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
-import { isEligibleWebSession } from "../web-sessions";
+import { isEligibleWebSession, leasedWebSessionId } from "../web-sessions";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
 import { webDefinitionFieldCapabilityRefusal } from "../definition-fields";
 import {
@@ -581,7 +581,9 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
 
 /** The sessions every evidence tool may use, narrowed to those that also declare `alsoDeclaring` when it is named. */
 function eligibleWebSessionIds(fluxiq: FluxIQ, alsoDeclaring?: string): string[] {
+  const leased = leasedWebSessionId();
   return fluxiq.programs.clientGateway.snapshot().sessions
+    .filter((session) => leased === undefined ? session.managedHostId === undefined : session.sessionId === leased)
     .filter((session) => isEligibleWebSession(session, alsoDeclaring))
     .map((session) => session.sessionId);
 }

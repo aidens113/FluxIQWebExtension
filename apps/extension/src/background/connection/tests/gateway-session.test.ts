@@ -69,6 +69,7 @@ type HarnessInput = {
   keepAlive?: () => void;
   // Core's recording-capture policy the hello's effective settings are clamped by.
   policy?: AutomationStudioRecordingCapturePolicy;
+  onHostLease?: () => void;
 };
 
 const PERSON_SETTINGS = { gatewayUrl: "ws://gateway.test", autoReconnect: false, captureMutations: true, captureInputValues: false, captureSnapshots: true, requestsEnabled: true } as FluxIQSettings;
@@ -99,6 +100,7 @@ function harness(input: HarnessInput = {}) {
     reportError: (message) => void state.errors.push(message),
     clearError: () => undefined,
     beforeConnect: async () => undefined,
+    ...(input.onHostLease ? { onHostLease: input.onHostLease } : {}),
     outbox,
     queueContext: () => state.context,
     mintLineage: () => "lineage-minted",
@@ -258,6 +260,21 @@ test("an action of an unknown type is answered as rejected and never reaches the
   assert.equal(sent[0]!.type, "client.action_result");
   assert.equal(sent[0]!.payload.commandId, "cmd-unknown");
   assert.notEqual(sent[0]!.payload.status, "succeeded");
+});
+
+test("a changed Core host lease invalidates context before mapped actions, once for each epoch", async () => {
+  let changed = 0;
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, onHostLease: () => { changed++; } });
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+    const lease = { resourceKey: "fluxnode.host:one", epoch: 1, holder: { role: "fluxnode-run", briefId: "run" } };
+    socket.deliver("server.execute_action", { commandId: "one", actionType: "web.dom.capture_snapshot", parameters: {}, lease }, "lease-one");
+    socket.deliver("server.execute_action", { commandId: "two", actionType: "web.dom.capture_snapshot", parameters: {}, lease }, "lease-same");
+    socket.deliver("server.execute_action", { commandId: "three", actionType: "web.dom.capture_snapshot", parameters: {}, lease: { ...lease, epoch: 2 } }, "lease-two");
+    await nextTurn();
+  });
+  assert.equal(changed, 2);
+  assert.equal(h.state.commands.length, 3);
 });
 
 // Core writes nothing to a socket before `server.session_ready` (the old

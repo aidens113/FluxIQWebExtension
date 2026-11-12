@@ -26,6 +26,7 @@
     "extension-chat-check": "node dist/extension-chat-check/cli.js"
   },
   "dependencies": {
+    "@fluxiq/sdk": "link:../../../!FluxIQ/packages/sdk",
     "@fluxiq-web-extension/browser-host": "workspace:*",
     "@fluxiq-web-extension/domain": "workspace:*",
     "@fluxiq-web-extension/test-contracts": "workspace:*",

@@ -87,6 +87,7 @@ export type GatewaySessionDeps = {
   // A new trust lineage id, for a socket that had to pair. Tests fix it.
   readonly mintLineage?: () => string;
   readonly handlers: GatewaySessionHandlers;
+  readonly onHostLease?: () => void;
   // How long a socket is given to open. Omitted in the extension, which takes
   // Core's `CLIENT_GATEWAY_OPEN_TIMEOUT_MS`; tests shorten it.
   readonly openTimeoutMs?: number;
@@ -104,6 +105,7 @@ type ExecuteActionMessage = Extract<ClientGatewayServerMessage, { type: "server.
 export class GatewaySession extends FluxIQClientGatewayConnection {
   private readonly deps: GatewaySessionDeps;
   private readonly enrolment: EnrolmentAttempt;
+  private leaseKey: string | undefined;
 
   constructor(deps: GatewaySessionDeps) {
     const enrolment = new EnrolmentAttempt();
@@ -183,6 +185,12 @@ export class GatewaySession extends FluxIQClientGatewayConnection {
   // A gateway action becomes a fact check or a browser action for the channel,
   // or is answered here when it cannot be read: nothing is dispatched to the page.
   private mapExecuteAction(message: ExecuteActionMessage): void {
+    const lease = message.payload.lease;
+    const leaseKey = lease === undefined ? undefined : `${lease.resourceKey}:${lease.epoch}`;
+    if (leaseKey !== undefined && leaseKey !== this.leaseKey) {
+      this.leaseKey = leaseKey;
+      this.deps.onHostLease?.();
+    }
     const { onCommand } = this.deps.handlers;
     // A fact check is not a web action: it is answered by its own route
     // (`runtime/fact-check-runner.ts`), or refused here when unreadable.

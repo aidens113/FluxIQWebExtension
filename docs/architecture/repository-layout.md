@@ -89,6 +89,39 @@ enforces that, and the test-runner imports from it instead (its
   channel, does the same for every registered profile when the engine dies
   without closing.
 
+Core grants each FluxNode leaf one host lease. The web domain selects that
+lease's exact session for both actions and evidence and refuses stale leases;
+unleased personal execution excludes managed sessions. A new lease invalidates
+the extension's project lookup cache, including an older lookup still in flight.
+Core owns the current run/project binding and checks managed HTTP calls through
+restricted service IAM policies. The headless API serves that client's context
+and shares trace/state upload intake with the web panel; it creates no person's
+project for a managed host. Production headless model-key custody remains Core's
+P3b seam.
+
+The product package is registered with the imported build cache, so its build
+precedes test-runner's reaper import. The provider-free acceptance command is:
+
+```powershell
+pnpm.cmd lab fluxnode-host --scenario company-website --task company-website-apprentices --hosts 2 --scripted-model --attempts 4
+```
+
+The proof uses the actual SDK and engine CLI, the realistic fixture and the
+product launcher. It records each predecessor's Flow/version/steps digest,
+actual engine model decisions, scripted requests and runtime; a replay requires
+zero decisions and zero scripted requests. It also checks independent sessions,
+fresh-host recovery, graceful shutdown, hard engine death and named retention
+and resume. Its artifacts remain in ignored, run-owned directories.
+
+Two FluxNodes each run an exploring attempt and three continuations concurrently,
+then one additional parallel replay each. Every result must match the fixture's
+four literal apprentice rows and name one actual leased host/session. A
+credential-free IPC acknowledgment drains observations after each SDK result.
+Scripted requests carry the owning run's validated correlation ID through the
+loopback transport; reply cursors are independent per run. Unknown requests stay
+in aggregate accounting and fail the proof. Scripted responses do not imply zero
+engine model decisions, and repeated run IDs cannot count as new attempts.
+
 ## Responsibility Boundaries
 
 Core's executable graph, neutral node pack and graph engine are framework capabilities.
