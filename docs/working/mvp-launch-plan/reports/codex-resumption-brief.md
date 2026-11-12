@@ -1,15 +1,15 @@
-Role: heavy worker, gpt-6.1-sol, max. Resume t907 managed browser host only.
-Owned roots paired fxwork/t907; preserve codex-resume-brief.md exact ownership. Read it and codex-t907-resume.md relevant sections.
-Lifecycle proof35b42038-ff13-4c0a-ba7e-c6687d9b8aaf passed all10, independently inspected; full Flow acceptance remainsopen.
-Lead independent corrected script/correlation/proof85 cases passed15.655s; subsequent fullproof88a64854-2f44-4790-9aaa-fc397003a695 FAILED.
-Second fullproof B reached4rows, A0,37engine/scriptedcalls (B25/A12), all evidence_tool_decision, paid0.
-B own request25refused; A stopped by peer diagnosis, attribution nowcorrect. No continuation reached; no markerprocesses remained.
-Root collected exit1 session62537 and released source hold before this resumption. Confirm no reader before edits.
-Trace actual MODEL-VISIBLE successful extraction evidence vs new readSucceeded guard (ok,node,status,read.extracted); raw domain shape may be transformed.
-Inspect earliest unexpected decision too; do not increase24reply diagnostic limit or complete merely oncallId.
-Already approved company-website-apprentices.ts and adjacent test under test-runner/src/attempt-lane/scripted-model/scripts; proof attribution paths owned.
-Request extra source paths before edits; use real safe evidence shape regression, preserve nonempty exact4roworacle.
-Separate known t885 greetingtimer attribution defect; do not workaround it in fixture/script.
-No browser relaunch until diagnosis/gates/lead announces; no paidcalls,userpanel,git,subagents,otherlanes,shared docs,t902/private t898.
-Slot1 reservation retained; PIDnull after exit. Source/dist frozen during any reader/build.
-Report codex-t907-resume.md, include lastfailure/debug. Return Outcome/Changed/Validation/Not verified/Report/Notes.
+Role: heavy worker, gpt-6.1-sol, max. Resume t909 action-scope final acceptance only.
+Owned paired fxwork/t909, preserve codex-resume-brief.md; read it and codex-t909-resume.md relevant latest sections.
+Last coherent source18files/71tests PASSED224.47s; lead independently earlier83ownership,27atomic storage plus snapshot/order gates.
+Last approved follow-up missing reachable named targets refuse BEFORE admission, no late latest-resolution or newtaskending.
+execution-targets.ts/tests, existing pipeline test, architecture runtime-ownership.md approved; cycle test and explicithash precedence retained.
+Final job t909-final-target-admission was running before previous tool session; coordinator nowempty. Inspect log/output/status, do not assume pass or redo blindly.
+Finish affected tests,typecheck,audit only if missing/failing; nofullsuite, no broad newinference expansion.
+Then freeze source and send exact independent commands for dynamic source/corruption/pin/target/missingtarget checks.
+Prepare fullcommit manifest including untracked source/tests excluding generated/private data.
+Prepare exact delta manifest SINCE frozen host handoff, especially create-fluxnode-service.ts and run-attempt.ts.
+Do not overwrite t907 host shutdown or t905 resultwiring; lead alone transfers3way after ownacceptance.
+Task binding retains originaltask/resolvedmanifest, midrunusesoriginalversions, restartchangedmanifestrefusesbeforeadmission.
+Preserve strictmemoryread/atomicdocumenttransaction and secret-free pointer/source snapshots.
+No otherlane/shared docs/git/subagents/paid/browser/userpanel/t902/private t898 edits. Use heavycoordinator forheavychecks.
+Report codex-t909-resume.md. Return Outcome/Changed/Validation/Not verified/Report/Notes.

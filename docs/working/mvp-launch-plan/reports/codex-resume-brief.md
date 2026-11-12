@@ -1,13 +1,13 @@
-# t907 Codex continuation brief
+# t909 Codex continuation brief
 Role: heavy worker; model gpt-6.1-sol; effort max.
-Goal: finish the stopped managed browser host lane, with verified root-cause behavior.
+Goal: finish the stopped FluxNode action scope lane, with verified root-cause behavior.
 Phase now: read-only intake; do not edit source until lead syncs dev and confirms ownership.
-Owned eventual paths: Existing t907 source diff in its paired Core and extension checkouts, plus directly adjacent tests/docs.
-Context: Read docs/working/mvp-seal-plan/reports/t907-browser-host/{design,browser-host,enrolment}.md and relevant MVP seal Current State. Inspect reported IAM actor/headless route blockers.
+Owned eventual paths: Existing t909 Core diff plus directly adjacent tests/docs; extension only your own report.
+Context: Inspect latest Core WIP message/diff and locate its act-scope report; read relevant Core fluxnode-plan Current State and named report. Explain missing report explicitly if absent.
 Read this lane's AGENTS.md/CODEX.md and Core's instructions before Core work.
 Inspect git status and diff against dev, not just latest commit. WIP is unvalidated.
 Return exact proposed edit paths, acceptance commands and remaining phases before source edits.
-Report: docs/working/mvp-launch-plan/reports/codex-t907-resume.md in this extension lane.
+Report: docs/working/mvp-launch-plan/reports/codex-t909-resume.md in this extension lane.
 Must not touch: shared Current State/ledger/index, another lane, t902, t898 private-run-context.md, main checkouts or user edits.
 No git mutations, subagents, full suites, paid runs, panel management or external messages.
 No symptom caps, arbitrary waits, extra retries, weak oracles or hidden failures.
@@ -16,20 +16,18 @@ Heavy jobs must coordinate through fxwork/.tools/heavy-slot.mjs; ask lead before
 Narrow mocked unit tests may run serially without a heavy slot. Use pnpm.cmd in PowerShell.
 End with Outcome / Changed / Validation(command and observed output) / Not verified / Report / Notes.
 Implementation authorized after dev sync (lead, 2026-11-11):
-Own B1/B2/B4/B6 and actor/headless paths enumerated in codex-t907-resume.md; confirm exact IAM machine-identity/custody contract before new IAM edits.
-B3 files create-fluxnode-service.ts/run-fluxnode.ts are temporarily owned by t909. Build disjoint hosts modules/tests, B5 and B7 scaffolding now; request lead handoff before editing those shared files.
-Machine authority must be derived from stored enrolled trust + current run lease, domain/project scoped, evaluated by IAM; no fictitious person/admin, hello-derived authority or relaxed person checks.
-Headless project context follows current lease; preserve Next/person behavior. Model calls stay in Core custody; no direct provider workaround.
-Complete B1-B7; report exact new build-cache/proof/architecture paths before editing outside named scopes. Lead owns versions/lockfile integration and shared docs.
-Heavy narrow checks/builds authorized through coordinator, one per lane, >=2GiB free. Coordinate other lanes; browser proofs only after unit/source gates and announced exact provider-free command.
-No paid calls, panel management, git mutations or other-lane edits. Keep normal shutdown/hard-death/isolation acceptance concrete.
+Own the 17 WIP paths and adjacent additions listed in codex-t909-resume.md, including new focused files under fluxnode/act-scope/.
+Reproduce both inferred gaps with failing tests first, then complete all four reported phases.
+Persist act records by execution scope; retain continuation task identity; preserve legacy chat and permission boundaries.
+Request exact additional generic-persistence paths before editing outside this ownership; other lanes may use them.
+Run narrow unit/SQL suites, package check and structure; heavy jobs use coordinator, one per lane, >=2 GiB free, serialize if capacity is tight.
+No paid calls or browser launch needed. Lead owns versions, shared docs, git and independent final checks.
 Continuation scope (lead, late 2026-11-11):
-- Approved connection/session/{writes,index,tests/writes.test}.ts for ordered durable writes and generation checks across lease handoff; lead independently passed73 extension,16 browser-host and23 domain tests, plus40 Core host/auth/upload tests.
-- Approved existing reaper IPC acknowledgments/loss cleanup. A real company-website lifecycle-only proof is authorized after package/build/currency gates, using two isolated hosts and zero engine/scripted/paid calls. Flow/continuation must be marked NOT RUN for that diagnostic. Do not launch old fake-gateway/blank-page headed test.
-- Approved test-runner proof/CLI --lifecycle-only stage; fixture navigation belongs only in proof harness, never site-specific product launcher code.
-- Approved scripts/lab/provider-free-run.mjs + tests/provider-free-run.test.mjs and scripts/lab/scenario-guard/lab-scenario-refusal.mjs + adjacent tests for new command protection before CLI/module setup. Preserve ten-scenario and no-credential guards.
-- Lead synced extensiondev before lifecycle launch; Core already contains currentdev. create/run remains reserved for t909 coherent dependency handoff.
-- Approved shutdown expansion: fluxnode/fluxnode-service.ts optional in-process close, run-registry.ts admission/stop/drain; owned create-service/run-dev integration; managed-hosts.test.ts and new run-registry-shutdown.test.ts, managed-hosts.md. Reproduce controller finalization race; drain in-flight admissions and all parent/leaf owner cleanup before instance close, without controller leases/time caps.
-- Approved full-proof attribution: packages/test-runner/src/attempt-lane/scripted-model/model-server.ts and existing tests/model-server.test.ts; optional validated synthetic run correlation from owned host fetch. Count unattributed requests explicitly; preserve independent scripted state and zero-call continuation criteria, no provider/Core decoding changes.
-- Correlation adjunct approved: scripted-model/correlation-header.ts and existing index.ts re-export; per-run scripted cursors/chat fallback, aggregate/unattributed reconciliation, interleaved two-run tests. No proof-consumer import from generic model server.
-- Full-proof root correction approved (lead, 2026-11-12): scripted-model/scripts/company-website-apprentices.ts and scripts/tests/company-website-apprentices.test.ts; scripts/evidence.ts and its adjacent tests only if a generic helper is required. The failed full proof repeatedly sent legacy absolute y=4000 while the asynchronously growing grid needed delta scrolling followed by actual named batch readiness. Both attempts stopped before extraction/result verification; the untransferred t905 result-ledger binding is not this failure's first cause. Preserve the 24-reply diagnostic limit, task and exact four-row oracle; reproduce absolute-scroll stall and pending-load retry before fixing with supported delta/wait contracts, no fixed delay. Per-run refusal versus sibling cancellation attribution and its regression remain in owned fluxnode-host-proof/**. No relaunch before debug/gates and lead supervision.
+- Approved runtime/answer-first/act-record/gate/act-gate.ts and adjacent tests, plus framework/automation-service/service/answer-first/run-acts/run-gate.ts and tests/settled-before-return.test.ts. Reproduced durable may_have_landed after settlement before next model decision; keep that observation and await flush at owning async doors.
+- Approved act-scope execution-owner helper/tests, request identity and durable key allocation, and pipeline/fluxnode-pipeline-context.ts service port. Separate-process contention, dead-owner recovery, fail-closed unknown owners, concurrent resume joining and scope ownership across every child/resume are required.
+- Lead transferred and locally committed snapshot-only 13-file dependency as Core9167d7141; do not rebuild or copy0036. Source API uses opaque immutable occurrence snapshots; secrets remain references.
+- Create/run handoff to t907 requires coherent dependency manifest, focused behavior checks and packagecheck. Dynamic snapshot adapter remains separate so host integration can proceed when the stable seam passes.
+- Approved after host transfer: act-scope/pipeline-source-reference.ts and pipeline-source-of.ts, task-memory snapshot-reference DTO, pipeline runner wiring and adjacent tests. Prove equal occurrences/reordered changed source/full Core restart: same parent key reuses immutable snapshot; fresh parents fetch current source. Keep create/run host files fixed.
+- Approved corrupt-state continuation: act-scope/scoped-memory.ts and tests; strict scoped TaskMemory reads/updates and minimal create-service launch preflight plus run-attempt strict-update argument. Reproduce keyed A/B/restart corruption before fix; refuse before admission, preserve cause and owner cleanup. Lead merges these reopened seams into other lanes.
+- Approved atomic task update: framework/persistence/program-state/document-transaction/{index.ts,transaction.ts,tests/transaction.test.ts,tests/process-writer.ts}; layout-v2 existing transaction, legacy per-document SQLite guard for RMW only. Prove independent processes retain acts+refs, crash release, independent documents and both layouts; no data duplication/global execution lock.
+- Approved pin/restart identity fix after3vs2 act reproduction: act-scope/execution-task.ts and adjacent tests; bind original taskKey and resolved target identity under existing execution owner before admission, strict stored binding, minimal create delta only. Reuse caller-key/options/pin policy; run-fluxnode unchanged.
