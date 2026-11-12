@@ -24,6 +24,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 **Action ownership verification (late).** Lead independently passed 83 tests across seven files for keyed execution, restart/resume, durable act records and persistence before the next call. The four-attempt case used the predecessor's saved Flow with zero calls on continuations. The subsequent audit corrections and dynamic source-adapter acceptance are tracked below; this is not full t909 acceptance.
 
 **Coherent dependency transfer (late).** t909 corrected its nine audit violations and passed its package check without exemptions or baseline changes. Lead transferred its frozen source/test/document slice into t905 and t907, including the independently validated snapshot and migration-order dependencies needed by t907. t905's only overlap, run-attempt.ts, preserves both result wiring and scoped act persistence. Lead passed all 18 combined result-service/action-scope/idempotency cases; the combined package check passed. Dynamic pipeline source snapshots remain separate work in t909. Lead also passed t905's 12 writer/preservation/service cases and 42 pagination/place/shown-value cases. The browser proof's shutdown fix passed nine independent units, but real lifecycle acceptance still needs its rerun after host integration.
+
+**Final edge checks and browser preparation.** t909 reproduced mutable source re-enumeration across a keyed restart (five acts instead of four); its snapshot fix passed 16 focused cases, including three fresh zero-call parent runs. A separate corrupt-memory reproduction then repeated a keyed act (three instead of two after A/B/restart); strict scoped state reads and owner-held admission checks are in progress. t907's first integrated host group passed 19 cases, but review found parent-controller finalization must also drain before instance shutdown; its regression is running. t905's ordered Core/downstream builds and package checks passed, including Chrome, Firefox and e2e Chromium bundles; remaining focused tests precede its three approved provider-free four-attempt browser series. Lead reserved machine slot 3 for t905-result-slot-3 and slot 1 for t907-host-slot-1. The latter reconciles stopped t885 ownership from the handoff and a zero-match prior-lane process check; no process was killed for reservation.
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
@@ -162,6 +164,14 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-11 - Restart persistence edges and isolated browser reservations
+
+- Agent: lead; act_scope, browser_host and result_evidence (Sol Max).
+- Findings: t909's reordered/changed source with an added row made a keyed retry perform five acts instead of four across actual Core restart. Snapshot repair -> worker 4 files / 16 passed, 108.99s; fresh-parent continuations used the saved Flow with zero calls (1640/1631/1870ms). Corrupt task memory then reproduced three acts instead of two for A/B/restart; strict scoped reads and pre-admission refusal are under repair, not accepted.
+- Validation: t907 focused host integration -> worker 6 files / 19 passed, 70.75s. Parent-controller cleanup is not covered by draining leaf leases; regression and registry-owned stop/drain follow. No full real-host acceptance yet.
+- Validation: t905 ordered library/downstream builds and package checks -> worker exit 0; focused downstream tests still running. Browser commands/manifests and unchanged 10/16/2-row oracles are recorded in its report before launch.
+- Coordination: lead reserved released slot 3 for t905 and reconciled stopped t885's slot 1 for t907 after confirming no resumed t885 lane and zero matching prior-lane processes. First t907 diagnostic lacked an explicit machine reservation; corrected before relaunch. No paid calls, guard overrides or user panel launch.
 
 ### 2026-11-11 - Shared action dependency integrated for result and host checks
 
