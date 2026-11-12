@@ -13,7 +13,7 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 ## Current State
 
-**Codex continuation (2026-11-11).** Intake finished; one implementation worker per lane now owns t908 (pager humanness and continuation truth), t906 (meaningful site-reset assertions and Buy Now diagnosis), and t901 (hosted-panel WIP validation and atomic username casing). The lead verifies and integrates. t902 stays local and off GitHub; t898's private-run-context.md and the main checkout's pre-existing uncommitted instructions/debug note remain untouched. Intake reports are in t901, t905 and t906 respectively. t898/t899/t900 are already integrated; t909 has Core-only unvalidated work. t843's runtime reset plan is superseded. No paid run or full sweep has been started by Codex. Shared detached Core was brought to dev with guarded library-only preparation for t906.
+**Codex continuation (2026-11-11).** t908 is validated and merged into dev: pager humanness, refreshed aim/marks on retries, and exact continuation records. t906 now owns a reproduced product readiness defect: both Buy Now presses can precede delayed handler attachment, because readiness omits that pending work; test delays or extra blind presses are not the fix. t901 owns atomic username casing, the member's own-name UI without broader identity access, and the independently found stale key-sharing-consent race across provider calls. One implementation worker owns each active lane; a separate read-only reviewer checks t901 security. t902 stays local and off GitHub; t898's private-run-context.md and pre-existing user edits remain untouched. t905 has a local intake-report-only commit; its WIP is not accepted or pushed. t898/t899/t900 are integrated; t909 has Core-only unvalidated work. t843's plan is superseded. No paid run or full sweep has been started by Codex.
 
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
@@ -153,6 +153,13 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-11 - t908 integrated; t906 and t901 causes reproduced
+
+- Agent: lead; pager_humanness (Sol Medium), reset_assertions (Sol High), click_readiness and hosted_panel (Sol Max), hosted_security_review (Sol Max).
+- Changed: t908 pager humanness and architecture docs merged through `pnpm task finish t908`; its extension worktree removed. t906 merged the updated dev. No commits unique to t902 occur in any selected lane (Core or extension).
+- Validation: lead `node apps/extension/scripts/test-extension.mjs content/action-runtime/humanness/tests content/extraction/page-advance/tests content/actions/tests/next-page.test` -> 133 passed after dev integration; direct Chromium `playwright test -c e2e/playwright.content.config.ts --workers=1 everything-store-next-page.spec.ts` -> 3 passed (1.6m); extension package check -> current matching successful cache stamp; finish structure audit -> passed. Worker also passed 140 initial tests, 91 final page-advance tests, and the browser spec. No installed-extension transport/Firefox/paid replay proof is claimed for t908.
+- Outcome: t906's serial browser run reproduced two pre-hydration presses (359/1178 ms; listener 1274 ms); a Sol Max worker is fixing generic readiness. Lead independently ran t901 casing API/service tests -> 25 passed; its other acceptance remains pending the member UI and fresh key-consent fixes. No main promotion.
 
 ### 2026-11-11 - Codex continuation intake and preparation
 
