@@ -34,6 +34,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 **Browser result and continuation gap (2026-11-12).** The corrected real side-panel driver accepted Continue throughout hubs run run-mwdbj3vf-90abb4ba. All four attempts achieved the exact ten stored and ten shown rows, with no reseed. Exploration took 21.888s and 11 scripted calls (1 interpretation, 9 decisions, 1 judge). Replays took 18.625/18.759/19.149s, each with zero decisions but one judge call. Lead inspected attempt.json: every saved record says notes_only/not_assembled; later starts carry only the draft digest, and all three continuation proofs are refused. This is correct-answer evidence, not saved-Flow or zero-call acceptance. Towels/Saturday are held while the worker traces assembly/save and judge causes; paid calls/billed cost remain zero. Lead also independently passed all 85 corrected hosted script/correlation/proof tests (15.655s); the corrected two-host proof then failed before completion (88a64854-2f44-4790-9aaa-fc397003a695): host B extracted four rows but reached its 25th scripted decision; host A had zero rows and was stopped by that shared diagnosis. Lead inspected the report: 37 engine/scripted decisions, zero paid calls, distinct hosts/sessions, and correct per-run failure attribution. The model-visible extraction success guard is under diagnosis before another run. The action worker passed its coherent 18-file/71-case check (224.47s), then began the approved missing-target admission tests/type/audit; independent final acceptance remains pending.
 
+**Integrated scope and accepted host proof (2026-11-12).** t909 is merged into both dev branches (Core c9eae465b, downstream 789775735). Lead independently passed the final 31 scope/source/target cases in 130.21s; Core finish passed all 70 mandatory contracts, and downstream finish passed its audit and removed the authoring worktree. Earlier independent 83 ownership and 27 atomic-storage cases remain valid. The complete t907 proof 7bda2559-3d0f-4a9e-b028-541debe9d7ef exited 0: all ten SDK executions returned the exact four-row dataset, all eight later executions proved their predecessor saved Flow with zero engine and zero actual scripted requests, and all fourteen host/lifecycle/accounting checks passed. Its 26 scripted requests were confined to exploration; paid calls and billed cost were zero. Lead transferred the final 34-path t909 dependency into t905/t907, resolving three host admission overlaps while preserving shutdown and result wiring; combined validation is pending. t885 now has a reproduced and unit-validated interruption-answer attribution fix (worker 46 domain and 15 Core protections), awaiting lead/browser acceptance. t893 inventory confirmed the dining fix already in dev; professional-network remains open. t902 has only local read-only security intake and stays off GitHub.
+
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
@@ -172,6 +174,14 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-12 - t909 integrated; complete managed-host proof passed
+
+- Agent: lead, act_scope/act_scope_resume, browser_host/browser_host_resume and result_evidence workers; t893_inventory read-only.
+- Validation: lead `pnpm lab fluxnode-host --scenario company-website --task company-website-apprentices --hosts 2 --scripted-model --attempts 4` -> exit 0, report 7bda2559-3d0f-4a9e-b028-541debe9d7ef passed; ten exact four-row executions, eight zero-request saved-Flow continuations, all 14 checks true, zero unknown/unattributed requests and zero billed cost. Marker-specific cleanup scan found no owned Node/Chrome processes; slot reservation retained with cleared PID.
+- Validation: final t909 nine-file command in codex-t909-resume.md -> lead 31/31 passed, 130.21s; `pnpm task finish t909` downstream -> audit passed and merged; Core `pnpm task finish t909 --skip-checks` -> all mandatory 70 contracts passed and merged. Narrow checks replace per-merge full sweeps under the standing policy.
+- Changed: final scoped dependency transferred to t905/t907, with reviewed three-way merges for create/run. Host proof accepts its pre-transfer frozen source; combined checks follow before that lane integrates. No full sweep, paid calls, npm publication or main promotion.
+
 
 ### 2026-11-12 - Exact hubs answers; continuation remains unaccepted
 
