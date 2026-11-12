@@ -1,5 +1,6 @@
 import { assertAttemptSeries, ATTEMPT_REPORT_SCHEMA_VERSION, attemptCountsAsLive, type AttemptCallKinds, type AttemptContinuation, type AttemptDeterministicSummary, type AttemptLoopsCaught, type AttemptReportRow, type AttemptSeries } from "@fluxiq-web-extension/test-contracts";
 import type { AttemptOutcome, AttemptTask } from "./driver.js";
+import { attemptOverheadLine, type AttemptOverhead } from "./overhead/index.js";
 
 /** Core's ladder counts per pattern, summed: how many times each kind of loop was caught, however it was answered. */
 function loopsCaughtOf(outcome: AttemptOutcome): AttemptLoopsCaught {
@@ -151,4 +152,9 @@ export function renderAttemptSeries(series: AttemptSeries): string {
     row.standIns.join(",") || "none",
   ].join(" | "));
   return [`task ${series.taskId} on ${series.scenarioId}`, header, ...lines, ...comparedWords(series), ...deterministicLines(series), ...laterAttemptNotes(series)].join("\n");
+}
+
+/** The series as `attempt-report.txt` shows it: each attempt's browser calls beside the saved Flow's (read from the run's step folders) follow the series. */
+export function renderAttemptReport(series: AttemptSeries, overheads: readonly AttemptOverhead[]): string {
+  return [renderAttemptSeries(series), ...overheads.map(attemptOverheadLine)].join("\n");
 }

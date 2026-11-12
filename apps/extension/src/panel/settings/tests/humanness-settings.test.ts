@@ -4,15 +4,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultSettings } from "../../../shared/browser";
 import { RUNTIME_MESSAGES } from "../../../shared/constants";
-import type { ExtensionStatus } from "../../../shared/protocol";
+import type { ExtensionStatus, FluxIQSettings } from "../../../shared/protocol";
 import { fake, withFakeDocument } from "../../chat/tests/fake-dom";
 import type { PanelContext } from "../../shell";
 import type { PanelStore } from "../../state";
-import { normaliseHumanness, readHumanness, withHumanness, type HumannessSettings } from "../humanness";
+import { normaliseHumanness, readHumanness, withHumanness } from "../humanness";
 import { createSettingsView } from "../settings-view";
 
 const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-const status = (settings: HumannessSettings): ExtensionStatus => ({ connectionState: "connected", recordingState: "idle", gatewayUrl: defaultSettings().gatewayUrl, settings, clientId: "fixture", paired: true, queueSize: 0, eventCount: 0, recentActivities: [], projectId: "project-1" });
+const status = (settings: FluxIQSettings): ExtensionStatus => ({ connectionState: "connected", recordingState: "idle", gatewayUrl: defaultSettings().gatewayUrl, settings, clientId: "fixture", paired: true, queueSize: 0, eventCount: 0, recentActivities: [], projectId: "project-1" });
 
 test("humanness is rounded and clamped to 0-100; anything else is 0", () => {
   assert.equal(normaliseHumanness(42.6), 43);

@@ -33,7 +33,7 @@ import type { RecordingStartRefusal } from "../recording-start/index";
 import { RuntimeStatusTracker } from "../runtime-status";
 import { ServerCommandChannel, type ServerCommandChannelDeps } from "../server-command-channel";
 
-function harness() {
+function harness(savedSettings: Partial<FluxIQSettings> = {}) {
   const calls: string[] = [];
   const refusals: RecordingStartRefusal[] = [];
   const accepted: Array<[string, string | null | undefined]> = [];
@@ -92,7 +92,7 @@ function harness() {
     evidence,
     sequence: new EventSequence(),
     session: () => ({ clientId: "client-1" }) as FluxIQSession,
-    settings: () => ({ gatewayUrl: "ws://gateway.test" }) as FluxIQSettings,
+    settings: () => ({ gatewayUrl: "ws://gateway.test", ...savedSettings }) as FluxIQSettings,
     persistSession: async () => {
       calls.push("persistSession");
     },
@@ -538,4 +538,22 @@ test("a traced fact check's answer carries the references; an untraced one is se
   assert.deepEqual(traced, { ...answer, metadata: { trace: { artifacts: TRACE.artifacts, unavailable: 1 } } });
   assert.equal(plain, untraced, "the very object the router handed over");
   assert.equal(answer.metadata, undefined, "the router's answer is not changed");
+});
+
+type HumannessFallback = { withSavedHumanness(action: BrowserActionCommand): BrowserActionCommand };
+
+test("a command with no humanness takes the saved setting when it is above 0; the run's own value wins", () => {
+  const withSaved = (saved: number | undefined, action: BrowserActionCommand) => (harness({ humanness: saved }).channel as unknown as HumannessFallback).withSavedHumanness(action);
+  assert.equal(withSaved(40, actionCommand("web.dom.click")).humanness, 40);
+  assert.equal(withSaved(40, actionCommand("web.dom.click", { humanness: 60 })).humanness, 60);
+  assert.equal(withSaved(40, actionCommand("web.dom.click", { humanness: 0 })).humanness, 0, "a run that set 0 stays 0");
+});
+
+test("a command with no humanness and no saved setting above 0 passes as the same object", () => {
+  for (const saved of [undefined, 0]) {
+    const action = actionCommand("web.dom.click");
+    const passed = (harness({ humanness: saved }).channel as unknown as HumannessFallback).withSavedHumanness(action);
+    assert.equal(passed, action);
+    assert.equal("humanness" in passed, false);
+  }
 });

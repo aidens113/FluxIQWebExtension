@@ -111,6 +111,19 @@ test("a message into a thread is one append-turn offering the chat's six capabil
   ]);
 });
 
+test("a turn carries the saved humanness only when it is above 0", async () => {
+  const withSaved = async (saved: number | undefined) => {
+    const c = context();
+    await relayConversation({ type: send, conversationId: "c-1", text: "Go" }, { ...c.value, humanness: () => saved });
+    return c.calls[0]?.payload;
+  };
+  assert.equal((await withSaved(35))?.humanness, 35);
+  for (const saved of [0, undefined]) assert.equal("humanness" in ((await withSaved(saved)) ?? {}), false);
+  const bare = context();
+  await relayConversation({ type: send, conversationId: "c-1", text: "Go" }, bare.value);
+  assert.equal("humanness" in (bare.calls[0]?.payload ?? {}), false, "a context with no setting sends none");
+});
+
 test("the capability list is the frozen six ids Core executes", () => {
   assert.deepEqual(CHAT_CAPABILITIES, offered);
   assert.ok(Object.isFrozen(CHAT_CAPABILITIES));

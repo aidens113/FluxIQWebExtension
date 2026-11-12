@@ -66,6 +66,17 @@ test("a run sends only the project, the Flow and the repair intent; a test of a 
   assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation }), { ok: false, code: "invalid_request", error: "That request is missing its flowId." });
 });
 
+test("a run carries the saved humanness only when it is above 0", async () => {
+  const withSaved = harness({}, { humanness: () => 40 });
+  await withSaved.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1" });
+  assert.deepEqual(withSaved.calls[0]?.payload, { projectId: "project-1", flowId: "flow-1", runIntent: "explore_and_adapt", humanness: 40 });
+  for (const saved of [0, undefined]) {
+    const h = harness({}, { humanness: () => saved });
+    await h.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1" });
+    assert.deepEqual(h.calls[0]?.payload, { projectId: "project-1", flowId: "flow-1", runIntent: "explore_and_adapt" });
+  }
+});
+
 test("a run's detail reads compact, then the adaptations of the run's Flow", async () => {
   const h = harness({
     "get-flow-run-detail": { ok: true, payload: { runDetail: { runId: "run-1", summary: { flowId: "flow-7" } } } },
