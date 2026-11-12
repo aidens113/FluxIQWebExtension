@@ -5,9 +5,12 @@
 // arguments and returns what it returns, so the page behaves as it would without
 // the extension.
 //
-// What is never counted, by evidence rather than by a time limit:
-// - a timer due later than `PAGE_WORK_HORIZON_MS` -- the page acting in its own
-//   time, not drawing itself;
+// A one-shot timer beyond `PAGE_WORK_HORIZON_MS` is counted separately: it does
+// not hold ordinary navigation readiness, but a still-unbound command can wait
+// for it before spending its existing second press. No timer duration is used
+// to decide whether that command is ready.
+//
+// What is never counted:
 // - a callback scheduled again once it has already run as one (a polling loop,
 //   an animation loop, `setTimeout(poll)` from inside `poll` or after an
 //   `await` in it): it recurs, and it runs as recurring work, so nothing it
@@ -58,7 +61,7 @@ export function installPageWorkTimers(host: Host, tracker: PageWorkTracker): boo
     if (typeof callback !== "function") return setTimeoutOriginal.call(this, callback, delay, ...rest);
     const again = recurs(callback as Callable);
     const due = Number(delay) || 0;
-    const id = again || due > PAGE_WORK_HORIZON_MS ? undefined : tracker.begin("timer");
+    const id = again ? undefined : tracker.begin(due > PAGE_WORK_HORIZON_MS ? "deferred-timer" : "timer");
     let token: unknown;
     const passed = function (this: unknown, ...values: unknown[]): unknown {
       timeouts.delete(token);

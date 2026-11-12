@@ -42,8 +42,8 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 
-/** The payload keys that hold the extension's record of the page rather than the node's answer. */
-const PAGE_RECORD_KEYS: ReadonlySet<string> = new Set(["snapshot", "element", "visualTarget", "resolution", "structure"]);
+/** The payload keys that hold the extension's record of the page rather than the node's answer; `humanness` is how the press was made (level, aim, misclick), kept in the step files and never shown to the model. */
+const PAGE_RECORD_KEYS: ReadonlySet<string> = new Set(["snapshot", "element", "visualTarget", "resolution", "structure", "humanness"]);
 
 /** The payload key listing what the runtime cleared, and the member of each entry that is the page's record. */
 const CLEARED_LAYERS_KEY = "clearedLayers";

@@ -2,7 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { postingById } from "../../../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
 import { viewJobHref } from "../../../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../../../fixtures/extension-context";
-import { bindScriptedProvider, keepDiagnostic, pageHandleWhere, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../../../index";
+import { bindScriptedProvider, keepDiagnostic, pageHandleWhere, projectBuild, rowTitles, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../../../index";
 import { actsWithOutcome, judgeLog, retiredCodesIn, supervisorWithEffect } from "../../../change-proof";
 import { bindDetectingRuntime } from "../../../photo-build";
 
@@ -14,11 +14,17 @@ const record = (value: unknown): JsonObject => typeof value === "object" && valu
 
 /**
  * Job-board save then read, judged with no reset (t775). Exploration saves the job and leaves it saved. The Flow
- * (open the job, save it, open My jobs, read the list) is tested twice, the second time as a changed revision. Both
- * trials begin with the job saved (by exploration, then still), so Core's `ensureState` on the save step, tied to the
- * explored press and its class-state toggle signature (the heart's name never flips), skips it `already_in_state`, the
- * read returns the saved rows, and each judge request's `siteChange` lists the skipped save with its pass. The builder
- * never undoes anything and no retired reset code appears in the step log.
+ * (open the job, save it, open My jobs, read the list) is tested once. The trial begins with the job saved (by
+ * exploration, then still), so Core's `ensureState` on the save step, tied to the explored press and its class-state
+ * toggle signature (the heart's name never flips), skips it `already_in_state`, the read returns the saved rows, and the
+ * judge request's `siteChange` lists the skipped save with its pass. The builder never undoes anything and no retired
+ * reset code appears in the step log.
+ *
+ * Two Core changes of 2026-10-30 shape the script. The press flips a class, so Core refuses a submitted step on it
+ * without `ensureState` (`candidate.toggle_state_required`): the save step names the state the press left, copied exactly
+ * from the save's own answer. And a yes on the judged whole run completes the brief before any further builder turn (Core
+ * t811): the trial's answer never reaches this builder, so there is no second revision to test, and the trial's verdict is
+ * read from the supervisor's `project.dispatch` answer instead.
  */
 test("installed gateway project build judges a save then read by the change, with the save skipped already in state", async ({ extensionSession }, testInfo) => {
   test.setTimeout(420_000);
@@ -31,6 +37,11 @@ test("installed gateway project build judges a save then read by the change, wit
   const pages: Record<string, string> = {};
   const answers: Record<string, JsonObject> = {};
   let destinationReference = "", heartHandle = "", detected = "", rowColumn = "";
+  /** The heart's state after the save's press, as the save's answer observed it: the save step's `ensureState`. */
+  let savedState: JsonObject = {};
+  /** What the supervisor's dispatch answered once the build brief returned: how the brief's trial ended. */
+  let dispatched: JsonObject | undefined;
+  let baselineTitles: string[] = [];
   try {
     await page.goto(new URL("/scenarios/job-board/", installed.origin).href);
     await page.getByRole("button", { name: "Accept all", exact: true }).click();
@@ -44,11 +55,10 @@ test("installed gateway project build judges a save then read by the change, wit
       pending = callId;
       return made;
     };
-    const flow = (second: boolean) => [`flow: Save job`, `step open: open the job`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(viewJob)}`,
-      `step save: save the job`, `  node: web.dom.click`, `  target: ${heartHandle}`, `  consequences: modify_existing`,
+    const flow = () => [`flow: Save job`, `step open: open the job`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(viewJob)}`,
+      `step save: save the job`, `  node: web.dom.click`, `  target: ${heartHandle}`, `  consequences: modify_existing`, `  ensureState: ${JSON.stringify(savedState)}`,
       `step saved: open my saved jobs`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(myJobs)}`,
-      `step read: read my saved jobs`, `  node: web.dom.extract_list`, `  extractList: ${JSON.stringify({ handle: detected, fields: { title: rowColumn } })}`,
-      ...(second ? [`step check: look at my saved jobs`, `  node: web.dom.capture_snapshot`] : [])].join("\n");
+      `step read: read my saved jobs`, `  node: web.dom.extract_list`, `  extractList: ${JSON.stringify({ handle: detected, fields: { title: rowColumn } })}`].join("\n");
     const builder = (turn: BuilderTurn) => {
       const { last, node, call } = turn;
       pages[`step-${turn.step}`] = turn.shownPage();
@@ -58,6 +68,7 @@ test("installed gateway project build judges a save then read by the change, wit
       }
       if (turn.step === 1) return send("saved.original", node("saved.original", "web.output.browser-navigate", { url: myJobs }));
       if (turn.step === 2) {
+        baselineTitles = rowTitles(turn.shownPage()).map(title => JSON.parse(title) as string);
         const destinations = record(last("core.run_node")?.resetDestinations).collections as JsonObject[] | undefined;
         const reference = destinations?.[0]?.ref;
         if (typeof reference !== "string") throw new Error("diagnostic.plain_list_ref_missing");
@@ -79,42 +90,77 @@ test("installed gateway project build judges a save then read by the change, wit
         return send("detect", call("detect", "web.detect_repeating_structure", { target: detected }));
       }
       if (turn.step === 6) {
+        savedState = record(record(answers["save"]?.toggle).signature);
+        if (!Object.keys(savedState).length) throw new Error("diagnostic.observed_toggle_state_missing");
         const packet = answers["detect"];
         detected = typeof packet?.extraction === "string" ? packet.extraction : "";
-        const field = (Array.isArray(packet?.fields) ? packet.fields as JsonObject[] : []).find(entry => typeof entry.key === "string");
+        const field = (Array.isArray(packet?.fields) ? packet.fields as JsonObject[] : []).find(entry =>
+          entry.kind === "text" && entry.sample === TARGET.title && typeof entry.key === "string");
         rowColumn = typeof field?.key === "string" ? field.key : "";
         if (!detected || !rowColumn) throw new Error("diagnostic.saved_list_not_detected");
-        return send("submit", call("submit", "core.submit_subflow", { flow: flow(false) }));
+        return send("submit", call("submit", "core.submit_subflow", { flow: flow() }));
       }
       const submitted = answers["submit"];
       if (typeof submitted?.revision !== "number" || typeof submitted.digest !== "string") throw new Error("diagnostic.submission_refused");
       const candidate = { revision: submitted.revision, digest: submitted.digest };
+      // The judged whole run. Its yes completes the brief at once (Core t811), so the builder's turn after it never comes.
       if (turn.step === 7) return send("trial.first", call("trial.first", "core.test_subflow", candidate));
-      if (turn.step === 8) return send("submit.second", call("submit.second", "core.submit_subflow", { flow: flow(true) }));
-      const second = answers["submit.second"];
-      if (typeof second?.revision !== "number" || typeof second.digest !== "string") throw new Error("diagnostic.second_submission_refused");
-      const next = { revision: second.revision, digest: second.digest };
-      if (turn.step === 9) return send("trial.second", call("trial.second", "core.test_subflow", next));
-      return turn.complete({ subflowKey: "main", ...next });
+      return turn.complete({ subflowKey: "main", ...candidate });
     };
+    const supervise = supervisorWithEffect({ permitted: ["modify_existing"], maxIterations: 24, effect: { kind: "end_state", state: "the job is on my saved jobs" } });
     const provider = bindScriptedProvider(installed, {
       task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: judge.verify,
-      supervisor: supervisorWithEffect({ permitted: ["modify_existing"], maxIterations: 24, effect: { kind: "end_state", state: "the job is on my saved jobs" } })
+      supervisor: turn => {
+        if (turn.step > 2) dispatched = turn.last("project.dispatch");
+        return supervise(turn);
+      }
     });
     const { ending, failure } = await build.run();
     const siteChanges = judge.siteChanges();
     const retired = retiredCodesIn(answers, observed.outcomes, provider.receipts, failure);
-    await keepDiagnostic(testInfo, "change-job-save-then-read.json", { ending, failure, answers, retired, siteChanges, outcomes: observed.outcomes, receipts: provider.receipts, pages });
+    await keepDiagnostic(testInfo, "change-job-save-then-read.json", { ending, failure, answers, dispatched, baselineTitles, retired, judged: judge.requests, siteChanges, outcomes: observed.outcomes, receipts: provider.receipts, pages });
 
     // No retired reset code anywhere in the step log, no undo named, and every judge request carries the site's change.
     expect(retired).toEqual([]);
     expect(observed.declarations.filter(declaration => declaration.call.startsWith("undo"))).toEqual([]);
-    expect([trialCode(answers["trial.first"]), trialCode(answers["trial.second"])]).toEqual(["yes", "yes"]);
-    expect(judge.requests.length).toBeGreaterThanOrEqual(2);
+    // The one trial answered yes: the brief returned done and the dispatch gave `complete` for the submitted revision (Core t811).
+    expect(ending).toBe("proposed");
+    const returned = (dispatched?.returns as JsonObject[] | undefined) ?? [];
+    expect(returned.map(entry => entry.outcome)).toEqual(["done"]);
+    expect((returned[0]?.trialsAnswered as JsonObject[] | undefined)?.map(entry => entry.verdict)).toEqual(["yes"]);
+    expect(record(returned[0]?.proposal).revision).toBe(answers["submit"]?.revision);
+    expect(record(dispatched?.complete).revision).toBe(answers["submit"]?.revision);
+    expect(judge.requests).toHaveLength(2);
+    expect(baselineTitles.length).toBeGreaterThanOrEqual(2);
+    expect(baselineTitles).not.toContain(TARGET.title);
+    const expectedTitles = [...baselineTitles, TARGET.title].sort();
+    for (const request of judge.requests) {
+      const summary = record(record(JSON.parse(request)).context).resultSummary as JsonObject;
+      expect(summary.totalRecordCount).toBe(expectedTitles.length);
+      expect(summary.recordSets).toHaveLength(1);
+      const stored = record((summary.recordSets as JsonObject[])[0]);
+      expect(stored.columns).toEqual(["title"]);
+      expect((stored.sampleRows as JsonObject[]).map(row => row.title).sort()).toEqual(expectedTitles);
+      const shape = summary.flowShape as JsonObject[];
+      // Core prepends the domain's arrival navigation; the control start is not an executed Flow-shape step.
+      expect(shape).toHaveLength(5);
+      expect(shape[0]).toEqual(expect.objectContaining({
+        nodeId: expect.stringMatching(/\.arrival$/u),
+        definitionId: "web.output.browser-navigate",
+        parameters: { url: viewJob }
+      }));
+      expect(shape[0]?.label).toBeUndefined();
+      expect(shape.slice(1).map(step => step.label)).toEqual([
+        "open the job", "save the job", "open my saved jobs", "read my saved jobs"
+      ]);
+      expect(shape.slice(1).map(step => step.definitionId)).toEqual([
+        "web.output.browser-navigate", "web.output.dom-click", "web.output.browser-navigate", "web.output.dom-extract_list"
+      ]);
+    }
     for (const siteChange of siteChanges) expect(siteChange).toBeDefined();
-    // Each trial began with the job saved: its save step is skipped already in state, with its pass, and never pressed
-    // (a press would unsave it: the toggle's second press).
-    expect(siteChanges).toHaveLength(2);
+    // The trial began with the job saved: its save step is skipped already in state, with its pass, and never pressed
+    // (a press would unsave it: the toggle's second press). Its two judge requests (the trial and Core's recheck of a yes) are one run.
+    expect(siteChanges).toHaveLength(1);
     for (const siteChange of siteChanges) expect(actsWithOutcome(siteChange, "already_in_state").length).toBeGreaterThanOrEqual(1);
     for (const siteChange of siteChanges) expect(actsWithOutcome(siteChange, "changed")).toEqual([]);
     // The read returned the saved rows (at least the job the build saved).

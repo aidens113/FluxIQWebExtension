@@ -39,6 +39,11 @@ test("once it has read, it completes, and a page it cannot read fails loudly", (
   assert.throws(() => decide({ ...request(""), payload: { taskKind: "evidence_tool_decision", context: { evidenceLoop: { evidence: [] } } } }), /holds no page/u);
 });
 
+test("the judge is held for every attempt of the default series, twice each", () => {
+  assert.ok((SCRIPT.replies.loop_verification?.length ?? 0) >= 8);
+  assert.ok((SCRIPT.replies.panel_command?.length ?? 0) >= 4);
+});
+
 test("a task with no script is refused by name", () => {
   assert.throws(() => scriptedModelScriptFor("no-such-task"), /has no script for no-such-task/u);
 });

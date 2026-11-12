@@ -50,19 +50,38 @@
 // that has neither -- a `div role=button` drawn as a circled plus whose only
 // name is its `<svg aria-label="Load more comments">` -- is recognized as Load
 // more by its accessible name, drawings included (`../identity/accessible-name.ts`),
-// as a person's assistive technology names it; a drawn Next is not (`drawnKind`
+// as a person's assistive technology names it; a drawn Next is not (`namedKind`
 // says why). Until 2026-10-27 such a control was
 // no control here: photo-social's comment thread was detected with no way on,
 // its reads carried no fact that it went on, and a Next page on it found no
 // Next, scrolled, and answered ended with Load more on screen (live run
 // `run-mvebbeom-a60886e1`, priya-tags).
+//
+// **A pager the page drew as plain elements is a pager, and a form's step
+// button is not one (t885, R4).** A booking widget pages its calendar by week
+// with `<div>‹ Earlier</div>` and `<div>Later ›</div>`, and steps its booking
+// form with Back and Next buttons in an action bar under the calendar. Only
+// the buttons were controls here, so every detection proposed the form's Next
+// as the calendar's pager; Next page pressed it, the form said "Choose a time."
+// and drew the same week again (`run-mwc6ut8u-52e3c1b3`). Now:
+//
+// - an element the page drew as a control -- one the page view prints
+//   `clickable` -- is a candidate when its label is a pager's
+//   (`./pager-reading/drawn-control.ts`), at a level whose semantic controls
+//   propose nothing, so a pager of links keeps the answer it had;
+// - a control that moves a dated list one way, `Later` or `Older` (with a word
+//   after it, `Older posts`), is its Next: a list starts at now, and a
+//   calendar goes on into later dates as a feed goes on into older posts;
+// - a Next beside a Back is a form's step control, never a pager: a pager says
+//   Previous, and a step that is pressed with nothing chosen raises an error
+//   rather than moving any list (`isStepControl`).
 
 import type { WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
 import { accessibleNameFor } from "../identity";
 import { selectorFor } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import { generalizedItemSelector } from "./item-selector";
-import { currentPageNumber } from "./pager-reading";
+import { currentPageNumber, pageDrawnControls } from "./pager-reading";
 
 /** What a control offers, when its label says. */
 export type PaginationControlKind = "next" | "loadMore";
@@ -75,6 +94,12 @@ const MAX_ANCESTOR_LEVELS = 6;
 
 const NEXT_LABEL = /^next\b|\bnext\s+page\b/u;
 const LOAD_MORE_LABEL = /\b(?:load|show|view)\s+more\b/u;
+/** A control that moves a dated list on: `Later`, `Older`, with at most one word after it and an arrow (header). */
+const FORWARD_LABEL = /^(?:later|older)(?:\s+\p{L}+)?[^\p{L}\p{N}]*$/u;
+/** A form step's way back, which a pager never says: it says Previous. */
+const STEP_BACK_LABEL = /^back\b[^\p{L}\p{N}]*$/u;
+/** The longest label a drawn control is read for. A pager's control is a word or two. */
+const MAX_DRAWN_LABEL = 40;
 
 /**
  * What a control labelled this way offers, or `undefined` when its label says
@@ -85,7 +110,7 @@ export function paginationKindForLabel(label: string, rel: string | undefined): 
   if (rel !== undefined && rel.trim().toLowerCase().split(/\s+/u).includes("next")) return "next";
   const text = label.replace(/\s+/gu, " ").trim().toLowerCase();
   if (!text) return undefined;
-  if (NEXT_LABEL.test(text)) return "next";
+  if (NEXT_LABEL.test(text) || FORWARD_LABEL.test(text)) return "next";
   if (LOAD_MORE_LABEL.test(text)) return "loadMore";
   return undefined;
 }
@@ -120,19 +145,41 @@ export const PROPOSED_MAX_PAGES = 1;
 export function detectPagination(run: readonly Element[], container: Element): WebAutomationExtractListPagination | undefined {
   let level: Element | null = container;
   for (let depth = 0; level && depth < MAX_ANCESTOR_LEVELS; depth += 1, level = level.parentElement) {
-    const controls = Array.from(level.querySelectorAll(CONTROL_SELECTOR))
-      .filter((control) => !run.some((item) => item === control || item.contains(control)));
-    const ended = lastPageNext(level, run);
-    if (controls.length === 0 && !ended) continue;
-    const next = controls.find((control) => kindOf(control) === "next") ?? ended;
-    if (next) return { mode: "next", next: selectorFor(next), maxPages: PROPOSED_MAX_PAGES };
-    const loadMore = controls.find((control) => kindOf(control) === "loadMore");
-    if (loadMore) return { mode: "loadMore", control: selectorFor(loadMore), maxPages: PROPOSED_MAX_PAGES };
-    const numbered = numberedControls(controls);
-    const pages = numbered && numbered.controls.length > 1 ? generalizedItemSelector(numbered.controls, `${selectorFor(numbered.holder)}${numbered.via}`) : undefined;
-    if (pages) return { mode: "numbered", pages: pages.selector, maxPages: PROPOSED_MAX_PAGES };
+    const outsideRun = (control: Element): boolean => !run.some((item) => item === control || item.contains(control));
+    const controls = Array.from(level.querySelectorAll(CONTROL_SELECTOR)).filter(outsideRun);
+    const found = proposalAmong(controls, lastPageNext(level, run))
+      // A control the page drew is asked about only where its controls answer nothing (header).
+      ?? proposalAmong(pageDrawnControls(level, (element) => outsideRun(element) && drawnKind(element) !== undefined), undefined);
+    if (found) return found;
   }
   return undefined;
+}
+
+/** What these controls of one level propose, in the header's order, or `undefined` when they propose nothing. */
+function proposalAmong(controls: readonly Element[], ended: Element | undefined): WebAutomationExtractListPagination | undefined {
+  if (controls.length === 0 && !ended) return undefined;
+  const next = controls.find((control) => kindOf(control) === "next") ?? ended;
+  if (next) return { mode: "next", next: selectorFor(next), maxPages: PROPOSED_MAX_PAGES };
+  const loadMore = controls.find((control) => kindOf(control) === "loadMore");
+  if (loadMore) return { mode: "loadMore", control: selectorFor(loadMore), maxPages: PROPOSED_MAX_PAGES };
+  const numbered = numberedControls(controls);
+  const pages = numbered && numbered.controls.length > 1 ? generalizedItemSelector(numbered.controls, `${selectorFor(numbered.holder)}${numbered.via}`) : undefined;
+  return pages ? { mode: "numbered", pages: pages.selector, maxPages: PROPOSED_MAX_PAGES } : undefined;
+}
+
+/** What a drawn element's short label says, read only to recognize it (D3); `undefined` for a long or silent one. */
+function drawnKind(element: Element): PaginationControlKind | undefined {
+  const said = element.getAttribute("aria-label") ?? textOutsideSensitiveControls(element);
+  return said.length > MAX_DRAWN_LABEL ? undefined : paginationKindForLabel(said, undefined);
+}
+
+/**
+ * Whether a control is a form's step button: labelled Next, beside a control
+ * labelled Back (header). Its label is read only to recognize it.
+ */
+function isStepControl(control: Element): boolean {
+  const siblings = Array.from(control.parentElement?.children ?? []);
+  return siblings.some((sibling) => sibling !== control && STEP_BACK_LABEL.test(labelOf(sibling)));
 }
 
 /**
@@ -155,8 +202,8 @@ function lastPageNext(level: Element, run: readonly Element[]): Element | undefi
 function kindOf(control: Element): PaginationControlKind | undefined {
   const rel = control.getAttribute("rel") ?? undefined;
   const said = control.getAttribute("aria-label") ?? textOutsideSensitiveControls(control);
-  if (said.trim()) return paginationKindForLabel(said, rel);
-  return drawnKind(control, rel);
+  const kind = said.trim() ? paginationKindForLabel(said, rel) : namedKind(control, rel);
+  return kind === "next" && isStepControl(control) ? undefined : kind;
 }
 
 /**
@@ -168,7 +215,7 @@ function kindOf(control: Element): PaginationControlKind | undefined {
  * Next page on the thread then followed as its pager. A load-more name says
  * which list it grows.
  */
-function drawnKind(control: Element, rel: string | undefined): PaginationControlKind | undefined {
+function namedKind(control: Element, rel: string | undefined): PaginationControlKind | undefined {
   const byRel = paginationKindForLabel("", rel);
   if (byRel) return byRel;
   return paginationKindForLabel(accessibleNameFor(control) ?? "", undefined) === "loadMore" ? "loadMore" : undefined;
@@ -264,8 +311,13 @@ const PAGER_CONTROL_SELECTOR = `${CONTROL_SELECTOR},[aria-disabled="true"]`;
  */
 const PAGER_NEXT_LABEL = /\bnext\s+page\b|^next\b[^\p{L}\p{N}]*$/u;
 
-/** A label that plainly names another page: a number, the current or a numbered page, Previous, First, Last or Back. */
-const OTHER_PAGE_LABEL = /^(?:(?:go\s+to\s+)?(?:current\s+)?page,?\s+(?:page\s+)?)?\d+$|\bprev(?:ious)?\b|\bfirst\b|\blast\b|\bback\b/u;
+/**
+ * A label that plainly names another page: a number, the current or a numbered
+ * page, Previous, First, Last or Back, or a dated list's way back, Earlier or
+ * Newer -- which a positional selector written beside Later names once the
+ * list has moved on and Earlier is drawn before it (t885, R4).
+ */
+const OTHER_PAGE_LABEL = /^(?:(?:go\s+to\s+)?(?:current\s+)?page,?\s+(?:page\s+)?)?\d+$|\bprev(?:ious)?\b|\bfirst\b|\blast\b|\bback\b|^\W*(?:earlier|newer)\b/u;
 
 /**
  * The control a `next` read follows on this page, or `undefined` when neither
@@ -282,7 +334,7 @@ export function nextControlOnPage(named: Element | null, run: readonly Element[]
     let level: Element | null = start;
     for (let depth = 0; level && depth < MAX_ANCESTOR_LEVELS; depth += 1, level = level.parentElement) {
       const controls = Array.from(level.querySelectorAll(PAGER_CONTROL_SELECTOR)).filter(outsideRun);
-      const labelled = controls.find(isPagerNext);
+      const labelled = controls.find(isPagerNext) ?? pageDrawnControls(level, (element) => outsideRun(element) && isPagerNext(element))[0];
       if (labelled) return { control: labelled, by: "label" };
       const following = numberedAfterCurrent(level, controls, outsideRun);
       if (following) return { control: following, by: "number" };
@@ -298,7 +350,8 @@ function labelOf(control: Element): string {
 function isPagerNext(control: Element): boolean {
   const rel = control.getAttribute("rel");
   if (rel !== null && rel.trim().toLowerCase().split(/\s+/u).includes("next")) return true;
-  return PAGER_NEXT_LABEL.test(labelOf(control));
+  const label = labelOf(control);
+  return (PAGER_NEXT_LABEL.test(label) || FORWARD_LABEL.test(label)) && !isStepControl(control);
 }
 
 /**

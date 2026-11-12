@@ -6,7 +6,9 @@
 // elements with xpaths, class names and attributes, the clicked `element`, the
 // `resolution` and the `visualTarget`. Every later decision carried the page
 // twice, and the raw copy was the one path by which markup reached a decision.
-// The stub page below answers a click the way the extension does.
+// The stub page below answers a click the way the extension does. A press run
+// above humanness 0 also records its level, aim and misclick: the step files
+// keep it, the model never reads it.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -194,4 +196,11 @@ test("the page record is taken out of a payload and nothing else is", () => {
   assert.equal(webNodeWithoutPageRecord({ snapshot: rawPage(true, false) }), undefined);
   assert.deepEqual(webNodeWithoutPageRecord([1, 2]), [1, 2]);
   assert.equal(webNodeWithoutPageRecord(undefined), undefined);
+});
+
+test("a press's humanness record (its level, aim and misclick) is the page's record, never shown to the model", () => {
+  const answer = { validation: VALIDATION, url: HOME };
+  const humanness = { level: 80, aimed: true, misclick: { x: 12, y: 40 } };
+  assert.deepEqual(webNodeWithoutPageRecord({ ...answer, humanness }), answer);
+  assert.equal(webNodeWithoutPageRecord({ humanness }), undefined);
 });

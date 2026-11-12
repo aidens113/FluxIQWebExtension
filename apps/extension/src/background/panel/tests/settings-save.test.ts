@@ -22,3 +22,11 @@ test("requests save ON only when Core's policy allows them and the save asked fo
   assert.equal(mergeSettings(defaultSettings(), { requestsEnabled: "yes" }, allowing).requestsEnabled, false);
   assert.equal(mergeSettings(defaultSettings(), { requestsEnabled: true }, AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY).requestsEnabled, false);
 });
+
+test("humanness saves rounded and clamped, and a bad or absent value leaves the current one", () => {
+  assert.equal(mergeSettings(defaultSettings(), { humanness: 50 }).humanness, 50);
+  assert.equal(mergeSettings(defaultSettings(), { humanness: 3.6 }).humanness, 4);
+  assert.equal(mergeSettings({ ...defaultSettings(), humanness: 30 }, { humanness: "high" }).humanness, 30);
+  assert.equal(mergeSettings({ ...defaultSettings(), humanness: 30 }, {}).humanness, 30);
+  assert.equal(mergeSettings(defaultSettings(), {}).humanness, undefined);
+});

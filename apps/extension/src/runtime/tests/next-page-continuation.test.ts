@@ -147,6 +147,30 @@ test("a refused landing's reload carries the refusal it spent into the next docu
   assert.deepEqual(sent.map((message) => continuation(message)?.resume), [undefined, { by: "next" }, refused]);
 });
 
+// Above humanness 0 a Next is marked again once its aim is known (t908,
+// `content/extraction/page-advance/pager-press.ts`): the later mark is the one
+// handed on, so the document a link loads records the press as it was made.
+test("a press marked again with its aim hands the new document the aimed mark", async () => {
+  const aimed: PageMoveMark = { by: "next", press: { aimed: true, misclick: { x: 12, y: 40 } } };
+  const { sent } = await run([{ marks: [{ mark: { by: "next" } }, { mark: aimed }], outcome: { lost: CHANNEL_CLOSED } }, { outcome: { reply: MOVED } }]);
+  assert.deepEqual(continuation(sent[1])?.resume, aimed);
+});
+
+test("a press record that is not exactly one refuses the whole mark", async () => {
+  const { sent } = await run([
+    {
+      marks: [
+        { mark: { by: "next", press: { aimed: "yes" } } },
+        { mark: { by: "next", press: { aimed: true, point: { x: 1, y: 2 } } } },
+        { mark: { by: "next", press: { aimed: true, misclick: { x: Number.NaN, y: 2 } } } }
+      ],
+      outcome: { lost: CHANNEL_CLOSED }
+    },
+    { outcome: { reply: MOVED } }
+  ]);
+  assert.equal(continuation(sent[1])?.resume, undefined);
+});
+
 test("a mark that is not one, or under another token, is not taken", async () => {
   const { sent } = await run([
     { marks: [{ mark: { by: "sideways" } }, { mark: { by: "next" }, token: "someone-else" }, { mark: { by: "next", rows: [{ a: "b" }] } }], outcome: { lost: CHANNEL_CLOSED } },

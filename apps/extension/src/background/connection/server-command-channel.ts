@@ -276,11 +276,18 @@ export class ServerCommandChannel {
         await this.deps.page.refresh();
         // A leased command that names no tab runs on the automation tab, the
         // resource its lease grants, never on whichever tab is in front.
-        await this.runtimeRouter().executeAction(payload.action, { leased: payload.lease !== undefined });
+        await this.runtimeRouter().executeAction(this.withSavedHumanness(payload.action), { leased: payload.lease !== undefined });
       } finally {
         this.reconciliation.release(commandId);
       }
     }
+  }
+
+  /** The run's own humanness wins; a command that carries none gets the person's saved setting when it is above 0, and any other command passes unchanged. */
+  private withSavedHumanness<Action extends { readonly humanness?: number | undefined }>(action: Action): Action {
+    if (action.humanness !== undefined) return action;
+    const saved = this.deps.settings().humanness;
+    return typeof saved === "number" && saved > 0 ? { ...action, humanness: saved } : action;
   }
 
   /** The refusal a command's host lease earns (`host-lease/`), or `undefined` when it may run. */

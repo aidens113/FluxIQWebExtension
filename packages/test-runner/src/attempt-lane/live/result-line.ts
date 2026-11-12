@@ -1,5 +1,6 @@
 import type { AttemptPath, AttemptReportRow, RunAnswerScore } from "@fluxiq-web-extension/test-contracts";
 import type { AttemptAskedAgain } from "../driver.js";
+import { overheadWords, type AttemptOverhead } from "../overhead/index.js";
 
 const PATH_WORDS: Readonly<Record<AttemptPath, string>> = {
   explore: "It explored, with no run of a saved Flow",
@@ -36,7 +37,13 @@ function askedAgainWords(askedAgain: AttemptAskedAgain | undefined): string {
   return ` You asked to do it again (Run again): ${parts.length > 0 ? parts.join("; ") : "it did nothing"}.`;
 }
 
-export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAnswerScore; status: string; waitingFor?: string | undefined; actsWithNoRow?: number | undefined; startedFromFirst?: boolean | undefined; askedAgain?: AttemptAskedAgain | undefined }): string {
+/** An attempt that drove the browser by hand says how many calls that took beside the saved Flow's, and what it repeated. */
+function browserCallsWords(overhead: AttemptOverhead | undefined): string {
+  if (!overhead || overhead.liveBrowserCalls === 0) return "";
+  return ` Browser calls ${overheadWords(overhead)}, ${overhead.repeatedCalls} repeated, ${overhead.wholeFlowRuns} whole-Flow runs from step 1.`;
+}
+
+export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAnswerScore; status: string; waitingFor?: string | undefined; actsWithNoRow?: number | undefined; startedFromFirst?: boolean | undefined; askedAgain?: AttemptAskedAgain | undefined; overhead?: AttemptOverhead | undefined }): string {
   const { row, answer } = input;
   const cached = row.cacheHitPercent === undefined ? "" : `, ${row.cacheHitPercent}% of input from cache`;
   const why = answer.wrongBecause.length > 0 ? ` because ${answer.wrongBecause.join(", ")}` : "";
@@ -44,5 +51,5 @@ export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAns
   const ended = `${input.status}${input.waitingFor ? ` for ${input.waitingFor}` : ""}`;
   const counted = row.live ? "counted as live" : `NOT LIVE, stand-ins: ${row.standIns.join(", ")}`;
   const noRow = (input.actsWithNoRow ?? 0) > 0 ? ` ${input.actsWithNoRow} lasting acts could not be tied to a row.` : "";
-  return `${row.taskId} attempt ${row.attempt}: answer ${answer.verdict}${why}.${askedAgainWords(input.askedAgain)}${againstWords(row, input.startedFromFirst)} Ended ${ended}${rows}, ${row.liveSteps} live steps, ${row.calls} calls${row.callKinds ? ` (interpretation ${row.callKinds.interpretation}, judge ${row.callKinds.judge}, decisions ${row.callKinds.decisions})` : ""}${cached}, $${row.usd.toFixed(4)}, ${Math.round(row.ms / 1000)} s. ${counted}.${noRow}`;
+  return `${row.taskId} attempt ${row.attempt}: answer ${answer.verdict}${why}.${askedAgainWords(input.askedAgain)}${againstWords(row, input.startedFromFirst)} Ended ${ended}${rows}, ${row.liveSteps} live steps, ${row.calls} calls${row.callKinds ? ` (interpretation ${row.callKinds.interpretation}, judge ${row.callKinds.judge}, decisions ${row.callKinds.decisions})` : ""}${cached}, $${row.usd.toFixed(4)}, ${Math.round(row.ms / 1000)} s. ${counted}.${noRow}${browserCallsWords(input.overhead)}`;
 }

@@ -9,7 +9,7 @@
 // asker confirms a drained page one task later (`runtime/navigation-events/`).
 
 /** What a counted piece of work is: a frame is not counted while the document is hidden, because a hidden document draws no frames. */
-export type PageWorkKind = "timer" | "frame" | "request";
+export type PageWorkKind = "timer" | "deferred-timer" | "frame" | "request";
 
 export type PageWorkTracker = {
   /** Counts a piece of work begun now; undefined, and nothing counted, while a recurring callback is running. */
@@ -19,7 +19,7 @@ export type PageWorkTracker = {
   /** `run`, as a recurring callback: nothing it begins is counted. */
   recurring<T>(run: () => T): T;
   /** Whether counted work is outstanding; frames are left out while `hidden`. */
-  busy(hidden: boolean): boolean;
+  busy(hidden: boolean, includeDeferred?: boolean): boolean;
 };
 
 /** A count that calls `drained` each time it falls to none. */
@@ -27,6 +27,13 @@ export function createPageWorkTracker(drained: () => void): PageWorkTracker {
   const outstanding = new Map<number, PageWorkKind>();
   let next = 0;
   let recurringDepth = 0;
+  const busy = (hidden: boolean, includeDeferred = false): boolean => {
+    for (const kind of outstanding.values()) {
+      if (kind === "deferred-timer" && !includeDeferred || hidden && kind === "frame") continue;
+      return true;
+    }
+    return false;
+  };
   return {
     begin(kind) {
       if (recurringDepth > 0) return undefined;
@@ -36,7 +43,7 @@ export function createPageWorkTracker(drained: () => void): PageWorkTracker {
     },
     end(id) {
       if (id === undefined || !outstanding.delete(id)) return;
-      if (outstanding.size === 0) drained();
+      if (!busy(false)) drained();
     },
     recurring(run) {
       recurringDepth += 1;
@@ -46,9 +53,6 @@ export function createPageWorkTracker(drained: () => void): PageWorkTracker {
         recurringDepth -= 1;
       }
     },
-    busy(hidden) {
-      for (const kind of outstanding.values()) if (!(hidden && kind === "frame")) return true;
-      return false;
-    }
+    busy
   };
 }

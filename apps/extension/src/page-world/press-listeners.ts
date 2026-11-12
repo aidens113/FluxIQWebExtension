@@ -10,7 +10,7 @@
 // remembered; a probe answers "the page bound a press here", not "a press here
 // does something now".
 
-import { PRESS_PROBE_EVENT } from "../shared/press-probe-event";
+import { PRESS_BINDING_MARK_EVENT, PRESS_BINDING_RELEASE_EVENT, PRESS_BINDING_SINCE_EVENT, PRESS_PROBE_EVENT } from "../shared/press-probe-event";
 import { inExtensionWorld } from "./extension-world";
 
 /** The events a person's press fires on what they press. */
@@ -26,8 +26,14 @@ export function installPressListenerWatch(): boolean {
   host.__fluxiqPressWatchInstalled = true;
 
   const listened = new WeakSet<EventTarget>();
+  const bindings = new WeakMap<EventTarget, number>();
+  const marked = new WeakMap<EventTarget, Map<string, number>>();
+  let generation = 0;
   const remember = (target: EventTarget): void => {
-    if (target instanceof Element && target !== document.documentElement && target !== document.body) listened.add(target);
+    if (target instanceof Element && target !== document.documentElement && target !== document.body) {
+      listened.add(target);
+      bindings.set(target, ++generation);
+    }
   };
 
   const nativeAdd = EventTarget.prototype.addEventListener;
@@ -53,6 +59,35 @@ export function installPressListenerWatch(): boolean {
   nativeAdd.call(window, PRESS_PROBE_EVENT, (event: Event) => {
     const target = event.composedPath()[0];
     if (target !== undefined && listened.has(target)) event.preventDefault();
+  }, true);
+  // Capture's historical probe above keeps its meaning. Readiness asks a
+  // different question: whether a fresh binding was observed after its own
+  // first-press mark. An old listener removed before delayed rehydration must
+  // not release the second press early.
+  nativeAdd.call(window, PRESS_BINDING_MARK_EVENT, (event: Event) => {
+    const target = event.composedPath()[0];
+    const token: unknown = (event as CustomEvent<unknown>).detail;
+    if (target !== undefined && typeof token === "string") {
+      const marks = marked.get(target) ?? new Map<string, number>();
+      marks.set(token, generation);
+      marked.set(target, marks);
+      event.preventDefault();
+    }
+  }, true);
+  nativeAdd.call(window, PRESS_BINDING_SINCE_EVENT, (event: Event) => {
+    const path = event.composedPath();
+    const target = path[0];
+    const token: unknown = (event as CustomEvent<unknown>).detail;
+    const since = target === undefined || typeof token !== "string" ? undefined : marked.get(target)?.get(token);
+    if (since !== undefined && path.some(item => (bindings.get(item) ?? 0) > since)) event.preventDefault();
+  }, true);
+  nativeAdd.call(window, PRESS_BINDING_RELEASE_EVENT, (event: Event) => {
+    const target = event.composedPath()[0];
+    const token: unknown = (event as CustomEvent<unknown>).detail;
+    if (target === undefined || typeof token !== "string") return;
+    const marks = marked.get(target);
+    marks?.delete(token);
+    if (marks?.size === 0) marked.delete(target);
   }, true);
   return true;
 }

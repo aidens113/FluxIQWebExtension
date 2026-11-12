@@ -333,6 +333,7 @@ function automationRelayDeps(manager: FluxIQConnection): AutomationRelayDeps {
     // Credentials are read per call, so a token FluxIQ rotated on reconnect is the one sent.
     call: (endpoint, payload, programId) => callCoreProgram(manager.coreApiCredentials(), endpoint, payload, programId),
     projectId: () => manager.projectId(),
+    humanness: () => manager.currentSettings().humanness,
     lastStoppedRecordingId: () => manager.lastStoppedRecordingId(),
     removeRecordedStep: (activityId) => manager.removeRecordedStep(activityId)
   };
