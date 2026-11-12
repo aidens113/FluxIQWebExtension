@@ -9,11 +9,15 @@
 // A misclick (W2 H4): above 0, on a command Core marked safe
 // (`humannessMisclick`), a press may be preceded by one click on an inert point
 // beside its target (`misclick/before.ts`); unmarked, or at 0, never.
+//
+// A Next page step's press (t908, `pager-press.ts`) is aimed and may misclick
+// on the same terms, and its record survives the press loading another document.
 
 export { aimPress } from "./aim-press";
 export { commandHumanness, type CommandHumanness } from "./command-humanness";
 export { fitWithinCommand } from "./fit-within-command";
 export { inertHitAt, isInteractiveElement, misclickBefore, misclickChance, misclickPoint, misclickRandom, pageHasOpenLayer } from "./misclick";
+export { humanPagerPress, type HumanPagerPress } from "./pager-press";
 export { pauseFor } from "./pause-for";
 export { pointNearCentre } from "./point-near-centre";
 export { recordHumanness, type HumannessRecord } from "./record-humanness";
