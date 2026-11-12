@@ -13,6 +13,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 ## Current State
 
+**Managed hosts integrated (2026-11-12).** t907 is merged into both dev branches: downstream01a01946a and Corea47f7dcf0. Final-source Chromium proof25764f49-644e-4974-9763-7dae7a3112d3 returned ten exact four-row results, with eight predecessor-Flow replays at zero engine/scripted calls and all fourteen lifecycle/isolation/accounting checks passed. Its27 scripted calls were exploratory; paid/billed0. Lead passed Core43, SDK9, web17, extension connection303, web-session15, host/script44 and guard31 tests plus affected package checks and audits. Core merge passed70 mandatory contracts. t905 exact-source/compiler-input/call-identity work passed109 independent tests; final audit/error-path closure and remaining input/effect proof remain. t893 script correction passed18 independent tests, awaiting t905 integration before browser rerun. Local-only t902 receipt/recovery work continues and is not pushed; t885 browser acceptance, P2c/P3b and simulation work remain open. No full sweep or main promotion.
+
 **Current acceptance (2026-11-12, afternoon).** t907 is committed locally on both task branches and synced with current dev; final lead acceptance is running after review fixed swallowed owner-release errors and nested runtime admission. The earlier complete browser proof remains valid for its recorded source; a final-source rerun will precede integration. t885 passed current-source package checks and 124 affected downstream tests, plus 9 Core wiring tests, but its wider browser continuation is still pending. t893 current-source readiness checks passed (46 tests, extension typecheck, audit); its four-attempt provider-free run completed two achieved attempts, then stopped NOT_JUDGED on attempt 3 after an unexpected fourth scripted judge request. Diagnosis shows replay omitted the result-producing read and therefore repaired instead of returning rows; no script allowance or oracle has been weakened. A dedicated worker is tracing this alongside t905 saved-source ownership. t905 source-identity tests reproduced missing metadata and its bounded implementation is under test. Local-only t902 reproduced false revocation receipts and the absent headless endpoint; the worker is fixing the shared endpoint and strict receipt handling. No paid calls, full sweep or promotion.
 
 **Codex continuation (2026-11-11).** t908 pager humanness is integrated and pushed. t906 fixes delayed press readiness and restores meaningful site-reset assertions: lead independently passed 305 units and all four installed-extension browser cases; merged into dev. t901 hosted identity, own-name UI and fresh key-consent fixes passed focused checks and independent security review; both sides are merged into dev, with all 70 mandatory Core contract tests passing. No fixed delay, extra press or weaker data oracle was added. t902 stays off GitHub; t898 private notes and original user edits remain untouched. t905 has a local intake-report-only commit, with its WIP unaccepted/unpushed. Codex touched t901, t906 and t908 implementation lanes; no paid run or full sweep.
@@ -176,6 +178,13 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-12 ? Final managed-host proof and paired merge
+
+- Agent: lead, browser_host and host_integration_review.
+- Changed: t907 completed and merged in both repositories; current-source proof/report committed.
+- Validation: `pnpm lab fluxnode-host --scenario company-website --task company-website-apprentices --hosts 2 --scripted-model --attempts 4` -> exit0, ten correct datasets, eight zero-call continuations, all fourteen checks true. `pnpm task finish t907` -> exit0/audit passed; Core `pnpm task finish t907 --skip-checks` -> exit0/70 mandatory contracts passed. A first Core finish refused the still-attached clean worktree; detaching it as the tool instructed allowed finish.
+- Outcome: downstream01a01946a/Corea47f7dcf0. No matching run processes remain; slot1 PID cleared. See reports/codex-t907-final-source-proof.md for calls, runtimes and limits. Original user edits and private/off-GitHub lanes remain untouched by integration.
 
 ### 2026-11-12 - Current-source readiness and bounded follow-ups
 
