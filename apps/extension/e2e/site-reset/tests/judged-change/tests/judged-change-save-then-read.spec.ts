@@ -2,7 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { postingById } from "../../../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
 import { viewJobHref } from "../../../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../../../fixtures/extension-context";
-import { bindScriptedProvider, keepDiagnostic, pageHandleWhere, projectBuild, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../../../index";
+import { bindScriptedProvider, keepDiagnostic, pageHandleWhere, projectBuild, rowTitles, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../../../index";
 import { actsWithOutcome, judgeLog, retiredCodesIn, supervisorWithEffect } from "../../../change-proof";
 import { bindDetectingRuntime } from "../../../photo-build";
 
@@ -41,6 +41,7 @@ test("installed gateway project build judges a save then read by the change, wit
   let savedState: JsonObject = {};
   /** What the supervisor's dispatch answered once the build brief returned: how the brief's trial ended. */
   let dispatched: JsonObject | undefined;
+  let baselineTitles: string[] = [];
   try {
     await page.goto(new URL("/scenarios/job-board/", installed.origin).href);
     await page.getByRole("button", { name: "Accept all", exact: true }).click();
@@ -67,6 +68,7 @@ test("installed gateway project build judges a save then read by the change, wit
       }
       if (turn.step === 1) return send("saved.original", node("saved.original", "web.output.browser-navigate", { url: myJobs }));
       if (turn.step === 2) {
+        baselineTitles = rowTitles(turn.shownPage()).map(title => JSON.parse(title) as string);
         const destinations = record(last("core.run_node")?.resetDestinations).collections as JsonObject[] | undefined;
         const reference = destinations?.[0]?.ref;
         if (typeof reference !== "string") throw new Error("diagnostic.plain_list_ref_missing");
@@ -92,7 +94,8 @@ test("installed gateway project build judges a save then read by the change, wit
         if (!Object.keys(savedState).length) throw new Error("diagnostic.observed_toggle_state_missing");
         const packet = answers["detect"];
         detected = typeof packet?.extraction === "string" ? packet.extraction : "";
-        const field = (Array.isArray(packet?.fields) ? packet.fields as JsonObject[] : []).find(entry => typeof entry.key === "string");
+        const field = (Array.isArray(packet?.fields) ? packet.fields as JsonObject[] : []).find(entry =>
+          entry.kind === "text" && entry.sample === TARGET.title && typeof entry.key === "string");
         rowColumn = typeof field?.key === "string" ? field.key : "";
         if (!detected || !rowColumn) throw new Error("diagnostic.saved_list_not_detected");
         return send("submit", call("submit", "core.submit_subflow", { flow: flow() }));
@@ -115,7 +118,7 @@ test("installed gateway project build judges a save then read by the change, wit
     const { ending, failure } = await build.run();
     const siteChanges = judge.siteChanges();
     const retired = retiredCodesIn(answers, observed.outcomes, provider.receipts, failure);
-    await keepDiagnostic(testInfo, "change-job-save-then-read.json", { ending, failure, answers, dispatched, retired, siteChanges, outcomes: observed.outcomes, receipts: provider.receipts, pages });
+    await keepDiagnostic(testInfo, "change-job-save-then-read.json", { ending, failure, answers, dispatched, baselineTitles, retired, judged: judge.requests, siteChanges, outcomes: observed.outcomes, receipts: provider.receipts, pages });
 
     // No retired reset code anywhere in the step log, no undo named, and every judge request carries the site's change.
     expect(retired).toEqual([]);
@@ -127,7 +130,33 @@ test("installed gateway project build judges a save then read by the change, wit
     expect((returned[0]?.trialsAnswered as JsonObject[] | undefined)?.map(entry => entry.verdict)).toEqual(["yes"]);
     expect(record(returned[0]?.proposal).revision).toBe(answers["submit"]?.revision);
     expect(record(dispatched?.complete).revision).toBe(answers["submit"]?.revision);
-    expect(judge.requests.length).toBeGreaterThanOrEqual(2);
+    expect(judge.requests).toHaveLength(2);
+    expect(baselineTitles.length).toBeGreaterThanOrEqual(2);
+    expect(baselineTitles).not.toContain(TARGET.title);
+    const expectedTitles = [...baselineTitles, TARGET.title].sort();
+    for (const request of judge.requests) {
+      const summary = record(record(JSON.parse(request)).context).resultSummary as JsonObject;
+      expect(summary.totalRecordCount).toBe(expectedTitles.length);
+      expect(summary.recordSets).toHaveLength(1);
+      const stored = record((summary.recordSets as JsonObject[])[0]);
+      expect(stored.columns).toEqual(["title"]);
+      expect((stored.sampleRows as JsonObject[]).map(row => row.title).sort()).toEqual(expectedTitles);
+      const shape = summary.flowShape as JsonObject[];
+      // Core prepends the domain's arrival navigation; the control start is not an executed Flow-shape step.
+      expect(shape).toHaveLength(5);
+      expect(shape[0]).toEqual(expect.objectContaining({
+        nodeId: expect.stringMatching(/\.arrival$/u),
+        definitionId: "web.output.browser-navigate",
+        parameters: { url: viewJob }
+      }));
+      expect(shape[0]?.label).toBeUndefined();
+      expect(shape.slice(1).map(step => step.label)).toEqual([
+        "open the job", "save the job", "open my saved jobs", "read my saved jobs"
+      ]);
+      expect(shape.slice(1).map(step => step.definitionId)).toEqual([
+        "web.output.browser-navigate", "web.output.dom-click", "web.output.browser-navigate", "web.output.dom-extract_list"
+      ]);
+    }
     for (const siteChange of siteChanges) expect(siteChange).toBeDefined();
     // The trial began with the job saved: its save step is skipped already in state, with its pass, and never pressed
     // (a press would unsave it: the toggle's second press). Its two judge requests (the trial and Core's recheck of a yes) are one run.

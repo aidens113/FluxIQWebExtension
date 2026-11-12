@@ -39,8 +39,11 @@
 // (`action-runtime/ignored-press/`) -- and only when none came is the control,
 // if it can still be pressed, pressed again at the same point, once, and the
 // result says so. Any sign, above all a request, means it is never pressed
-// again: a second press on one that did something is a second order. A request
-// counts from the moment the page begins it, not when its response ends: until
+// again: a second press on one that did something is a second order.
+// A command with no fresh binding and known page work pending keeps this original
+// answer watch open until binding/work completion or the command's deadline
+// (`action-runtime/press-readiness/`), so hydration cannot waste both presses.
+// A request counts from the moment the page begins it, not when its response ends: until
 // 2026-10-12 a Confirm whose page awaited a slow server before changing the
 // card read as ignored and confirmed one friend request twice in playback
 // (`run-mv5jnc5m-a47c3e59`, t465). The press
@@ -192,6 +195,7 @@ import type {
 } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import { portableActionability } from "../action-runtime/actionability/index";
+import { pageWorkBudgetRemainingMs } from "../action-runtime/recovery";
 import { aimPress, commandHumanness, misclickBefore, recordHumanness } from "../action-runtime/humanness";
 import { toggleReadingOf } from "./toggle-reading";
 import type { ContentActionDependencies } from "./types";
@@ -404,6 +408,11 @@ async function pressInPlace(
   // control's section is a press the watch saw no sign of, and is never pressed again.
   if (first.refused) return refusal(action, deps, startedAt, first.refused, evidence());
   if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
+  if (first.answer?.readinessTimedOut) {
+    return deps.timedOut(action, startedAt, "The unanswered press outlasted the command while page work remained pending.", {
+      status: "failed", expected: "the page answers the press", actual: "the first press was unanswered and no fresh binding was observed while page work remained pending; no further press was made"
+    }, evidence());
+  }
   // A change that came and went, and a page settled exactly as it was (t896), or so but for the page's own notice
   // (t743, t898): certainly nothing, so a press the page ignored, made once more below like one with no sign at all.
   // Only a command's first press is looked at, so this is never the press made once more after a layer was closed.
@@ -557,6 +566,7 @@ async function press(
   // Whether the server has answered every request the press began, which closes
   // the notice and check windows as their end does (task speed S10).
   let served = undefined as PressAnswered | undefined;
+  const readiness = lookAgain && expectsAnswer(element) ? deps.watchPressReadiness?.(element) : undefined;
   try {
     const accepted = dispatchClickGesture(element, point, () => {
       notice = deps.watchRateLimitNotice(element);
@@ -568,7 +578,10 @@ async function press(
     const [refused, sighting, answer] = await Promise.all([
       notice ? notice.settle(windowMs, served) : undefined,
       check ? check.settle(windowMs, robotCheckWaitMs(action, startedAt), served) : undefined,
-      ignored ? ignored.settle(windowWithin(action, IGNORED_PRESS_WINDOW_MS)) : undefined
+      ignored ? ignored.settle(windowWithin(action, IGNORED_PRESS_WINDOW_MS), readiness ? {
+        pending: readiness.pending,
+        remainingMs: () => pageWorkBudgetRemainingMs(action, startedAt, Date.now())
+      } : undefined) : undefined
     ]);
     const changedOnly = answer !== undefined && answer.seen.length === 1 && answer.seen[0] === "change";
     // Looked at on any control, since a notice may answer one that is not a
@@ -582,6 +595,7 @@ async function press(
     check?.stop();
     ignored?.stop();
     served?.stop();
+    readiness?.stop?.();
   }
 }
 

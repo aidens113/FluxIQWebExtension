@@ -2,7 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test } from "../../fixtures/extension-context";
 import { judgeLog, retiredCodesIn } from "../change-proof";
-import { actsUnder, bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../index";
+import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Start a checkout for one product without the free trial.";
 const SAGE = TIDEWELL_KETTLES.find(product => product.variant?.colour === "Sage Green" && product.variant.capacity === "1.7 L")!;
@@ -51,14 +51,37 @@ test("installed gateway project build settles a toggle the site put back itself 
   /** The Plus box as each named moment's page view showed it. */
   const plusShown: Record<string, string | null> = {};
   const sent: string[] = [];
-  const tests: JsonObject[] = [];
+  const buyTiming: Array<{ kind: string; document: number; elapsed: number; listener?: boolean }> = [];
   const judge = judgeLog();
   /** What the supervisor's dispatch answered once the build brief returned: how the brief's trial ended. */
   let dispatched: JsonObject | undefined;
   let destinationReference = "", buyHandle = "", untickAct = "";
   let baseline: string | undefined;
   let plusCheckedAtEnd: boolean | undefined;
+  let trialActionsStart = -1;
+  let trialTimingStart = -1;
   try {
+    // Observe the deliberately delayed product hydration without waiting for it or changing the press.
+    // Only timings and listener presence cross this binding; no page content, URLs or command identifiers.
+    await page.exposeFunction("__resetBuyTiming", (event: typeof buyTiming[number]) => buyTiming.push(event));
+    await page.addInitScript(() => {
+      const emit = (event: { kind: string; document: number; elapsed: number; listener?: boolean }) =>
+        (window as unknown as { __resetBuyTiming: (event: unknown) => Promise<void> }).__resetBuyTiming(event);
+      const listened = new WeakSet<EventTarget>();
+      const add = EventTarget.prototype.addEventListener;
+      const isBuy = (target: EventTarget) => target instanceof HTMLButtonElement && target.textContent?.trim() === "Buy Now";
+      EventTarget.prototype.addEventListener = function (this: EventTarget, ...args: Parameters<typeof add>) {
+        if (args[0] === "click" && isBuy(this)) {
+          listened.add(this);
+          void emit({ kind: "listener", document: performance.timeOrigin, elapsed: performance.now() });
+        }
+        return add.apply(this, args);
+      };
+      document.addEventListener("click", event => {
+        const button = event.target instanceof Element ? event.target.closest("button") : null;
+        if (button && isBuy(button)) void emit({ kind: "press", document: performance.timeOrigin, elapsed: performance.now(), listener: listened.has(button) });
+      }, true);
+    });
     await openStoreDetail(page, installed.origin, detail);
     await installed.pair();
     const observed = bindInstrumentedRuntime(installed);
@@ -81,7 +104,6 @@ test("installed gateway project build settles a toggle the site put back itself 
         answers[pending] = record([...turn.evidence].reverse().find(entry => entry.callId === pending)?.value);
         clicks[pending]!.after = observed.clicks();
         plusShown[pending] = plusLine(turn.shownPage()) ?? null;
-        if (pending.startsWith("trial.")) tests.push(answers[pending]!);
         pending = "";
       }
       const done = () => {
@@ -127,6 +149,8 @@ test("installed gateway project build settles a toggle the site put back itself 
           const submitted = answers["submit"];
           if (typeof submitted?.revision !== "number" || typeof submitted.digest !== "string") throw new Error("diagnostic.submission_refused");
           candidate = { revision: submitted.revision, digest: submitted.digest };
+          trialActionsStart = observed.actions.length;
+          trialTimingStart = buyTiming.length;
           return send("trial.first", call("trial.first", "core.test_subflow", candidate));
         }
         default:
@@ -152,9 +176,10 @@ test("installed gateway project build settles a toggle the site put back itself 
     plusCheckedAtEnd = await page.getByRole("checkbox", { name: /Plus trial/u }).isChecked().catch(() => undefined);
     const cartReads = reads.filter(read => read.location?.includes("/everything-store/cart") === true);
     const coded = (callId: string) => answers[callId]?.code ?? answers[callId]?.verdict ?? (answers[callId]?.ok === true ? "ok" : undefined);
-    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, destinationReference, baseline, untickAct, plusShown, plusCheckedAtEnd, clicks, answers, tests, dispatched, judged: judge.requests, siteChanges: judge.siteChanges(), reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
+    const trialActions = observed.actions.slice(trialActionsStart);
+    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, destinationReference, baseline, untickAct, plusShown, plusCheckedAtEnd, clicks, answers, trialActionsStart, trialActions, buyTiming, dispatched, judged: judge.requests, siteChanges: judge.siteChanges(), reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
     await keepDiagnostic(testInfo, "reset-office-toggle.json", diagnostic);
-    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, sent, codes: Object.fromEntries(sent.map(callId => [callId, coded(callId) ?? null])), undo: [answers["undo.toggle"]?.failed ?? null, answers["undo.toggle"]?.canMeet ?? null], actsToUndo: actsUnder(tests[0], "actsToUndo").map(act => [act.act, act.call ?? null]), plusShown: Object.fromEntries(Object.entries(plusShown).map(([call, line]) => [call, line === null ? null : line.endsWith(" unchecked") ? "unchecked" : "checked"])), plusCheckedAtEnd } }));
+    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, sent, codes: Object.fromEntries(sent.map(callId => [callId, coded(callId) ?? null])), undo: [answers["undo.toggle"]?.failed ?? null, answers["undo.toggle"]?.canMeet ?? null], buyTiming, trialActions, plusCheckedAtEnd } }));
 
     // The cart is read complete, its ref issued; Buy Now named it, admitted and pressed once.
     expect(destinationReference).toMatch(/^destination-[1-9][0-9]{0,3}$/u);
@@ -185,10 +210,15 @@ test("installed gateway project build settles a toggle the site put back itself 
 
     // The untick is settled by what the page shows, so the trial is admitted and runs (answering yes). Since Core t811
     // (2026-10-30) a yes on the judged whole run completes the brief before any further builder turn, so the trial's own
-    // answer never reaches this builder (`tests` stays empty): the builder's ninth turn, the trial, is its last, and the
+    // answer never reaches this builder: the builder's ninth turn, the trial, is its last, and the
     // trial's verdict is read from the supervisor's `project.dispatch` answer instead. The brief returned done on one trial
     // answered yes, proposing the revision the builder submitted.
-    expect(tests).toEqual([]);
+    expect(trialActionsStart).toBeGreaterThanOrEqual(0);
+    expect(trialActions.filter(action => action.action === "web.dom.click")).toEqual([
+      expect.objectContaining({ status: "succeeded", skipped: undefined })
+    ]);
+    expect(trialTimingStart).toBeGreaterThanOrEqual(0);
+    expect(buyTiming.slice(trialTimingStart).some(event => event.kind === "press" && event.listener === true)).toBe(true);
     expect(provider.builderSteps()).toBe(9);
     expect(retiredCodesIn([...Object.values(answers)], observed.outcomes, provider.receipts, failure)).toEqual([]);
     const returned = (dispatched?.returns as JsonObject[] | undefined) ?? [];

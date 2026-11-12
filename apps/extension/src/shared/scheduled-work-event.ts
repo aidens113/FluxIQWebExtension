@@ -27,6 +27,9 @@ export const PAGE_WORK_WATCHED_EVENT = "fluxiq:page-work-watched";
 /** Dispatched on `window`; cancelled while any work the page scheduled for itself is outstanding. */
 export const PAGE_WORK_BUSY_EVENT = "fluxiq:page-work-busy";
 
+/** Cancelled while finite work is pending, including one-shot timers beyond the ordinary navigation-readiness horizon. */
+export const PAGE_WORK_PENDING_EVENT = "fluxiq:page-work-pending";
+
 /** Dispatched by the page world on `window` each time its count of outstanding work falls to none. */
 export const PAGE_WORK_DRAINED_EVENT = "fluxiq:page-work-drained";
 

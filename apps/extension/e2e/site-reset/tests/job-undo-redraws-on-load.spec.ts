@@ -3,15 +3,12 @@ import { postingById } from "../../../../scenario-lab/src/scenarios/job-board/ca
 import { viewJobHref } from "../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../fixtures/extension-context";
 import { judgeLog, retiredCodesIn } from "../change-proof";
-import { actsUnder, bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, pageHandleWhere, projectBuild, rowControl, rowTitles, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../index";
+import { bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, pageHandleWhere, projectBuild, rowControl, rowTitles, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Save three jobs to my saved jobs.";
 /** Three jobs nobody saved: the build saves each, so three lasting acts stand on the saved-jobs list. */
 const TARGETS = [postingById("m1"), postingById("d1"), postingById("m2")];
 const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
-/** The acts an answer's `actsUnsettleable` names, with the reason and the failed condition Core gave them. */
-const unsettleable = (answer: JsonObject | undefined) => (Array.isArray(answer?.actsUnsettleable) ? answer.actsUnsettleable : []).map(record).map(entry => ({ act: String(entry.act ?? ""), reason: entry.reason ?? null, failed: entry.failed ?? null }));
-const toStillOpen = (answer: JsonObject | undefined) => actsUnder(answer, "actsToUndo").map(entry => entry.act).sort();
 
 /**
  * Job-board rerun round 6 (`run-mvrj7qg9-b6dc94f6`, root cause 1): My jobs is
@@ -39,12 +36,6 @@ const VARIANTS = [
   { name: "installed gateway project build admits the trial on the restored site once the last undo lands after a list that redraws only on load", restored: true }
 ];
 for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, testInfo) => {
-  // KNOWN GAP (t772 w11): Core's part holds (no act is listed unsettleable from the in-place read, and an act whose own
-  // undo landed settles once a load shows its row gone and every other differing row is another act's own row). The per-act
-  // expectations below still fail on two defects outside t772: (1) the extension records each save's subject from the
-  // "Apply on company site" link beside the save control, not the posting's heading (`record.ts` `nearestTitle`), so no act
-  // owns its row until its undo lands; (2) the domain's press-again rule (t513, `press-effect/settled.ts`) pressed the
-  // second undo twice because the list redraws only on load, saving that job again. Remove this line once both are fixed.
   test.setTimeout(420_000);
   const installed = await startInstalledBuild(extensionSession);
   const { page } = installed;
@@ -53,7 +44,6 @@ for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, 
   const build = projectBuild(installed, "Installed reset job redraw", TASK, () => installed.page.url());
   const pages: Record<string, string> = {};
   const answers: Record<string, JsonObject> = {};
-  const tests: JsonObject[] = [];
   const judge = judgeLog();
   const clicks: Record<string, { before: number; after?: number }> = {};
   let destinationReference = "", heartHandle = "";
@@ -63,6 +53,7 @@ for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, 
   let savedState: JsonObject = {};
   /** What the supervisor's dispatch answered once the build brief returned: how the brief's trial ended. */
   let dispatched: JsonObject | undefined;
+  let trialActionsStart = -1;
   /** Core numbers acts from 1 in the order the build made them and never reuses a number. */
   const acts = ["act-1", "act-2", "act-3"];
   try {
@@ -76,6 +67,7 @@ for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, 
     let pending = "";
     const send = (callId: string, made: ScriptedAnswer) => {
       pending = callId;
+      if (callId.startsWith("trial.")) trialActionsStart = observed.actions.length;
       clicks[callId] = { before: observed.clicks() };
       return made;
     };
@@ -143,7 +135,6 @@ for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, 
       }
       const next = queue.shift();
       if (next) return next(turn);
-      tests.push(answers["trial.mid"] ?? answers["trial.final"] ?? {});
       return turn.complete({ subflowKey: "main", ...(answers["submit"] ? candidate() : {}) });
     };
     const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 30, maxCallsPerRun: 40, builder, verify: judge.verify,
@@ -158,15 +149,18 @@ for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, 
       }
     });
     const { ending, failure } = await build.run();
+    const trialActions = observed.actions.slice(trialActionsStart);
     // The site as the build left it: My jobs, loaded fresh, says which of the three saves still stand.
     await page.goto(myJobs);
     const standing = await Promise.all(TARGETS.map(async posting => (await page.getByText(posting.title, { exact: true }).count()) > 0));
     const baselineStanding = await Promise.all(baselineTitles.map(async title => (await page.getByText(JSON.parse(title) as string, { exact: true }).count()) > 0));
     // `pressedAgain`: the runtime pressed the control a second time because the first changed nothing it could see.
-    const summary = Object.fromEntries(Object.entries(answers).map(([id, answer]) => [id, { ok: answer.ok ?? null, code: answer.code ?? answer.verdict ?? null, failed: answer.failed ?? null, toUndo: toStillOpen(answer), unsettleable: unsettleable(answer), ...(typeof answer.pressedAgain === "string" ? { pressedAgain: true } : {}) }]));
+    const summary = Object.fromEntries(Object.entries(answers).map(([id, answer]) => [id, { ok: answer.ok ?? null, code: answer.code ?? answer.verdict ?? null, failed: answer.failed ?? null,
+      stillOpen: (record(answer.resetSettlement).actsStillOpen as JsonObject[] | undefined)?.map(act => act.act),
+      ...(typeof answer.pressedAgain === "string" ? { pressedAgain: true } : {}) }]));
     // What each lasting call was declared about: an undo is tied to its act's row only through these subjects.
     const subjects = Object.fromEntries(observed.declarations.filter(declaration => Array.isArray(declaration.consequences) && declaration.consequences.length > 0).map(declaration => [declaration.call, { subject: declaration.subject ?? null, page: declaration.page ?? null }]));
-    await keepDiagnostic(testInfo, "reset-job-redraw.json", { ending, failure, builderStep: provider.builderSteps(), acts, destinationReference, clicks, answers, tests, dispatched, baselineTitles, standing, judged: judge.requests, siteChanges: judge.siteChanges(), reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
+    await keepDiagnostic(testInfo, "reset-job-redraw.json", { ending, failure, builderStep: provider.builderSteps(), acts, destinationReference, clicks, answers, dispatched, trialActionsStart, trialActions, baselineTitles, standing, judged: judge.requests, siteChanges: judge.siteChanges(), reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
     console.log(JSON.stringify({ resetDiagnostic: { ending, failure, acts, summary, subjects } }));
 
     // Three lasting acts stand: each save named the ref of the list read before them and was admitted.
@@ -176,19 +170,32 @@ for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, 
     }
     // The first undo landed from the list page, which redraws only on load.
     expect(answers["undo.first"]?.ok).toBe(true);
+    expect(answers["undo.first"]?.resetSettlement).toMatchObject({ open: acts[0],
+      actsStillOpen: acts.map(act => expect.objectContaining({ act, settle: expect.any(String) })) });
     expect(clicks["undo.first"]?.after).toBe(clicks["undo.first"]!.before + 1);
     // The second undo, aimed at another act on the same unreloaded list, is admitted too.
     expect(answers["undo.second"]?.ok).toBe(true);
+    expect(answers["undo.second"]?.resetSettlement).toMatchObject({ open: acts[1],
+      actsStillOpen: acts.map(act => expect.objectContaining({ act, settle: expect.any(String) })) });
+    expect(clicks["undo.second"]?.after).toBe(clicks["undo.second"]!.before + 1);
     expect(retiredCodesIn(answers, observed.outcomes, provider.receipts)).toEqual([]);
+    expect(trialActionsStart).toBeGreaterThanOrEqual(0);
+    expect(trialActions.filter(action => action.action === "web.dom.click")).toEqual([expect.objectContaining({ status: "succeeded", skipped: undefined })]);
     // Core completes the brief on the trial's yes, so its answer is the dispatch's: one trial, answered yes, for the submitted revision.
-    expect(tests[0]?.failed).not.toBe("acts_unsettleable");
-    expect(unsettleable(tests[0])).toEqual([]);
     const returned = (dispatched?.returns as JsonObject[] | undefined) ?? [];
     expect(returned.map(entry => entry.outcome)).toEqual(["done"]);
     expect((returned[0]?.trialsAnswered as JsonObject[] | undefined)?.map(entry => entry.verdict)).toEqual(["yes"]);
     expect(record(returned[0]?.proposal).revision).toBe(answers["submit"]?.revision);
     expect(record(dispatched?.complete).revision).toBe(answers["submit"]?.revision);
+    expect(judge.requests).toHaveLength(2);
+    expect(judge.siteChanges()).toHaveLength(1);
     const left = judge.siteChanges()[0]?.leftFromEarlier;
+    expect(Array.isArray(left)).toBe(true);
+    for (const shown of judge.requests) {
+      const summary = record(record(JSON.parse(shown)).context).resultSummary as JsonObject;
+      const inherited = ((summary.startedWith as unknown[] | undefined) ?? []).map(String);
+      expect(inherited.map(entry => entry.match(/\(act-[0-9]+\)/u)?.[0]).filter(Boolean)).toEqual(variant.restored ? [] : ["(act-3)"]);
+    }
     if (!variant.restored) {
       // The trial after the two undos, on the list as the board now draws it: the two undone acts settled, so the third is the one act left in
       // place. t775: the trial is no longer refused for it. It runs, and the judge's `siteChange` lists that one act under `leftFromEarlier`.
@@ -196,7 +203,9 @@ for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, 
     } else {
       // The reset completes once the last is undone: the undo is admitted, and the trial is admitted on the restored site, leaving nothing in place.
       expect(answers["undo.third"]?.ok).toBe(true);
-      expect(left ?? []).toEqual([]);
+      expect(answers["undo.third"]?.resetSettlement).toMatchObject({ open: acts[2],
+        actsStillOpen: acts.map(act => expect.objectContaining({ act, settle: expect.any(String) })) });
+      expect(left).toEqual([]);
     }
     // The site's own state is where the undone acts are proven settled, which the trial's answer (`actsToUndo`, `unsettleable`)
     // once showed and no longer reaches this builder (Core t811). Every row the build found is still there, and none of the
