@@ -286,6 +286,42 @@ machine-readable account: counts, flags, closed words and declared field keys.
 Per-item read faults, page-advance faults, blank fields and incomplete records
 remain bounded prose on the action result rather than new summary fields.
 
+### An unanswered press while a control is being prepared
+
+The first click remains immediate. If its ordinary 800 ms observation sees no
+answer, a script-dependent command with no fresh scoped binding keeps that same
+observation open while the page world reports pending work
+(`content/action-runtime/press-readiness/`). This includes one-shot timers beyond
+the 1000 ms navigation-readiness horizon: delayed hydration may attach a handler
+without changing the DOM. The existing horizon and extra-press count stay the
+same. The new `PAGE_WORK_PENDING_EVENT` query includes these deferred timers;
+`PAGE_WORK_BUSY_EVENT` retains its ordinary navigation-readiness meaning.
+
+The observation ends when a fresh press binding is registered on the control or
+its scoped composed ancestor after the first-press mark, or when the known work
+drains. The dedicated `PRESS_BINDING_MARK_EVENT` / `PRESS_BINDING_SINCE_EVENT`
+probe observes that generation; capture's historical `PRESS_PROBE_EVENT`
+continues remembering removed listeners and is not a readiness signal. A new
+binding can be an event listener or a property-assigned `onclick`; an existing
+inline gesture handler or native activation needs no binding wait. Binding ends this
+wait even while unrelated one-shot work remains. Recurring callbacks and long
+intervals do not hold it. Native activation and an immediately answered
+delegated or inline action need no added wait. Missing page-world support
+provides no pending-work claim.
+
+Each observation has its own opaque token and releases it when the press ends;
+overlapping watches on one element cannot overwrite one another's baseline.
+A silent old binding with unrelated pending work remains observed until fresh
+binding, known work completion, or the command deadline. This observation
+does not claim to enumerate the handlers currently installed.
+
+The original effect and request watch remains active throughout. Any late
+answer prevents a duplicate press; pending work never proves an earlier act
+did nothing. Only the command's already-available second press can follow the
+unanswered observation, after actionability is checked again. If the existing
+command deadline expires first, the action reports `timed_out` and makes no
+further press, without marking an uncertain lasting effect as unacted.
+
 ## Capability Matrix
 
 | Capability | State | Outcome validated | Represented as | Owning files | Why this state |

@@ -5,7 +5,7 @@
 // so their wrappers sit over these and their own health checks still hold, and
 // every call the page makes still passes through here.
 
-import { PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT, PAGE_WORK_WATCHED_EVENT } from "../../shared/scheduled-work-event";
+import { PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT, PAGE_WORK_PENDING_EVENT, PAGE_WORK_WATCHED_EVENT } from "../../shared/scheduled-work-event";
 import { inExtensionWorld } from "../extension-world";
 import { installPageWorkRequests } from "./requests";
 import { installPageWorkTimers } from "./timers";
@@ -33,6 +33,9 @@ export function installPageWorkWatch(): boolean {
   }, true);
   window.addEventListener(PAGE_WORK_BUSY_EVENT, (event: Event) => {
     if (tracker.busy(document.visibilityState === "hidden")) event.preventDefault();
+  }, true);
+  window.addEventListener(PAGE_WORK_PENDING_EVENT, (event: Event) => {
+    if (complete && tracker.busy(document.visibilityState === "hidden", true)) event.preventDefault();
   }, true);
   return complete;
 }
