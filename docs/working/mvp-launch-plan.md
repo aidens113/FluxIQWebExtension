@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Plan written 2026-11-10 for about one month to go-live; five workstreams, W1 already running, W2-W5 dispatched the same day.
 Created: 2026-11-10
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 Owner: Senior supervisor agent
 Scope: Everything between today and a launchable MVP: data scraping and task execution (W1), a humanness setting from the extension slider down to Core and FluxNodes (W2), FluxNode developer overrides and docs (W3), the extension's brand and UI (W4), the Core web panel as a hosted product (W5), and pluggable person-needed handlers and extension add-ons (W6). It does not change a standing rule in either AGENTS.md.
 Paired document: Core `docs/working/fluxnode-plan.md` (W3), Core `docs/working/hosted-production-plan.md` and this repository's `hosted-production-plan.md` (W5).
@@ -13,7 +13,7 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 ## Current State
 
-**Codex continuation (2026-11-11).** t908 pager humanness is integrated and pushed. t906 fixes delayed press readiness and restores meaningful site-reset assertions: lead independently passed 305 units and all four installed-extension browser cases; integration follows. t901 hosted identity, own-name UI and fresh key-consent fixes passed focused checks and independent security review; extension reports are merged and Core integration follows t906. No fixed delay, extra press or weaker data oracle was added. t902 stays off GitHub; t898 private notes and original user edits remain untouched. t905 has a local intake-report-only commit, with its WIP unaccepted/unpushed. Codex touched t901, t906 and t908 implementation lanes; no paid run or full sweep.
+**Codex continuation (2026-11-11).** t908 pager humanness is integrated and pushed. t906 fixes delayed press readiness and restores meaningful site-reset assertions: lead independently passed 305 units and all four installed-extension browser cases; merged into dev. t901 hosted identity, own-name UI and fresh key-consent fixes passed focused checks and independent security review; both sides are merged into dev, with all 70 mandatory Core contract tests passing. No fixed delay, extra press or weaker data oracle was added. t902 stays off GitHub; t898 private notes and original user edits remain untouched. t905 has a local intake-report-only commit, with its WIP unaccepted/unpushed. Codex touched t901, t906 and t908 implementation lanes; no paid run or full sweep.
 
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
@@ -53,7 +53,7 @@ New lanes on 2026-11-11:
 
 A judge's wrong no starts the 50-120-call retry storms. Even the passing towels exploration took 38 browser steps against its Flow's 8.
 
-**Next.** Land t898, then t901, then today's second sweep and promotion. t902 lands and pushes once all its security fixes are in.
+**Next.** t898, t901, t906 and t908 are integrated. Resume remaining lanes from their own reports, especially t905 result evidence and t907 browser hosting; t902 remains local pending its security work. Run the next allowed full sweep on the combined dev commits before main promotion.
 
 ---
 
@@ -159,7 +159,7 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 - Agent: lead; click_readiness and hosted_panel (Sol Max); independent hosted_security_review (Sol Max).
 - Changed: generic unanswered-press observation retains the original effect watch through finite deferred binding work; independent per-watch marks are released. Site-reset assertions inspect real actions, exact nonempty data and generated arrival navigation. Hosted fixes guard username recasing at mutation and recheck key consent before/after each reveal; members can edit their own name without broader identity reads.
 - Validation: lead adjacent-unit command in `reports/codex-t906-readiness.md` -> 305 passed; direct serial Playwright command recorded there -> 4 passed (2.2m); office trial press/binding/retry 338/1261/1295 ms, succeeded. Extension source/test check, Chrome/Firefox/e2e builds and structure passed. Hosted lead vitest commands in `reports/codex-t901.md` -> 25 casing, 12 consent, 13 own-name UI/route and 77 API route tests passed; worker affected web tests -> 404 passed; required package typechecks, structure and generated-reference freshness passed.
-- Outcome: both scoped implementations accepted for dev integration. No new full sweep, main promotion, production deployment, live model run or manual Firefox claim. t901's older production-browser evidence remains historical.
+- Outcome: both scoped implementations merged through their task tools; t906 worktree removed, t901 Core contract gate passed 70/70. No new full sweep, main promotion, production deployment, live model run or manual Firefox claim. t901's older production-browser evidence remains historical.
 
 
 ### 2026-11-11 - t908 integrated; t906 and t901 causes reproduced
