@@ -155,6 +155,15 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 
 ## Work Ledger
 
+### 2026-11-11 - Verified scoped acts; coordinate pipeline snapshots and host dependencies
+
+- Agent: lead and the same three lane workers; implementation continues, not accepted as complete.
+- Findings: t909 reproduced interleaved keyed restart and explore-resume repeats (3 renewals instead of 2), then repaired them with scope-owned write-through task records. Lead independently verified its five-test integration file. A pipeline continuation still reproduced 8 renewals instead of 5; stable child invocation identity and immutable source snapshots are being built. Lead also found that raw keyed-request hashing retains a secret-derived verifier; durable opaque scopes and secret-free request comparison are required, including restart conflicts.
+- Interfaces: t905 owns a true immutable dataset snapshot service/store (0037, independent of batch-evidence0036); t909 owns reference-only task state and secret-rebinding adapters. Full data rows do not belong in hot task-memory JSON. t907 waits for the coherent create/run host seam, and never leases a host to a pipeline controller waiting on children.
+- Validation: lead `pnpm --filter fluxiq exec vitest run src/framework/automation-service/service/fluxnode/tests/act-scope.test.ts --maxWorkers=1 --minWorkers=1` -> 5 passed (60.80s). Lead t885 script-wiring/replay baseline -> 9 passed; its domain check stopped before TypeScript at the stale Core library guard. t907 worker Core types and focused groups -> 52 passed; lead registry check -> 9 passed. Lead `pnpm install --offline --ignore-scripts` in t907 -> exit0, downloaded0, only the SDK link added to lockfile and verified to its paired Core.
+- Next: finish the pipeline/security regressions and shared snapshot slice, validate the ledger storage/judge migration, wire and prove managed hosts, then continue the remaining stopped lanes. No paid/model network run, full sweep, main promotion or panel server.
+
+
 ### 2026-11-11 - Resume the remaining structural lanes
 
 - Agent: lead; result_evidence, browser_host and act_scope (Sol Max), one worker per lane.
