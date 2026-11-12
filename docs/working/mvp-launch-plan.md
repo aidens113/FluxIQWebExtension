@@ -13,6 +13,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 ## Current State
 
+**Codex continuation (2026-11-11).** Three discovery workers are reconciling the stopped lane reports and commits before implementation resumes: product (t898-t901), runtime (t903/t905/t907-t909), and validation (t885/t893/t904/t906 and simulator status). The lead verifies and integrates. t902 stays local and off GitHub; t898's private-run-context.md and the main checkout's pre-existing uncommitted instructions/debug note remain untouched. Intake reports are in t901, t905 and t906 respectively. The first bounded candidate is t908's unvalidated next-page humanness change; t906's report explicitly records vacuous assertions requiring repair before acceptance. No paid run or full sweep has been started by Codex.
+
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
