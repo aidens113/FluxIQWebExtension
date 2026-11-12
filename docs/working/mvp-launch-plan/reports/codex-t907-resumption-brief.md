@@ -1,5 +1,5 @@
 Role: heavy worker, gpt-6.1-sol, max. Resume t907 managed browser host only.
-Owned roots paired fxwork/t907; preserve codex-resume-brief.md exact ownership. Read it and codex-t907-resume.md relevant sections.
+Owned roots paired fxwork/t907; preserve codex-t907-original-resume-brief.md exact ownership. Read it and codex-t907-resume.md relevant sections.
 Lifecycle proof35b42038-ff13-4c0a-ba7e-c6687d9b8aaf passed all10, independently inspected; full Flow acceptance remainsopen.
 Lead independent corrected script/correlation/proof85 cases passed15.655s; subsequent fullproof88a64854-2f44-4790-9aaa-fc397003a695 FAILED.
 Second fullproof B reached4rows, A0,37engine/scriptedcalls (B25/A12), all evidence_tool_decision, paid0.
