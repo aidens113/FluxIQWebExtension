@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Plan written 2026-11-10 for about one month to go-live; five workstreams, W1 already running, W2-W5 dispatched the same day.
 Created: 2026-11-10
-Last updated: 2026-11-11
+Last updated: 2026-11-12
 Owner: Senior supervisor agent
 Scope: Everything between today and a launchable MVP: data scraping and task execution (W1), a humanness setting from the extension slider down to Core and FluxNodes (W2), FluxNode developer overrides and docs (W3), the extension's brand and UI (W4), the Core web panel as a hosted product (W5), and pluggable person-needed handlers and extension add-ons (W6). It does not change a standing rule in either AGENTS.md.
 Paired document: Core `docs/working/fluxnode-plan.md` (W3), Core `docs/working/hosted-production-plan.md` and this repository's `hosted-production-plan.md` (W5).
@@ -26,6 +26,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 **Coherent dependency transfer (late).** t909 corrected its nine audit violations and passed its package check without exemptions or baseline changes. Lead transferred its frozen source/test/document slice into t905 and t907, including the independently validated snapshot and migration-order dependencies needed by t907. t905's only overlap, run-attempt.ts, preserves both result wiring and scoped act persistence. Lead passed all 18 combined result-service/action-scope/idempotency cases; the combined package check passed. Dynamic pipeline source snapshots remain separate work in t909. Lead also passed t905's 12 writer/preservation/service cases and 42 pagination/place/shown-value cases. The browser proof's shutdown fix passed nine independent units, but real lifecycle acceptance still needs its rerun after host integration.
 
 **Final edge checks and browser preparation.** t909 reproduced mutable source re-enumeration across a keyed restart (five acts instead of four); its snapshot fix passed 16 focused cases, including three fresh zero-call parent runs. A separate corrupt-memory reproduction then repeated a keyed act (three instead of two after A/B/restart); strict scoped state reads and owner-held admission checks are in progress. t907's first integrated host group passed 19 cases, but review found parent-controller finalization must also drain before instance shutdown; its regression is running. t905's ordered Core/downstream builds and package checks passed, including Chrome, Firefox and e2e Chromium bundles; remaining focused tests precede its three approved provider-free four-attempt browser series. Lead reserved machine slot 3 for t905-result-slot-3 and slot 1 for t907-host-slot-1. The latter reconciles stopped t885 ownership from the handoff and a zero-match prior-lane process check; no process was killed for reservation.
+
+**Continuation, 2026-11-12.** Strict scoped state now refuses corruption before admission: worker 35 cases passed, retaining two acts after A/B/restart and leaving the bad file untouched. A separate two-store regression then lost one scope during concurrent task updates; a per-document transaction fix is under process-level validation. Lead independently passed all eight integrated managed-host cases, including parent-owner cleanup before instance shutdown; a subsequent late-admission race was reproduced and fixed, with four registry tests and Core typecheck passing. t905's focused downstream run reached 876/879; two listKey assertions and one wrong-cwd invocation were corrected, then exact reruns passed 25 and task scripts passed 38. Final take/parser gates, audits, package checks and build refreshes passed. Its first hubs four-attempt provider-free series is active in slot 3, still preparing the isolated Core web build; no task verdict yet. t907 is rebuilding its frozen host source before the lifecycle rerun. No new full sweep, paid call or main promotion.
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
@@ -164,6 +166,15 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-12 - Independent host shutdown checks and first scraping series
+
+- Agent: lead; browser_host, act_scope and result_evidence (Sol Max).
+- Validation: lead t907 `pnpm --filter fluxiq exec vitest run src/framework/automation-service/service/fluxnode/tests/managed-hosts.test.ts --maxWorkers 1 --minWorkers 1` -> 8 passed, 62.16s, exit 0. Covers nested one-host pipelines, queued Stop, active authority revocation, exactly-once ownership cleanup, failed registration and parent cleanup drain. Worker late-admission regression then failed before add() was changed to stop late runs before scheduling; registry 4 and Core typecheck passed afterwards.
+- Findings: t909 scoped corruption repair -> worker 35 passed; concurrent updates from two independent stores -> 18 passed / 1 failed, one scope lost. Generic per-document transaction helper now uses the existing layout-v2 transaction or a data-free legacy SQLite guard; independent-process, crash and layout cases are pending. Lead reviewed ownership and RMW paths, no acceptance yet.
+- Validation: t905 focused domain command -> 876 passed / 3 failed, 274.08s; two metadata assertions corrected, third rerun from package cwd -> exact 25 passed. Task scripts/provider-free launch checks -> 38 passed. Core amendment/parser group -> 220 passed and typecheck passed; relocating only the new parser block under line budget -> 41 passed and audit passed. Final ordered libraries/currentness/domain check/extension audit passed.
+- Run: t905 hubs series `FLUXIQ_LAB_INSTANCE=t905-result-slot-3 FLUXIQ_ATTEMPT_SCRIPT_FORM=left-out node scripts/lab/run-lab.mjs attempt crossborder-marketplace --task crossborder-marketplace-free-hubs-under-ten --authoring-mode answer-first --scripted-model --attempts 4` started with provider variables/keys absent. Prelude 126.998s; isolated Core cold web compilation completed, typechecking still in progress. No browser task result claimed. Lead verified runner identity before recording PID 16968 in the slot owner.
+- Ownership: t905 and t907 source/dist remain frozen during their active builds/readers. t902 stays local; t898 private note and original user edits remain untouched. No paid calls, new full sweep or main promotion.
 
 ### 2026-11-11 - Restart persistence edges and isolated browser reservations
 
