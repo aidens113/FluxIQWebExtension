@@ -1,6 +1,7 @@
 export { ActivePage, type ActivePageDeps } from "./active-page";
 export { ActiveRecording, type ActiveRecordingDeps } from "./active-recording";
 export { ActivityLog } from "./activity-log";
+export { SessionWrites } from "./session";
 export {
   actionTypesFromCapabilities,
   browserStateFromTabs,

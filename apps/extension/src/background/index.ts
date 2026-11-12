@@ -1,7 +1,7 @@
 import { BUILD_IDENTITY_MESSAGE } from "../shared/build-identity";
 import { RUNTIME_MESSAGES } from "../shared/constants";
 import { browserDescriptor } from "../shared/browser";
-import type { ExtensionStatus, FluxIQSettings, RecordingEventPayload } from "../shared/protocol";
+import type { ConnectRequest, ExtensionStatus, RecordingEventPayload } from "../shared/protocol";
 import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
 import { clearSession, discardPersistentQueue, forgetDeliveryStorage, onSavedStateRepaired, readOrCreateClientId, readSession, readSettings, writeSession, writeSettings } from "./storage";
@@ -185,16 +185,19 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   if (refusedOutsideControlPage(typed.type, sender)) return { ok: false, code: "forbidden" };
 
   if (typed.type === RUNTIME_MESSAGES.connect) {
+    const request = typed as ConnectRequest;
+    // A managed host's ticket stays in this worker's memory; only the settings are saved.
+    const enrolmentTicket = enrolmentTicketOf(request.enrolment);
     await deliverPendingForget(forgetDeliveryDeps()).catch(noteMessageFailure);
     await autoConnect.noteConnectedByPerson();
     const stored = await readSettings();
-    const requested = (typed.settings as Partial<FluxIQSettings> | undefined) ?? {};
+    const requested = request.settings ?? {};
     // The direct-requests choice changes only where the policy Core gave this
     // connection allows it (Core's default until it has given one).
     const settings = { ...stored, ...requested, requestsEnabled: requestsChoice(stored.requestsEnabled, requested.requestsEnabled, manager.currentCapturePolicy()) };
     await writeSettings(settings);
     manager.updateSettings(await readSettings());
-    await manager.connect();
+    await manager.connect(enrolmentTicket === undefined ? {} : { enrolmentTicket });
     void syncReconnectWatchdog(manager);
     return { ok: true, status: manager.status() };
   }
@@ -307,6 +310,13 @@ async function syncReconnectWatchdog(manager: FluxIQConnection): Promise<void> {
     disconnectedByPerson,
     connectionState: status.connectionState
   });
+}
+
+// The enrolment ticket a connect message carries, when it carries a usable one.
+// Anything else is no ticket: the connect is then an ordinary one.
+function enrolmentTicketOf(enrolment: unknown): string | undefined {
+  const ticket = typeof enrolment === "object" && enrolment !== null ? (enrolment as { ticket?: unknown }).ticket : undefined;
+  return typeof ticket === "string" && ticket ? ticket : undefined;
 }
 
 function forgetDeliveryDeps(): ForgetDeliveryDeps {

@@ -5,9 +5,10 @@ import path from "node:path";
 import { anthropicStreamBody, scriptedModelReplyText, scriptedModelUsage } from "./anthropic-stream.js";
 import type { ScriptedModelScript, ScriptedReply } from "./script.js";
 import { readScriptedModelRequest, type ScriptedModelKind, type ScriptedModelRequest } from "./wire-request.js";
+import { SCRIPTED_MODEL_CORRELATION_HEADER } from "./correlation-header.js";
 
 /** One request as it went: its kind and count, and why it was refused. Never its contents. */
-export type ScriptedModelCall = Readonly<{ at: number; kind: ScriptedModelKind; ordinal: number; answered: boolean; refused?: string }>;
+export type ScriptedModelCall = Readonly<{ at: number; kind: ScriptedModelKind; ordinal: number; answered: boolean; refused?: string; correlationId?: string }>;
 
 /** The running scripted model. `refusals` are the requests the script did not expect, which fail the run. */
 export type ScriptedModelServer = {
@@ -47,6 +48,7 @@ function refuse(response: ServerResponse, status: number, message: string): void
 export async function startScriptedModelServer(input: { script: ScriptedModelScript; key: string; logDirectory?: string; onCall?: (call: ScriptedModelCall) => void }): Promise<ScriptedModelServer> {
   const calls: ScriptedModelCall[] = [];
   const counts: Record<ScriptedModelKind, number> = {};
+  const correlatedCounts = new Map<string, Record<ScriptedModelKind, number>>();
   /** A chat turn's words, by the scripted reply that first read them. */
   const answeredWords = new Map<string, ScriptedReply>();
   if (input.logDirectory) await mkdir(input.logDirectory, { recursive: true });
@@ -56,12 +58,19 @@ export async function startScriptedModelServer(input: { script: ScriptedModelScr
     if (input.logDirectory) void appendFile(path.join(input.logDirectory, "calls.jsonl"), `${JSON.stringify(call)}\n`).catch(/* best-effort: `calls` holds the record the run reads */ () => undefined);
   };
   const server = createServer((request, response) => {
+    const header = request.headers[SCRIPTED_MODEL_CORRELATION_HEADER];
+    const correlationId = typeof header === "string" && /^fnr-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(header) ? header : undefined;
+    const record = (call: ScriptedModelCall): void => note(correlationId ? { ...call, correlationId } : call);
     void (async () => {
       const at = Date.now();
       const refused = (kind: ScriptedModelKind, ordinal: number, why: string, status = 400): void => {
-        note({ at, kind, ordinal, answered: false, refused: why });
+        record({ at, kind, ordinal, answered: false, refused: why });
         refuse(response, status, why);
       };
+      if (header !== undefined && correlationId === undefined) {
+        refused("invalid_correlation", 0, "The synthetic Lab correlation header is not a run identifier");
+        return;
+      }
       if (request.method !== "POST" || request.url !== MESSAGES_PATH) {
         refused("not_messages", 0, `The scripted model takes only POST ${MESSAGES_PATH}`, 404);
         return;
@@ -73,7 +82,13 @@ export async function startScriptedModelServer(input: { script: ScriptedModelScr
       const body = await readBody(request);
       let read: ScriptedModelRequest;
       try {
-        read = readScriptedModelRequest(body, (kind) => (counts[kind] = (counts[kind] ?? 0) + 1));
+        read = readScriptedModelRequest(body, (kind) => {
+          counts[kind] = (counts[kind] ?? 0) + 1;
+          if (!correlationId) return counts[kind]!;
+          const own = correlatedCounts.get(correlationId) ?? {};
+          correlatedCounts.set(correlationId, own);
+          return own[kind] = (own[kind] ?? 0) + 1;
+        });
       } catch (error) {
         refused("unreadable", 0, error instanceof Error ? error.message : String(error));
         return;
@@ -84,8 +99,9 @@ export async function startScriptedModelServer(input: { script: ScriptedModelScr
       // model reading them the same way would. So a series of deterministic attempts runs to its end and
       // its report counts each interpretation call a later attempt still makes, instead of stopping at
       // the first one the script did not write out.
-      const reply = scripted ?? (read.kind === "panel_command" ? answeredWords.get(read.message) : undefined);
-      if (scripted !== undefined && read.kind === "panel_command" && !answeredWords.has(read.message)) answeredWords.set(read.message, scripted);
+      const wordsKey = JSON.stringify([correlationId ?? null, read.message]);
+      const reply = scripted ?? (read.kind === "panel_command" ? answeredWords.get(wordsKey) : undefined);
+      if (scripted !== undefined && read.kind === "panel_command" && !answeredWords.has(wordsKey)) answeredWords.set(wordsKey, scripted);
       if (reply === undefined) {
         refused(read.kind, read.ordinal, `The script for ${input.script.taskId} expects no request ${read.ordinal} of kind ${read.kind}`);
         return;
@@ -99,11 +115,11 @@ export async function startScriptedModelServer(input: { script: ScriptedModelScr
       }
       const text = scriptedModelReplyText(value, read.jsonText);
       const stream = anthropicStreamBody({ model: read.model, text, usage: scriptedModelUsage(Buffer.byteLength(body), Buffer.byteLength(text)) });
-      note({ at, kind: read.kind, ordinal: read.ordinal, answered: true });
+      record({ at, kind: read.kind, ordinal: read.ordinal, answered: true });
       response.writeHead(200, { "content-type": "text/event-stream" });
       response.end(stream);
     })().catch((error: unknown) => {
-      note({ at: Date.now(), kind: "server_error", ordinal: 0, answered: false, refused: error instanceof Error ? error.message : String(error) });
+      record({ at: Date.now(), kind: "server_error", ordinal: 0, answered: false, refused: error instanceof Error ? error.message : String(error) });
       if (!response.headersSent) refuse(response, 400, "The scripted model failed");
       else response.destroy();
     });

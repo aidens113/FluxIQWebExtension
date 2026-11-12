@@ -66,6 +66,7 @@ import {
   RuntimeStatusTracker,
   ScriptedNavigationIntent,
   ServerCommandChannel,
+  SessionWrites,
   StateAssetStore,
   TabRecorder,
   type CoreApiCredentials,
@@ -101,6 +102,7 @@ export class FluxIQConnection {
   private readonly commands: ServerCommandChannel;
   private readonly activity: ActivityRelay;
   private readonly capturePolicy: CapturePolicySource;
+  private readonly sessionWrites = new SessionWrites(() => this.session, writeSession);
 
   // Construction order is dependency order: a collaborator handed to another as
   // an instance is built first. Anything reached through a closure is read when
@@ -150,6 +152,7 @@ export class FluxIQConnection {
       reportError: (message) => { this.lastError = message; },
       clearError: () => { this.lastError = undefined; },
       beforeConnect: () => this.page.refresh(),
+      onHostLease: () => this.projects.invalidate(),
       // Session storage (worker memory without it): queued page data never
       // outlives the browser session that recorded it.
       outbox: new ClientGatewayOutbox(
@@ -380,6 +383,13 @@ export class FluxIQConnection {
     if (recordingBlock) status.recordingBlock = recordingBlock;
     if (this.lastError) status.lastError = this.lastError;
     if (gateway.lastMessageAt !== undefined) status.lastMessageAt = gateway.lastMessageAt;
+    // An enrolment that ended without a session is an error until the next connect, whatever closed the socket after it.
+    const enrolmentFailure = this.gateway.enrolmentFailure();
+    if (enrolmentFailure) {
+      status.connectionState = "error";
+      status.lastError = enrolmentFailure.message;
+      if (enrolmentFailure.code !== undefined) status.enrolmentRefusalCode = enrolmentFailure.code;
+    }
     return status;
   }
 
@@ -407,7 +417,13 @@ export class FluxIQConnection {
     return await fetchCoreRecordings(this.coreApiCredentials(), page, pageSize);
   }
 
-  async connect(): Promise<void> {
+  /**
+   * Connects to FluxIQ. With `enrolmentTicket`, a managed host's one-time
+   * ticket, the browser is enrolled instead of paired: the ticket is held in
+   * this worker's memory until the hello takes it, never stored or reported.
+   */
+  async connect(options: { enrolmentTicket?: string | undefined } = {}): Promise<void> {
+    await this.gateway.prepareConnect(options.enrolmentTicket);
     await this.gateway.connect();
   }
 
@@ -557,7 +573,7 @@ export class FluxIQConnection {
 
   private async persistSession(session: FluxIQSession): Promise<void> {
     this.session = session;
-    await writeSession(this.session);
+    await this.sessionWrites.save();
   }
 
   /**

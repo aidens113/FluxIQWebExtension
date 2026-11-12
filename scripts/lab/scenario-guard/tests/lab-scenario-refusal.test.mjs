@@ -88,3 +88,12 @@ test("lab attempt is held to the ten like every run", () => {
   assert.equal(labScenarioRefusal(["attempt", "company-website", "--task", "x", "--scripted-model"]), null);
   assert.match(labScenarioRefusal(["attempt", "--task", "x"]) ?? "", /takes its scenario right after the command/u);
 });
+
+test("managed-host proofs require one explicit realistic scenario and refuse ambiguous forms before setup", () => {
+  assert.equal(labScenarioRefusal(["fluxnode-host", "--scenario", "company-website", "--scripted-model", "--lifecycle-only"]), null);
+  assert.match(labScenarioRefusal(["fluxnode-host", "--scenario", "basic-form"]), RULE);
+  for (const args of [[], ["--scenario"], ["--scenario=company-website"], ["--scenarios", "company-website"], ["--scenario", "company-website", "--scenario", "job-board"]]) {
+    assert.match(labScenarioRefusal(["fluxnode-host", ...args]), /exactly one --scenario/u);
+  }
+  assert.match(labScenarioRefusal(["fluxnode-host", "--scenario", "company-website", "--live-llm"]), /refuses --live-llm/u);
+});

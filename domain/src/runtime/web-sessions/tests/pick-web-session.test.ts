@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
 import { pickWebAutomationSession } from "..";
+import { AutomationStudioHostLeaseScope, AutomationStudioHostResourceScheduler } from "fluxiq/automation";
 
 function session(sessionId: string, overrides: Partial<ClientGatewaySession> = {}): ClientGatewaySession {
   return {
@@ -53,4 +54,37 @@ test("web actions offering only the snapshot action count; another domain's do n
   const snapshotOnly = session("snapshot", { capabilities: [{ id: "web.actions", kind: "action", actionTypes: ["web.dom.capture_snapshot"] }] });
   const elsewhere = session("elsewhere", { capabilities: [{ id: "web.actions", kind: "action", metadata: { domainId: "elsewhere" } }] });
   assert.equal(pickWebAutomationSession([snapshotOnly, elsewhere])?.sessionId, "snapshot");
+});
+
+test("an engine-managed browser is unavailable outside its run lease", () => {
+  assert.equal(pickWebAutomationSession([session("managed", { managedHostId: "host-1" })]), undefined);
+  assert.equal(pickWebAutomationSession([session("managed", { managedHostId: "host-1" }), session("personal")])?.sessionId, "personal");
+});
+
+test("a lease selects exactly its browser for both execution and evidence, never a requested neighbour", async () => {
+  const scope = new AutomationStudioHostLeaseScope(new AutomationStudioHostResourceScheduler({
+    capacity: 1,
+    acquire: () => ({ resourceKey: "managed:host-2", epoch: 1, sessionId: "two" }),
+    release: () => undefined
+  }));
+  await scope.run({ role: "fluxnode-run", briefId: "run-1" }, async () => {
+    const sessions = [session("one", { managedHostId: "host-1" }), session("two", { managedHostId: "host-2" })];
+    assert.equal(pickWebAutomationSession(sessions)?.sessionId, "two");
+    assert.equal(pickWebAutomationSession(sessions, "one"), undefined);
+    assert.equal(pickWebAutomationSession([sessions[0]!]), undefined);
+    assert.equal(pickWebAutomationSession([session("two", { status: "disconnected" }), sessions[0]!]), undefined);
+  });
+});
+
+test("a callback from a released lease cannot fall back to a personal browser", async () => {
+  const scope = new AutomationStudioHostLeaseScope(new AutomationStudioHostResourceScheduler({ capacity: 1,
+    acquire: () => ({ resourceKey: "host-one", epoch: 1, sessionId: "managed" }), release: () => undefined }));
+  let resume = (): void => undefined;
+  const gate = new Promise<void>((resolve) => { resume = resolve; });
+  let late: Promise<unknown>;
+  await scope.run({ role: "fluxnode-run", briefId: "old-run" }, async () => {
+    late = gate.then(() => pickWebAutomationSession([session("personal")]));
+  });
+  resume();
+  await assert.rejects(late!, /lease/iu);
 });

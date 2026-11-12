@@ -80,4 +80,3 @@ export function inPanelTarget(input: PanelTargetStep, planScroll: typeof panelSc
   return { found: true, x, y };
 }
 import type { panelScrollPlan } from "./scroll-plan.js";
-

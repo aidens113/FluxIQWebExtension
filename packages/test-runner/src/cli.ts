@@ -17,6 +17,7 @@ import { resolveLabPaths } from "./lab-instance/index.js";
 import { runInteractiveSession } from "./interactive-session.js";
 import { assertRealisticScenarios, isRealisticScenario } from "./realistic-scenarios/index.js";
 import { recoveryMatrixStatus, runRecoveryMatrix } from "./recovery-matrix/index.js";
+import { runFluxNodeHostProof } from "./fluxnode-host-proof/index.js";
 import { runScenario } from "./run-scenario.js";
 import { replaySavedFlow } from "./saved-flow-replay/index.js";
 import { loadScenarioManifests } from "./scenarios.js";
@@ -24,7 +25,7 @@ import { loadTestEnvironment, resolveAuthScopeConfiguration, resolveCloneCacheSc
 
 export async function runCli(argv: string[], given: NodeJS.ProcessEnv = process.env): Promise<number> {
   // A scripted attempt is provider-free before anything is read: no key, and no env file of this checkout.
-  const env = argv[0] === "attempt" && argv.includes("--scripted-model") ? providerFreeEnvironment(given) : given;
+  const env = argv[0] === "fluxnode-host" || argv[0] === "attempt" && argv.includes("--scripted-model") ? providerFreeEnvironment(given) : given;
   const repositoryRoot = path.resolve(env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
   try {
     const resolvedEnvironment = await loadTestEnvironment(repositoryRoot, env);
@@ -34,7 +35,7 @@ export async function runCli(argv: string[], given: NodeJS.ProcessEnv = process.
     const command = parseLabCommand(argv);
     // Before anything the command does: a Lab run opens only the ten realistic scenarios (`realistic-scenarios/index.ts`).
     // `matrix --all` runs the realistic ones; a bench is held to its corpus's scenarios once the corpus is known.
-    if (command.command === "run" || command.command === "interactive" || command.command === "replay" || command.command === "attempt") assertRealisticScenarios([command.scenarioId], `lab ${command.command}`);
+    if (command.command === "run" || command.command === "interactive" || command.command === "replay" || command.command === "attempt" || command.command === "fluxnode-host") assertRealisticScenarios([command.scenarioId], `lab ${command.command}`);
     if (command.command === "matrix" && command.scenarioIds) assertRealisticScenarios(command.scenarioIds, "lab matrix");
     if (command.command === "interactive") {
       const target = resolveInteractiveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
@@ -61,6 +62,11 @@ export async function runCli(argv: string[], given: NodeJS.ProcessEnv = process.
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     if (command.command === "attempt") return await runAttemptCommand({ command, repositoryRoot, fluxiqRepositoryRoot, environment: resolvedEnvironment, argv });
+    if (command.command === "fluxnode-host") {
+      const proof = await runFluxNodeHostProof(command, { repositoryRoot, fluxiqRepositoryRoot, environment: resolvedEnvironment });
+      process.stdout.write(`${JSON.stringify(proof)}\n`);
+      return proof.passed ? 0 : 1;
+    }
     if (command.command === "recovery-matrix") {
       // Provider-free and headed; every case's scenario is one of the ten realistic ones (`recovery-matrix/matrix-rows.ts`).
       if (command.list) {

@@ -198,6 +198,12 @@ export type ExtensionStatus = {
   unsupportedPage?: UnsupportedPageState | undefined;
   recordingBlock?: RecordingBlockState | undefined;
   lastError?: string | undefined;
+  /**
+   * The code FluxIQ refused this browser's enrolment with (`enrolment.unknown`,
+   * `.expired`, `.used`, `.revoked`, `.domain_mismatch`), while
+   * `connectionState` is `error` for it; absent otherwise. Never the ticket.
+   */
+  enrolmentRefusalCode?: string | undefined;
   lastMessageAt?: number | undefined;
   /** How long the pairing lasts: "browser_session" when this browser cannot keep it between sessions. Absent or "lasting": nothing to say. */
   credentialDurability?: "lasting" | "browser_session" | undefined;
@@ -252,6 +258,18 @@ export type PanelTakeOverRunRequest = {
 export type PanelHandBackRunRequest = {
   projectId?: string | undefined;
   runId: string;
+};
+
+/**
+ * `fluxiq.connect`, taken only from the side panel or the popup
+ * (`background/control-page.ts`). `settings` are saved before connecting.
+ * `enrolment` comes from a managed-host launcher: its one-time `ticket` enrols
+ * this browser instead of pairing it, and is never written to settings or
+ * storage, nor put in a status or a reply.
+ */
+export type ConnectRequest = {
+  settings?: Partial<FluxIQSettings> | undefined;
+  enrolment?: { ticket: string } | undefined;
 };
 
 /** `panelSaveSettings`: settings to store without connecting. */

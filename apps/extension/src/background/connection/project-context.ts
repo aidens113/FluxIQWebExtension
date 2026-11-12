@@ -44,10 +44,20 @@ export class ProjectContext {
   // has no project, which is different from not yet knowing.
   private activeRecordingProjectId: string | null | undefined;
   private lookup: CoreLookup | undefined;
+  private generation = 0;
+  private leaseScoped = false;
   // What Core last called a project, kept here only: a restarted worker learns it again at the next read.
   private named: { readonly projectId: string; readonly name: string } | undefined;
 
   constructor(private readonly deps: ProjectContextDeps) {}
+
+  /** A new Core lease may name another project even within the cache's reuse window. */
+  invalidate(): void {
+    this.generation++;
+    this.lookup = undefined;
+    this.named = undefined;
+    this.leaseScoped = true;
+  }
 
   activeRecordingProject(): string | null | undefined {
     return this.activeRecordingProjectId;
@@ -74,11 +84,13 @@ export class ProjectContext {
    * stored project when Core names none, cannot be asked, or is slow.
    */
   async resolve(reason: string): Promise<string | undefined> {
+    const generation = this.generation;
     const recording = nonEmpty(this.activeRecordingProjectId);
     if (recording) return recording;
     if (!this.deps.session().token) return this.current();
     const named = await this.boundedCoreLookup(reason);
-    return named ?? this.current();
+    if (generation !== this.generation) return undefined;
+    return named ?? (this.leaseScoped ? undefined : this.current());
   }
 
   private async boundedCoreLookup(reason: string): Promise<string | undefined> {
@@ -113,20 +125,24 @@ export class ProjectContext {
   }
 
   private async askCore(reason: string): Promise<string | undefined> {
+    const generation = this.generation;
     const session = this.deps.session();
     const token = session.token;
     if (!token) return undefined;
     try {
       const credentials = { coreApiUrl: this.deps.settings().coreApiUrl, token };
       const found = await fetchProjectFromCoreSnapshot(credentials, { sessionId: session.sessionId, clientId: session.clientId }, reason);
+      if (generation !== this.generation) return undefined;
       const named = nonEmpty(found?.projectId);
       // Core read none: asked once this browser has nothing stored either, since a browser's chat has nowhere to be without one.
       const projectId = named ?? (this.current() ? undefined : nonEmpty(await askCoreForFirstProject(credentials)));
+      if (generation !== this.generation) return undefined;
       if (!projectId) return undefined;
       // A recording Core accepted with no project takes the one Core now names.
       if (this.activeRecordingProjectId === null) this.activeRecordingProjectId = projectId;
       if (nonEmpty(this.deps.session().projectId) !== projectId) {
         await this.deps.adoptProjectId(projectId);
+        if (generation !== this.generation) return undefined;
         this.deps.onActivity("recording", "Project context linked", projectId, "success");
       }
       this.learnName(projectId, named === projectId ? found?.projectName : undefined);

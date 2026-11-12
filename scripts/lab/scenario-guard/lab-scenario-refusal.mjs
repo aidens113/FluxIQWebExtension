@@ -22,6 +22,15 @@ const ONE_SCENARIO = new Set(["run", "interactive", "replay", "attempt"]);
  */
 export function labScenarioRefusal(args) {
   const [command, ...rest] = args;
+  if (command === "fluxnode-host") {
+    if (rest.includes("--live-llm")) return "lab fluxnode-host is provider-free and refuses --live-llm before any provider setup.";
+    const named = rest.flatMap((value, index) => value === "--scenario" ? [rest[index + 1]] : []);
+    if (named.length !== 1 || named[0] === undefined || named[0].startsWith("--")
+      || rest.some((value) => value.startsWith("--scenario") && value !== "--scenario")) {
+      return "lab fluxnode-host requires exactly one --scenario <scenario-id>, held to the ten realistic scenarios before anything starts.";
+    }
+    return unrealisticScenarioRefusal([named[0]], "lab fluxnode-host");
+  }
   if (command !== undefined && ONE_SCENARIO.has(command)) {
     const scenarioId = rest[0];
     if (scenarioId === undefined || scenarioId.startsWith("--")) {

@@ -3,3 +3,4 @@
 export { WEB_AUTOMATION_SESSION_CRITERIA } from "./criteria";
 export { isEligibleWebSession } from "./eligible-web-session";
 export { pickWebAutomationSession } from "./pick-web-session";
+export { leasedWebSessionId } from "./leased-web-session";

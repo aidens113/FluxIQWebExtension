@@ -7,7 +7,16 @@
 
 import { pickClientGatewaySession, type ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
 import { WEB_AUTOMATION_SESSION_CRITERIA } from "./criteria";
+import { isEligibleWebSession } from "./eligible-web-session";
+import { leasedWebSessionId } from "./leased-web-session";
 
 export function pickWebAutomationSession(sessions: readonly ClientGatewaySession[], requestedSessionId?: string): ClientGatewaySession | undefined {
-  return pickClientGatewaySession(sessions, requestedSessionId === undefined ? WEB_AUTOMATION_SESSION_CRITERIA : { ...WEB_AUTOMATION_SESSION_CRITERIA, requestedSessionId });
+  const leased = leasedWebSessionId();
+  if (leased !== undefined) {
+    if (requestedSessionId !== undefined && requestedSessionId !== leased) return undefined;
+    return sessions.find((session) => session.sessionId === leased && isEligibleWebSession(session));
+  }
+  // Engine-managed browsers belong to their run leases. A person's independent
+  // builder must not acquire the same browser under another resource key.
+  return pickClientGatewaySession(sessions.filter((session) => session.managedHostId === undefined), requestedSessionId === undefined ? WEB_AUTOMATION_SESSION_CRITERIA : { ...WEB_AUTOMATION_SESSION_CRITERIA, requestedSessionId });
 }

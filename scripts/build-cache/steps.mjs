@@ -196,6 +196,7 @@ export const STEPS = Object.freeze({
     env: ["NODE_ENV"]
   },
   ...library("boundary-audit", { required: ["dist/index.js", "dist/cli.js"] }),
+  ...library("browser-host", { required: ["dist/index.js", "dist/launcher.js", "dist/reaper/reaper/main.js"] }),
   ...library("real-site-policy", { required: ["dist/index.js", "dist/cli.js"] }),
   ...library("test-contracts", { required: ["dist/index.js", "dist/index.d.ts"] }),
   ...library("test-evidence", { required: ["dist/index.js", "dist/index.d.ts"] }),

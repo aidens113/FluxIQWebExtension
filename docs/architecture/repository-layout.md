@@ -50,6 +50,7 @@ domain/
   src/web-panel-host.ts  Entry point of the web panel host (see below)
   scripts/          Web panel host build, FluxIQ setup, and domain test runner
 packages/          Repository-local testing facility and tooling packages
+packages/browser-host/  Product package: launches Chromium with the built extension for `fluxiq dev --browsers N`
 docs/architecture/  Authored current-state architecture
 docs/working/       Investigation and implementation working documents
 scripts/            Repository-level FluxIQ panel launcher and Lab launcher
@@ -60,6 +61,66 @@ the package rather than under `recording/` or `runtime/` because both of those
 read them, and putting either under one would make the other depend on it.
 The testing packages are described in
 [the automated testing facility](testing-facility.md).
+
+### The Browser Host Package
+
+`packages/browser-host` is product code, not testing infrastructure: it is the
+launcher `fluxiq dev --browsers N` loads (`--browser-host
+@fluxiq-web-extension/browser-host/launcher`). It implements Core's
+`FluxIQHostLauncher` (type-only import from `fluxiq/server`; the interface is
+Core's) and never depends on `packages/test-runner`; the structure audit
+enforces that, and the test-runner imports from it instead (its
+`find-browser-process.ts` re-exports the one `--user-data-dir` matcher).
+
+- Each host gets a fresh temp profile (`mkdtemp`, removed on close) or a named
+  one under `<dataDir>/browser-hosts/<name>/<hostId>` that is kept. Hosts launch
+  in parallel; if one fails the others close and the error names it.
+- Enrolment: after the extension's worker is up, the launcher opens the
+  extension's own side-panel page and sends `fluxiq.connect` with the one-time
+  ticket as an in-memory `evaluate` argument over Playwright's debugging pipe.
+  The ticket is never in argv, env, a URL, a file or a log, and the package
+  refuses to enrol while `DEBUG` enables Playwright protocol logging
+  (`browser_host.protocol_logging_on`). A connect that fails before redemption is
+  retried with a new ticket (first attempt plus 3 retries); an `enrolment.*`
+  refusal is final.
+- No leftovers: `close()` closes the context, kills any process still holding the
+  profile (`taskkill /T /F` on Windows, signals elsewhere) and removes a fresh
+  profile. A detached reaper process, spawned once per engine with an IPC
+  channel, does the same for every registered profile when the engine dies
+  without closing.
+
+Core grants each FluxNode leaf one host lease. The web domain selects that
+lease's exact session for both actions and evidence and refuses stale leases;
+unleased personal execution excludes managed sessions. A new lease invalidates
+the extension's project lookup cache, including an older lookup still in flight.
+Core owns the current run/project binding and checks managed HTTP calls through
+restricted service IAM policies. The headless API serves that client's context
+and shares trace/state upload intake with the web panel; it creates no person's
+project for a managed host. Production headless model-key custody remains Core's
+P3b seam.
+
+The product package is registered with the imported build cache, so its build
+precedes test-runner's reaper import. The provider-free acceptance command is:
+
+```powershell
+pnpm.cmd lab fluxnode-host --scenario company-website --task company-website-apprentices --hosts 2 --scripted-model --attempts 4
+```
+
+The proof uses the actual SDK and engine CLI, the realistic fixture and the
+product launcher. It records each predecessor's Flow/version/steps digest,
+actual engine model decisions, scripted requests and runtime; a replay requires
+zero decisions and zero scripted requests. It also checks independent sessions,
+fresh-host recovery, graceful shutdown, hard engine death and named retention
+and resume. Its artifacts remain in ignored, run-owned directories.
+
+Two FluxNodes each run an exploring attempt and three continuations concurrently,
+then one additional parallel replay each. Every result must match the fixture's
+four literal apprentice rows and name one actual leased host/session. A
+credential-free IPC acknowledgment drains observations after each SDK result.
+Scripted requests carry the owning run's validated correlation ID through the
+loopback transport; reply cursors are independent per run. Unknown requests stay
+in aggregate accounting and fail the proof. Scripted responses do not imply zero
+engine model decisions, and repeated run IDs cannot count as new attempts.
 
 ## Responsibility Boundaries
 
