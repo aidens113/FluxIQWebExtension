@@ -13,6 +13,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 ## Current State
 
+**Codex continuation (2026-11-11).** Three discovery workers are reconciling the stopped lane reports and commits before implementation resumes: product (t898-t901), runtime (t903/t905/t907-t909), and validation (t885/t893/t904/t906 and simulator status). The lead verifies and integrates. t902 stays local and off GitHub; t898's private-run-context.md and the main checkout's pre-existing uncommitted instructions/debug note remain untouched. Intake reports are in t901, t905 and t906 respectively. The first bounded candidate is t908's unvalidated next-page humanness change; t906's report explicitly records vacuous assertions requiring repair before acceptance. No paid run or full sweep has been started by Codex.
+
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
@@ -25,7 +27,15 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 **Promoted (2026-11-11).** The day's first full sweep passed on Core b445ad6f4 and extension 42da23a9f, and both mains were fast-forwarded: 337 Core and 247 extension commits since 2026-11-03. The sweep failures before it were fixed by lane t904, all in tests: tests never moved with intended changes, a stub whose check never cleared, and load-dependent tests.
 
-**Lanes (2026-11-11, evening).** Landed on dev today: t904, t885, t903, t897, t899 (W3) and t900 (W4).
+**Lanes (2026-11-11, evening).** Landed on dev today: t904, t885 (twice; the second carries fixes 32-36), t903, t897, t899 (W3), t900 (W4), t905 phase 0, and t898 (W2: humanness end to end, each person's starting value, and the run-request and reviewer security fixes). All are pushed.
+
+New lanes on 2026-11-11:
+- t906 fixes the site-reset specs that drifted.
+- t907 builds the managed browser host (Core's P5).
+- feat/fluxnode-sims in `!FluxIQTestEnvironments` puts FluxNodes on the simulated Android, Linux and Windows environments (P8).
+- P2c (one engine for many runtimes) is designed in Core's `fluxnode-plan/reports/p2c-multi-runtime-design.md`.
+- A next-page humanness follow-up is opening, because Next page presses do not yet aim.
+- P3b keys starts after t901.
 - W1, live checks (E1): Saturday causes R1-R7, including the ending (a caught loop is steered onto a new approach, never parked for a person); reruns of follow-official-store and priya; breadth tasks 5-10; the Lab recording each run's exact model, which it does not do today.
 - W1, structural (t905, sub-supervisor): the design in `reports/result-evidence-design.md` makes the result exactly what the draft's read steps read. A read outside the draft is a look that never changes the result. The model is always told the result as it stands, and the judge gets every contributing page whole.
   - Lead decisions D1-D4: draft steps only, with `take` to promote a look; fold identical steps; exploring reads return only kept rows; one evidence shape for both judges.
