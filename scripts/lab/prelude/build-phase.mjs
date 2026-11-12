@@ -37,6 +37,7 @@ const HOST_BUILD_STEP = "domain:host-build";
  * @typedef {{
  *   interactive: boolean,
  *   instanced: boolean,
+ *   managedHosts?: boolean,
  *   env: NodeJS.ProcessEnv,
  *   runStep: (step: string, options: { env: NodeJS.ProcessEnv }) => Promise<StepOutcome>,
  *   buildOrder: (step: string) => string[],
@@ -55,10 +56,10 @@ const HOST_BUILD_STEP = "domain:host-build";
  * @returns {Promise<StepOutcome[]>} one outcome per step, in the order run
  */
 export async function runBuildPhase(options) {
-  const { interactive, instanced, env, runStep, buildOrder, timer, note } = options;
+  const { interactive, instanced, managedHosts = false, env, runStep, buildOrder, timer, note } = options;
   const plan = [
     ...buildOrder("scenario-lab:build"),
-    ...(interactive || instanced ? [HOST_BUILD_STEP] : []),
+    ...(interactive || instanced || managedHosts ? [HOST_BUILD_STEP] : []),
     ...buildOrder("extension:build"),
     ...buildOrder("test-runner:build")
   ];

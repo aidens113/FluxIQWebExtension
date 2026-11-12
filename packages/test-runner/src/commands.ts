@@ -4,6 +4,7 @@ import { LAB_ANSWER_FIRST_AUTHORING_MODE, LAB_AUTHORING_MODE_FLAG, labAuthoringM
 import { parseRecoveryMatrixCommand, type RecoveryMatrixCommand } from "./recovery-matrix/command.js";
 import { refuseRecordingOnlyFlow } from "./flow-lane/recording-only/index.js";
 import { demonstrationOptions } from "./flow-lane/creation/recorded-evidence/demonstration/index.js";
+import { parseFluxNodeHostProofCommand, type FluxNodeHostProofCommand } from "./fluxnode-host-proof/index.js";
 
 export type EvidenceMode = "none" | "failure" | "checkpoints" | "events";
 export type TargetMode = FluxIQTargetMode;
@@ -36,13 +37,15 @@ export type LabCommand =
   // One attempt at a task from the real extension chat, scored on its answer: `lab attempt` (`attempt-lane/live/`). `model` is a scripted server (provider-free) or a live provider run.
   | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "live"; llm: LlmExecutionProfile }; attempts: number; restartBetween?: true; humanness?: number; dryRun?: true }
   // The state-aware recovery plan's provider-free acceptance matrix: `lab recovery-matrix` (`recovery-matrix/command.ts`).
-  | RecoveryMatrixCommand;
+  | RecoveryMatrixCommand
+  | FluxNodeHostProofCommand;
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const COMPARE_USAGE = "Usage: lab compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves (a report is a bench id or a path to its report.json)";
 
 export function parseLabCommand(argv: string[]): LabCommand {
   const [command, ...args] = argv;
+  if (command === "fluxnode-host") return parseFluxNodeHostProofCommand(args);
   if (command === "interactive") {
     rejectUnknownOptions(argv.slice(1), ["--seed", "--target", "--workspace", "--fresh-login", "--no-live-panel"]);
     const { livePanel, rest: args } = livePanelOption(argv.slice(1));

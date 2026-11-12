@@ -115,6 +115,22 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/browser-host:
+    dependencies:
+      playwright-core:
+        specifier: 1.51.1
+        version: 1.51.1
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      fluxiq:
+        specifier: link:../../../!FluxIQ/packages/fluxiq
+        version: link:../../../!FluxIQ/packages/fluxiq
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/real-site-policy:
     devDependencies:
       '@types/node':
@@ -158,6 +174,9 @@ importers:
 
   packages/test-runner:
     dependencies:
+      '@fluxiq-web-extension/browser-host':
+        specifier: workspace:*
+        version: link:../browser-host
       '@fluxiq-web-extension/domain':
         specifier: workspace:*
         version: link:../../domain
@@ -167,6 +186,9 @@ importers:
       '@fluxiq-web-extension/test-evidence':
         specifier: workspace:*
         version: link:../test-evidence
+      '@fluxiq/sdk':
+        specifier: link:../../../!FluxIQ/packages/sdk
+        version: link:../../../!FluxIQ/packages/sdk
       '@playwright/test':
         specifier: 1.51.1
         version: 1.51.1

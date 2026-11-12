@@ -1,0 +1,24 @@
+{
+  "name": "@fluxiq-web-extension/browser-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./launcher": "./dist/launcher.js",
+    "./reaper": "./dist/reaper/index.js"
+  },
+  "scripts": {
+    "build": "node ../../scripts/check/core-build.mjs && node ../../scripts/build-cache/cli.mjs browser-host:build -- \"tsc -p tsconfig.json\"",
+    "check": "node ../../scripts/check/core-build.mjs && node ../../scripts/build-cache/cli.mjs browser-host:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check.tsbuildinfo\"",
+    "test": "node ../../scripts/check/core-build.mjs && node ../../scripts/build-cache/cli.mjs browser-host:build && node --test \"dist/**/*.test.js\""
+  },
+  "dependencies": {
+    "playwright-core": "1.51.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "fluxiq": "link:../../../!FluxIQ/packages/fluxiq",
+    "typescript": "^5.7.0"
+  }
+}

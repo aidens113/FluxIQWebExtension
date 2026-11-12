@@ -8,6 +8,7 @@ import test from "node:test";
 import type { FluxIQSettings } from "../../shared/protocol";
 import { FluxIQConnection } from "../connection";
 import { OverlayTarget } from "../activity/index";
+import { GatewaySession } from "../connection/index";
 
 const settings: FluxIQSettings = {
   gatewayUrl: "ws://127.0.0.1:4777/client",
@@ -48,4 +49,18 @@ test("the status carries what Core's recording-capture policy allows, as boolean
   const connection = new FluxIQConnection(settings, { clientId: "client-1" });
   assert.deepEqual(connection.status().captureAllowed, { captureMutations: true, captureInputValues: true, captureSnapshots: true, directRequests: false });
   assert.equal(connection.currentCapturePolicy().directRequests.allowed, false);
+});
+
+test("an enrolment that ended without a session shows as an error with Core's refusal code, never the ticket", (t) => {
+  t.mock.method(GatewaySession.prototype, "enrolmentFailure", () => ({ code: "enrolment.domain_mismatch", message: "This client declared a domain its enrolment ticket was not issued for." }));
+  const status = new FluxIQConnection(settings, { clientId: "client-1" }).status();
+  assert.equal(status.connectionState, "error");
+  assert.equal(status.enrolmentRefusalCode, "enrolment.domain_mismatch");
+  assert.equal(status.lastError, "This client declared a domain its enrolment ticket was not issued for.");
+});
+
+test("no enrolment failure leaves the status as the connection reports it", () => {
+  const status = new FluxIQConnection(settings, { clientId: "client-1" }).status();
+  assert.equal(status.connectionState, "disconnected");
+  assert.equal(Object.hasOwn(status, "enrolmentRefusalCode"), false);
 });
