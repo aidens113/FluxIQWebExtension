@@ -240,6 +240,13 @@ Briefs were written before dispatch; compact scope preserved here. Each owned on
 - Outcome: Accepted; warnings are existing structural advisories, not fresh runtime validation.
 - Follow-up: Commit/push the audit task; full code suites and live hosting checks not required for this documentation-only unit.
 
+### 2026-11-14 — Report whitespace correction
+- Agent: Senior supervisor.
+- Changed: Trimmed report trailing spaces and extra EOF blank lines.
+- Validation: `git diff --cached --check` initially found Markdown hard-break spaces and extra EOF lines in the three reports; after normalization, `git diff --check` -> exit 0, no output.
+- Outcome: Corrected; the initial unstaged-only check had not covered staged new reports.
+- Follow-up: Validate the complete task diff before integration.
+
 ## Open Questions
 
 Decide at named execution gate; these do not block completion of this audit. Defaults are recommendations, not claims of user approval.

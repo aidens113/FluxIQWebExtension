@@ -14,9 +14,9 @@ Audited repository commit: `28398c288ffbdffd150133dfb3f9355c17700ba8` (worktree 
 
 ## Return contract
 
-Outcome: Done  
-Changed: `docs/working/hosted-platform-launch-plan/reports/browser-audit.md`  
-Validation: not run; read-only audit brief prohibited builds and tests. Source evidence was inspected at commit `28398c288ffbdffd150133dfb3f9355c17700ba8`.  
-Not verified: No browser or live hosted service was launched; Linux deployment and hosted takeover behavior could not be exercised.  
-Report: `docs/working/hosted-platform-launch-plan/reports/browser-audit.md`  
+Outcome: Done
+Changed: `docs/working/hosted-platform-launch-plan/reports/browser-audit.md`
+Validation: not run; read-only audit brief prohibited builds and tests. Source evidence was inspected at commit `28398c288ffbdffd150133dfb3f9355c17700ba8`.
+Not verified: No browser or live hosted service was launched; Linux deployment and hosted takeover behavior could not be exercised.
+Report: `docs/working/hosted-platform-launch-plan/reports/browser-audit.md`
 Notes: The plan's hosted-extension status is stale; managed enrollment and local managed Chromium now exist, but they do not amount to a production hosted-browser service.

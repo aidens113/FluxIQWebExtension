@@ -1,4 +1,4 @@
-﻿# Website audit
+# Website audit
 
 - **Audited checkout:** `C:/Users/osrs_/FluxStuff/FluxIQWebsite`; no `.git` metadata is present, so HEAD/commit cannot be established. The directory is not a git repository. `CODEX.md` is absent; repository `AGENTS.md` was read.
 - **Implemented (repo evidence):** This is a public marketing site (`README.md:1-5`), configured as a Next static export (`next.config.mjs:3-9`). The home page is a presentation of sections (`src/app/page.tsx:17-31`); app routes found are `/`, `/extension`, `/privacy`, `/terms`, plus sitemap/robots. The privacy copy states there are no accounts, forms, or sign-ups (`src/content/privacy.ts:28`). This checkout therefore provides no evidence of a hosted automation backend, customer identity/tenant surface, product purchase flow, marketplace listing or transaction flow.
@@ -14,4 +14,3 @@ Validation: Read-only source/doc/workflow inspection -> report evidence recorded
 Not verified: Git commit identity/history, live Hostinger account configuration or health, workflow execution history, marketplace or backend behavior.
 Report: `docs/working/hosted-platform-launch-plan/reports/website-audit.md`
 Notes: No source or shared documents changed. No secrets or live account data accessed.
-

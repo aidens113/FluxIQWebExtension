@@ -38,4 +38,3 @@ The separately inspected `C:/Users/osrs_/FluxStuff/fxwork/t843/!FluxIQ/docs/work
 ## Audit commands and limits
 
 Read-only commands: `git rev-parse HEAD`, `git rev-parse dev`, `git branch --show-current`, `git status --short`, `git ls-tree -r --name-only dev`, `git grep -n ... dev -- ...`, targeted `rg --files`, `rg -n` and `Get-Content`. Observed exact dev commit above, primary t911 dirty tree, concrete source and missing route names. Initial wildcard-path `rg` probes failed on Windows; reran against exact paths/directories. This is source evidence only: historical test claims in working documents were not rerun; infrastructure, public DNS/TLS, email, credentials, runtime behavior, scalability and marketplace absence outside the inspected surfaces remain unverified.
-
