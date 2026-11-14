@@ -1,7 +1,7 @@
 # Hosted Platform Launch Audit And Plan
 
 Status: Active
-Status detail: Audit complete; implementation queued. Separate Core hosting accepted by user; nothing deployed.
+Status detail: Audit complete; expanded platform design covers fully local, hybrid API and consumer modes, paid routing and commercial lifecycle. Nothing deployed.
 Created: 2026-11-14
 Last updated: 2026-11-14
 Owner: Senior supervisor agent
@@ -16,6 +16,8 @@ Related: [Hosted production](./hosted-production-plan.md), [MVP seal](./mvp-seal
 **User requirements (2026-11-14):** retain Hostinger landing site/Node.js CI/CD; host the Core panel independently; offer first-party apps, verified publishers and clearly labelled unverified apps/Flows through FluxIQ accounts; charge hosting markup plus a FluxIQ fee; dedicated and cheaper shared compute with customer resource control; preserve self-hosting; begin with web, later real Windows/Linux/Android. Developer FluxNodes/code can stay local while automation runs remotely. The user accepted another Core server during the audit. Nothing was purchased/deployed.
 
 **Lead recommendations:** getfluxiq.com stays on Hostinger; app.getfluxiq.com runs Core/private product account services on persistent compute. Customer browsers use a separate worker tier, initially one isolated VM per customer. One identity/IAM system; retain existing BYOK initially. These recommendations are not additional user rules.
+
+**User clarification (2026-11-14):** fully local includes the application, FluxIQ engine AND automation environments on the developer's computers/servers. Hybrid keeps application code locally while outsourcing automation to FluxIQ Cloud through an API key. Consumer clients such as the extension are another entry point, not a requirement to write developer code. Client choice and execution location are separate axes. The detailed operating model below is now part of the implementation plan, including paid routing; all new endpoints/state models are proposed contracts, not claims of existing implementation.
 
 **Baseline:** downstream `28398c288ffbdffd150133dfb3f9355c17700ba8`; clean Core dev snapshot `04e7b1650f183868505b2e0c076e339b9bf7ccf9`. Website is an archive without Git metadata, so revision/live parity are unknown. Primary Core is dirty task t911, not dev; its pending lease changes are excluded. The IDE's t843 reset plan explicitly says Superseded and is not a prerequisite.
 
@@ -70,26 +72,205 @@ Return events use client-initiated streaming and answer POST, not inbound laptop
 | Core | Identity/IAM, tenancy, SDK/protocol, durable execution, neutral host leases, datasets/lineage, panel, generic commercial ports |
 | Web-extension | Browser/domain, launcher/image, web takeover, consumer/store UX, browser acceptance |
 | Website | Public marketing/catalog/pricing/publisher presentation, account links |
-| Product unit, initially downstream deploy/ | Pinned composition, release manifest, infrastructure/environment controller, billing/catalog adapters, operations; focused modules |
+| Product services, initially focused downstream packages beside apps/product | Infrastructure/environment controller, billing/catalog/notification adapters and commercial control APIs; apps/product remains a thin host integration |
+| Product deploy/ | Pinned composition, release manifest, infrastructure definitions and operational runbooks; not the business-service implementation |
 | Customer app | Local declarations/checks/transforms/business UI; optional hosted callback/app worker |
 
 Core keeps generic container assets. Product packaging layers pinned public web capabilities, not private imports/copied runtime. Website backend code may deploy beside Core; no provisioning secret in Hostinger's static server. Create paired records before implementation.
 
 ## Product Contracts
 
-### Local Code, Cloud Automation
+### Supported Operating Modes
 
-Register a developer public key, keeping its private key local. Scope sessions to account/workspace/environment/actions. SDK sends serializable declarations/inputs/runtime requirements and idempotency identity; JavaScript callbacks are not uploaded. Cloud engine chooses an authorized browser, loads/learns a Flow and records typed output/evidence/usage. Local checks/transforms/person callbacks receive events and POST answers; applications can combine results with their own local data.
+| Mode | Application/client | Engine and execution | FluxIQ Cloud dependency |
+| --- | --- | --- | --- |
+| Fully local developer | Developer's code on laptop or own server | Their Core plus their browser/environment on their hardware | None for core execution; optional catalog/cloud services only by explicit use |
+| Fully self-hosted network | Code on customer's devices/servers | Customer-operated authenticated Core and environment fleet | None for execution; customer manages network, identity, keys and infrastructure |
+| Hybrid developer | Code, checks and transforms on customer's laptop/server | Authenticated FluxIQ Cloud engine and selected cloud environment | API access and paid cloud allocation; only necessary inputs/evidence/results cross boundary |
+| Consumer client with local execution | Extension or another client | Local/self-hosted Core and user's connected environment | None for local operation |
+| Consumer client with cloud execution | Extension or hosted panel | FluxIQ Cloud plus explicitly selected managed browser | Hosted identity/entitlement; no developer setup required |
+| Cloud engine with personal browser | Extension enrolled by its user | Cloud Core controls that authorized personal browser | Hosted control services, but no managed-browser compute charge; availability requires connected browser |
+| Fully managed application | Hosted app/worker or installed marketplace app | Cloud engine and managed environments | Hosting for app/callbacks and automation billed as distinct resources |
 
-Persist runs/events/answers before acknowledgement and fence ownership. Resume by durable cursor, deduplicating submissions and reconciling uncertain lasting effects. If callbacks disconnect, keep recoverable waiting state and release capacity where safely resumable. A closed laptop cannot run local callbacks. Scheduled pipelines need an explicitly uploaded worker/app or a customer-operated always-on callback worker; callback-free saved Flows can run entirely hosted.
+Fully local means independent of FluxIQ's website, billing service and cloud authentication availability. BYOK may still require the customer's external model provider during exploration; deterministic execution can run without that provider when the Flow needs no model. A customer can operate locally over their own network with their own authenticated endpoint. Loopback open-mode convenience must not become unauthenticated LAN/internet access.
 
-FluxIQ access keys differ from provider keys. Preserve BYOK. P3b must grant approved tenant model access after logout/restart through encrypted custody, explicit service grants, rotation/revocation/audit; never borrow another person's latest unlock or silently introduce a platform key.
+SDK exposes endpoint/credential profiles and an explicit environment selection. Same declarations and schemas work across modes, subject to installed runtime capabilities and authorized resources. Never silently fall back from local to cloud (spend/data transfer), cloud to local (personal browser actions), dedicated to shared, or one region/account to another. Copying a Flow between deployments is explicit export/import; runtime-owned cookies, provider/access credentials and customer data do not travel implicitly. Exported artifacts carry compatibility metadata and preserve provenance without exposing secrets.
 
-### Accounts And Website
+For consumers, onboarding asks where work runs: this browser, a managed cloud browser, or a chosen self-hosted server. The panel labels both connected server and execution target on every run. Selecting a cloud browser does not transfer the user's local cookies or logged-in sessions: offer an authenticated remote login/takeover flow. A lost personal browser connection becomes a recoverable wait, not a switch to someone else's/cloud profile. Changing target for a running task is a checked migration, not a UI setting flip.
 
-One identity system; distinguish account/workspace, billing customer, environment, publisher and installation. Put signup/login/account/billing/install on app.getfluxiq.com, with allowlisted deep links from public pages. Adapt the signup stand-in into a co-located service calling private provisioning; Hostinger need not join its private network.
+### Journeys And Product Surfaces
 
-Use secure host-only app cookies, CSRF and exact origins. Publisher UIs use a separate untrusted-app origin and scoped API consent, never app cookies. Public catalog reads need no secret. Real verification/recovery email, revocation/export/deletion and updated privacy copy precede public signup.
+| Journey | Complete path |
+| --- | --- |
+| Local developer | Install engine/web runtime; start own browser host; connect SDK to local endpoint; declare/run FluxNode; inspect local panel/results; back up/export independently |
+| Hybrid developer | Create account/workspace; buy/select capacity; provision environment; register API key; copy endpoint/profile; run same code; inspect run/usage; rotate/revoke key |
+| Consumer | Install extension or open app; sign in/connect chosen server; select personal/cloud environment; authorize sites/lasting actions at start; run; answer takeover requests; inspect result/cost |
+| Marketplace user | Browse without login; inspect publisher/permissions/runtime/cost; sign in; choose workspace/environment; install version and bind secrets; run; approve upgrades; uninstall without silently deleting shared datasets |
+| Dedicated owner | Purchase reservation; see provisioning progress; configure browser/login; run; inspect resources; resize/stop/restart; export/cancel/delete with explicit retained-storage costs |
+| Publisher | Register identity; submit immutable artifact; validation/review; preview permissions; publish; maintain versions/respond to incidents; payouts only when that product is enabled |
+
+Public navigation: Product, Cloud, Marketplace, Developers/docs, Pricing, Self-hosting and Sign in. App navigation: Overview, Runs, Environments, Flows/apps, Data, API/access, Usage/billing and Settings. Publisher workspace and operator console have explicit separate permissions. Screens use the same API actions/authorization as SDK callers; no privileged UI-only routes. CLI onboarding can open a browser login/enrollment flow, while unattended servers enroll a restricted service key through a human-authorized setup.
+
+### Cloud Services And Durable Records
+
+These are logical modules; the initial product can deploy them as a modular service plus worker processes rather than many microservices. Persist cross-module transitions before performing external effects. The control plane decides who may run and pay; a workspace engine owns execution; worker environments own the browser/OS resources.
+
+| Module | Durable records and authority |
+| --- | --- |
+| Identity/access (Core) | Principals, memberships, roles/policies, API keys/sessions, revocation; resolves caller and tenant |
+| Product account/commerce | Billing accounts, provider customer/subscription references, versioned plans/prices, entitlements and usage allowances |
+| Environment controller | Environment ID, owner, region, runtime/image version, capacity class, provider resource IDs, desired/observed state, persistent volume/profile references |
+| Admission/router | Durable accepted submission, idempotency identity/digest, payer/entitlement snapshot, reservations, authorized placement and queue ticket |
+| Scheduler/lease owner | Workspace-to-engine route, fenced run/environment leases, queue priorities, fairness and recovery assignments |
+| Workspace engine (Core) | Runs, callbacks/events/checkpoints, Flow versions, effects, datasets/lineage and person-needed state |
+| Meter/reconciler | Append-only usage events, allocation intervals, invoice aggregates, adjustments and provider reconciliation |
+| Catalog/install service | Publisher identity, signed package versions, review state, tenant installations, permission grants and upgrade history |
+| Notifications/integrations | Transactional mail, takeover/run notifications, signed webhook deliveries and dead-letter/retry state |
+| Operator tooling | Fleet health, incidents, redacted diagnostics, support access grants, provisioning/billing reconciliation and audited manual actions |
+
+An account can own multiple workspaces; workspace/project scoping controls data and execution. Billing account is the payer, not an IAM principal. Each environment has an owner workspace and a billing allocation; sharing across workspaces requires explicit grants and payer acceptance. A run snapshots actor/client, workspace/project, environment or placement request, payer, entitlement revision, price version and artifact version. A paid account cannot gain another tenant's data by choosing their identifiers.
+
+Keep platform commerce/catalog state outside customer workspace databases; use durable control-plane storage and transactional outbox delivery. Initially use the existing platform persistence under one writer where appropriate; add a migration/scale plan before multiple independent writers. Workspace SQLite remains behind one fenced owner. Queues must be recoverable from durable records. Object/blob storage uses tenant-scoped references and short-lived authorized downloads, not public buckets. Never use a single transient process map as the authority for paid reservations or accepted runs.
+
+## API, Authentication And Paid Routing
+
+### Authentication Contract
+
+In the inspected SDK, `apiKey` already means private PEM or `fxkey1` key material, not an arbitrary bearer string (`packages/sdk/src/client/connect-options.ts`). Retain that P3b design: public key registered server-side; SDK signs an audience-bound proof; server exchanges it for a short-lived scoped session. Document this plainly as FluxIQ API access and provide copyable credential-profile setup. Do not invent a second opaque-key authentication system just for billing. Raw HTTP clients get documented signing/session helpers and conformance examples.
+
+Keys have ID, public material, owner service/user principal, allowed workspaces/projects/environments/actions, expiry, last-use metadata and revocation state. Registration is authenticated and audited; private material is generated/stored on the customer side. Rotation overlaps old/new keys deliberately then revokes old sessions. Verify purpose/audience/instance, nonce/replay, time bounds and signature; derive tenant from authenticated grants, never an untrusted header alone. Credential/session errors never fall back to cloud open mode. Credentials for one deployment cannot authenticate to another by hostname substitution.
+
+Browser users use secure login sessions; consumer extensions use user-consented enrolled/device credentials; fleet workers use separate short-lived workload identity tied to their environment/lease. All resolve through the same Core policy evaluator. A publisher's installation gets only its granted scopes, not the user's administrative API key. Frontend JavaScript and installed packages never receive the operator's provisioning/cloud-provider credentials.
+
+### Proposed API Surface
+
+Preserve existing `/api/fluxnode/v1` and session/discovery contracts; add compatible missing capabilities behind Core's neutral APIs. The resource names below define work to implement, not a promise these routes exist today. Product APIs use a versioned `/api/platform/v1` namespace, kept separate from neutral engine APIs. Start with the app origin; an optional api.getfluxiq.com alias may follow with correct audience/discovery configuration, not a separate auth stack.
+
+| API family | Required operations and contract |
+| --- | --- |
+| Discovery/session | Capabilities/protocol/instance identity; prove key, renew/revoke session; no unauthenticated tenant details |
+| Account/workspace | Profile, memberships, workspace selection, current caller permissions; least-privileged invite/manage actions |
+| Environments | List/create/inspect/start/stop/resize/delete; asynchronous operation ID, desired/observed status and cost preview |
+| Run/FluxNode | Validate/register/start/get/list/events/answers/stop/resume; explicit workspace/project/environment; durable idempotency key and typed result |
+| Schedule | Create/change/pause/list; timezone/DST policy, versioned artifact, execution target, callback availability and per-run budgets |
+| Data/Flow/artifact | Authorized list/version/export/import/download; schemas/lineage, immutable version references and permissioned deletion |
+| Access/secrets | Key enrollment/rotation/revocation; secret-reference grants and status; no readback of raw secrets through listings |
+| Commerce | Plans/quote/checkout/customer portal/usage/invoices; effective entitlements and pending changes; internal verified provider webhook intake |
+| Catalog/install | Search/version/permissions; install/configure/upgrade/uninstall; publisher submission/review/revoke |
+| Notifications | Webhook endpoints/secrets/rotation/delivery logs; signed notifications with stable event IDs, not private result bodies by default |
+
+Use `202 + operation/run ID` only after durable acceptance; poll or stream events instead of holding a request for the whole automation. Existing SDK behavior must migrate additively through versioned contracts, never a second incompatible run engine. Public errors include stable code, correlation ID and retry classification: unauthenticated, forbidden/not-found, billing action required, environment unavailable, capacity queued, conflict/idempotency mismatch and invalid input. Do not expose another workspace's existence in error details. Publish OpenAPI/schema docs and examples for SDK and raw HTTP; validate requests and pin/deprecate protocol versions explicitly.
+
+Every mutating externally retriable operation uses scoped idempotency plus a canonical payload digest. Repeated identical requests return the same operation; changed payload under the same key is a conflict. Scope includes tenant and action; credential rotation must not create a second run. List APIs paginate; streams support durable cursors and replay; webhook receivers deduplicate by event ID. Specify idempotency retention and reconciliation beyond it so old retries cannot silently recreate a charged environment. API rate protection and concurrency allocations are separate from Flow retry/recovery policy.
+
+### Paid-User Admission And Placement
+
+Authentication, authorization, entitlement and placement are separate decisions. Buying a plan never grants access to a tenant, and knowing an API key never implies unlimited compute. No per-user public port or hard-coded API-key-to-IP lookup: stable gateway routes authorized requests to the current workspace owner and its permitted environment.
+
+```mermaid
+flowchart LR
+    R[SDK, extension or panel request] --> A[Authenticate principal]
+    A --> W[Resolve workspace and IAM]
+    W --> I[Find or create idempotent submission]
+    I --> E[Check payer and effective entitlements]
+    E --> Q[Atomically reserve capacity and cost authority]
+    Q --> D[Persist admission and queue event]
+    D --> P[Place on authorized environment]
+    P --> L[Acquire fenced engine and host leases]
+    L --> X[Execute, meter and checkpoint]
+    X --> S[Settle usage and release allocation]
+```
+
+1. Authenticate key/session/device and reject revoked or wrong-audience credentials. Resolve workspace membership and IAM for the requested operation/resources; do not trust client-supplied payer or tier.
+2. Look up the authenticated submission identity. An existing accepted run returns its status even if the plan has since changed, subject to current read permission; it is not admitted or billed twice.
+3. Resolve payer from workspace/environment grants and billing state. Apply a versioned entitlement snapshot: permitted runtime/classes/regions, dedicated reservations, shared concurrency, retained storage, catalog licenses and any explicit trial/credit allowance. Rate card is a separate versioned record.
+4. Validate installed artifact/version, runtime capability, explicit target and granted sites/secrets. Never attach another user's browser or select a cheaper/different region silently.
+5. Atomically reserve allowed concurrency/capacity and the customer's authorized monetary allowance as applicable. Concurrent submissions cannot both consume the same last slot/credit. Distinguish reserving spend authority from actually charging for unused work.
+6. Commit submission/reservation/outbox event together; reconcile against provider state after partial failures. A billing/entitlement outage fails closed for new unverified spend while already authorized work can use its recorded grant; preserve read/stop/export access.
+7. Dedicated request routes only to its owned environment. Shared request enters a fair workspace queue and takes a sandbox compatible with runtime, region and profile affinity. Personal-browser request targets its enrolled session and consumes no managed-browser allocation. No silent tier upgrade or cloud/personal fallback.
+8. Recheck revocation, current entitlement for new allocation and tenant binding at dispatch/resume; carry signed/scoped execution grant and fenced lease. Running tasks use their defined allocation policy; plan changes do not migrate them mid-act.
+9. Worker accepts only its lease/tenant/run; heartbeats and authenticated events carry ownership. Meter allocation intervals from the scheduler/provider, not user-reported success counts. Completion/stop closes intervals, records results and releases reservations idempotently.
+
+If paid shared capacity is busy, return an observable queued run with position/estimated availability where measurable, cancellation and allocation status. Reject unsupported requests before acceptance; accepted recoverable work remains resumable rather than acquiring a new terminal failure timeout. Dedicated VMs are not on-demand shared slots: their subscription reservation remains billable while provisioned under the stated price terms. Retries/failovers cannot bill duplicate allocation intervals, even though separate compute legitimately consumed must be reconciled according to the published incident-credit policy.
+
+Example: two keys for workspace A share A's concurrency entitlement. A third concurrent run queues; a request using workspace B's environment is refused even if A buys the highest tier. Upgrading A changes future eligible allocation after confirmed billing/entitlement update, not key ownership. Replaying the same accepted request returns the same run. Revoking a key removes its ongoing authority; ownership-safe checkpoint/stop prevents duplicate effects, while another authorized operator can inspect/resume according to policy.
+
+### Billing And Entitlement State Machine
+
+Default product recommendation: account creation/catalog browsing costs nothing; no automatic paid VM on signup. Optional trial compute is an explicit grant with stated allowance/expiry, never assumed from a login. Final prices, free allowances and grace duration are commercial settings still to be chosen.
+
+| State | New paid allocation | Existing data/work |
+| --- | --- | --- |
+| No plan / checkout pending | None unless explicit trial/credit grant | Browse, local use, account access; checkout return URL cannot grant service |
+| Active | Within purchased class/reservations/allowances | Normal operation; usage visible by workspace/environment |
+| Past due, within configured grace | Only according to published grace grant | Notify billing owner; preserve state; do not silently extend unlimited credit |
+| Suspended | No new paid allocation | Read/billing/export/stop remain; checkpoint/release safely, retain resumable tasks and data per retention policy |
+| Cancel at period end | Existing entitlement until effective date | Explain remaining charges; no surprise early teardown |
+| Ended | No paid allocation | Export/retention countdown; stop resources through reconciler, delete only under disclosed lifecycle |
+| Security/abuse restriction | Block relevant activity immediately | Fence revoked authority and safe handling of uncertain acts; operator audit and appeal/support path |
+
+Payment provider sends verified events to commerce; store each event durably/deduplicate, reconcile current provider state for delayed/out-of-order messages, then publish internal entitlement revision. Never trust a frontend success redirect or unsigned client plan field. Periodic reconciliation repairs missed events. Keep provider customer/subscription/invoice references and an internal ledger rather than using the payment provider as the runtime authorization database.
+
+Separate subscriptions/reservations, usage and credits/adjustments. Usage events include unique ID, workspace/payer/environment/run when applicable, meter/unit/quantity, interval, price version and source evidence. Resource meters cover reserved VM time, shared allocation, storage/transfer and separately hosted application workers; BYOK provider charges are informational, not collected twice. Finalized invoices are immutable; corrections are auditable adjustments. Refunds/chargebacks must not corrupt historical usage or transfer data ownership.
+
+Upgrades become effective after confirmed payment policy; downgrades wait until reservations/storage fit or their effective date with an actionable migration plan. Stop/resize/delete return asynchronous operations; retained disks/IP/backups can still cost money. Orphan resource detection matches provider tags/IDs against desired state and alerts/reconciles. Dedicated storage never disappears just because a webhook arrives twice. Entitlement suspension is recoverable infrastructure state, not an invented failed-task final result. Explain in-flight spending authority and any maximum authorized spend before starting; do not hide product defects behind new retry/time caps.
+
+## Execution, Data And Operational Lifecycle
+
+### Runtime, Scheduling And Recovery
+
+Keep internal infrastructure states distinct from existing public task outcomes: accepted/queued, provisioning, running, waiting for client/person/capacity, recovering, draining and settled. A temporary fault does not become a new final failure category. Persist why blocked and what action resumes it. A user Stop, achieved result and explicit budget state preserve the existing Core semantics.
+
+One fenced workspace owner and one valid host lease govern a run at a time. Worker loss triggers lease fencing plus effect reconciliation before replacement; do not promise universal exactly-once external side effects. Retry transport and persisted commands safely, checking whether a lasting act landed before issuing it again. Core owns recovery/Flow learning; the fleet orchestrator must not restart a failed task from scratch behind it. API acknowledgements, admission/outbox, lease assignment, effects, callback answers and usage settlement each require crash-window tests.
+
+Persistent browser profiles bind to tenant/environment, not anonymous queue workers. Lock profile access against concurrent incompatible use, encrypt volumes/backups, retain stable egress where purchased, and clearly describe session expiration/challenges. Authentication-required work waits for the user's remote takeover, with short-lived viewer grants tied to that profile and audit. No session-cookie export to publishers. Ephemeral workers wipe state before reuse; persistent state mounts only for its owner.
+
+Schedules persist timezone, DST handling, missed-occurrence policy (default coalesce with user-visible history), overlap policy (default queue without concurrent use of one profile), artifact/input version, environment, payer and authorized budget. Deduplicate each occurrence by schedule/version/time. Re-evaluate permissions and entitlements when due, then use the same admission path as SDK/extension requests. Never schedule a pipeline with unavailable local callbacks as if it were fully hosted; require a named always-on worker or callback-free declaration.
+
+Outbound customer webhooks are optional notifications, not the source of task truth. Sign them, retry durably and expose delivery failures; use event IDs for deduplication and authenticated API reads for results. Validate destinations against SSRF/private-network/metadata access, rechecking redirects/DNS; keep webhook delivery off the browser worker and outside sensitive private networks. Mail/push notifications identify pending work without embedding credentials or private scraped content.
+
+### Data Ownership, Security And Governance
+
+Projects/Flows/datasets/evidence belong to their workspace. Publishers own package source and versions, not customer outputs or learned private state. Export includes schemas, versions, portable Flow definitions and authorized datasets; exclude credentials/profiles by default. Import verifies compatibility and requests new secret bindings. Changing local/cloud deployment is explicit migration with preview and consent, never account sign-in triggering automatic data upload.
+
+Define retention separately for run metadata, evidence/screenshots, datasets, profiles, audit and billing records; display settings/expiry and storage charges. Deletion traverses live stores, queues, object references, indexes and backup-expiration schedules, with documented exceptions for retained billing/security records. Encrypted key destruction and backup expiry must match the published recovery/deletion promise. Region is chosen before provisioning; cross-region moves need explicit consent and a tested migration, not scheduler fallback.
+
+Threat boundaries: public API to control plane, tenant to tenant, automation target site to runner, publisher artifact to host, browser viewer to profile and operator to customer data. Require least-privileged worker identity, metadata/egress controls, sandbox/non-root where supported, image/package scanning, signed releases, secret rotation and redacted diagnostics. Security alerts and user Stop can fence authority; they must preserve honest effect state. Do not cache IAM/entitlement decisions indefinitely: revision/invalidation and dispatch checks are part of the contract.
+
+Operators use a separate console with scoped roles. No silent customer impersonation or unrestricted profile browsing: time-bound support grants/customer consent where appropriate, audited break-glass for incidents, redacted default views. Audit key lifecycle, permission changes, environment allocation, package install/upgrade/revoke, billing adjustments and privileged support actions. Public status and incident communications distinguish control-plane/API outages, fleet capacity and provider issues without exposing tenant data.
+
+### Capacity, Availability And Service Operations
+
+Begin one region and explicit published service expectations, not an untested multi-region SLA. Measure API admission latency, queue delay, browser startup, successful run/continuation rate, callback wait, model calls, utilization, provisioning failures, duplicate-effect incidents and unallocated paid resources. Alert on stuck durable transitions, queue age, missing heartbeats, disk/backup failure, denied-route spikes, delayed meter reconciliation and runaway provisioning. Never log raw keys/cookies/page captures in metrics.
+
+Load-test realistic concurrent sessions and heavy evidence/datasets before setting density. Shared scheduling uses per-workspace fairness and purchased reservations; price tier is not authority to starve all other customers. Scale workers from queued eligible demand and capacity reservations; drain before scale-down, retaining persistent profiles safely. Plan provider quotas, stock shortages, IP/egress availability and graceful admission/queue behavior. Do not buy capacity solely because an unauthenticated request asks for it.
+
+Backups need restore drills for platform identity/commerce, workspace/Flow/data, encrypted secret custody and browser profiles together. Choose and publish measured recovery-point/time targets after rehearsal. Separate development/staging/production credentials, payment modes, provider accounts/resources and datasets. Staging never automates real customer data. Runbooks cover provider outage, key compromise, tenant escape suspicion, broken migration, failed mail, provisioning orphan, invoice dispute and data restore. Patch images with canary runs then drain/roll forward; maintain a compatible release manifest for rollback.
+
+## Delivery Packages And Acceptance Matrix
+
+These extend the phases below and make their ownership testable. Each implementation package gets exact file partitions when dispatched; do not create a cloud-only duplicate of Core's routing, retry or secret systems.
+
+| Package | Owner / phase | Required acceptance |
+| --- | --- | --- |
+| Mode parity and onboarding | SDK/Core, extension, website / 0-2 | Fully local works with FluxIQ Cloud blocked; self-hosted endpoint authenticates; same FluxNode runs hybrid; consumer targets explicit; no silent fallback/data upload |
+| Identity and tenant routing | Core / 1-2 | User/device/key/worker principals converge on policy; cross-tenant forged IDs/streams/artifacts refused; revocation applies to dispatch and running authority |
+| Commerce and entitlement resolver | Product + Core port / 1,4 | Checkout alone grants nothing; duplicate/out-of-order/missed payment events reconcile; UI cannot override payer/plan; suspension preserves inspect/export/stop |
+| Admission/reservation/router | Core neutral runtime plus product entitlement adapter / 2-4 | Two keys share allowance; last-slot/last-credit races serialize; accepted retry returns same run; dedicated never placed shared; wrong tenant never routed |
+| Durable execution/callbacks | Core/SDK / 2 | Restart across admission/effect/answer/settlement windows; local callback offline/resume; duplicate lasting-act prevention; public outcomes preserved |
+| Environment fleet and viewer | Product + downstream browser-host / 3 | Allocation retry no duplicate VM; safe resize/stop; profile isolation; authenticated takeover; sandbox/metadata/egress tests; lost worker fenced |
+| Metering and billing | Product / 4 | VM/shared/storage intervals reconcile; duplicate meter events ignored; no double-charge from retry; refunds/adjustments traceable; stopped resource costs clear |
+| Schedules/notifications | Core neutral schedule contracts + product delivery / 2-4 | DST/missed/overlap policies, entitlement checks at due time, unavailable callback worker, webhook replay/signature/SSRF failures |
+| Catalog/packages/publisher | Core portability + product/Website / 5-6 | All three trust labels; scans/permission preview; tenant install; version pinning; escalation needs consent; no embedded private state; revoke/export/self-host |
+| Isolation and operations | Product infra + Core owners / 3-6 | Malicious/shared/noisy-neighbour tests, restore/rollback/canary, operator access audit, regional policy, load/capacity and incident drills |
+
+Release evidence must include a journey from API credential issuance to paid routing, actual execution and invoice reconciliation, plus the fully local journey with cloud services unreachable. Tests use synthetic accounts/payment mode and allowed browser fixtures, with four attempts for task acceptance. Contract/unit tests cover billing/network failures without paid infrastructure/provider calls. Final staging acceptance uses pinned production artifacts and disposable resources; no endpoint or commerce promise is marked shipped from mock-only tests.
+
+## Product Offers And Reference Application
+
+One identity system serves signup/login, account, billing and installation on app.getfluxiq.com, with allowlisted deep links from public pages. Adapt the existing signup stand-in into a co-located service calling private provisioning; Hostinger need not join its private network. Use secure host-only app cookies, CSRF and exact origins. Publisher UIs use a separate untrusted-app origin and scoped consent, never app cookies. Public catalog reads need no secret. Real verification/recovery email, revocation/export/deletion and updated privacy copy precede public signup.
+
+FluxIQ access keys differ from model-provider keys. Preserve BYOK initially. P3b must grant only approved tenant model access after logout/restart through encrypted custody, explicit service grants, rotation/revocation/audit. Never borrow another person's latest unlock or silently introduce a global platform key. Hosted control of a personal browser may incur an explicitly priced control-service fee, but not a managed-browser compute charge. Local/self-hosted compute is never metered as FluxIQ Cloud compute; marketplace licenses, if sold later, remain a separately disclosed entitlement.
 
 ### Compute And Control
 
@@ -146,6 +327,7 @@ Planning only. Use written file-disjoint briefs, sequencing shared auth/lease ch
 - Capture Website source/revision, actual Hostinger branch/build/entry, DNS/TLS/plan; reconcile P3b and t911 with dev. Keep t843 superseded.
 - Write paired plans/ADRs: identity/workspace/environment IDs, key custody, durable run/answer protocol, host leases, artifact types and release manifest.
 - Define dedicated/shared promises, billing units, region/retention/control surfaces. Default to existing BYOK.
+- Freeze the operating-mode matrix, principal/workspace/payer model and API/admission contracts above; explicit endpoint/target selection must preserve local independence. The delivery-package matrix is the dispatch and acceptance checklist.
 - Exit: one owner/compatibility policy/acceptance test per seam and identifiable release inputs.
 
 ### Phase 1 — Safe Panel And Accounts
@@ -175,6 +357,7 @@ Planning only. Use written file-disjoint briefs, sequencing shared auth/lease ch
 ### Phase 4 — Paid Dedicated Web Beta
 
 - Product owns environment controller, billing/usage ledger and account UI; Website consumes API.
+- Complete the proposed paid-admission path and billing state machine, including atomic reservations, outbox/reconciliation, plan revisions, dispatch-time checks and queue visibility. Consumer clients and SDK requests use the same path.
 - Meter allocated/active compute, idle reservations, stopped storage/IP, transfer/concurrency/model use separately. Unique usage IDs and tenant attribution; reconcile provider totals.
 - Checkout/subscriptions, verified idempotent webhooks, failure/grace/suspension, cancel/export/retention/teardown. No duplicate VM/charge on retry; active work settles safely under stated policy.
 - Exit: test-mode purchase through provisioning/run/usage/invoice/cancel/delete, including failure/reconciliation; measured margin before prices. Same artifacts self-hostable.
@@ -246,6 +429,14 @@ Briefs were written before dispatch; compact scope preserved here. Each owned on
 - Validation: `git diff --cached --check` initially found Markdown hard-break spaces and extra EOF lines in the three reports; after normalization, `git diff --check` -> exit 0, no output.
 - Outcome: Corrected; the initial unstaged-only check had not covered staged new reports.
 - Follow-up: Validate the complete task diff before integration.
+
+### 2026-11-14 — Complete operating modes and cloud platform contracts
+- Agent: Senior supervisor, direct documentation work on two understood files.
+- Changed: This plan and generated working index.
+- Why: User clarified fully local environments, hybrid API use and consumer clients, and requested all cloud-platform aspects including paid routing.
+- Validation: Inspected `packages/sdk/src/client/connect-options.ts` -> `apiKey` accepts private PEM or fxkey1 material. `node scripts/structure-audit.mjs --rule working-docs --rule docs-links` -> `passed (0 warning(s), 2 baselined)`; `git diff --check -- docs/working/hosted-platform-launch-plan.md docs/working/README.md` -> exit 0, no output.
+- Outcome: Expanded design, not implemented endpoints or fresh runtime acceptance.
+- Follow-up: Implement delivery packages through existing phase gates; exact prices/provider accounts remain rollout decisions.
 
 ## Open Questions
 
