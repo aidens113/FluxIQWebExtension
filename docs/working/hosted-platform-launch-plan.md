@@ -1,7 +1,7 @@
 # Hosted Platform Launch Audit And Plan
 
 Status: Active
-Status detail: Implementation authorized 2026-11-14; paired task t914 isolates platform work from ongoing runtime experiments. Nothing deployed.
+Status detail: Paired task t914 isolates platform work from experiments. Default-lock removal pushed; private credential/tab foundations and metadata adapter verified, hosted sign-in composition next. Nothing deployed.
 Created: 2026-11-14
 Last updated: 2026-11-14
 Owner: Senior supervisor agent
@@ -10,6 +10,8 @@ Paired document: ../!FluxIQ/docs/working/hosted-platform-launch-plan.md
 Related: [Hosted production](./hosted-production-plan.md), [MVP seal](./mvp-seal-plan.md)
 
 ## Current State
+
+**Latest checkpoint:** Default-lock removal is pushed in both paired task branches. Lead verified private credentials21 tests, authentication-tab foundation60, hosted transport adapter25 and setup-card4; hosted PKCE/background/privacy composition remains unwired. Extension package checking passes against freshly rebuilt paired Core, including source/test types and in-memory browser bundles; both structure audits pass. Core app registry and transport persistence barrier/metadata callback are pushed, tenant-routing219 tests passed, and server metadata/constructor41 tests passed. Real browser restart/sign-in/privacy behavior remains unverified; nothing is deployed.
 
 **User correction, highest implementation priority (2026-11-14):** remove default locking for authenticated clients from Core and extension. Approval/authentication must make the client usable without a second unlock ceremony. Earlier locked-by-default enrollment descriptions below record superseded implementation, not the intended product behavior. Fix backend model/key access, durable reconnect behavior and extension UI together; do not merely hide a lock message. Keep tenant/account permissions and actual credential revocation. A missing configured model key is a configuration issue, not an authenticated-client lock. Core's authenticated-client-access brief owns the immediate investigation and replacement plan.
 
@@ -535,3 +537,29 @@ Decide at named execution gate; these do not block completion of this audit. Def
 - Validation: Final Core projection/key-management regression -> 133 passed; Core typecheck and final Core/UI builds passed. Lead final downstream relay/readiness regression -> 44 passed. Lead independent normal-emission harness check -> 22 passed in 8 files, zero skips, after correcting the test-only Page.evaluate optional-argument mock. Both repository structure audits pass with no baseline expansion. Earlier independently observed access/runtime/UI/web/extension checks remain recorded above.
 - Outcome: Default client unlock ceremony removed from backend, actual server response projection, shared/web UI and extension. Existing authenticated client authority survives ordinary panel logout/restart and later configuration; real revoke/disable/IAM denial remains enforced. No live browser or cloud rollout was run.
 - Follow-up: Paired task branch commit/push; continue dedicated tenant routes and the standardized custom-app contract. Main/dev and experimental branches remain unchanged.
+
+### 2026-11-14 ? Checkpoint pushed and hosted credential foundation assigned
+- Agent: Senior supervisor; paired credential worker owns new background/credentials module only.
+- Outcome: Core 79f175d2a and extension 1285dd320 pushed to task/t914-hosted-platform. Default-lock removal is backed up in both histories; dev/main and experiments remain unchanged.
+- Changed: Core app contracts and persistent installation/authority kernel independently pass 69 contract and 40 registry tests. Tenant route adapter and dedicated route migration are under acceptance. Core WebSocket credential persistence failure handling is being repaired before hosted integration.
+- Decision: Hosted extension credentials must be privately persisted and bound to exact server origin, stable instance, gateway, user/workspace and trusted-client lineage. New IndexedDB foundation is assigned in isolation; legacy local pairing/composition remains unchanged until serial migration and verification. No second unlock is introduced.
+- Validation: New downstream foundation is not yet implemented or tested. Actual browser isolation, hosted sign-in and restart remain unverified; no server/browser/provider/paid call has been started.
+- Follow-up: Review typed credential/storage interfaces, complete focused checks and wire hosted PKCE/auth-tab isolation only after these prerequisites are proven.
+
+### 2026-11-14 ? Private credential foundation independently verified
+- Agent: Senior supervisor.
+- Changed: Standalone extension-origin IndexedDB credentials module with exact server/instance/gateway binding, durable CAS/idempotency, private revocation journal and separate trust lineage. Not yet wired to existing local/hosted session composition. Added test-only fake-indexeddb6.2.8.
+- Validation: Lead `EXTENSION_TEST_BUILD_LABEL=t914-credential-lead node scripts/test-extension.mjs background/credentials/tests` ->21 passed,0failed,0skipped after stable Core dependency builds. Owner source type probe0diagnostics and17 scoped structure rules0findings; full downstream typecheck pending auth-tab source freeze. No browser-origin isolation or live sign-in claim.
+- Decision: New trust/account switching is composed explicitly; rotating a previous proof must not auto-revoke current trust. Credential write must receive actual server-authored expiry/identity before acknowledgement; this currently missing metadata path is being traced in Core. Auth-tab registry foundation is assigned separately and remains unwired.
+- Follow-up: Complete source guards/types, commit/push the credential unit; compose session-bound auth-tab privacy and PKCE with actual metadata and preserve existing local pairing/experiments.
+### 2026-11-14 — Credential foundations and remaining lock fixture cleanup
+- Agent: Senior supervisor with Core-owned briefs and file-owned workers.
+- Validation: `EXTENSION_TEST_BUILD_LABEL=t914-credential-lead node scripts/test-extension.mjs background/credentials/tests` ->21 passed. `EXTENSION_TEST_BUILD_LABEL=t914-auth-tabs-lead node scripts/test-extension.mjs background/authentication-tabs/tests` ->60 passed. These are provider-free synthetic storage tests, not browser acceptance.
+- Validation: Extension package check reached test typechecking and found2 obsolete fixture errors: journey key still included locked, and setup-card store double lacked current/subscribe. Root removed the unused journey lock state, replaced setup browser lock assertions with host-protection availability/non-gated composer assertions, updated historical task recovery wording, and used a full setup-card store with real panelRequest plus stubbed browser transport.
+- Validation: `EXTENSION_TEST_BUILD_LABEL=t914-setup-followup node scripts/test-extension.mjs panel/getting-started/tests` ->4 passed. Subsequent package check refused stale Core outputs because server metadata source was underway. No stale package result accepted; rebuild and rerun pending.
+- Changed: Hosted credential transport adapter is being implemented under its own brief; private repository semantics remain frozen. Actual PKCE tab creation, background composition, privacy filtering and browser restart testing remain outstanding. No live browser/server/paid run started.
+### 2026-11-14 — Private connection checkpoint verified
+- Agent: Senior supervisor.
+- Validation: Lead hosted transport adapter tests25/25 passed, in addition to private repository21/21, authentication-tab registry60/60 and setup-card4/4. `pnpm.cmd --filter @fluxiq-web-extension/extension check` passed with current paired Core artifacts, source/test typechecking and in-memory browser bundle checks. Final structure audit ->0 failures/250 warnings. Browser fixtures were updated but not exercised in an actual browser.
+- Outcome: Durable credential storage and acknowledgement ordering, exact binding/lineage guards and authentication-tab ownership foundation are verified provider-free. Default connection/key unlock remains removed. These modules are not yet wired into hosted sign-in; normal local behavior remains on its existing path.
+- Follow-up: Commit/push the verified paired checkpoint, then implement fixed-client PKCE through injected ports and compose one privacy policy across state, recording, actions and screenshots. A surviving auth-risk marker with lost browser-session ownership needs a safe restoration policy; do not guess old tab IDs or silently expose restored authentication pages. Connection authority must remain distinct from uncertain tab eligibility.

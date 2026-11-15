@@ -120,7 +120,8 @@ test("local-classifieds: tasks by mouse, every state drawn and looked at at 360 
   await shot("11-waiting");
   await frame.getByRole("button", { name: "Back to tasks" }).click();
   await row(frame, "today's news").click();
-  await expect(frame.getByRole("group", { name: "Waiting for your model key" })).toContainText("Unlock it in FluxIQ");
+  await expect(frame.getByRole("group", { name: "Waiting for your model key" })).toContainText("current model configuration");
+  await expect(frame.getByRole("group", { name: "Waiting for your model key" })).not.toContainText(/unlock/iu);
   await expect(frame.getByRole("button", { name: "Carry on" })).toHaveCount(0);
   await shot("12-model-key-locked");
   await frame.getByRole("button", { name: "Back to tasks" }).click();

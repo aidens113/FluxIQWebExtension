@@ -1,20 +1,31 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import { fake, withFakeDocument } from "../../chat/tests/fake-dom";
 import type { PanelContext } from "../../shell";
-import type { PanelStore } from "../../state";
+import { panelRequest, type PanelStore } from "../../state";
 import { statusWith } from "../../tests/status-fixture";
 import { createSetupCard } from "../setup-card";
 import { startGuide } from "../start";
 
-test("configuration reminder leaves connected work usable and opens ordinary settings", async () => {
+function setupStore(t: TestContext, calls: unknown[] = []): PanelStore {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "chrome");
+  const runtime = { lastError: undefined, sendMessage: (message: unknown, respond: (answer: unknown) => void) => {
+    calls.push(message);
+    respond({ ok: true });
+  } };
+  Object.defineProperty(globalThis, "chrome", { configurable: true, value: { runtime } });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, "chrome", previous);
+    else Reflect.deleteProperty(globalThis, "chrome");
+  });
+  return { current: () => undefined, subscribe: () => () => {}, request: panelRequest };
+}
+
+test("configuration reminder leaves connected work usable and opens ordinary settings", async (t) => {
   await withFakeDocument(async () => {
     const calls: unknown[] = [];
-    const store = { request: async (message: unknown) => {
-      calls.push(message);
-      return { ok: true, value: {} };
-    } } as PanelStore;
+    const store = setupStore(t, calls);
     const card = createSetupCard({ store, surface: "popup" } as PanelContext);
     const status = statusWith({ connectionState: "connected", paired: true });
     const guide = startGuide(status, false, undefined, "missing");
@@ -32,9 +43,9 @@ test("configuration reminder leaves connected work usable and opens ordinary set
   });
 });
 
-test("unavailable configuration shows its cause and clears after a fresh available reading", async () => {
+test("unavailable configuration shows its cause and clears after a fresh available reading", async (t) => {
   await withFakeDocument(async () => {
-    const store = { request: async () => ({ ok: true, value: {} }) } as PanelStore;
+    const store = setupStore(t);
     const card = createSetupCard({ store, surface: "sidepanel" } as PanelContext);
     const status = statusWith({ connectionState: "connected", paired: true });
     card.render(startGuide(status, false, undefined, { state: "unavailable", code: "host_protection_unavailable" }), status);

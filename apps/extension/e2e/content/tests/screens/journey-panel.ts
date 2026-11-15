@@ -12,7 +12,7 @@ import { startScriptedPanel } from "./scripted-panel";
 
 type Turn = TargetCore["threads"][number]["turns"][number];
 type World = {
-  key: "missing" | "locked" | "ready";
+  key: "missing" | "ready";
   rec: { description: string; stopped: boolean; lists: number };
   turns: Turn[];
   activity: unknown;
@@ -118,7 +118,7 @@ export function startJourneyPanel(surface: PanelSurface): void {
     answer: (message, core) => {
       scope.__core = core;
       const world = load();
-      const keys = () => (world.key === "missing" ? [] : [{ kind: "llm", provider: "scripted", enabled: true, ...(world.key === "locked" ? { unlocked: false, lockedBecause: "signed_out" } : {}) }]);
+      const keys = () => (world.key === "missing" ? [] : [{ kind: "llm", provider: "openai", enabled: true, availability: { state: "available" } }]);
       switch (message.type) {
         case "fluxiq.connect":
           world.sent.push({ type: message.type });

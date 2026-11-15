@@ -13,9 +13,9 @@
     "test:e2e:report": "playwright show-report e2e/test-results/report"
   },
   "dependencies": {
+    "@fluxiq-web-extension/domain": "workspace:*",
     "@fluxiq/client-gateway-websocket": "link:../../../!FluxIQ/packages/client-gateway-websocket",
     "@fluxiq/contracts": "link:../../../!FluxIQ/packages/contracts",
-    "@fluxiq-web-extension/domain": "workspace:*",
     "@fluxiq/ui-components": "link:../../../!FluxIQ/packages/ui-components",
     "fluxiq": "link:../../../!FluxIQ/packages/fluxiq"
   },
@@ -24,6 +24,7 @@
     "@types/chrome": "^0.0.287",
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.2",
+    "fake-indexeddb": "6.2.8",
     "typescript": "^5.7.0"
   }
 }
