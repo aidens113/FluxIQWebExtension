@@ -1,0 +1,1 @@
+export type NativeProxy = { origin: string; counts(): { forwarded: number; denied: number; nativeCallbackRequests: number; connectionResets: number; transportFailures: number }; close(): Promise<void> };
