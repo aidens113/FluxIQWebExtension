@@ -261,7 +261,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
 
   function draw(): void {
     const status = store.current();
-    const guide = startGuide(status, noAnswer, store.lost(), keyReader.current(), setupPort.lockWords?.());
+    const guide = startGuide(status, noAnswer, store.lost(), keyReader.current());
     const next = shellScreen(state, guide.gated);
     start.render(guide, status);
     setupCard.render(guide, status);

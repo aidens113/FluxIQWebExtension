@@ -1,5 +1,5 @@
 // The setup card: shown above the chat once the browser is connected and the model key
-// is missing or locked. It takes the place of the chat's own key line while it shows
+// is missing or unavailable. It takes the place of the chat's own key line while it shows
 // (`getting-started.css` hides that line), so nothing about the key is told twice, and it
 // leaves the composer reachable: the Lab connects, adds its key just before it types, and
 // must never wait on a screen. "Not now" puts the reminder back in the chat's line for
@@ -25,7 +25,7 @@ export function createSetupCard(context: PanelContext): SetupCard {
   const title = createElement("strong", { className: "setup-card-step" });
   const line = createElement("p", { className: "setup-card-line" });
   const later = createElement("button", { className: "link-button", text: "Not now", attrs: { type: "button" } });
-  const element = createElement("section", { className: "setup-card", hidden: true, attrs: { "aria-label": "One more step", "aria-live": "polite" } }, [
+  const element = createElement("section", { className: "setup-card", hidden: true, attrs: { "aria-label": "Model configuration", "aria-live": "polite" } }, [
     createElement("p", { className: "setup-card-done", text: `✓ ${DONE_LINE}` }),
     title,
     line,
@@ -40,7 +40,7 @@ export function createSetupCard(context: PanelContext): SetupCard {
   });
 
   function draw(guide: StartGuide): void {
-    const current = guide.steps.find((step) => step.state === "current");
+    const current = guide.steps.find((step) => step.state === "current" || step.state === "problem");
     element.hidden = dismissed || !guide.card || current === undefined;
     if (element.hidden || current === undefined) return;
     title.textContent = current.title;

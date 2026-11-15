@@ -1,3 +1,4 @@
+import type { ModelKeyAvailability } from "fluxiq/ui";
 import {
   CLIENT_GATEWAY_PROTOCOL_VERSION,
   type ClientGatewayActionCommand,
@@ -222,7 +223,7 @@ export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHuman
 
 /**
  * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
- * `purpose: "model-key"`, the keys page, where a model key is added. The three are mutually exclusive.
+ * `purpose: "model-key"`, the ordinary keys configuration page. The three are mutually exclusive.
  */
 export type PanelOpenFluxIQRequest = {
   flowId?: string | undefined;
@@ -348,7 +349,7 @@ export const AUTOMATION_PANEL_MESSAGES = {
   renameTask: RUNTIME_MESSAGES.panelRenameTask,
   /** `remove-task` with `{ projectId, taskId }`: forgets the task's own memory entry and no Flow, saved part, result or attempt. Answers `{ taskId, removed }`. */
   removeTask: RUNTIME_MESSAGES.panelRemoveTask,
-  /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider`, `enabled` and, when Core says, `unlocked` and `lockedBecause` only. */
+  /** `secret-keys` `snapshot`. Answers `{ keys: PanelModelKeySummary[] }`; metadata only, never key values. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,
@@ -380,6 +381,17 @@ export const AUTOMATION_PANEL_MESSAGES = {
 } as const;
 
 export type AutomationPanelMessageType = (typeof AUTOMATION_PANEL_MESSAGES)[keyof typeof AUTOMATION_PANEL_MESSAGES];
+
+/** Safe model metadata. Null availability means malformed status; absence permits legacy compatibility. */
+export type PanelModelKeySummary = {
+  readonly kind?: string;
+  readonly provider?: string;
+  readonly enabled: boolean;
+  readonly heldByYou?: boolean;
+  readonly availability?: ModelKeyAvailability | null;
+  /** Only an old explicit refusal is retained, so an incompatible server never looks ready. */
+  readonly unlocked?: false;
+};
 
 /** The fields automation panel requests carry beside `type`. Every field is optional on the wire and checked by the relay. */
 export type AutomationPanelRequest = {

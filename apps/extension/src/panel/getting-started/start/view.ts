@@ -18,8 +18,8 @@ import "../getting-started.css";
 /** The mounted screen. */
 export type StartView = { readonly element: HTMLElement; render(guide: StartGuide, status: ExtensionStatus | undefined): void };
 
-const KEYS: readonly StartStepKey[] = ["start", "signin", "connect", "approve", "key", "unlock"];
-const MARKS: Readonly<Record<StartStepKey, string>> = { start: "1", signin: "2", connect: "3", approve: "4", key: "5", unlock: "6" };
+const KEYS: readonly StartStepKey[] = ["start", "signin", "connect", "approve", "key"];
+const MARKS: Readonly<Record<StartStepKey, string>> = { start: "1", signin: "2", connect: "3", approve: "4", key: "5" };
 const STATE_WORDS: Readonly<Record<StartStep["state"], string>> = { done: "Done", current: "Next", waiting: "In progress", problem: "Needs attention", todo: "To do" };
 
 /** Builds the screen; `openSettings` opens settings (the connection address). */
@@ -32,7 +32,6 @@ export function createStartView(context: PanelContext, openSettings: () => void)
   const line = createElement("p", { className: "start-line" });
   const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small" });
   const keyOpen = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small", purpose: "model-key" });
-  const unlockOpen = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small", purpose: "model-key" });
   const connectButton = createElement("button", { id: "connectButton", className: "primary-button", text: "Connect", attrs: { type: "button" } });
   const addressLink = createElement("button", { className: "link-button", text: "Check the connection address", attrs: { type: "button" } });
   const code = createElement("p", { id: "pairingReferenceCode", className: "pairing-code", attrs: { "aria-label": "Approval code" } });
@@ -44,7 +43,6 @@ export function createStartView(context: PanelContext, openSettings: () => void)
     start: createElement("div", { className: "start-actions", hidden: true }),
     signin: createElement("div", { className: "start-actions" }, [open.element]),
     key: createElement("div", { className: "start-actions" }, [keyOpen.element]),
-    unlock: createElement("div", { className: "start-actions" }, [unlockOpen.element]),
     connect: createElement("div", { className: "start-actions" }, [connectButton, addressLink]),
     approve: createElement("div", { className: "start-approve" }, [code, createElement("div", { className: "start-actions" }, [approveOpen.element, cancelPairing])])
   };
@@ -113,9 +111,9 @@ export function createStartView(context: PanelContext, openSettings: () => void)
       for (const row of rows) {
         const step = guide.steps.find((candidate) => candidate.key === row.key);
         row.item.hidden = step === undefined;
-        // The Open FluxIQ beside a step shows only while that step is still to do (sign in, except beside the approval code, which has its own) or the one to do now (key, unlock).
+        // Configuration remains optional; its button opens the ordinary keys page.
         if (row.key === "signin") actions.signin.hidden = step === undefined || step.state === "done" || guide.pairingCode !== undefined;
-        if (row.key === "key" || row.key === "unlock") actions[row.key].hidden = step?.state !== "current";
+        if (row.key === "key") actions.key.hidden = step?.state !== "current" && step?.state !== "problem";
         if (step === undefined) continue;
         row.item.dataset.state = step.state;
         row.mark.textContent = step.state === "done" ? "✓" : MARKS[row.key];
@@ -135,7 +133,6 @@ export function createStartView(context: PanelContext, openSettings: () => void)
       if (status !== undefined) {
         open.observe(status);
         keyOpen.observe(status);
-        unlockOpen.observe(status);
         approveOpen.observe(status);
         if (error.observe(status)) drawNotice();
       }

@@ -28,3 +28,10 @@ test("any other failure keeps its sentence, detail, code and unsupported flag, w
   const unsupported = sendRecorder({ ok: false, sentence: "This extension doesn't support that yet.", unsupported: true });
   assert.deepEqual(await createExtensionChatTransport(unsupported.request, NO_PUSHES).activity.read(), { ok: false, sentence: "This extension doesn't support that yet.", unsupported: true });
 });
+
+test("a missing readiness list stays unknown and a refused snapshot stays refused", async () => {
+  const missing = sendRecorder({ ok: true, value: { ok: true, payload: {} } });
+  assert.deepEqual(await createExtensionChatTransport(missing.request, NO_PUSHES).models?.readKeys(), { ok: true, value: { keys: undefined } });
+  const refused = sendRecorder({ ok: false, code: "forbidden", sentence: "Browser approval is required." });
+  assert.deepEqual(await createExtensionChatTransport(refused.request, NO_PUSHES).models?.readKeys(), { ok: false, sentence: "Browser approval is required.", code: "forbidden" });
+});

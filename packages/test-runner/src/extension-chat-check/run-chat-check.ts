@@ -1,4 +1,5 @@
 import path from "node:path";
+import { defaultLlmModelForProvider } from "@fluxiq-web-extension/test-contracts";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
 import { resolveLabPaths } from "../lab-instance/index.js";
 import { extensionStatus, pairExtensionWithColdEpochRecovery, runtimeMessage } from "../run-lifecycle/index.js";
@@ -10,7 +11,9 @@ import { chatNetworkPolicy } from "./chat-network-policy.js";
 import { evidenceWriter } from "./evidence-writer.js";
 import { openChromeChatSession, type WorkerRequest } from "./open-chrome-session.js";
 import { openFirefoxChatSession } from "./open-firefox-session.js";
-import { proveAskAnswered, proveChatBuild, proveChatRelay, proveModelKeyUnlock, type AskAnswerObservation, type ChatBuildObservation, type ModelKeyUnlockObservation, type ChatRelayObservation } from "./prove/index.js";
+import { proveAskAnswered, proveChatBuild, proveChatRelay, proveApprovedClientAccess, type AskAnswerObservation, type ChatBuildObservation, type ApprovedClientAccessObservation, type ChatRelayObservation } from "./prove/index.js";
+import { scriptedModelChildEnvironment, scriptedModelKey, startScriptedModelServer, type ScriptedModelServer } from "../attempt-lane/scripted-model/index.js";
+import { approvedClientModelScript } from "./model-fixture/index.js";
 import { threadReader } from "./thread-reader.js";
 import type { Page } from "@playwright/test";
 import type { ChatBrowser, ChatBrowserSession, ChatCheckContext } from "./types.js";
@@ -26,7 +29,7 @@ export type ChatCheckOptions = {
   ask: boolean;
   /** Also run claim 4: the created-Flow lane's chat stage types a build request into the panel and follows the build (`prove/chat-build.ts`). */
   build?: boolean;
-  /** Runs only the model key's claim: pairing, a Core restart, a sign-out and the one-time step, with a dummy key and no model. */
+  /** Proves approved-client access through Core's real custody and a provider-free loopback model. */
   modelKey?: boolean;
   evidenceDirectory: string;
   log?: (line: string) => void;
@@ -50,7 +53,7 @@ export type ChatCheckResult = {
   relay: ChatRelayObservation | null;
   ask: AskAnswerObservation | null;
   build: ChatBuildObservation | null;
-  modelKey: ModelKeyUnlockObservation | null;
+  modelKey: ApprovedClientAccessObservation | null;
   flow: ApprovalFlow | null;
   /** The chat-relevant program calls the extension made, as the proxy in front of Core received them. No headers. */
   coreCalls: unknown[];
@@ -61,11 +64,12 @@ export type ChatCheckResult = {
 const RELEVANT = new Set(["open-conversation", "append-turn", "answer-ask"]);
 
 /**
- * Proves the extension chat's relay in a real headed browser with no model: an
+ * Proves the extension chat's relay in a real headed browser without a live provider: an
  * isolated Core, the scenario lab, the extension paired with Core through a
  * recording proxy, and the chat shown the way a person sees it -- Chrome's
  * side panel or Firefox's popup. Every stage is logged and the result says
- * how far it got, so a failure reads as a cause and a distance.
+ * how far it got, so a failure reads as a cause and a distance. Approved-client
+ * acceptance uses the product's model binding with a loopback transport fixture.
  */
 export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<ChatCheckResult> {
   assertRealisticScenarios([options.scenarioId], "The extension chat check");
@@ -78,9 +82,15 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
   const workerRequests: WorkerRequest[] = [];
   let topology: RunningTopology | undefined;
   let proxy: CoreRecordingProxy | undefined;
+  let modelStub: ScriptedModelServer | undefined;
+  const modelScript = options.modelKey ? approvedClientModelScript() : undefined;
   const result: ChatCheckResult = { browser: options.browser, browserVersion: null, scenarioId: scenario.id, pageUrl: null, panelMode: null, panelNote: null, panelInput: null, extensionProject: null, cookiePrompt: null, stage: "topology", relay: null, ask: null, build: null, modelKey: null, flow: null, coreCalls: [], failure: null, evidenceDirectory: options.evidenceDirectory };
   const stage = (name: string) => { result.stage = name; log(`[chat-check] ${options.browser}: ${name}`); };
   try {
+    if (modelScript) {
+      stage("provider-free model transport");
+      modelStub = await startScriptedModelServer({ script: modelScript.script, key: scriptedModelKey() });
+    }
     topology = await startTopology({
       repositoryRoot: options.repositoryRoot,
       fluxiqRepositoryRoot: options.fluxiqRepositoryRoot,
@@ -92,6 +102,7 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
       hostModulePath: labPaths.hostModulePath,
       prepareHost: false,
       bootstrapIdentity: true,
+      ...(modelStub ? { environment: scriptedModelChildEnvironment(process.env, modelStub.origin), modelProvidersEnabled: true, args: ["--llm-provider", "anthropic", "--llm-model", defaultLlmModelForProvider("anthropic")] } : {}),
     });
     const control = topology.control;
     const projectId = topology.projectId;
@@ -99,11 +110,6 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
     if (!control || !projectId || !authorizationPin || !topology.gatewayUrl) throw new Error("The isolated Core started without a signed-in control, a project, a PIN or a gateway");
     stage("recording proxy");
     proxy = await startCoreRecordingProxy(topology.fluxiqOrigin);
-    if (options.modelKey) {
-      stage("add a dummy model key");
-      // Never reaches a provider: this claim makes no model call, and the network guard would refuse one.
-      await control.secretKeysCall("create-key", { name: "Chat check dummy", value: ["sk", "ant", "dummy", "a1b2".repeat(8)].join("-"), kind: "llm", provider: "anthropic", authorizationPassword: topology.authorizationPassword ?? "", authorizationPin });
-    }
     if (options.ask) {
       stage("save approval flow");
       result.flow = await saveApprovalFlow(control, { projectId, authorizationPin });
@@ -149,9 +155,10 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
       log,
     };
     if (options.modelKey) {
-      stage("claim model key");
+      stage("claim approved-client model access");
       const owned = topology;
-      result.modelKey = await proveModelKeyUnlock(context, {
+      if (!modelStub || !modelScript) throw new Error("Approved-client acceptance has no provider-free model transport.");
+      result.modelKey = await proveApprovedClientAccess(context, {
         gatewaySnapshot: () => control.gatewaySnapshot(),
         restartCore: () => owned.restartCore!(),
         signOut: () => control.signOut(),
@@ -159,7 +166,11 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
           await control.reauthenticate();
           return control.sessionCookieValue();
         },
-        password: owned.authorizationPassword ?? "",
+        configureKey: async () => {
+          await control.secretKeysCall("create-key", { name: "Approved-client fixture", value: scriptedModelKey(), kind: "llm", provider: "anthropic", authorizationPassword: owned.authorizationPassword ?? "", authorizationPin });
+        },
+        selectProject: () => control.selectProject(projectId),
+        model: { calls: () => modelStub!.calls(), receipts: modelScript.receipts },
         fluxiqOrigin: owned.fluxiqOrigin,
         gatewayUrl: owned.gatewayUrl!,
         coreApiUrl: proxy.origin,
@@ -191,6 +202,7 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
     await session?.close().catch(/* best-effort: cleanup after the result is written */ () => undefined);
     await proxy?.close().catch(/* best-effort: cleanup after the result is written */ () => undefined);
     await topology?.close().catch(/* best-effort: cleanup after the result is written */ () => undefined);
+    await modelStub?.close().catch(/* best-effort: cleanup after the result is written */ () => undefined);
     if (topology) await removeRunOwnedTopologyState(topology).catch(/* best-effort: run-owned state is disposable and pruned later */ () => undefined);
   }
   return result;

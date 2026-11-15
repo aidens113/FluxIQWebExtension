@@ -1,8 +1,7 @@
 // The getting-started screen as data: whether it replaces the chat, and its
 // numbered steps -- Start FluxIQ, Sign in, Connect this browser, Approve it,
-// Add a model key, and Unlock this browser once (only when the key says it needs
-// it) -- each marked done, under way, a problem, or still to do. Pure, so every
-// state is tested without a DOM.
+// and optional model configuration -- each marked done, under way, a problem,
+// or still to do. Pure, so every state is tested without a DOM.
 //
 // A tick is only ever for something detected: FluxIQ reached (pairing, connected),
 // signed in and approved (the browser is paired), a key listed (the key reading).
@@ -14,7 +13,7 @@
 //
 // The screen shows while FluxIQ is not connected, this browser is not approved
 // yet, or something critical is wrong (the background does not answer). Once the
-// browser is connected the chat comes back. A model key that is missing or locked
+// browser is connected the chat comes back. A model key that is missing or unavailable
 // does not hold the chat back (the Lab types into it right after it connects and
 // adds its key): `card` says the setup card shows above the chat instead.
 //
@@ -24,14 +23,14 @@
 
 import type { ExtensionStatus } from "../../../shared/protocol";
 import type { BackgroundLoss } from "../../state";
-import type { ModelKeyReading } from "../model";
+import { modelKeyUnavailableLine, type ModelKeyReading } from "../model";
 import * as words from "./step-words";
 
 /** Where one step stands. `current` is the next thing to do; `waiting` is under way. */
 export type StartStepState = "done" | "current" | "waiting" | "problem" | "todo";
 
-/** The six steps, in the order a person does them. */
-export type StartStepKey = "start" | "signin" | "connect" | "approve" | "key" | "unlock";
+/** Connection steps followed by optional model configuration. */
+export type StartStepKey = "start" | "signin" | "connect" | "approve" | "key";
 
 /** One numbered step. */
 export type StartStep = { readonly key: StartStepKey; readonly title: string; readonly state: StartStepState; readonly line?: string };
@@ -52,7 +51,7 @@ export type StartGuide = {
   readonly pairingCode?: string | undefined;
   /** Shows "Check the connection address", which opens settings. */
   readonly addressLink: boolean;
-  /** Connected, and the model key is missing or locked: the setup card shows above the chat, which stays usable. */
+  /** Connected, and model configuration needs attention: the card shows above the usable chat. */
   readonly card: boolean;
 };
 
@@ -69,7 +68,7 @@ const LOST_LINES: Readonly<Record<BackgroundLoss, string>> = {
  * background lost, from the panel store. `key` is the model key reading, used
  * only once connected (before that nothing can read it).
  */
-export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss, key: ModelKeyReading = "unknown", lockWords?: string): StartGuide {
+export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss, key: ModelKeyReading = "unknown"): StartGuide {
   const base = { gated: true, heading: HEADING, line: words.SETUP_LINE, addressLink: false, card: false };
   if (noAnswer && status === undefined) {
     return {
@@ -83,7 +82,7 @@ export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolea
 
   const state = status.connectionState;
   if (state === "connected") {
-    return { ...base, gated: false, steps: [...doneSteps(), ...keySteps(key, lockWords)], card: key === "missing" || key === "locked" };
+    return { ...base, gated: false, steps: [...doneSteps(), ...keySteps(key)], card: key !== "ready" && key !== "unknown" };
   }
 
   const paired = status.paired;
@@ -159,16 +158,16 @@ function doneSteps(): StartStep[] {
   ];
 }
 
-/** The model key and unlock steps once connected. `unknown` lists neither: nothing is claimed. */
-function keySteps(key: ModelKeyReading, lockWords: string | undefined): StartStep[] {
+/** Optional model configuration once connected. An unreadable status claims nothing. */
+function keySteps(key: ModelKeyReading): StartStep[] {
   switch (key) {
     case "ready":
-      return [step("key", "Add a model key", "done", undefined, "Model key added")];
+      return [step("key", "Add a model key", "done", undefined, "Model key configured")];
     case "missing":
       return [step("key", "Add a model key", "current", words.KEY_MISSING_LINE)];
-    case "locked":
-      return [step("key", "Add a model key", "done", undefined, "Model key added"), step("unlock", "Unlock this browser once", "current", lockWords ?? words.UNLOCK_LINE)];
     case "unknown":
       return [];
+    default:
+      return [step("key", "Model key unavailable", "problem", modelKeyUnavailableLine(key))];
   }
 }

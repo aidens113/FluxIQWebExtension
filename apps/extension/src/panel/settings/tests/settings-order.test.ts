@@ -68,7 +68,7 @@ test("settings read top down: connection, model, behaviour, permissions, appeara
     for (const id of ["captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled"]) assert.equal(permissions.descendants().some((node) => node.id === id), true, `${id} is under Permissions`);
     assert.equal(advanced.descendants().some((node) => node.textContent === "Forget this pairing"), true);
     assert.equal(advanced.textContent.includes("spend"), false, "no spending setting is drawn");
-    assert.equal(root.textContent.includes("Your model key is ready."), true);
+    assert.equal(root.textContent.includes("Your model key is configured."), true);
     assert.equal(root.textContent.includes("FluxIQ approved this browser."), true);
   }));
 });
@@ -84,12 +84,28 @@ test("Advanced starts closed: a person reads what they care about first", async 
   }));
 });
 
-test("the key line follows the reading, and an unreadable key never claims anything", () => {
-  assert.equal(modelKeyLine("ready", true), "Your model key is ready.");
-  assert.match(modelKeyLine("missing", true), /no model key yet/);
-  assert.match(modelKeyLine("locked", true), /Unlock it in FluxIQ/);
+test("the key line separates configuration, unavailability and a failed read", () => {
+  assert.equal(modelKeyLine("ready", true), "Your model key is configured.");
+  assert.match(modelKeyLine("missing", true), /No supported model key/);
+  assert.match(modelKeyLine("upgrade_required", true), /Update FluxIQ/);
+  assert.match(modelKeyLine({ state: "unavailable", code: "legacy_recovery_required" }, true), /recover or replace/);
+  assert.match(modelKeyLine({ state: "unavailable", code: "host_protection_unavailable" }, true), /host operator/);
+  assert.match(modelKeyLine({ state: "unavailable", code: "ciphertext_invalid" }, true), /replace it/);
   assert.match(modelKeyLine("unknown", true), /Couldn't check/);
   assert.match(modelKeyLine("ready", false), /Connect to FluxIQ/);
+});
+
+test("model configuration failure preserves connected and approved status", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    const settings = view(status(), { state: "unavailable", code: "host_protection_unavailable" });
+    settings.shown();
+    await tick();
+    const text = fake(settings.element).textContent;
+    assert.match(text, /host operator/u);
+    assert.match(text, /FluxIQ approved this browser/u);
+    assert.doesNotMatch(text, /Unlock it|password once/iu);
+  }));
 });
 
 test("approval and project are said in words, never as codes", () => {

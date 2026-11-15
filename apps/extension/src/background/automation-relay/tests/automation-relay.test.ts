@@ -97,12 +97,59 @@ test("an export names its run, dataset and format", async () => {
   assert.equal((await h.send({ type: AUTOMATION_PANEL_MESSAGES.exportDataset, runId: "run-1", datasetId: "d1" })).ok, false);
 });
 
-test("model readiness carries whether a key opens here, and nothing else about it", async () => {
+test("model readiness carries only safe configuration and availability metadata", async () => {
   const h = harness({
-    snapshot: { ok: true, payload: { keys: [{ id: "secret:1", name: "Mine", kind: "llm", provider: "anthropic", enabled: true, unlocked: false, lockedBecause: "signed_out" }, { kind: "llm", enabled: true, unlocked: true }, { kind: "llm", enabled: true, unlocked: "no" }] } }
+    snapshot: { ok: true, payload: { keys: [
+      { id: "secret:1", name: "Mine", kind: "llm", provider: "anthropic", enabled: true, availability: { state: "available", ciphertext: "private-ciphertext", value: "private-value" }, unlocked: false, lockedBecause: "signed_out" },
+      ...["legacy_recovery_required", "host_protection_unavailable", "ciphertext_invalid"].map((code) => ({ kind: "llm", enabled: true, availability: { state: "unavailable", code, credential: "private-credential" } })),
+      { kind: "llm", enabled: true, unlocked: false, lockedBecause: "signed_out" },
+      { kind: "llm", enabled: true, unlocked: true },
+      { kind: "llm", enabled: true, unlocked: "no" }
+    ], unlockTicket: "private-ticket", lockedClients: [{ holderId: "private-holder" }] } }
   });
   const reply = await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness });
-  assert.deepEqual(reply, { ok: true, payload: { keys: [{ kind: "llm", provider: "anthropic", enabled: true, unlocked: false, lockedBecause: "signed_out" }, { kind: "llm", enabled: true, unlocked: true }, { kind: "llm", enabled: true }] } });
+  assert.deepEqual(reply, { ok: true, payload: { keys: [
+    { kind: "llm", provider: "anthropic", enabled: true, availability: { state: "available" } },
+    ...["legacy_recovery_required", "host_protection_unavailable", "ciphertext_invalid"].map((code) => ({ kind: "llm", enabled: true, availability: { state: "unavailable", code } })),
+    { kind: "llm", enabled: true, unlocked: false },
+    { kind: "llm", enabled: true },
+    { kind: "llm", enabled: true }
+  ] } });
+  assert.doesNotMatch(JSON.stringify(reply), /private-|lockedBecause|unlockTicket|lockedClients/u);
+});
+
+test("malformed explicit availability remains unknown through the relay", async () => {
+  for (const availability of [null, "available", {}, { state: "available", code: "unexpected" }, { state: "unavailable", code: "future_code" }]) {
+    const h = harness({ snapshot: { ok: true, payload: { keys: [{ kind: "llm", enabled: true, availability, unlocked: false }] } } });
+    assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness }), { ok: true, payload: { keys: [{ kind: "llm", enabled: true, availability: null }] } });
+  }
+});
+
+test("an explicitly invalid provider cannot become the legacy default provider", async () => {
+  for (const provider of [null, "", " ", 42, {}]) {
+    const h = harness({ snapshot: { ok: true, payload: { keys: [{ kind: "llm", enabled: true, provider }] } } });
+    assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness }), { ok: true, payload: { keys: [{ kind: "llm", enabled: true, provider: "" }] } });
+  }
+});
+
+test("readiness preserves only the boolean ownership marker for admin-visible keys", async () => {
+  const h = harness({ snapshot: { ok: true, payload: { keys: [
+    { kind: "llm", enabled: true, heldByYou: false, availability: { state: "available" } },
+    { kind: "llm", enabled: true, heldByYou: true },
+    { kind: "llm", enabled: true, heldByYou: "not-boolean" }
+  ] } } });
+  assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness }), { ok: true, payload: { keys: [
+    { kind: "llm", enabled: true, heldByYou: false, availability: { state: "available" } },
+    { kind: "llm", enabled: true, heldByYou: true },
+    { kind: "llm", enabled: true }
+  ] } });
+});
+
+test("model readiness keeps authorization and transport failures as failures", async () => {
+  const refused = { ok: false, code: "forbidden", error: "Current browser approval is required." } as const;
+  const h = harness({ snapshot: refused });
+  assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness }), refused);
+  assert.deepEqual(h.calls, [{ endpoint: "snapshot", payload: {}, programId: "secret-keys" }]);
 });
 
 test("a task's attempts are read by conversation or by attempt, naming exactly one, and nothing else reaches Core", async () => {

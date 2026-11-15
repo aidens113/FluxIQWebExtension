@@ -106,9 +106,8 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   person types in a field the switch would hide (it waits for a later event
   of the same run). Builds do not switch the panel. The chat then retargets
   to a thread that shows the run (`ChatPanel.followRun`, below). Above the
-  chat, once the browser is connected and its model key reads missing or
-  locked, a setup card says what is done and the one thing left
-  (below).
+  chat, once the browser is connected, optional model configuration or
+  unavailable key custody can show a dismissible setup card (below).
 - **Automations**, the person's saved automations, newest first, under
   "Your automations", with a "New automation" section below the list.
   Choosing one calls `chat.open({ kind: "automation", flowId, name })` and
@@ -150,18 +149,31 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   -- or when the background does not answer: numbered steps, in order, each
   marked done, under way, needs attention or to do, with their buttons and the
   approval code: 1 Start FluxIQ, 2 Sign in to FluxIQ, 3 Connect this browser,
-  4 Approve this browser in FluxIQ, 5 Add a model key. Step 1 says to run
-  `pnpm dev` in the `!FluxIQWebExtension` folder (there is no installer), and
-  step 2 how to sign in the first time. A step is marked done only for what
-  was detected: FluxIQ reached, the browser paired, a model key listed. A failed
+  4 Approve this browser in FluxIQ, 5 optional model configuration for AI work.
+  Step 1 requires FluxIQ to be running; step 2 describes ordinary first sign-in.
+  A step is marked done only for what was detected: FluxIQ reached, the
+  browser paired, compatible model configuration available. A failed
   connection says so in words with "Try again", and "Check the connection
   address" opens Settings, because that address is there. Once the browser is
-  connected the chat comes back. A model key that reads missing, or a locked
-  browser (a sixth step, "Unlock this browser once"), does not hold the chat
-  back: the setup card sits above a usable chat with "Open FluxIQ" and "Not
-  now", and goes by itself when the key reads ready. The unlock step says why
-  the key locked, in the words every other place uses (`modelKeyLockedWords`). A
-  key read that fails shows nothing and blocks nobody.
+  connected the chat comes back. Missing model configuration and unavailable
+  key custody do not gate connection, the composer or saved Flows that need no
+  model. The card offers "Open FluxIQ" and "Not now" and disappears after a
+  fresh available reading. There is no sixth browser-unlock step or second
+  password prompt. Recovery guidance distinguishes an old server requiring an
+  update, legacy key recovery, unavailable host protection and invalid saved
+  ciphertext. A failed read claims neither configured nor missing; Settings
+  reports that it could not check the key.
+
+  The safe readiness relay carries each key's kind, provider, enabled flag,
+  optional boolean ownership marker (`heldByYou`) and checked `availability`.
+  Administrator-visible foreign keys (`heldByYou:false`), custom secrets and
+  unsupported providers do not establish personal model readiness. Missing
+  provider metadata retains the legacy DeepSeek default; Anthropic aliases
+  normalize consistently with shared chat. Absent availability retains prior
+  enabled-key compatibility, while an explicit old `unlocked:false` requires
+  an update and never becomes another unlock action. Malformed explicit
+  availability remains unknown. Configured status does not attest provider
+  authentication, balance or connectivity.
 
 While a recording runs, a bar under the top bar on every screen shows its step
 count, "Extract Data From This Page" and "Stop recording". It also holds a
@@ -493,10 +505,14 @@ gates are what stand there. The overlay's last place, the one value a content sc
 keeps, goes through the background instead (`background/overlay-placement.ts`), which
 reads and writes only that key and only a value small enough to be a placement.
 
-**Open FluxIQ for a model key** asks Core for this browser's ticket (`unlockTicket`, in the
-`secret-keys` `snapshot` a paired client reads) and opens the keys page with it in the
-address's fragment, when nobody has unlocked this browser yet. The page offers such a browser
-only to someone who came from it.
+**Open FluxIQ for a model key** opens `/programs/secret-keys` directly on the
+configured HTTP(S) address. It clears the query and fragment and makes no
+preliminary snapshot or custody request. Ordinary sign-in and key-management
+authorization still apply on that page. Current authenticated approval gives
+the client access to its authorized available keys without a separate unlock;
+ending the approving panel session does not revoke that independent client.
+Explicit client revocation and current account/workspace permissions remain
+authoritative for every request.
 
 **A browser's name** in its hello is what its person reads when choosing among theirs:
 "Chrome on Windows" (`browserClientLabel`).
@@ -1333,8 +1349,10 @@ The mounted extension view accepts the bounded project-only navigation event flu
   (`page-url.ts`). Core builds from that page. If the browser cannot say which
   tab is active, nothing is sent, and the panel is told why.
 
-Core runs a chosen capability for the paired person's project, on that person's
-unlocked model key, and answers `response.execution`. For a build or a run
+Core runs a chosen capability for the paired person's authorized project and,
+when a model is needed, their authorized configured model key, and answers
+`response.execution`. Model-free deterministic execution needs no model key.
+For a build or a run
 that is `started`. The result arrives later as a thread turn, and progress
 arrives as activity stamped with the thread's id. Every word of those turns is
 Core's: its first reply says in plain words what will happen and names the
