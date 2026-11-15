@@ -17,6 +17,42 @@ The extension is intentionally not the framework runtime. FluxIQ owns durable
 projects, Automation Studio, recordings, normalization, policy generation,
 authorization, and long-running work. The extension owns browser presence.
 
+## Hosted Connection Foundations
+
+Approved client authentication does not require a second default key unlock.
+Core evaluates current user, workspace, sharing and IAM authority on use; a
+missing model configuration is reported as configuration, not a locked client.
+Normal panel logout does not revoke an independently authenticated client.
+
+`background/credentials` owns private IndexedDB credentials, installation
+identity, revision/lineage changes and revocation intentions. Its transport
+adapter persists server-ready credential changes before acknowledging them.
+Tokens do not belong in content-script-readable local or sync storage.
+
+`background/connect/pkce` implements fixed-client, same-origin hosted sign-in
+through injected ports. A blank tab must be durably claimed before navigation.
+Discovery, exact callback/state, current selection and tab ownership are checked
+around asynchronous work. State and verifier are removed from the persisted
+attempt before the single token exchange; an ambiguous or interrupted exchange
+is never automatically replayed. A usable result follows durable credential
+adoption and final currentness checks.
+
+`background/authentication-attempts` provides private browser-session storage.
+It uses the authentication-tab registry's session identity, a closed state
+parser and a shared per-area queue. Compare-and-swap matches session and revision,
+persists the increment before success and checks identity around storage awaits.
+This serializes one background runtime, not distributed or browser-native storage
+transactions. Corrupt state and unavailable storage fail explicitly; there is
+no local/sync or memory fallback. Valid previous-session state is durably cleared.
+
+These foundations are not activated in the main background connection yet.
+Activation requires recording/content/capture exclusion before acquiring login
+page data, safe authentication-tab recovery, binding-scoped outboxes and guarded
+revocation dispatch. The protocol journals cleanup but performs no revocation
+HTTP; reading current trust and then queueing an unadopted proof is not an atomic
+credential transaction. The isolated native-auth probe showed native UI alone
+does not prevent injection or capture, so integration uses a preclaimed tab.
+
 ## Responsibilities
 
 Cross-document action transport belongs to Next page. The focused

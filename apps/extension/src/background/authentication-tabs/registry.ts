@@ -31,6 +31,16 @@ export class AuthenticationTabs {
     return this.phase;
   }
 
+  /** Only an exact, durably committed owner is authority; a reservation is not. */
+  owns(tabId: number, attemptId: string): boolean {
+    return this.phase === "ready" && Number.isSafeInteger(tabId) && tabId >= 0
+      && isAuthenticationTabIdentifier(attemptId) && this.owners.get(tabId) === attemptId;
+  }
+
+  sessionIdentity(): string | null {
+    return this.phase === "ready" ? this.browserSessionId : null;
+  }
+
   eligible(tab: AuthenticationTabSnapshot): boolean {
     if (this.phase !== "ready" || !Number.isSafeInteger(tab.tabId) || tab.tabId < 0
       || this.owners.has(tab.tabId) || this.reservations.has(tab.tabId)) return false;
