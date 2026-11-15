@@ -1,15 +1,17 @@
 # Hosted Platform Launch Audit And Plan
 
 Status: Active
-Status detail: Audit complete; expanded platform design covers fully local, hybrid API and consumer modes, paid routing and commercial lifecycle. Nothing deployed.
+Status detail: Implementation authorized 2026-11-14; paired task t914 isolates platform work from ongoing runtime experiments. Nothing deployed.
 Created: 2026-11-14
 Last updated: 2026-11-14
 Owner: Senior supervisor agent
 Scope: Hosted panel, coordinated releases, managed web cloud, local FluxNodes, marketplace and self-hosting.
-Paired document: none (Core/Website inspected read-only; execution needs paired ownership records)
+Paired document: ../!FluxIQ/docs/working/hosted-platform-launch-plan.md
 Related: [Hosted production](./hosted-production-plan.md), [MVP seal](./mvp-seal-plan.md)
 
 ## Current State
+
+**Execution authorized (2026-11-14).** User requests implementation while FluxNode/client/Core automation experiments continue independently and merge later. Paired task t914 under `fxwork/t914/` owns implementation; Core's paired document holds file-owned worker briefs and the experimental integration contract. Existing t911/t912/t905 and other checkouts are preserved. Work begins from committed dev, not dirty experimental source. Enterprise licensing and real non-web clients remain later phases, as explicitly directed.
 
 **Verdict:** substantial panel, IAM, SDK and managed-browser foundations exist, but FluxIQ is not yet a deploy-and-sell cloud product. Launch a safe hosted panel and authenticated dedicated web automation first, then shared compute and external marketplace publishing. Catalog work can proceed in parallel; installations wait on isolation and entitlement gates.
 
@@ -23,7 +25,9 @@ Related: [Hosted production](./hosted-production-plan.md), [MVP seal](./mvp-seal
 
 **Baseline:** downstream `28398c288ffbdffd150133dfb3f9355c17700ba8`; clean Core dev snapshot `04e7b1650f183868505b2e0c076e339b9bf7ccf9`. Website is an archive without Git metadata, so revision/live parity are unknown. Primary Core is dirty task t911, not dev; its pending lease changes are excluded. The IDE's t843 reset plan explicitly says Superseded and is not a prerequisite.
 
-**Main gaps:** tenant routing, production mail, real SDK auth/API, unattended model-key custody, durable active runs/events/callback recovery, Linux/browser deployment, environment provisioning, billing/metering, remote takeover and release/restore proof. Website accounts/marketplace are absent from the inspected archive.
+**Implementation checkpoint:** Core now has tenant-verified panel program routing, a distinct platform identity authority, durable SDK proof/session exchange and account-owned key management, production email transport, additive instance/build discovery, and a transactional commerce/eligibility module. Lead verified authority/mail (102 tests), commerce (56), discovery (22), key sessions (58, including cross-process replay), and web integration (178, plus 30 after import correction). Package checks and structural gates pass; details and failures/fixes are in the paired Core ledger. This is foundation code, not completed hosted execution or billing-provider integration.
+
+**Main remaining gaps:** consumer connect/PKCE and tenant gateway routing, process-state isolation, multi-tenant account composition/custody, durable runs/events/callback recovery, Linux/browser deployment, actual provisioning and payment/usage integration, remote takeover, catalog and release/restore proof. Website accounts/marketplace remain absent from the inspected archive. User identified separate upstream `https://github.com/aidens113/FluxIQWebsite` (remote main observed at `08e51d4980750c693e2eac5fcce38f7aca46e921`); actual Hostinger deployed revision is unverified. Provider/account/region are not selected; portability to AWS, Google Cloud and Azure is required and its Core-only deployment package is underway.
 
 **Next:** phase 0 fixes contracts/provenance; phases 1-3 proceed in parallel by file. Do not expose local open-mode APIs through a proxy or sell shared execution before isolation acceptance. Reuse existing runtime work. This source/design audit ran no live automation, paid calls, panel server, DNS change or deployment. Task tooling automatically prepared Core dependencies/builds; that is not hosted acceptance.
 
@@ -344,7 +348,7 @@ Initially one authoritative workspace state owner with persistent disk. Multiple
 
 ## Implementation Phases
 
-Planning only. Use written file-disjoint briefs, sequencing shared auth/lease changes. No calendar launch date is justified before deployment/security spikes. Existing full-suite frequency limits remain binding.
+Implementation authorized; paired task t914 preserves experimental branches. Use written file-disjoint briefs, sequencing shared auth/lease changes. No calendar launch date is justified before deployment/security spikes. Existing full-suite frequency limits remain binding. User clarified Website remote is `https://github.com/aidens113/FluxIQWebsite` and stays separate; no provider/account/region selected. Core deployment must remain portable across AWS, Google Cloud and Azure, with provider-specific infrastructure adapters and common container artifacts.
 
 ### Phase 0 — Contracts And Provenance
 
