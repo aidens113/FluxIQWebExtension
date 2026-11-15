@@ -15,7 +15,9 @@ Related: [Hosted production](./hosted-production-plan.md), [MVP seal](./mvp-seal
 
 **User requirements (2026-11-14):** retain Hostinger landing site/Node.js CI/CD; host the Core panel independently; offer first-party apps, verified publishers and clearly labelled unverified apps/Flows through FluxIQ accounts; charge hosting markup plus a FluxIQ fee; dedicated and cheaper shared compute with customer resource control; preserve self-hosting; begin with web, later real Windows/Linux/Android. Developer FluxNodes/code can stay local while automation runs remotely. The user accepted another Core server during the audit. Nothing was purchased/deployed.
 
-**Lead recommendations:** getfluxiq.com stays on Hostinger; app.getfluxiq.com runs Core/private product account services on persistent compute. Customer browsers use a separate worker tier, initially one isolated VM per customer. One identity/IAM system; retain existing BYOK initially. These recommendations are not additional user rules.
+**Lead recommendations:** getfluxiq.com stays on Hostinger; app.getfluxiq.com runs Core and its private platform services on persistent compute. Customer browsers use a separate worker tier, initially one isolated VM per customer. One identity/IAM system; retain existing BYOK initially. These recommendations are not additional user rules.
+
+**Ownership correction (user, 2026-11-14):** substantial authentication/accounts, billing, subscriptions and entitlements belong in FluxIQ Core and power our cloud deployment. The landing website stays independently updated in its own repo on getfluxiq.com; the Core app is on app.getfluxiq.com. The same Core supports local/self-hosted deployment and later enterprise account/license feature activation. Enterprise licensing is future work, not an initial cloud launch prerequisite. This replaces the earlier recommendation to implement commercial backend services downstream.
 
 **User clarification (2026-11-14):** fully local includes the application, FluxIQ engine AND automation environments on the developer's computers/servers. Hybrid keeps application code locally while outsourcing automation to FluxIQ Cloud through an API key. Consumer clients such as the extension are another entry point, not a requirement to write developer code. Client choice and execution location are separate axes. The detailed operating model below is now part of the implementation plan, including paid routing; all new endpoints/state models are proposed contracts, not claims of existing implementation.
 
@@ -61,22 +63,44 @@ flowchart TD
     Engine --> Shared[Isolated shared web runners]
     Engine --> Data[Flows, datasets, evidence and usage]
     Engine --> Local
-    App --> Product[Billing, catalog and environments]
-    Product --> Private[Private Core provisioning]
+    App --> Platform[Core platform: identity, billing and entitlements]
+    Platform --> Private[Private Core provisioning and environment control]
 ```
 
 Return events use client-initiated streaming and answer POST, not inbound laptop access. Debugging/provisioning/storage stay private. Customer execution must not share the control plane's security boundary.
 
 | Owner | Responsibilities |
 | --- | --- |
-| Core | Identity/IAM, tenancy, SDK/protocol, durable execution, neutral host leases, datasets/lineage, panel, generic commercial ports |
+| Core | Accounts/auth/IAM, tenancy, SDK, execution, host leases, data, panel, billing/subscriptions/metering/entitlements and provider adapters; generic environment/catalog/notification backends |
 | Web-extension | Browser/domain, launcher/image, web takeover, consumer/store UX, browser acceptance |
 | Website | Public marketing/catalog/pricing/publisher presentation, account links |
-| Product services, initially focused downstream packages beside apps/product | Infrastructure/environment controller, billing/catalog/notification adapters and commercial control APIs; apps/product remains a thin host integration |
+| FluxIQ Cloud deployment | Configures and operates Core modules and payment/mail/cloud integrations; brand/prices/provider credentials are deployment configuration, not a second backend |
 | Product deploy/ | Pinned composition, release manifest, infrastructure definitions and operational runbooks; not the business-service implementation |
 | Customer app | Local declarations/checks/transforms/business UI; optional hosted callback/app worker |
 
-Core keeps generic container assets. Product packaging layers pinned public web capabilities, not private imports/copied runtime. Website backend code may deploy beside Core; no provisioning secret in Hostinger's static server. Create paired records before implementation.
+Core owns the substantial platform implementation in focused modules, not a catch-all service. Browser/DOM behavior stays downstream and loads through public contracts. Website is a presentation/client of Core APIs, not another identity/commerce backend. Port useful signup stand-in logic to its Core owner instead of maintaining two systems. No provisioning secret in Hostinger. Create paired Core/downstream records before implementation; this update changes the plan only.
+
+### What Runs Where
+
+| Location | Hosted responsibilities |
+| --- | --- |
+| getfluxiq.com on Hostinger | Independent Website repo: landing pages, pricing, public marketplace presentation, documentation links and app entry links; public Core API reads where needed |
+| app.getfluxiq.com on separate managed compute | Core panel/API, accounts/auth/IAM, workspaces, billing/subscriptions, entitlements, usage, catalog backend, scheduling and fleet control |
+| Private platform infrastructure | Core databases, queues, secret custody and object storage; not publicly served website assets |
+| Managed worker servers | Dedicated/shared customer execution, browser runtime/extension, isolated profiles and explicitly hosted application workers; separate from control-plane trust boundary |
+| Customer computers/servers | Same Core in local/self-hosted mode with optional local panel and own execution environments, or just application/client code calling FluxIQ Cloud |
+
+Core code ownership does not require all modules to run in one process or machine. Separate API, scheduler, metering and fleet processes when needed while retaining Core ownership. Initial API uses app.getfluxiq.com; api.getfluxiq.com can be an alias later, not a separate backend. The website repo updates independently against a compatible Core API/release contract.
+
+### Deployment Context And Later Enterprise Activation
+
+Extend existing local/self-hosted/service profiles. Resolve context from explicit operator configuration and instance identity; discovery reports profile/capabilities for clients to display the correct setup and execution location. Loopback detection can suggest onboarding defaults. Hostname, IP, email suffix and client flags must never establish privilege, paid status or enterprise access. Enterprise entitlement is independent of location: it may apply locally, self-hosted or in cloud.
+
+Local installs use their own identity/security configuration and can omit cloud-commerce providers. Self-hosted servers require appropriate authentication, without a FluxIQ Cloud subscription for base execution. Our service deployment enables Core commerce/tenant/fleet modules with our provider configuration. Our credentials are never shipped in customer builds; local runs do not need calls to our billing system.
+
+Later enterprise work: explicitly link an installation to an authorized organization or import a signed license. Core verifies issuer/signature, feature grants, organization/installation binding, validity and activation authority; backend and UI share the entitlement resolver. Organization membership/login alone is not a paid-license proof. Design offline validation, renewal/revocation, grace, transfer and expiry in that future phase, including air-gapped use where contracted. Preserve base local functionality and export on expiry. Feature list, prices and exact license policy remain future decisions.
+
+Cloud subscription grants and future enterprise license grants enter Core through distinct trusted entitlement sources; neither bypasses IAM or tenancy. Future acceptance covers spoofed context/domains, forged/expired licenses, cross-organization activation and legitimate offline operation. This is an architectural seam now, not an enterprise implementation request.
 
 ## Product Contracts
 
@@ -118,7 +142,7 @@ These are logical modules; the initial product can deploy them as a modular serv
 | Module | Durable records and authority |
 | --- | --- |
 | Identity/access (Core) | Principals, memberships, roles/policies, API keys/sessions, revocation; resolves caller and tenant |
-| Product account/commerce | Billing accounts, provider customer/subscription references, versioned plans/prices, entitlements and usage allowances |
+| Core account/commerce | Billing accounts, provider customer/subscription references, versioned plans/prices, entitlements and usage allowances |
 | Environment controller | Environment ID, owner, region, runtime/image version, capacity class, provider resource IDs, desired/observed state, persistent volume/profile references |
 | Admission/router | Durable accepted submission, idempotency identity/digest, payer/entitlement snapshot, reservations, authorized placement and queue ticket |
 | Scheduler/lease owner | Workspace-to-engine route, fenced run/environment leases, queue priorities, fairness and recovery assignments |
@@ -255,20 +279,20 @@ These extend the phases below and make their ownership testable. Each implementa
 | --- | --- | --- |
 | Mode parity and onboarding | SDK/Core, extension, website / 0-2 | Fully local works with FluxIQ Cloud blocked; self-hosted endpoint authenticates; same FluxNode runs hybrid; consumer targets explicit; no silent fallback/data upload |
 | Identity and tenant routing | Core / 1-2 | User/device/key/worker principals converge on policy; cross-tenant forged IDs/streams/artifacts refused; revocation applies to dispatch and running authority |
-| Commerce and entitlement resolver | Product + Core port / 1,4 | Checkout alone grants nothing; duplicate/out-of-order/missed payment events reconcile; UI cannot override payer/plan; suspension preserves inspect/export/stop |
-| Admission/reservation/router | Core neutral runtime plus product entitlement adapter / 2-4 | Two keys share allowance; last-slot/last-credit races serialize; accepted retry returns same run; dedicated never placed shared; wrong tenant never routed |
+| Commerce and entitlement resolver | Core platform / 1,4 | Checkout alone grants nothing; duplicate/out-of-order/missed payment events reconcile; UI cannot override payer/plan; suspension preserves inspect/export/stop |
+| Admission/reservation/router | Core runtime and platform entitlement modules / 2-4 | Two keys share allowance; last-slot/last-credit races serialize; accepted retry returns same run; dedicated never placed shared; wrong tenant never routed |
 | Durable execution/callbacks | Core/SDK / 2 | Restart across admission/effect/answer/settlement windows; local callback offline/resume; duplicate lasting-act prevention; public outcomes preserved |
-| Environment fleet and viewer | Product + downstream browser-host / 3 | Allocation retry no duplicate VM; safe resize/stop; profile isolation; authenticated takeover; sandbox/metadata/egress tests; lost worker fenced |
-| Metering and billing | Product / 4 | VM/shared/storage intervals reconcile; duplicate meter events ignored; no double-charge from retry; refunds/adjustments traceable; stopped resource costs clear |
-| Schedules/notifications | Core neutral schedule contracts + product delivery / 2-4 | DST/missed/overlap policies, entitlement checks at due time, unavailable callback worker, webhook replay/signature/SSRF failures |
-| Catalog/packages/publisher | Core portability + product/Website / 5-6 | All three trust labels; scans/permission preview; tenant install; version pinning; escalation needs consent; no embedded private state; revoke/export/self-host |
+| Environment fleet and viewer | Core fleet modules + downstream browser-host/viewer / 3 | Allocation retry no duplicate VM; safe resize/stop; profile isolation; authenticated takeover; sandbox/metadata/egress tests; lost worker fenced |
+| Metering and billing | Core platform / 4 | VM/shared/storage intervals reconcile; duplicate meter events ignored; no double-charge from retry; refunds/adjustments traceable; stopped resource costs clear |
+| Schedules/notifications | Core schedule and delivery modules / 2-4 | DST/missed/overlap policies, entitlement checks at due time, unavailable callback worker, webhook replay/signature/SSRF failures |
+| Catalog/packages/publisher | Core backend/portability + Website presentation / 5-6 | All three trust labels; scans/permission preview; tenant install; version pinning; escalation needs consent; no embedded private state; revoke/export/self-host |
 | Isolation and operations | Product infra + Core owners / 3-6 | Malicious/shared/noisy-neighbour tests, restore/rollback/canary, operator access audit, regional policy, load/capacity and incident drills |
 
 Release evidence must include a journey from API credential issuance to paid routing, actual execution and invoice reconciliation, plus the fully local journey with cloud services unreachable. Tests use synthetic accounts/payment mode and allowed browser fixtures, with four attempts for task acceptance. Contract/unit tests cover billing/network failures without paid infrastructure/provider calls. Final staging acceptance uses pinned production artifacts and disposable resources; no endpoint or commerce promise is marked shipped from mock-only tests.
 
 ## Product Offers And Reference Application
 
-One identity system serves signup/login, account, billing and installation on app.getfluxiq.com, with allowlisted deep links from public pages. Adapt the existing signup stand-in into a co-located service calling private provisioning; Hostinger need not join its private network. Use secure host-only app cookies, CSRF and exact origins. Publisher UIs use a separate untrusted-app origin and scoped consent, never app cookies. Public catalog reads need no secret. Real verification/recovery email, revocation/export/deletion and updated privacy copy precede public signup.
+One identity system serves signup/login, account, billing and installation on app.getfluxiq.com, with allowlisted deep links from public pages. Port the existing signup stand-in into a Core-owned account module calling private provisioning; Hostinger need not join its private network. Use secure host-only app cookies, CSRF and exact origins. Publisher UIs use a separate untrusted-app origin and scoped consent, never app cookies. Public catalog reads need no secret. Real verification/recovery email, revocation/export/deletion and updated privacy copy precede public signup.
 
 FluxIQ access keys differ from model-provider keys. Preserve BYOK initially. P3b must grant only approved tenant model access after logout/restart through encrypted custody, explicit service grants, rotation/revocation/audit. Never borrow another person's latest unlock or silently introduce a global platform key. Hosted control of a personal browser may incur an explicitly priced control-service fee, but not a managed-browser compute charge. Local/self-hosted compute is never metered as FluxIQ Cloud compute; marketplace licenses, if sold later, remain a separately disclosed entitlement.
 
@@ -356,7 +380,7 @@ Planning only. Use written file-disjoint briefs, sequencing shared auth/lease ch
 
 ### Phase 4 — Paid Dedicated Web Beta
 
-- Product owns environment controller, billing/usage ledger and account UI; Website consumes API.
+- Core owns environment controller, billing/usage ledger, subscriptions/entitlements and account UI; Website consumes its public APIs. Our cloud deployment configures these modules instead of implementing a parallel backend.
 - Complete the proposed paid-admission path and billing state machine, including atomic reservations, outbox/reconciliation, plan revisions, dispatch-time checks and queue visibility. Consumer clients and SDK requests use the same path.
 - Meter allocated/active compute, idle reservations, stopped storage/IP, transfer/concurrency/model use separately. Unique usage IDs and tenant attribution; reconcile provider totals.
 - Checkout/subscriptions, verified idempotent webhooks, failure/grace/suspension, cancel/export/retention/teardown. No duplicate VM/charge on retry; active work settles safely under stated policy.
@@ -364,7 +388,7 @@ Planning only. Use written file-disjoint briefs, sequencing shared auth/lease ch
 
 ### Phase 5 — First-Party Catalog And App
 
-- Website/product: listings/install/publisher registry. Core: missing generic portable packages/import/export/permission seams.
+- Website owns public listing presentation. Core owns catalog/install/publisher backend and authenticated app UI, plus portable packages/import/export/permission seams.
 - Immutable packages, tenant install/secrets, runtime/cost explanation, consented upgrades/rollback; static-friendly browsing.
 - Ship consultant reference app/source/safe lineage; prove nonempty exact data, freshness, dedupe and changes.
 - Exit: new account discovers/installs/runs cloud app; local developer uses cloud browsers; self-hosted user imports same package; no private data in exports.
@@ -437,6 +461,14 @@ Briefs were written before dispatch; compact scope preserved here. Each owned on
 - Validation: Inspected `packages/sdk/src/client/connect-options.ts` -> `apiKey` accepts private PEM or fxkey1 material. `node scripts/structure-audit.mjs --rule working-docs --rule docs-links` -> `passed (0 warning(s), 2 baselined)`; `git diff --check -- docs/working/hosted-platform-launch-plan.md docs/working/README.md` -> exit 0, no output.
 - Outcome: Expanded design, not implemented endpoints or fresh runtime acceptance.
 - Follow-up: Implement delivery packages through existing phase gates; exact prices/provider accounts remain rollout decisions.
+
+### 2026-11-14 — Core platform ownership and hosting clarification
+- Agent: Senior supervisor.
+- Changed: Plan ownership, hosting map, deployment context and future enterprise entitlement seam; generated index.
+- Why: User places substantial authentication/billing in Core, with separate main-domain website and app subdomain; enterprise activation comes later.
+- Validation: `node scripts/structure-audit.mjs --rule working-docs --rule docs-links` -> `passed (0 warning(s), 2 baselined)`; `git diff --check -- docs/working/hosted-platform-launch-plan.md docs/working/README.md` -> exit 0, no output. No source changes or deployment.
+- Outcome: Architecture corrected; Core runtime implementation remains future work.
+- Follow-up: Core-owned platform briefs must follow this split; do not build downstream billing/auth duplicates.
 
 ## Open Questions
 
