@@ -213,6 +213,15 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
 
 ## Engineering Structure And Modularity
 
+**Authenticated clients are usable by default (user, 2026-11-14).** Once a
+client is authenticated/approved, do not put it behind a default key or
+connection lock, first-unlock ticket, or second password/PIN ceremony.
+Implement backend and extension behavior together, including reconnects;
+hiding a locked UI is not a fix. Retain tenant/IAM isolation and actual
+credential revocation. Missing provider-key configuration is a configuration
+issue, not a locked authenticated connection. This supersedes earlier
+locked-by-default recommendations in hosted-platform and custody plans.
+
 - **Fix the root cause, never cap the symptom (user, 2026-11-10):** "we should NEVER
   attempt to fix these problems by simply capping the symptoms. Instead we should come
   up with ways to fix the root cause, always". Lowering a timeout or a fixed wait,
