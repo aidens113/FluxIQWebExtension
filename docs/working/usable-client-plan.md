@@ -23,6 +23,8 @@ Related: [Hosted platform launch](./hosted-platform-launch-plan.md), [MVP launch
 
 **Next:** discovery reports (below), then file-partitioned implementation briefs, then a live check of every journey in a headed browser, then hand the user a running instance.
 
+**UI polish phase (user, 2026-11-16):** "make sure to work on the UI of the panel, is that part of the plan? there are other things like weird not properly styled UI elements". The plan had fixed only the defects the walk-through hit, so a visual phase is added: two audits (Core web panel `reports/panel-ui-audit.md`, extension side panel `reports/extension-ui-audit.md`) screenshot every page and state in light and dark at desktop and narrow widths, trace each badly styled element to its cause, and compare against the website's look (getfluxiq.com, local `FluxIQWebsite`); fix workers follow, partitioned by folder, shared tokens and base styles first.
+
 ## Cloud Plan Review (2026-11-16)
 
 Review of [hosted-platform-launch-plan.md](./hosted-platform-launch-plan.md) as it stands on `dev` and on task t914, for the user. The design itself (Core owns identity, billing and entitlements; website stays on Hostinger; app on app.getfluxiq.com; local, hybrid and consumer modes as separate axes; no silent fallback between local and cloud; durable admission before paid work) is sound and is kept. What needs changing:
