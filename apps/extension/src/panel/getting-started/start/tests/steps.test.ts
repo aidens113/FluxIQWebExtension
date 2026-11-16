@@ -153,3 +153,19 @@ test("the sign-in step never prints a default credential", () => {
     assert.match(line, /sign in/iu, state);
   }
 });
+
+test("FluxIQ answers before pairing: Start FluxIQ is done and Sign in is the next step", () => {
+  const guide = startGuide(statusWith(), false, undefined, "unknown", true);
+  assert.deepEqual(states(guide), ["start:done", "signin:current", "connect:todo", "approve:todo", "key:todo"]);
+  assert.equal(guide.steps[0]?.title, "FluxIQ is running");
+});
+
+test("FluxIQ answers and the browser was approved before: Start is done, Sign in stays done, Connect is the button", () => {
+  const guide = startGuide(statusWith({ paired: true }), false, undefined, "unknown", true);
+  assert.deepEqual(states(guide).slice(0, 3), ["start:done", "signin:done", "connect:todo"]);
+});
+
+test("FluxIQ not answering or not asked: Start FluxIQ stays the next step", () => {
+  assert.equal(startGuide(statusWith(), false, undefined, "unknown", false).steps[0]?.state, "current");
+  assert.equal(startGuide(statusWith(), false).steps[0]?.state, "current");
+});

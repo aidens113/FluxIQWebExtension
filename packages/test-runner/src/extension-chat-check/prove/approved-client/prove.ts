@@ -5,6 +5,7 @@ import { probeApprovedClientModel } from "./model-probe.js";
 import type { ApprovedClientAccessObservation } from "./observation.js";
 import { approvedClientModelReadiness } from "./readiness.js";
 import { revokeAndProbeCredential } from "./revoke-probe.js";
+import { KEYS_PAGE_PATH, isBareKeysPageAddress } from "./keys-page.js";
 
 export type ApprovedClientAccessInput = {
   restartCore(): Promise<void>;
@@ -81,7 +82,7 @@ export async function proveApprovedClientAccess(context: ChatCheckContext, input
   await context.session.context.addCookies([{ name: "fluxiq_session", value: cookie, url: input.fluxiqOrigin, httpOnly: true, sameSite: "Lax" }]);
   const panel = await context.session.context.newPage();
   try {
-    await panel.goto(`${input.fluxiqOrigin}/programs/secret-keys`, { waitUntil: "domcontentloaded" });
+    await panel.goto(`${input.fluxiqOrigin}${KEYS_PAGE_PATH}`, { waitUntil: "domcontentloaded" });
     await runtimeMessage(control, { type: "fluxiq.connect", settings: { gatewayUrl: input.gatewayUrl, coreApiUrl: input.coreApiUrl, autoReconnect: true } });
     const dialog = panel.getByRole("dialog", { name: "Client pairing request" });
     await panel.bringToFront();
@@ -94,8 +95,7 @@ export async function proveApprovedClientAccess(context: ChatCheckContext, input
     await context.session.scenario.bringToFront();
     await probe("approved-without-password");
     const configured = await runtimeMessage(control, { type: "fluxiq.panel.openFluxIQ", purpose: "model-key" }) as { url?: string };
-    const address = new URL(configured.url ?? "http://invalid/");
-    result.checks.configurationHasNoUnlockFragment = address.origin === new URL(input.coreApiUrl).origin && address.pathname === "/programs/secret-keys" && address.search === "" && address.hash === "";
+    result.checks.configurationHasNoUnlockFragment = isBareKeysPageAddress(configured.url, input.coreApiUrl);
   } finally {
     await panel.close();
   }

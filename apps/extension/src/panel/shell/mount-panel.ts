@@ -53,7 +53,7 @@ import { chooseAutomation, createAutomationsTab } from "../automations";
 import { createActivityFeed, createChatOwnerContext, createChatPanel, createSharedActivityFeed, type ActivityFeed, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
 import { bindChatProjectNavigation } from "../chat/project-navigation";
-import { createModelKeyReader, createSetupCard, createStartView, extensionSetupPort, startGuide } from "../getting-started";
+import { createModelKeyReader, createReachabilityReader, createSetupCard, createStartView, discoveryProbe, extensionSetupPort, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
 import { createProjectSelector, extensionProjectsPort } from "../projects";
 import { createRecordingControls, createRecordingReview } from "../recording";
@@ -197,6 +197,10 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
     setTimeout: (run, ms) => window.setTimeout(run, ms),
     clearTimeout: (handle) => window.clearTimeout(handle as number)
   }, () => draw());
+  const reachability = createReachabilityReader(ports.reachability ?? discoveryProbe, {
+    setTimeout: (run, ms) => window.setTimeout(run, ms),
+    clearTimeout: (handle) => window.clearTimeout(handle as number)
+  }, () => draw());
   // Coming back to the panel (a Firefox popup closes when Open FluxIQ is pressed; a side panel only loses focus) reads the key again.
   window.addEventListener("focus", () => keyReader.refresh());
   root.ownerDocument.addEventListener?.("visibilitychange", () => { if (root.ownerDocument.visibilityState === "visible") keyReader.refresh(); });
@@ -279,7 +283,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
 
   function draw(): void {
     const status = store.current();
-    const guide = startGuide(status, noAnswer, store.lost(), keyReader.current());
+    const guide = startGuide(status, noAnswer, store.lost(), keyReader.current(), reachability.current());
     const next = shellScreen(state, guide.gated);
     start.render(guide, status);
     setupCard.render(guide, status);
@@ -309,6 +313,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
     if (replaced) replaceWorkingFeed();
     else observeWorking();
     keyReader.observe(status.connectionState === "connected");
+    reachability.observe(status);
     // A push that repeats the status (the connecting probe, a loss change) re-renders nothing but the screen choice below.
     const signature = JSON.stringify(status);
     if (signature !== renderedStatus) {

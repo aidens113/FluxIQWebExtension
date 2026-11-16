@@ -2,7 +2,7 @@
    come from panel/theme/tokens.css; buttons, notices, fields and .dot from
    panel/shell/shell.css. */
 
-.settings-screen { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); }
+.settings-screen { scrollbar-width: thin; scrollbar-color: var(--edge) transparent; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); }
 .settings-column { display: grid; gap: var(--space-3); width: 100%; max-width: 520px; margin: 0 auto; }
 .settings-head { display: flex; align-items: center; gap: var(--space-2); }
 .settings-head .settings-back { border-color: transparent; background: transparent; font-size: 16px; }
@@ -12,12 +12,18 @@
 .settings-group-title { margin: 0; font-size: 13px; font-weight: 750; }
 .settings-state { display: flex; align-items: center; gap: var(--space-2); }
 .settings-state-text { font-size: 13px; }
-.settings-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 750; min-height: 28px; display: flex; align-items: center; }
+.settings-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 750; min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); list-style: none; }
+.settings-advanced > summary::-webkit-details-marker { display: none; }
+/* The disclosure mark: a chevron that points down while closed and up while open, in the muted text colour. */
+.settings-advanced > summary::after { content: ""; flex: 0 0 auto; width: 7px; height: 7px; margin: -3px 3px 0 0; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s ease; }
+.settings-advanced[open] > summary::after { margin-top: 3px; transform: rotate(225deg); }
+.settings-advanced > summary:hover::after { border-color: var(--text); }
+.settings-advanced > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 .settings-advanced[open] > summary { margin-bottom: var(--space-2); }
 .settings-advanced-body { display: grid; gap: var(--space-3); }
 
 .settings-form { display: grid; gap: var(--space-3); }
-.settings-form input[type="url"] { width: 100%; min-height: 36px; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface-muted); color: var(--text); padding: 7px 9px; }
+.settings-form input[type="url"], .settings-form input[type="text"] { width: 100%; font-weight: 400; min-height: 36px; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface-muted); color: var(--text); padding: 7px 9px; }
 .settings-form input[aria-invalid="true"] { border-color: var(--danger); }
 .field-hint { color: var(--muted); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
 /* One type scale for every switch, in or out of the form: 13px Geist 500 labels, 12px muted hints. */
@@ -65,3 +71,10 @@
 .settings-project { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .settings-project-name { min-width: 0; flex: 1 1 auto; }
 .settings-project .small-button { flex: 0 0 auto; }
+
+/* The humanness slider, drawn from tokens. Left to the browser, Chrome paints a near-black track in the light theme. Applies wherever the control shows (settings, the open Flow's strip). */
+.humanness-range { -webkit-appearance: none; appearance: none; height: 24px; background: transparent; }
+.humanness-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--edge); }
+.humanness-range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--edge); }
+.humanness-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent); }
+.humanness-range::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent); }

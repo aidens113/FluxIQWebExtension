@@ -103,7 +103,9 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
   const controls = createElement("div", { className: "automations-controls" }, [searchBox.element, ...(names.length > 1 ? [segments.element] : [])]);
   const automationsGroup = createElement("div", { className: "automations-group" }, automationParts);
   const tasksPane = createElement("div", { className: "automations-pane", attrs: { "data-pane": "tasks" } }, [...(tasks === undefined ? [] : [tasks.element]), automationsGroup]);
-  const libraryPane = createElement("div", { className: "automations-pane", hidden: true, attrs: { "data-pane": "library" } }, library === undefined ? [] : [library.element]);
+  // The library draws nothing until a project is chosen and FluxIQ is connected; this says so instead of leaving a blank strip.
+  const libraryNote = createElement("p", { className: "card-line", hidden: true, attrs: { role: "status" } });
+  const libraryPane = createElement("div", { className: "automations-pane", hidden: true, attrs: { "data-pane": "library" } }, library === undefined ? [] : [libraryNote, library.element]);
   const column = createElement("div", { className: "automations-column" }, segmented ? [hooks.review, controls, tasksPane, libraryPane] : [hooks.review, ...automationParts]);
   const element = createElement("section", { className: "automations-screen", hidden: true, attrs: { "aria-label": "Automations" } }, [column]);
   tasks?.onMatches((count) => {
@@ -229,6 +231,12 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     strip,
     render(status) {
       fallbackOpen.observe(status);
+      const libraryWords = status.connectionState !== "connected" ? "Connect to FluxIQ to see your saved subflows."
+        : typeof status.projectId !== "string" ? "Choose a project at the top to see its saved subflows."
+          : "";
+      libraryNote.textContent = libraryWords;
+      libraryNote.hidden = libraryWords === "";
+      if (library !== undefined) library.element.hidden = libraryWords !== "";
       strip.render(status);
       if (controller.observe(status) && active && document.visibilityState === "visible") void controller.refresh();
       syncTimer();

@@ -68,7 +68,7 @@ const LOST_LINES: Readonly<Record<BackgroundLoss, string>> = {
  * background lost, from the panel store. `key` is the model key reading, used
  * only once connected (before that nothing can read it).
  */
-export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss, key: ModelKeyReading = "unknown"): StartGuide {
+export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss, key: ModelKeyReading = "unknown", reachable?: boolean): StartGuide {
   const base = { gated: true, heading: HEADING, line: words.SETUP_LINE, addressLink: false, card: false };
   if (noAnswer && status === undefined) {
     return {
@@ -133,12 +133,21 @@ export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolea
       return { ...base, steps: [running, signin, step("connect", "Connect this browser", "waiting", "Connecting to FluxIQ..."), approve, ...later], connect: { label: "Cancel", action: "disconnect" } };
     case "reconnecting":
       return { ...base, steps: [running, signin, step("connect", "Connect this browser", "waiting", "Lost the connection. Trying again..."), approve, ...later], connect: { label: "Try now", action: "connect" } };
-    case "disconnected":
+    case "disconnected": {
+      // `reachable`: FluxIQ answered at its web address before pairing, so step one is done and sign-in is the person's next.
+      const answering = reachable === true;
       return {
         ...base,
-        steps: [running, signin, step("connect", "Connect this browser", "todo", paired ? words.CONNECT_AGAIN_LINE : words.CONNECT_LINE), approve, ...later],
+        steps: [
+          answering ? step("start", "Start FluxIQ", "done", undefined, "FluxIQ is running") : running,
+          answering && !paired ? step("signin", "Sign in to FluxIQ", "current", words.SIGN_IN_LINE) : signin,
+          step("connect", "Connect this browser", "todo", paired ? words.CONNECT_AGAIN_LINE : words.CONNECT_LINE),
+          approve,
+          ...later
+        ],
         connect: { label: "Connect", action: "connect" }
       };
+    }
   }
 }
 

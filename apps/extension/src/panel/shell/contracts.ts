@@ -2,7 +2,7 @@
 // top bar, and under it exactly one screen at a time (see `screen-state.ts`).
 
 import type { ChatResultsPort, ProjectsPort, SubflowLibraryPort, TasksMemory, TasksPort } from "@fluxiq/ui-components";
-import type { SetupPort } from "../getting-started";
+import type { ReachabilityProbe, SetupPort } from "../getting-started";
 import type { PanelStore } from "../state";
 
 /** Which browser surface mounted the panel. */
@@ -21,6 +21,8 @@ export type PanelTasks = { readonly port: TasksPort; readonly results: ChatResul
 export type PanelPorts = {
   /** Reads the model key for the setup card; the default reads the background's model readiness (`extensionSetupPort`). */
   readonly setup?: SetupPort;
+  /** Asks whether FluxIQ answers at its web address before pairing; the default fetches its discovery document. */
+  readonly reachability?: ReachabilityProbe;
   /**
    * Reads and changes the person's tasks, with the results port behind a task's Add budget, Run again and rows export. They
    * come together so one cannot be filled without the other. The default is `extensionTasksPort`, which reads Core's task records

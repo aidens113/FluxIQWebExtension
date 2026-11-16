@@ -7,3 +7,4 @@ export { createModelKeyReader, KEY_BEAT_MS, modelKeyFromReply, modelKeyUnavailab
 export type { SetupPort } from "./setup-port";
 export { extensionSetupPort } from "./extension-setup-port";
 export { createSetupCard, type SetupCard } from "./setup-card";
+export { createReachabilityReader, discoveryProbe, REACHABILITY_BEAT_MS, type ReachabilityHost, type ReachabilityProbe, type ReachabilityReader } from "./reachability";
