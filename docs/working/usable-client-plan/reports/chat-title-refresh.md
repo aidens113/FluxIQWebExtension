@@ -14,11 +14,10 @@ Core titles an unnamed thread inside the send call (`nameFromFirstMessage`), but
 - `vitest run src/chat src/project-switcher`: 110 files, 744 tests passed.
 - `pnpm --filter @fluxiq/ui-components check`: passed (build-cache step ran, no tsc errors).
 - `pnpm --filter @fluxiq/ui-components build`: passed (238 s, other worker was loading the machine).
-- `node scripts/structure-audit.mjs` in CORE: printed nothing; exit code not captured (the run went to the background twice).
+- `node scripts/structure-audit.mjs` in CORE: passed (550 warnings, 914 baselined, none in my files), exit 0.
 
 ## Not verified
 - Not run in a live browser or against real Core; the fake Core titles during `send`, as the real one does.
-- Structure audit exit status.
 
 ## Open questions
 None.
