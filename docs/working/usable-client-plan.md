@@ -99,6 +99,14 @@ Workers build against these at the same time; a change needs the lead.
 - Outcome: two gaps found and dispatched to worker-heavy: (1) Core sends `server.activity` to a paired session only for `session.projectId`, set at pairing or by a recording, so after the person switches project the extension's chat gets no pushes: a `client.focus_project` gateway message (report `gateway-project-focus.md`); (2) stored result-check authorizations are still minted from a held key unlock and refuse a paired client (report `result-check-authority.md`).
 - Follow-up: integrated build, run every unit's tests one at a time, then the live check.
 
+### 2026-11-16 — Production panel builds; first live walk-through
+- Agent: Senior supervisor; workers gateway-project-focus (done), live-walkthrough (done).
+- Changed (t915): Core `apps/web/src/features/chats/index.ts` now exports only the two client pages, and the Projects page moved to `apps/web/src/features/projects/` (its barrel exports only the client page), with the route and the route test mock repointed.
+- Why: the first two `next build` runs failed: a server route imported the Chats barrel, whose plain `load-chats.ts` pulled the automation-studio conversation barrel and with it unmarked hook modules (`views/view-readiness.ts`, `parameters/ParameterEditor.tsx`) into the server graph. `next dev` compiles a page only when visited, so nothing had caught it. A scratch tracer (server entries to every unmarked hook module, stopping at `"use client"`) found the chain and then reported none of the 6 unmarked hook modules reachable.
+- Validation: `node scripts/run-fluxiq-web.mjs` in t915 -> `next build` passed, `next start` "Ready in 3.5s" at http://127.0.0.1:3000; `node apps/extension/scripts/test-extension.mjs src/panel src/background/panel src/background/projects src/background/connection src/shared` -> 1221 pass, 0 fail; `npx tsc -p tsconfig.test.json --noEmit` in apps/extension -> exit 0. Live walk-through (report `live-walkthrough.md`): pairing approved in 1.7 s with no unlock, password or key step anywhere; panel pages 110-470 ms to content; extension chat usable 352 ms after opening; extension makes 0 HTTP requests per idle minute.
+- Outcome: blocking defect D1/D2: the extension and the panel list different projects and chats (dispatched to worker-heavy, report `shared-projects-fix.md`). UX defects D3-D10 dispatched to two workers (`panel-ux-fixes.md`, `extension-ux-fixes.md`). Structure-audit failures (3 extension, 13 Core) dispatched to two workers (`extension-audit-fixes.md`, `core-web-audit-fixes.md`).
+- Follow-up: a Core structure-audit rule that fails when a server entry reaches an unmarked hook module, so this class of break is caught before `next build`.
+
 ## Open Questions
 
 None blocking.
