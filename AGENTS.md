@@ -213,15 +213,6 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
 
 ## Engineering Structure And Modularity
 
-**Authenticated clients are usable by default (user, 2026-11-14).** Once a
-client is authenticated/approved, do not put it behind a default key or
-connection lock, first-unlock ticket, or second password/PIN ceremony.
-Implement backend and extension behavior together, including reconnects;
-hiding a locked UI is not a fix. Retain tenant/IAM isolation and actual
-credential revocation. Missing provider-key configuration is a configuration
-issue, not a locked authenticated connection. This supersedes earlier
-locked-by-default recommendations in hosted-platform and custody plans.
-
 - **Fix the root cause, never cap the symptom (user, 2026-11-10):** "we should NEVER
   attempt to fix these problems by simply capping the symptoms. Instead we should come
   up with ways to fix the root cause, always". Lowering a timeout or a fixed wait,
@@ -540,7 +531,7 @@ lands; its "one judged whole run" stands and moves to the next real attempt.
 
 **No PIN on normal actions, and never mid-Flow** (user, 2026-11-03): "NO PIN FOR ANY NORMAL ACTIONS. Maybe just a pin to do dangerous actions ONLY THE FIRST TIME A USER DOES IT, AND NEVER IN THE MIDDLE OF A FLOW, ONLY WHEN FIRST STARTING A FLOW/CHAT."
 
-**A connected client has model access (user, 2026-11-16):** "if a client is connected, they are CONNECTED, meaning they have access to the basic feature of the fluxiq framework (llm)". No unlock step, unlock key, password re-entry, unlock ticket or "key locked" wait stands between an authenticated client (panel session, paired extension, SDK session) and the workspace's configured model key, after a restart or a logout included. A missing key is a setup step, not a lock. Revoking or disabling a client or key, and IAM denial, still apply.
+**A connected client has model access (user, 2026-11-14 and 2026-11-16):** "if a client is connected, they are CONNECTED, meaning they have access to the basic feature of the fluxiq framework (llm)". No unlock step, unlock key, password re-entry, unlock ticket, PIN or "key locked" wait stands between an authenticated client (panel session, paired extension, SDK session) and the workspace's configured model key, after a restart, a reconnect or a logout included, and that covers standing authorizations such as a Flow's result check. Fix the backend and the client together; hiding a locked UI is not a fix. A missing key is a setup step, not a lock. Tenant and IAM isolation, revoking or disabling a client or key, and IAM denial still apply. This supersedes the locked-by-default designs in the hosted-platform and custody plans.
 
 **Build the whole Flow first; test it whole only when it should work** (user,
 2026-09-30 and 2026-10-02, reaffirmed 2026-10-29): a build explores and authors

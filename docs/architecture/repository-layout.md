@@ -897,9 +897,14 @@ shared rule fails with a message saying to merge Core's `dev` into it.
 
 ## Panel Commands
 
-`pnpm dev` builds the web panel host, runs repository-local FluxIQ setup, and
-starts the panel with this repository as `FLUXIQ_ROOT` and
-`FLUXIQ_HOST_MODULE` pointing at the host. `pnpm fluxiq:setup` prepares local
+`pnpm dev` builds the web panel host, runs repository-local FluxIQ setup,
+builds the Core web app for production (the build cache skips this when
+nothing changed) and starts it with `next start`, with this repository as
+`FLUXIQ_ROOT` and `FLUXIQ_HOST_MODULE` pointing at the host. The production
+build is the default because `next dev` compiles each page on its first visit
+and compiles Core from source, which made every newly opened page wait.
+`pnpm dev -- --dev` starts the hot-reloading development server instead, for
+work on the panel itself. `pnpm fluxiq:setup` prepares local
 FluxIQ state without starting the panel. Per `AGENTS.md`, do not start the
 panel unless the user has authorized panel management for the session.
 

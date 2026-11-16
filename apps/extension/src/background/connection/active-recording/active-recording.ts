@@ -23,27 +23,27 @@ import type {
   RecordingEventPayload,
   RecordingState,
   TabDescriptor
-} from "../../shared/protocol";
-import type { ActivePage } from "./active-page";
-import type { ActivityLog } from "./activity-log";
-import { unsupportedPageForUrl } from "./browser-state";
-import type { ContentAttachment } from "./content-attachment";
-import type { EventSequence } from "./event-sequence";
-import type { GatewayMessageSender } from "./gateway-session";
-import type { NavigationRecorder } from "./navigation-recorder";
-import type { PointerClickFilter } from "./pointer-click-filter";
-import type { ProjectContext } from "./project-context";
-import type { RecordingEvidenceReporter } from "./recording-evidence";
-import type { ScriptedNavigationIntent } from "./scripted-navigation/index";
-import { recordingActionChannels, recordingEnvironment, recordingSources } from "./recording-manifest";
+} from "../../../shared/protocol";
+import type { ActivePage } from "../active-page";
+import type { ActivityLog } from "../activity-log";
+import { unsupportedPageForUrl } from "../browser-state";
+import type { ContentAttachment } from "../content-attachment";
+import type { EventSequence } from "../event-sequence";
+import type { GatewayMessageSender } from "../gateway-session";
+import type { NavigationRecorder } from "../navigation-recorder";
+import type { PointerClickFilter } from "../pointer-click-filter";
+import type { ProjectContext } from "../project-context";
+import type { RecordingEvidenceReporter } from "../recording-evidence";
+import type { ScriptedNavigationIntent } from "../scripted-navigation/index";
+import { recordingActionChannels, recordingEnvironment, recordingSources } from "../recording-manifest";
 import {
   isRecordingStartRefusalError,
   recordingStartRefusalBlock,
   RecordingStartHandshake,
   type RecordingStartAttempt,
   type RecordingStartRefusal
-} from "./recording-start/index";
-import { compactObject } from "./value-readers";
+} from "../recording-start/index";
+import { compactObject } from "../value-readers";
 
 // How long a start waits on its project lookup before going on without a
 // project. The lookup reads FluxIQ's gateway snapshot over HTTP with no timeout
@@ -64,7 +64,7 @@ export type ActiveRecordingDeps = {
   readonly evidence: RecordingEvidenceReporter;
   readonly attachment: ContentAttachment;
   readonly navigation: NavigationRecorder;
-  readonly scriptedNavigation: ScriptedNavigationIntent;
+  readonly scriptedNavigation: Pick<ScriptedNavigationIntent, "cancelAll">;
   readonly clicks: PointerClickFilter;
   readonly sequence: EventSequence;
   readonly activityLog: ActivityLog;

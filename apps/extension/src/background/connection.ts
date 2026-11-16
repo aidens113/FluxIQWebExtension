@@ -39,6 +39,7 @@ import { activeTab, observedTabFrames, allTabs, ensureContentScript, sendToTab }
 import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
+import { chromeProjectChoiceStorage, panelChangesFor, ProjectFocus } from "./projects/index";
 import { RecordedStepIndex } from "./recorded-steps";
 import { ClientGatewayOutbox } from "@fluxiq/client-gateway-websocket";
 import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
@@ -59,6 +60,7 @@ import {
   fetchCoreRecordings,
   GatewaySession,
   NavigationRecorder,
+  PanelProjectAccess,
   PointerClickFilter,
   ProjectContext,
   RecordedEventIntake,
@@ -93,6 +95,9 @@ export class FluxIQConnection {
   private readonly transport: TabSnapshotTransport = { sendToTab, allTabFrames: observedTabFrames };
   private readonly gateway: GatewaySession;
   private readonly projects: ProjectContext;
+  private readonly focus: ProjectFocus;
+  /** The panel's hold on the project: which one its calls use, and its choice. */
+  readonly panelProjects: PanelProjectAccess;
   private readonly attachment: ContentAttachment;
   private readonly evidence: RecordingEvidenceReporter;
   private readonly tabs: TabRecorder;
@@ -123,7 +128,7 @@ export class FluxIQConnection {
 
     this.capturePolicy = new CapturePolicySource({
       call: (endpoint, payload) => callCoreProgram(this.coreApiCredentials(), endpoint, payload),
-      projectId: () => this.projects.activeRecordingProject() ?? this.session.projectId,
+      projectId: () => this.projects.current() ?? this.session.projectId,
       // A policy that arrives once a recording has started reaches the page
       // being recorded now; a tab attached later is sent it anyway.
       onChange: () => {
@@ -191,10 +196,25 @@ export class FluxIQConnection {
     this.projects = new ProjectContext({
       settings: () => this.settings,
       session: () => this.session,
-      adoptProjectId: (projectId) => this.persistSession(compactObject({ ...this.session, projectId })),
+      adoptProjectId: async (projectId) => {
+        await this.persistSession(compactObject({ ...this.session, projectId }));
+        // The panel follows Core's project from the status, not by asking.
+        this.emitStatus();
+      },
       onProjectName: () => this.emitStatus(),
+      choiceStorage: chromeProjectChoiceStorage(),
       onActivity
     });
+    // Tells Core the project the person chose, so its activity reaches this browser as it happens (`projects/project-focus.ts`).
+    this.focus = new ProjectFocus({
+      send: (type, payload) => this.gateway.send(type, payload),
+      connected: () => this.gateway.state() === "connected",
+      chosenProject: () => this.projects.chosenProject(),
+      onSendFailed: (error) => console.warn("FluxIQ could not be told which project this browser is working in.", error instanceof Error ? error.name : "non_error")
+    });
+    this.panelProjects = new PanelProjectAccess({ projects: this.projects, announceChosen: (projectId) => this.focus.chosen(projectId) });
+    // The person's saved project choice for this server address; a session that became ready before it was read hears it now.
+    void this.projects.loadChoice().then((changed) => (changed ? this.focus.announceHeld() : undefined)).catch(/* best-effort: an unreadable stored choice leaves this browser following Core's project */ () => undefined);
     this.attachment = new ContentAttachment({
       sendToTab,
       ensureContentScript,
@@ -311,9 +331,15 @@ export class FluxIQConnection {
       onActivity,
       emitStatus,
       recordEvent,
-      acceptActivity: (activity) => void this.activity.accept(activity),
+      acceptActivity: (activity) => void this.activity.accept(activity).then((kept) => {
+        // What Core pushed that the panel can act on: it reads again instead of on a timer.
+        const change = kept ? panelChangesFor(activity, Date.now()) : undefined;
+        if (change) void chrome.runtime.sendMessage(change).catch(/* best-effort: no panel is open to hear it */ () => undefined);
+      }),
       stopRecording: (notifyServer) => this.stopRecording(notifyServer),
       disconnect: () => this.disconnect(),
+      announceProjectFocus: () => this.focus.announceHeld(),
+      onProjectFocusRefused: (refusal) => this.addActivity("connection", "Project not switched for live updates", refusal.message, "warning"),
       traceCapture: new TracePageCapturer({ credentials: () => this.coreApiCredentials() })
     });
     // The page the automation drives, never an extension page or FluxIQ's
@@ -371,7 +397,9 @@ export class FluxIQConnection {
     const unsupportedPage = this.page.unsupported();
     const recordingBlock = this.recording.block();
     if (this.session.sessionId) status.sessionId = this.session.sessionId;
-    if (this.session.projectId !== undefined) status.projectId = this.session.projectId;
+    const projectId = this.projects.held() ?? this.session.projectId;
+    if (projectId !== undefined) status.projectId = projectId;
+    status.projectChosenBy = this.projects.chosenBy();
     const projectName = this.projects.currentName();
     if (projectName !== undefined) status.projectName = projectName;
     if (activeTabId !== undefined) status.activeTabId = activeTabId;
@@ -406,7 +434,10 @@ export class FluxIQConnection {
   }
 
   updateSettings(settings: FluxIQSettings): void {
+    const addressChanged = settings.coreApiUrl !== this.settings.coreApiUrl;
     this.settings = settings;
+    // Each server address keeps its own project choice.
+    if (addressChanged) void this.projects.loadChoice().catch(/* best-effort: an unreadable stored choice leaves this browser following Core's project */ () => undefined);
   }
 
   recordingLogPage(page: number, pageSize: number): RecordingLogPage {
@@ -592,7 +623,7 @@ export class FluxIQConnection {
 
   /** The project this browser's session belongs to, as FluxIQ last said. */
   projectId(): string | null | undefined {
-    return this.session.projectId;
+    return this.projects.held() ?? this.session.projectId;
   }
 
   /**

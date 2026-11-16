@@ -643,6 +643,7 @@ Client messages this extension sends:
 - `client.recording_event`
 - `client.snapshot`
 - `client.action_result`
+- `client.focus_project` (see [Project Focus](#project-focus))
 
 The gateway protocol also defines `client.recording_entry` and
 `client.error`, and FluxIQ's gateway client package can send both, but this
@@ -666,6 +667,35 @@ Current server message groups:
 - `server.ack`
 - `server.activity`, only to a session that declared the `fluxiq.activity`
   capability
+- `server.project_focused`, Core's answer to `client.focus_project`
+
+### Project Focus
+
+Core pushes `server.activity` to a session only for the session's own project,
+which pairing set (and a reconnect leaves unset). The person's project choice is
+kept here (`ProjectContext`, `background/projects/choice-storage.ts`), so without
+telling Core, a chosen project's work never reached the chat as it happened and
+the chat fell back to its slow read. `ProjectFocus` (`background/projects/project-focus.ts`)
+sends `client.focus_project` with the chosen project when the person chooses one
+(`projectChoice().choose`, which the panel's project messages use), with `null`
+when the choice is cleared (Core returns the session to its pairing's project),
+and again after every `server.session_ready` while a choice is held, since each
+new session starts at its pairing's project (`ServerCommandChannel.handleSessionReady`
+calls it right after the session is marked ready, before anything else is sent).
+A choice read from storage after the session became ready is sent then. It is
+sent only over a ready session, never put in the offline queue: a focus queued
+while offline would reach a later session than the one it was meant for.
+
+Core checks that the person who paired this browser may read the project in this
+browser's domain, as it checks the person's own paired program calls, then moves
+the session and answers `server.project_focused`. A refusal is a `server.error`
+with a `project_focus.*` code (`invalid`, `not_paired`, `refused`, `unavailable`)
+that leaves the session on its earlier project. It is about the project, not the
+connection: `ServerCommandChannel` hands it to the activity log as a warning
+(`background/projects/focus-refusal.ts`) and never marks the connection failed or
+sets its error, and the choice is kept. An older Core ignores the message. The
+moved project is also the one a token call naming no project reaches on Core,
+which the extension already names explicitly on every panel call.
 
 ### Live Activity
 
@@ -1346,7 +1376,7 @@ window in `chrome.storage.session` (`fluxiq.chatThread.<windowId>`). The
 extension gives the list no `unavailableReason`: its relays name the session's
 project for a message that names none, so the latest chat takes a first message
 before the status names a project. The
-message shapes are `PanelConversation*Request` in `shared/panel-conversation.ts`,
+message shapes are `PanelConversation*Request` in `shared/panel/conversation.ts`,
 re-exported from `shared/protocol.ts`.
 
 **Humanness per Flow and per task** (t900; user, 2026-11-11: "humanness slider
@@ -1369,7 +1399,7 @@ message, one Core call each:
 A task's level is read from its `list-project-tasks` row. Core refuses an
 out-of-range level by name; the panel shows Core's sentence and carries its code
 as `coreCode` (`background/connection/core-api.ts`, `panel/state/request.ts`).
-The shapes are in `shared/panel-humanness.ts`, re-exported from `shared/protocol.ts`.
+The shapes are in `shared/panel/humanness.ts`, re-exported from `shared/protocol.ts`.
 
 The mounted extension view accepts the bounded project-only navigation event fluxiq:chat-project with exactly { projectId }. It opens the ordinary chat tab and exposes data-fluxiq-chat-project plus data-fluxiq-chat-scope-state (loading, ready, error) for setup validation. Ready follows a successful authorized thread read; the event itself grants no permissions and executes no model capability. The Lab uses this same view and the ordinary composer.
 
@@ -2047,7 +2077,7 @@ once. Stop does not resolve while any pre-boundary continuation can later
 activate the recorder.
 
 A recording starts once
-([`background/connection/active-recording.ts`](../../apps/extension/src/background/connection/active-recording.ts)).
+([`background/connection/active-recording/active-recording.ts`](../../apps/extension/src/background/connection/active-recording/active-recording.ts)).
 Every way into one, a local start or a `server.start_recording`, goes through
 `beginOnce`. A start is marked the moment it is decided, and another that arrives
 meanwhile waits for it. `beginAccepted` first reads which recording a

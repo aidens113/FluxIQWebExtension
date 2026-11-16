@@ -9,17 +9,17 @@ import type {
   RecordingEventPayload,
   TabDescriptor,
   UnsupportedPageState
-} from "../../../shared/protocol";
-import type { ActivePage } from "../active-page";
+} from "../../../../shared/protocol";
+import type { ActivePage } from "../../active-page";
 import { ActiveRecording, type ActiveRecordingDeps } from "../active-recording";
-import { ActivityLog } from "../activity-log";
-import type { ContentAttachment } from "../content-attachment";
-import { EventSequence } from "../event-sequence";
-import { NavigationRecorder } from "../navigation-recorder";
-import { PointerClickFilter } from "../pointer-click-filter";
-import type { ProjectContext } from "../project-context";
-import type { RecordingEvidenceReporter } from "../recording-evidence";
-import { classifyRecordingStartRefusal } from "../recording-start/index";
+import { ActivityLog } from "../../activity-log";
+import type { ContentAttachment } from "../../content-attachment";
+import { EventSequence } from "../../event-sequence";
+import { NavigationRecorder } from "../../navigation-recorder";
+import { PointerClickFilter } from "../../pointer-click-filter";
+import type { ProjectContext } from "../../project-context";
+import type { RecordingEvidenceReporter } from "../../recording-evidence";
+import { classifyRecordingStartRefusal } from "../../recording-start/index";
 
 // Hand-driven timers, on the pattern handshake.test.ts uses.
 export function fakeTimers(t: TestContext) {
@@ -157,7 +157,7 @@ export function harness(options: {
     navigation: options.navigation ?? new NavigationRecorder(),
     scriptedNavigation: {
       cancelAll: (code: string) => { scriptedNavigationCancellations.push(code); }
-    } as never,
+    },
     clicks: new PointerClickFilter(),
     sequence: new EventSequence(),
     activityLog: new ActivityLog(),

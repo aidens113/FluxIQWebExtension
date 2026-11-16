@@ -82,4 +82,5 @@
 .setup-card-step { font-size: 14px; font-weight: 700; }
 .setup-card-line { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .chat-screen:not(:has(.chat-empty:not([hidden]))) > .setup-card { display: none; }
-.chat-screen:has(> .setup-card:not([hidden])) .chat-key-line { display: none; }
+.chat-screen:has(> .setup-card:not([hidden])) .chat-key-line,
+.chat-screen:has(> .setup-card[data-dismissed="true"]) .chat-key-line { display: none; }

@@ -3,7 +3,7 @@ import type { ExtensionStatus } from "../../../shared/protocol";
 import type { PanelStore } from "../../state";
 import { downloadFile } from "../../automations";
 import { listenToRuntime } from "../feed";
-import { activityPort, conversationPort, modelsPort, recordingsPort, resultsPort, runsPort, taskSettingsPort, type RuntimeListen } from "./ports";
+import { activityPort, changesPort, conversationPort, modelsPort, recordingsPort, resultsPort, runsPort, taskSettingsPort, type RuntimeListen } from "./ports";
 
 /**
  * The chat's transport over the extension's background: each port sends the
@@ -22,6 +22,7 @@ export function createExtensionChatTransport(
   return {
     conversation: conversationPort(request),
     activity: activityPort(request, listen),
+    changes: changesPort(listen),
     runs: runsPort(request),
     recordings: recordingsPort(request),
     models: modelsPort(request),

@@ -30,10 +30,19 @@ await run("node", [path.join(repoRoot, "domain", "scripts", "setup-fluxiq.mjs")]
   ...env,
   FLUXIQ_WEB_AUTOMATION_ROOT: repoRoot
 });
-console.log("[FluxIQ Web Automation] Starting @fluxiq/web from the core framework workspace...");
+// The panel a person uses is the production build: `next dev` compiles every
+// page on its first visit and compiles Core from source, which made each new
+// tab wait. The build cache skips the build when nothing changed. `--dev`
+// keeps the hot-reloading server for work on the panel itself.
+const devServer = process.argv.slice(2).includes("--dev");
+if (!devServer) {
+  console.log("[FluxIQ Web Automation] Building @fluxiq/web (skipped when nothing changed)...");
+  await run("pnpm", ["--dir", fluxiqRoot, "--filter", "@fluxiq/web", "build"], env);
+}
+console.log(`[FluxIQ Web Automation] Starting @fluxiq/web (${devServer ? "development server" : "production build"}) from the core framework workspace...`);
 console.log(`[FluxIQ Web Automation] FLUXIQ_HOST_MODULE=${env.FLUXIQ_HOST_MODULE}`);
 
-const child = spawn("pnpm", ["--dir", fluxiqRoot, "--filter", "@fluxiq/web", "dev"], {
+const child = spawn("pnpm", ["--dir", fluxiqRoot, "--filter", "@fluxiq/web", devServer ? "dev" : "start"], {
   env,
   stdio: "inherit",
   shell: process.platform === "win32"

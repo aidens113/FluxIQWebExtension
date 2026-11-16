@@ -49,7 +49,11 @@ const SAVE_LABEL = "Save changes";
 export type SettingsView = { readonly element: HTMLElement; shown(): void; hidden(): void };
 
 /** What settings reads beside the status: the model key, through the setup screens' one seam. Absent, the key line says it could not check. */
-export type SettingsViewOptions = { readonly setup?: SetupPort };
+export type SettingsViewOptions = {
+  readonly setup?: SetupPort;
+  /** Opens the header's project switcher (the Project row's Change). Absent: the row names the project and offers no button. */
+  readonly changeProject?: () => void;
+};
 
 /** Builds settings; `close` goes back to where the person was. */
 export function createSettingsView(context: PanelContext, close: () => void, options: SettingsViewOptions = {}): SettingsView {
@@ -66,7 +70,10 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const dot = createElement("span", { className: "dot", attrs: { "aria-hidden": "true" } });
   const stateLine = createElement("p", { className: "settings-state-text", text: "Checking the connection..." });
   const approval = createElement("p", { className: "card-line" });
-  const project = createElement("p", { className: "card-line" });
+  const project = createElement("p", { className: "card-line settings-project-name" });
+  const changeProject = createElement("button", { id: "changeProjectButton", className: "small-button", text: "Change", hidden: true, attrs: { type: "button", "aria-label": "Change project" } });
+  changeProject.addEventListener("click", () => options.changeProject?.());
+  const projectRow = createElement("div", { className: "settings-project", attrs: { "aria-label": "Project" } }, [project, changeProject]);
   const durability = createElement("p", { className: "card-line", hidden: true });
   const keyLine = createElement("p", { className: "card-line" });
   const draftLine = createElement("p", { className: "card-line", text: "You have changes that aren't saved yet.", hidden: true });
@@ -97,7 +104,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
         createElement("div", { className: "settings-state" }, [dot, stateLine]),
         approval,
         durability,
-        project,
+        projectRow,
         form.parts.reconnect,
         createElement("div", { className: "card-actions" }, [disconnectButton])
       ]),
@@ -251,6 +258,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     stateLine.textContent = copy.sentence;
     approval.textContent = approvalLine(status);
     project.textContent = projectLine(status);
+    changeProject.hidden = options.changeProject === undefined || status.connectionState !== "connected";
     durability.textContent = durabilityLine(status);
     durability.hidden = durability.textContent === "";
     keyLine.textContent = modelKeyLine(modelKey, status.connectionState === "connected");

@@ -53,6 +53,8 @@ export type ChatPanelOptions = {
   asks?: ChatAskPort;
   /** The composer's host control ("Show me how", beside "+"), as the package takes it. */
   composer?: NonNullable<ChatWidgetOptions["composer"]>;
+  /** The panel's one activity feed (`feed/shared-activity-feed.ts`), so the chat does not start a second. */
+  activity?: NonNullable<ChatWidgetOptions["activity"]>;
   /** Where this window's thread is remembered; the browser's session storage when absent. */
   threadMemory?: ThreadMemory;
 };

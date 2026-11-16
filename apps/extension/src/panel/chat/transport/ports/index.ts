@@ -1,5 +1,6 @@
 // One port of the chat's transport each, over the background's messages.
 export { activityPort, type RuntimeListen } from "./activity";
+export { changesPort } from "./changes";
 export { conversationPort } from "./conversation";
 export { modelsPort } from "./models";
 export { recordingsPort } from "./recordings";

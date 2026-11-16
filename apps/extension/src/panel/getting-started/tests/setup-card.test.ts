@@ -27,7 +27,7 @@ test("configuration reminder leaves connected work usable and opens ordinary set
     const calls: unknown[] = [];
     const store = setupStore(t, calls);
     const card = createSetupCard({ store, surface: "popup" } as PanelContext);
-    const status = statusWith({ connectionState: "connected", paired: true });
+    const status = statusWith({ connectionState: "connected", paired: true, gatewayUrl: "ws://first.test:3" });
     const guide = startGuide(status, false, undefined, "missing");
     card.render(guide, status);
     const root = fake(card.element);
@@ -56,5 +56,23 @@ test("unavailable configuration shows its cause and clears after a fresh availab
     assert.doesNotMatch(root.textContent, /unlock|password/iu);
     card.render(startGuide(status, false, undefined, "ready"), status);
     assert.equal(root.hidden, true);
+  });
+});
+
+test("Not now stays dismissed for that server across new cards, and not for another", async (t) => {
+  await withFakeDocument(async () => {
+    const store = setupStore(t);
+    const status = statusWith({ connectionState: "connected", paired: true, gatewayUrl: "ws://dismissal.test:1" });
+    const guide = startGuide(status, false, undefined, "missing");
+    const first = createSetupCard({ store, surface: "sidepanel" } as PanelContext);
+    first.render(guide, status);
+    fake(first.element).descendants().find((node) => node.textContent === "Not now")!.dispatch("click");
+    const again = createSetupCard({ store, surface: "sidepanel" } as PanelContext);
+    again.render(guide, status);
+    assert.equal(fake(again.element).hidden, true);
+    assert.equal(fake(again.element).getAttribute("data-dismissed"), "true");
+    const other = statusWith({ connectionState: "connected", paired: true, gatewayUrl: "ws://other.test:2" });
+    again.render(guide, other);
+    assert.equal(fake(again.element).hidden, false);
   });
 });

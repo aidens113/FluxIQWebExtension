@@ -6,7 +6,7 @@
 
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createElement } from "../dom";
-import { createOpenFluxIQButton, type OpenFluxIQButton } from "../open-fluxiq";
+import { createOpenFluxIQButton, openFluxIQWebPage, type OpenFluxIQButton } from "../open-fluxiq";
 import type { PanelStore } from "../state";
 import type { AutomationRowView, AutomationsController, ExportFormat } from "./controller";
 import { createFlowHumannessSection, flowHumannessPort } from "./humanness";
@@ -26,11 +26,20 @@ export type AutomationStrip = {
 };
 
 /** Builds the strip over `controller`. */
-export function createAutomationStrip(request: PanelStore["request"], controller: AutomationsController): AutomationStrip {
+export function createAutomationStrip(request: PanelStore["request"], controller: AutomationsController, openPage: (url: string) => void = (url) => { window.open(url, "_blank", "noopener,noreferrer"); }): AutomationStrip {
   let run = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
   let stop = stopButton();
   const stopStatus = createElement("span", { className: "strip-stop-status", attrs: { role: "status", "aria-live": "polite" } });
   const open = createOpenFluxIQButton(request, { label: "Open in FluxIQ", look: "link" }, () => shown?.flowId);
+  // The last run's data (or the run, when it collected none) on FluxIQ's web pages (`/data`, `/runs/<id>`).
+  const dataLink = createElement("button", { className: "link-button strip-data-link", text: "Open data in FluxIQ", hidden: true, attrs: { type: "button" } });
+  let dataPage: { readonly runId: string } | undefined;
+  dataLink.addEventListener("click", () => {
+    if (dataPage === undefined || element.hidden) return;
+    const row = controller.state().rows.find((candidate) => candidate.flowId === shown?.flowId);
+    const page = row !== undefined && row.datasets.length > 0 ? { kind: "data" } as const : { kind: "run", runId: dataPage.runId } as const;
+    openFluxIQWebPage(lastStatus?.settings?.coreApiUrl, page, openPage);
+  });
   const lines = createElement("p", { className: "strip-lines" });
   const hint = createElement("p", { className: "strip-hint", hidden: true });
   const exports = createElement("span", { className: "strip-exports", hidden: true });
@@ -40,7 +49,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     createElement("div", { className: "strip-head" }, [lines, run, stop]),
     stopStatus,
     hint,
-    createElement("div", { className: "strip-links" }, [exports, open.element]),
+    createElement("div", { className: "strip-links" }, [exports, dataLink, open.element]),
     humanness.element,
     notice
   ]);
@@ -73,7 +82,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   bindStop(stop, renderedOwner);
 
   function retireOwner(owner: number): void {
-    shown = undefined; renderedOwner = owner; datasets.clear(); exports.replaceChildren();
+    shown = undefined; renderedOwner = owner; datasets.clear(); exports.replaceChildren(); dataPage = undefined; dataLink.hidden = true;
     noticeButton?.element.remove(); noticeButton = undefined; noticeKey = undefined;
     noticeText.textContent = ""; notice.hidden = true; lines.textContent = ""; hint.textContent = "";
     const nextRun = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
@@ -168,6 +177,9 @@ export function createAutomationStrip(request: PanelStore["request"], controller
       if (exports.children[position] !== child) exports.insertBefore(child, exports.children[position] ?? null);
     });
     exports.hidden = ordered.length === 0;
+    dataPage = row !== undefined && !row.running && row.runId !== undefined ? { runId: row.runId } : undefined;
+    dataLink.hidden = dataPage === undefined;
+    dataLink.textContent = row !== undefined && row.datasets.length > 0 ? "Open data in FluxIQ" : "Open run in FluxIQ";
     notice.hidden = row?.notice === undefined;
     noticeText.textContent = row?.notice?.sentence ?? "";
     notice.title = row?.notice?.detail ?? "";

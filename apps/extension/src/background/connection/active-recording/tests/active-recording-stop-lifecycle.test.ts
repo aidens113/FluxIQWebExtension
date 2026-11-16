@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { TabDescriptor } from "../../../shared/protocol";
-import { NavigationRecorder } from "../navigation-recorder";
+import type { TabDescriptor } from "../../../../shared/protocol";
+import { NavigationRecorder } from "../../navigation-recorder";
 import { fakeTimers, harness, NO_PROJECT, settle, STALE, stubManifest } from "./active-recording-test-harness";
 
 test("stop flushes a pending navigation while the recording is active before notifying FluxIQ", async () => {

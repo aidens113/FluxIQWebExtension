@@ -109,7 +109,7 @@ export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolea
         ...base,
         steps: [
           step("start", "Start FluxIQ", "done", undefined, "FluxIQ is running"),
-          paired ? signin : step("signin", "Sign in to FluxIQ", "todo", words.SIGN_IN_TO_APPROVE_LINE),
+          paired ? signin : step("signin", "Sign in to FluxIQ", "waiting", words.SIGN_IN_TO_APPROVE_LINE),
           step("connect", "Connect this browser", "done", undefined, "Connected"),
           step("approve", "Approve this browser in FluxIQ", "waiting", words.APPROVE_LINE),
           ...later

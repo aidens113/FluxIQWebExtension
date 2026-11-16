@@ -2,8 +2,9 @@
 // `sidepanel/index.ts` each call `mountPanel` with the stub page's `#app` and
 // their surface. There is one UI, laid out like a chat app:
 //
-//   top bar          FluxIQ, the Chat / Automations tabs, the connection
-//                    dot, the gear, Open FluxIQ (`top-bar.ts`)
+//   header           the project switcher (`panel/projects`), the Chat /
+//                    Automations tabs, the connection dot, Settings and
+//                    Open FluxIQ (`top-bar.ts`)
 //   recording bar    only while a recording runs (`panel/recording`)
 //   one screen       chosen by `screen-state.ts`:
 //     chat             the whole panel: the chat (`panel/chat`), with a slim
@@ -20,6 +21,7 @@
 //   panel/automations/    the list, the strip, Run and exports
 //   panel/recording/      "Show me how" (in the composer), the recording bar, extraction's entry, review
 //   panel/open-fluxiq/    the Open FluxIQ button
+//   panel/projects/       the project switcher and its port
 //   panel/copy/, dom/, theme/tokens.css, extraction/, chat/
 //
 // The empty latest chat's "Extract data from this page" shows the Automations
@@ -48,11 +50,12 @@
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { chooseAutomation, createAutomationsTab } from "../automations";
-import { createActivityFeed, createChatOwnerContext, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
+import { createActivityFeed, createChatOwnerContext, createChatPanel, createSharedActivityFeed, type ActivityFeed, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
 import { bindChatProjectNavigation } from "../chat/project-navigation";
 import { createModelKeyReader, createSetupCard, createStartView, extensionSetupPort, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
+import { createProjectSelector, extensionProjectsPort } from "../projects";
 import { createRecordingControls, createRecordingReview } from "../recording";
 import { createExtensionLibrary } from "../library";
 import { createTasksPanel } from "../tasks";
@@ -80,11 +83,16 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
   let visible = true;
   let connected = false;
   let activatedRow: HTMLElement | undefined;
+  let renderedStatus: string | undefined;
+  /** The project the library last rendered for: undefined before the first, null for none. */
+  let renderedProject: string | null | undefined;
   const runFollow = createRunFollow();
 
   // A recording that ends goes to the next message, and the caret goes into the box (`panel/recording`).
   const recording = createRecordingControls(context, { attach: () => chat.attachLatestRecording(), attached: () => chat.focusComposer() });
-  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style), { onExtract: () => openExtraction(), composer: { action: recording.recordButton } });
+  // The shell reads FluxIQ's activity once; the chat shows the same feed through this stand-in.
+  const sharedActivity = createSharedActivityFeed();
+  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style), { onExtract: () => openExtraction(), composer: { action: recording.recordButton }, activity: sharedActivity.source });
   const review = createRecordingReview(context, { onAttach: () => chat.attachLatestRecording() });
   const tasks = createTasksPanel(context, ports, { openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }), showAutomations: () => dispatch({ type: "tab", tab: "automations" }) });
   const library = createExtensionLibrary(store.request, ports.library, {
@@ -140,11 +148,13 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
     }, () => {
       if (!current()) return;
       if (next.snapshot().reach === "unsupported") activityUnsupported = true;
+      sharedActivity.changed();
       observeWorking();
       followRun();
     });
     function current(): boolean { return activity === next && lease.current(); }
     activity = next;
+    sharedActivity.use(next);
     activityCurrent = current;
     if (!activityUnsupported) { next.start(); void next.read(); }
     observeWorking();
@@ -190,12 +200,20 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
   // Coming back to the panel (a Firefox popup closes when Open FluxIQ is pressed; a side panel only loses focus) reads the key again.
   window.addEventListener("focus", () => keyReader.refresh());
   root.ownerDocument.addEventListener?.("visibilitychange", () => { if (root.ownerDocument.visibilityState === "visible") keyReader.refresh(); });
-  const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }), { setup: ports.setup ?? extensionSetupPort(store.request) });
-  const openIcon = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "icon" });
+  const projects = createProjectSelector(store.request, ports.projects ?? extensionProjectsPort(store.request), {
+    openAll: () => void store.request({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "projects" })
+  });
+  const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }), { setup: setupPort, changeProject: () => projects.open() });
+  // Open FluxIQ opens the open automation's page, and the web panel's home otherwise.
+  const openIcon = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "icon" }, () => {
+    const target = chat.target();
+    return target.kind === "automation" ? target.flowId : undefined;
+  });
   const topBar = createTopBar({
     onTab: (tab) => dispatch({ type: "tab", tab }),
     onGear: () => dispatch({ type: "gear" }),
-    openFluxIQ: openIcon.element
+    openFluxIQ: openIcon.element,
+    projects: projects.element
   });
 
   const chatScreen = createElement("section", {
@@ -291,13 +309,23 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
     if (replaced) replaceWorkingFeed();
     else observeWorking();
     keyReader.observe(status.connectionState === "connected");
-    topBar.render(status);
-    openIcon.observe(status);
-    recording.render(status);
-    review.render(status);
-    chat.render(status);
-    automations.render(status);
-    library?.render(typeof status.projectId === "string" ? status.projectId : undefined);
+    // A push that repeats the status (the connecting probe, a loss change) re-renders nothing but the screen choice below.
+    const signature = JSON.stringify(status);
+    if (signature !== renderedStatus) {
+      renderedStatus = signature;
+      topBar.render(status);
+      projects.render(status);
+      openIcon.observe(status);
+      recording.render(status);
+      review.render(status);
+      chat.render(status);
+      automations.render(status);
+      const projectId = typeof status.projectId === "string" ? status.projectId : null;
+      if (projectId !== renderedProject) {
+        renderedProject = projectId;
+        library?.render(projectId ?? undefined);
+      }
+    }
     // The relay forgets its state when the worker restarts; read it again on reconnecting.
     const nowConnected = status.connectionState === "connected";
     if (nowConnected && !connected && !replaced && !activityUnsupported) void activity?.read();

@@ -50,7 +50,7 @@ test("connecting and reconnecting: the connect step is under way, with Cancel or
 test("pairing: FluxIQ is reached and connected, approval is under way with the code", () => {
   const guide = startGuide(statusWith({ connectionState: "pairing", pairingReferenceCode: "482913" }), false);
   assert.equal(guide.gated, true);
-  assert.deepEqual(states(guide), ["start:done", "signin:todo", "connect:done", "approve:waiting", "key:todo"]);
+  assert.deepEqual(states(guide), ["start:done", "signin:waiting", "connect:done", "approve:waiting", "key:todo"]);
   assert.equal(guide.pairingCode, "482913");
   assert.equal(guide.connect, undefined, "no Connect while waiting for approval");
   assert.equal(startGuide(statusWith({ connectionState: "pairing" }), false).pairingCode, "------", "a code not yet sent shows as dashes");
@@ -143,5 +143,13 @@ test("the Lab's connect button names: exactly one of Connect, Try again, Try now
   const idle: ExtensionStatus["connectionState"][] = ["disconnected", "error", "reconnecting"];
   for (const connectionState of idle) {
     assert.match(startGuide(statusWith({ connectionState }), false).connect?.label ?? "", /^(Connect|Try again|Try now)$/u, connectionState);
+  }
+});
+
+test("the sign-in step never prints a default credential", () => {
+  for (const state of ["disconnected", "pairing"] as const) {
+    const line = startGuide(statusWith({ connectionState: state }), false).steps.find((item) => item.key === "signin")?.line ?? "";
+    assert.doesNotMatch(line, /admin|password/iu, state);
+    assert.match(line, /sign in/iu, state);
   }
 });

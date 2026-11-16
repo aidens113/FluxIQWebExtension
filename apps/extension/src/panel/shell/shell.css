@@ -48,12 +48,16 @@ h2 { font-size: 13px; }
   border-bottom: 1px solid var(--divider);
   background: var(--surface);
 }
-.top-brand { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
+.top-bar { flex-wrap: wrap; }
+.top-brand { display: flex; flex: 1 1 auto; align-items: center; gap: 7px; min-width: 0; }
+.top-brand > :not(.brand-mark) { min-width: 0; }
 .brand-mark { display: grid; place-items: center; width: 24px; height: 24px; color: var(--text); }
 .brand-mark svg { display: block; }
 .brand-mark .logo-node { fill: var(--accent); }
 .top-name { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
-.top-tabs { display: flex; flex: 1 1 auto; justify-content: center; gap: 2px; min-width: 0; }
+.top-tabs { display: flex; flex: 0 1 auto; justify-content: center; gap: 2px; min-width: 0; }
+/* Narrow (the 380 px popup, a thin side panel): the tabs take their own row under the project and the controls. */
+@media (max-width: 460px) { .top-tabs { order: 3; flex: 1 1 100%; } }
 .top-tab {
   min-height: 30px;
   border: 0;
@@ -70,7 +74,9 @@ h2 { font-size: 13px; }
 .top-actions { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
 .top-actions .icon-button { width: 30px; min-height: 30px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
 .top-actions .icon-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-.top-actions .icon-button.active { background: transparent; color: var(--accent-text); }
+.top-actions .icon-button.active, .top-actions .top-settings.active { background: transparent; color: var(--accent-text); }
+.top-settings { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; border-color: transparent; padding: 4px 8px; color: var(--muted); font-weight: 500; }
+.top-settings:hover:not(:disabled) { color: var(--text); }
 .top-dot { margin: 0 5px; width: 6px; height: 6px; }
 /* The Open FluxIQ icon's failure line drops below the bar instead of widening it. */
 .top-actions .open-fluxiq { position: static; }

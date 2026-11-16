@@ -10,7 +10,7 @@
 
 import type { ActivityEntry, RecordingEventPayload } from "../../shared/protocol";
 import type { ActivePage } from "./active-page";
-import type { ActiveRecording } from "./active-recording";
+import type { ActiveRecording } from "./active-recording/index";
 import { unsupportedPageForUrl } from "./browser-state";
 import type { ContentAttachment } from "./content-attachment";
 import { isDomSnapshotPayload } from "./dom-snapshot";

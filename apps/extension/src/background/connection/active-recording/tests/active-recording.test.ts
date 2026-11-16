@@ -6,9 +6,9 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { UnsupportedPageState } from "../../../shared/protocol";
+import type { UnsupportedPageState } from "../../../../shared/protocol";
 import { RECORDING_START_PROJECT_LOOKUP_BOUND_MS } from "../active-recording";
-import { RECORDING_START_ACCEPT_TIMEOUT_MS } from "../recording-start/index";
+import { RECORDING_START_ACCEPT_TIMEOUT_MS } from "../../recording-start/index";
 import { fakeTimers, harness, NO_PROJECT, settle, STALE, stubManifest } from "./active-recording-test-harness";
 
 test("nothing is sent while disconnected, and an unsupported page refuses with its reason", async () => {
