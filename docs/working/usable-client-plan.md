@@ -37,8 +37,41 @@ Review of [hosted-platform-launch-plan.md](./hosted-platform-launch-plan.md) as 
 
 | Report | Question |
 | --- | --- |
-| `reports/extension-navigation-audit.md` (running) | Which extension journeys work, break or are missing, and why |
-| `reports/unlock-removal-verification.md` (running) | Whether t914 removed every unlock surface a connected client meets |
+| [extension-navigation-audit](./usable-client-plan/reports/extension-navigation-audit.md) | Which extension journeys work, break or are missing, and why |
+| [unlock-removal-verification](./usable-client-plan/reports/unlock-removal-verification.md) | Whether t914 removed every unlock surface a connected client meets |
+| [core-panel-audit](./usable-client-plan/reports/core-panel-audit.md) | Why the Core web panel is slow and what configuration and navigation it lacks |
+
+Findings in brief: the production unlock path is clean on t914, but the lock machinery, wording and docs remain and a custom host could revive the wait; keys saved before t914 need one panel sign-in to upgrade. The extension has no project concept (Core refuses `projects` and `create-project` to paired tokens) and buries chat navigation in a closed drawer; it polls every 4 seconds and fetches a Core snapshot in front of relay calls. The Core panel runs on the Next development server, fetches projects twice per page, fans Home out to 1+2N requests every 30 seconds, mounts a closed chat on every page, and has no projects page, chats page or client-connection settings.
+
+## Assignments (task t915, `fxwork/t915`)
+
+| Unit | Tier | Owned files (summary) | Report |
+| --- | --- | --- | --- |
+| U1 unlock cleanup | worker | Core lock path, secret-keys dead types, contracts model-keys, two web files, Core docs | `reports/unlock-cleanup.md` |
+| U2 paired project access | worker-heavy | Core program-route allowlist, projects handler | `reports/core-project-access.md` |
+| U3 extension background | worker | shared constants and protocol, background/panel, project context, runtime status, quickstart | `reports/extension-background-projects.md` |
+| U4 ui-components navigation | worker | ui-components chat, new project-switcher | `reports/ui-components-navigation.md` |
+| U5 extension panel shell | worker | apps/extension/src/panel, background/panel/open-fluxiq.ts | `reports/extension-panel-shell.md` |
+| W1 panel launch | lead | scripts/run-fluxiq-web.mjs, layout and install docs | this ledger |
+| W2 panel network cost | worker | web top-bar, dock, home | `reports/core-panel-network.md` |
+| W3 panel projects and chats | worker | web projects and chats pages, nav, presets, flows list | `reports/core-panel-projects-chats.md` |
+| W4 panel client connection | worker | web settings-page (not engine-tools.ts), security/access | `reports/core-panel-connect-settings.md` |
+
+## Stable Interfaces (fixed before dispatch, 2026-11-16)
+
+Workers build against these at the same time; a change needs the lead.
+
+- **Core paired-client API (U2 implements, U3 consumes).** A paired extension token may call automation-studio `projects` and `create-project`. For a token caller every listed project carries at least `id`, `name`, `updatedAt` and no owner or member identities; `create-project` from a token accepts only `{ name }`. `update-project` and `delete-project` stay refused to tokens.
+- **Extension runtime messages (U3 implements, U5 consumes),** in `shared/constants.ts` `RUNTIME_MESSAGES` and typed in `shared/protocol.ts`:
+  - `panelListProjects` = `"fluxiq.panel.listProjects"` -> `{ ok: true, projects: PanelProjectSummary[], selectedProjectId: string | null }`, with `PanelProjectSummary = { id: string; name: string; updatedAt?: string }`.
+  - `panelCreateProject` = `"fluxiq.panel.createProject"` `{ name }` -> `{ ok: true, project: PanelProjectSummary }`.
+  - `panelSelectProject` = `"fluxiq.panel.selectProject"` `{ projectId: string | null }` (null means follow Core) -> `{ ok: true }`. The status the panel reads and receives carries `projectId`, `projectName` and `projectChosenBy: "person" | "core"`. Every relay without an explicit project uses the selection.
+  - `panelChanges` = `"fluxiq.panel.changes"`: a push from the worker to the panel `{ projectId: string | null, conversationIds?: string[], at: number }` whenever Core's gateway reports a conversation, attempt or run change. If Core pushes nothing usable, U3 says so and U5 keeps the existing reads.
+  - Every failure is `{ ok: false, error: { code, message } }`, as existing panel messages do.
+- **ui-components (U4 implements, U5 consumes),** exported from `@fluxiq/ui-components`:
+  - `createProjectSwitcher({ port, onSelect, onOpenAll? })` -> `{ element, setCurrent(project | null), open(), close(), refresh(), destroy() }`, where `port: ProjectsPort = { list(): Promise<ProjectSummary[]>; create(name: string): Promise<ProjectSummary> }` and `ProjectSummary = { id: string; name: string; updatedAt?: string }`. Vanilla DOM in the chat widget's style; list, search, New project, and "All projects in FluxIQ" when `onOpenAll` is given.
+  - The chat widget shows a chat bar by default: current chat title, a Chats button (the list, with a waiting badge) and "+ New chat". When its `projectId` supplier returns a different project, the thread list and the open chat follow that project.
+  - The chat widget accepts an injected activity feed (option `activity`) instead of always starting its own.
 
 ## Work Ledger
 
@@ -49,6 +82,14 @@ Review of [hosted-platform-launch-plan.md](./hosted-platform-launch-plan.md) as 
 - Validation: `git log --oneline dev..HEAD` in `fxwork/t914` (both repositories) -> 11 extension and 17 Core commits unmerged; `git status --short | wc -l` -> 122 extension and 10 Core uncommitted paths; newest uncommitted edit 2026-11-14 23:26.
 - Outcome: plan opened; discovery dispatched.
 - Follow-up: implementation briefs once discovery returns.
+
+### 2026-11-16 — Discovery returned; eight units dispatched
+- Agent: Senior supervisor; discovery by three workers (reports above).
+- Changed: this document (interfaces, assignments); task t915 started (`fxwork/t915`, both repositories fast-forwarded to t914's committed tips `ee9cacd68` and `592a188a4`); `scripts/run-fluxiq-web.mjs` and two docs in t915 (W1, uncommitted until a live start passes).
+- Why: the three reports agree on the causes recorded under Discovery.
+- Validation: `pnpm -r --filter "./packages/**" build` in t915 Core, then `pnpm install --frozen-lockfile` and `pnpm -r build` in t915 extension -> exit 0 (test-runner rebuilt because workers' edits began during the build).
+- Outcome: U1-U5 and W2-W4 running in parallel on disjoint files.
+- Follow-up: verify each report, integrate, build, then a headed live check of every journey.
 
 ## Open Questions
 
