@@ -540,6 +540,8 @@ lands; its "one judged whole run" stands and moves to the next real attempt.
 
 **No PIN on normal actions, and never mid-Flow** (user, 2026-11-03): "NO PIN FOR ANY NORMAL ACTIONS. Maybe just a pin to do dangerous actions ONLY THE FIRST TIME A USER DOES IT, AND NEVER IN THE MIDDLE OF A FLOW, ONLY WHEN FIRST STARTING A FLOW/CHAT."
 
+**A connected client has model access (user, 2026-11-16):** "if a client is connected, they are CONNECTED, meaning they have access to the basic feature of the fluxiq framework (llm)". No unlock step, unlock key, password re-entry, unlock ticket or "key locked" wait stands between an authenticated client (panel session, paired extension, SDK session) and the workspace's configured model key, after a restart or a logout included. A missing key is a setup step, not a lock. Revoking or disabling a client or key, and IAM denial, still apply.
+
 **Build the whole Flow first; test it whole only when it should work** (user,
 2026-09-30 and 2026-10-02, reaffirmed 2026-10-29): a build explores and authors
 the draft live, and its first run from the start is the test it asks for once it

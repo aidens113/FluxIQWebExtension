@@ -1,0 +1,112 @@
+# Usable Client Plan
+
+Status: Active
+Status detail: Discovery running; implementation will build on task t914's committed tip in a new paired task.
+Created: 2026-11-16
+Last updated: 2026-11-16
+Owner: Senior supervisor agent
+Scope: Make the extension and the Core web panel usable for a person testing them today: no model-key unlock for connected clients, project and chat navigation entirely inside the extension, the settings a person needs, and a panel that is fast to open and move around.
+Paired document: none yet (Core edits are recorded here; a Core-side record is owed if the Core part grows beyond this task)
+Related: [Hosted platform launch](./hosted-platform-launch-plan.md), [MVP launch](./mvp-launch-plan.md)
+
+## Current State
+
+**User request (2026-11-16):** "we need to get a working version of the extension/panel that I can test done today. The UI base looks good on the surface, but is functionality unusable. The panel is slow, seems to be missing some needed configuration stuff/ux navigation, and generally just needs to be reworked. Extension needs to actually be able to navigate through different chats and projects entirely through the extension, right now you cant do anything. And ENSURE that dumb unlock key feature is removed. if a client is connected, they are CONNECTED, meaning they have access to the basic feature of the fluxiq framework (llm)".
+
+**Findings so far:**
+
+- The unlock removal the user wants was already built by Codex on task t914 (Core `79f175d2a`, extension `1285dd320`, 2026-11-14) and verified by unit tests only. t914 never merged, so `dev`, which the user runs, still has the unlock.
+- t914 holds 17 Core commits (820 files, +34,605/-3,492) and 11 extension commits of hosted-platform foundation, all unmerged. Its worktree also holds 105 uncommitted extension files of an unfinished content-script "admission" privacy refactor, idle since 2026-11-14 23:26. That WIP stays untouched in `fxwork/t914`.
+- `pnpm dev` serves the Core panel with `next dev --turbopack`, a development server that compiles each route on first request; this is a likely cause of the slow panel and is being measured.
+
+**Decision (lead, 2026-11-16):** build today's work on t914's committed tip (both repositories) in a new paired task, rather than re-implementing the unlock removal on `dev`, so the two never conflict. t914's committed foundation lands on `dev` with this task once local panel and extension journeys are verified live.
+
+**Next:** discovery reports (below), then file-partitioned implementation briefs, then a live check of every journey in a headed browser, then hand the user a running instance.
+
+## Cloud Plan Review (2026-11-16)
+
+Review of [hosted-platform-launch-plan.md](./hosted-platform-launch-plan.md) as it stands on `dev` and on task t914, for the user. The design itself (Core owns identity, billing and entitlements; website stays on Hostinger; app on app.getfluxiq.com; local, hybrid and consumer modes as separate axes; no silent fallback between local and cloud; durable admission before paid work) is sound and is kept. What needs changing:
+
+1. **Nothing has landed.** Two days of implementation (17 Core and 11 extension commits) sit on t914, and the `dev` copy of the plan still reads "audit only, nothing implemented". User-visible results such as the unlock removal never reached the user. Change: land t914's committed foundation now (this task), and from here merge each verified unit into `dev` as it finishes instead of growing one branch.
+2. **No launch date.** The plan says no calendar date is justified, but go-live is about a month out (user, 2026-11-10). Change: a dated schedule cut for parallel lanes, with the critical path named: usable local client (this task), hosted panel with accounts on one server, a dedicated browser per customer, then billing. Marketplace, shared compute, real OS environments and enterprise licensing move after launch.
+3. **The product people touch is missing from the phases.** The plan covers infrastructure, accounts and billing but has no package for the panel and extension being usable, although the hosted panel is what customers use at launch (user, 2026-11-10). Change: add a client-usability package (navigation, settings, speed, production panel build) ahead of phase 1; this task is its first unit.
+4. **Unlock wording.** The `dev` copy still frames model-key custody around unlocks ("never borrow another person's latest unlock"). The user's rule (2026-11-16) is that a connected client has model access. Change: custody is server-held protection of configured keys; access follows authentication and IAM, and revocation still applies. Recorded in AGENTS.md.
+5. **Unfinished privacy refactor.** t914's worktree holds 105 uncommitted extension files changing every content action to check tab "admission", so hosted sign-in tabs are never captured. It is unfinished and has been idle since 2026-11-14. Change: give it its own task and brief, and check whether one gate at the background capture authority gives the same guarantee before resuming a refactor of every action.
+
+## Discovery
+
+| Report | Question |
+| --- | --- |
+| [extension-navigation-audit](./usable-client-plan/reports/extension-navigation-audit.md) | Which extension journeys work, break or are missing, and why |
+| [unlock-removal-verification](./usable-client-plan/reports/unlock-removal-verification.md) | Whether t914 removed every unlock surface a connected client meets |
+| [core-panel-audit](./usable-client-plan/reports/core-panel-audit.md) | Why the Core web panel is slow and what configuration and navigation it lacks |
+
+Findings in brief: the production unlock path is clean on t914, but the lock machinery, wording and docs remain and a custom host could revive the wait; keys saved before t914 need one panel sign-in to upgrade. The extension has no project concept (Core refuses `projects` and `create-project` to paired tokens) and buries chat navigation in a closed drawer; it polls every 4 seconds and fetches a Core snapshot in front of relay calls. The Core panel runs on the Next development server, fetches projects twice per page, fans Home out to 1+2N requests every 30 seconds, mounts a closed chat on every page, and has no projects page, chats page or client-connection settings.
+
+## Assignments (task t915, `fxwork/t915`)
+
+| Unit | Tier | Owned files (summary) | Report |
+| --- | --- | --- | --- |
+| U1 unlock cleanup | worker | Core lock path, secret-keys dead types, contracts model-keys, two web files, Core docs | `reports/unlock-cleanup.md` |
+| U2 paired project access | worker-heavy | Core program-route allowlist, projects handler | `reports/core-project-access.md` |
+| U3 extension background | worker | shared constants and protocol, background/panel, project context, runtime status, quickstart | `reports/extension-background-projects.md` |
+| U4 ui-components navigation | worker | ui-components chat, new project-switcher | `reports/ui-components-navigation.md` |
+| U5 extension panel shell | worker | apps/extension/src/panel, background/panel/open-fluxiq.ts | `reports/extension-panel-shell.md` |
+| W1 panel launch | lead | scripts/run-fluxiq-web.mjs, layout and install docs | this ledger |
+| W2 panel network cost | worker | web top-bar, dock, home | `reports/core-panel-network.md` |
+| W3 panel projects and chats | worker | web projects and chats pages, nav, presets, flows list | `reports/core-panel-projects-chats.md` |
+| W4 panel client connection | worker | web settings-page (not engine-tools.ts), security/access | `reports/core-panel-connect-settings.md` |
+
+## Stable Interfaces (fixed before dispatch, 2026-11-16)
+
+Workers build against these at the same time; a change needs the lead.
+
+- **Core paired-client API (U2 implements, U3 consumes).** A paired extension token may call automation-studio `projects` and `create-project`. For a token caller every listed project carries at least `id`, `name`, `updatedAt` and no owner or member identities; `create-project` from a token accepts only `{ name }`. `update-project` and `delete-project` stay refused to tokens.
+- **Extension runtime messages (U3 implements, U5 consumes),** in `shared/constants.ts` `RUNTIME_MESSAGES` and typed in `shared/protocol.ts`:
+  - `panelListProjects` = `"fluxiq.panel.listProjects"` -> `{ ok: true, projects: PanelProjectSummary[], selectedProjectId: string | null }`, with `PanelProjectSummary = { id: string; name: string; updatedAt?: string }`.
+  - `panelCreateProject` = `"fluxiq.panel.createProject"` `{ name }` -> `{ ok: true, project: PanelProjectSummary }`.
+  - `panelSelectProject` = `"fluxiq.panel.selectProject"` `{ projectId: string | null }` (null means follow Core) -> `{ ok: true }`. The status the panel reads and receives carries `projectId`, `projectName` and `projectChosenBy: "person" | "core"`. Every relay without an explicit project uses the selection.
+  - `panelChanges` = `"fluxiq.panel.changes"`: a push from the worker to the panel `{ projectId: string | null, conversationIds?: string[], at: number }` whenever Core's gateway reports a conversation, attempt or run change. If Core pushes nothing usable, U3 says so and U5 keeps the existing reads.
+  - Every failure is `{ ok: false, error: { code, message } }`, as existing panel messages do.
+- **ui-components (U4 implements, U5 consumes),** exported from `@fluxiq/ui-components`:
+  - `createProjectSwitcher({ port, onSelect, onOpenAll? })` -> `{ element, setCurrent(project | null), open(), close(), refresh(), destroy() }`, where `port: ProjectsPort = { list(): Promise<ProjectSummary[]>; create(name: string): Promise<ProjectSummary> }` and `ProjectSummary = { id: string; name: string; updatedAt?: string }`. Vanilla DOM in the chat widget's style; list, search, New project, and "All projects in FluxIQ" when `onOpenAll` is given.
+  - The chat widget shows a chat bar by default: current chat title, a Chats button (the list, with a waiting badge) and "+ New chat". When its `projectId` supplier returns a different project, the thread list and the open chat follow that project.
+  - The chat widget accepts an injected activity feed (option `activity`) instead of always starting its own.
+
+## Work Ledger
+
+### 2026-11-16 — Reconcile Codex's cloud work and open this plan
+- Agent: Senior supervisor.
+- Changed: this document.
+- Why: the user asked for a review of Codex's cloud work and a usable extension and panel today.
+- Validation: `git log --oneline dev..HEAD` in `fxwork/t914` (both repositories) -> 11 extension and 17 Core commits unmerged; `git status --short | wc -l` -> 122 extension and 10 Core uncommitted paths; newest uncommitted edit 2026-11-14 23:26.
+- Outcome: plan opened; discovery dispatched.
+- Follow-up: implementation briefs once discovery returns.
+
+### 2026-11-16 — Discovery returned; eight units dispatched
+- Agent: Senior supervisor; discovery by three workers (reports above).
+- Changed: this document (interfaces, assignments); task t915 started (`fxwork/t915`, both repositories fast-forwarded to t914's committed tips `ee9cacd68` and `592a188a4`); `scripts/run-fluxiq-web.mjs` and two docs in t915 (W1, uncommitted until a live start passes).
+- Why: the three reports agree on the causes recorded under Discovery.
+- Validation: `pnpm -r --filter "./packages/**" build` in t915 Core, then `pnpm install --frozen-lockfile` and `pnpm -r build` in t915 extension -> exit 0 (test-runner rebuilt because workers' edits began during the build).
+- Outcome: U1-U5 and W2-W4 running in parallel on disjoint files.
+- Follow-up: verify each report, integrate, build, then a headed live check of every journey.
+
+### 2026-11-16 — First eight units returned; three follow-ups dispatched or done
+- Agent: Senior supervisor; workers U1-U5, W2-W4 (reports linked in the assignments table).
+- Changed (t915, uncommitted until the integrated check): every unit's owned files; lead edits `apps/extension/src/shared/fluxiq-web-routes.ts`, `shared/protocol.ts`, `background/panel/{open-fluxiq,panel-control}.ts`, `panel/shell/mount-panel.ts` and `background/panel/tests/open-purpose.test.ts` (the switcher's "All projects in FluxIQ" opens the new `/projects` page; a chat page route), `background/projects/projects-relay.ts` (Core's numeric `updatedAt` kept as ISO time), and Core `apps/web/.../[endpoint]/tests/route.test.ts` (its copy of the paired allowlist gains `projects` and `create-project`).
+- Why: the shell worker read the web routes before the Projects and Chats pages existed; the project-access worker could not touch apps/web.
+- Validation: worker-reported (claims, re-run at integration): U1 `pnpm --filter fluxiq check`, contracts and ui-components checks exit 0, 1559 tests pass in changed dirs; U2 138 program-route tests pass; U3 520 background tests pass; U4 742/743 (the one failure was U1's in-flight wording); U5 789 panel tests pass, extension tsc clean; W2 31, W4 59 tests pass on a scratch config; W3 not run (stale Core build, memory). Lead: `node apps/extension/scripts/test-extension.mjs src/background/panel` -> 99 pass, 0 fail.
+- Outcome: two gaps found and dispatched to worker-heavy: (1) Core sends `server.activity` to a paired session only for `session.projectId`, set at pairing or by a recording, so after the person switches project the extension's chat gets no pushes: a `client.focus_project` gateway message (report `gateway-project-focus.md`); (2) stored result-check authorizations are still minted from a held key unlock and refuse a paired client (report `result-check-authority.md`).
+- Follow-up: integrated build, run every unit's tests one at a time, then the live check.
+
+### 2026-11-16 — Production panel builds; first live walk-through
+- Agent: Senior supervisor; workers gateway-project-focus (done), live-walkthrough (done).
+- Changed (t915): Core `apps/web/src/features/chats/index.ts` now exports only the two client pages, and the Projects page moved to `apps/web/src/features/projects/` (its barrel exports only the client page), with the route and the route test mock repointed.
+- Why: the first two `next build` runs failed: a server route imported the Chats barrel, whose plain `load-chats.ts` pulled the automation-studio conversation barrel and with it unmarked hook modules (`views/view-readiness.ts`, `parameters/ParameterEditor.tsx`) into the server graph. `next dev` compiles a page only when visited, so nothing had caught it. A scratch tracer (server entries to every unmarked hook module, stopping at `"use client"`) found the chain and then reported none of the 6 unmarked hook modules reachable.
+- Validation: `node scripts/run-fluxiq-web.mjs` in t915 -> `next build` passed, `next start` "Ready in 3.5s" at http://127.0.0.1:3000; `node apps/extension/scripts/test-extension.mjs src/panel src/background/panel src/background/projects src/background/connection src/shared` -> 1221 pass, 0 fail; `npx tsc -p tsconfig.test.json --noEmit` in apps/extension -> exit 0. Live walk-through (report `live-walkthrough.md`): pairing approved in 1.7 s with no unlock, password or key step anywhere; panel pages 110-470 ms to content; extension chat usable 352 ms after opening; extension makes 0 HTTP requests per idle minute.
+- Outcome: blocking defect D1/D2: the extension and the panel list different projects and chats (dispatched to worker-heavy, report `shared-projects-fix.md`). UX defects D3-D10 dispatched to two workers (`panel-ux-fixes.md`, `extension-ux-fixes.md`). Structure-audit failures (3 extension, 13 Core) dispatched to two workers (`extension-audit-fixes.md`, `core-web-audit-fixes.md`).
+- Follow-up: a Core structure-audit rule that fails when a server entry reaches an unmarked hook module, so this class of break is caught before `next build`.
+
+## Open Questions
+
+None blocking.
