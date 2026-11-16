@@ -91,6 +91,14 @@ Workers build against these at the same time; a change needs the lead.
 - Outcome: U1-U5 and W2-W4 running in parallel on disjoint files.
 - Follow-up: verify each report, integrate, build, then a headed live check of every journey.
 
+### 2026-11-16 — First eight units returned; three follow-ups dispatched or done
+- Agent: Senior supervisor; workers U1-U5, W2-W4 (reports linked in the assignments table).
+- Changed (t915, uncommitted until the integrated check): every unit's owned files; lead edits `apps/extension/src/shared/fluxiq-web-routes.ts`, `shared/protocol.ts`, `background/panel/{open-fluxiq,panel-control}.ts`, `panel/shell/mount-panel.ts` and `background/panel/tests/open-purpose.test.ts` (the switcher's "All projects in FluxIQ" opens the new `/projects` page; a chat page route), `background/projects/projects-relay.ts` (Core's numeric `updatedAt` kept as ISO time), and Core `apps/web/.../[endpoint]/tests/route.test.ts` (its copy of the paired allowlist gains `projects` and `create-project`).
+- Why: the shell worker read the web routes before the Projects and Chats pages existed; the project-access worker could not touch apps/web.
+- Validation: worker-reported (claims, re-run at integration): U1 `pnpm --filter fluxiq check`, contracts and ui-components checks exit 0, 1559 tests pass in changed dirs; U2 138 program-route tests pass; U3 520 background tests pass; U4 742/743 (the one failure was U1's in-flight wording); U5 789 panel tests pass, extension tsc clean; W2 31, W4 59 tests pass on a scratch config; W3 not run (stale Core build, memory). Lead: `node apps/extension/scripts/test-extension.mjs src/background/panel` -> 99 pass, 0 fail.
+- Outcome: two gaps found and dispatched to worker-heavy: (1) Core sends `server.activity` to a paired session only for `session.projectId`, set at pairing or by a recording, so after the person switches project the extension's chat gets no pushes: a `client.focus_project` gateway message (report `gateway-project-focus.md`); (2) stored result-check authorizations are still minted from a held key unlock and refuse a paired client (report `result-check-authority.md`).
+- Follow-up: integrated build, run every unit's tests one at a time, then the live check.
+
 ## Open Questions
 
 None blocking.
