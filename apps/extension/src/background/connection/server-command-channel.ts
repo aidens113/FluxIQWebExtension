@@ -35,7 +35,7 @@ import { observedTabFrames, sendToTab } from "../tabs";
 import type { SnapshotCaptureOptions } from "../../shared/snapshot-capture-options";
 import { currentAutomationTabId, ExtensionRuntimeCommandRouter } from "../../runtime";
 import { TracedCommands, withTraceMetadata, type TraceCapture } from "../trace-capture/index";
-import { projectFocusRefusal, type ProjectFocusRefusal } from "../projects/index";
+import { projectAccessEnded, projectFocusRefusal, type ProjectAccessEnded, type ProjectFocusRefusal } from "../projects/index";
 import type { ActivePage } from "./active-page";
 import type { ActiveRecording } from "./active-recording/index";
 import type { ContentAttachment } from "./content-attachment";
@@ -106,6 +106,8 @@ export type ServerCommandChannelDeps = {
   readonly announceProjectFocus?: () => Promise<void>;
   /** Hears Core refuse a project focus. It is about the project, not the connection, which stays up. */
   readonly onProjectFocusRefused?: (refusal: ProjectFocusRefusal) => void;
+  /** Hears Core say the person lost the session's project (`projects/access-ended.ts`); the connection stays up. */
+  readonly onProjectAccessEnded?: (notice: ProjectAccessEnded) => Promise<void> | void;
 };
 
 export class ServerCommandChannel {
@@ -149,6 +151,14 @@ export class ServerCommandChannel {
         return;
       }
       this.deps.gateway.markFailed();
+      return;
+    }
+
+    // The person lost the session's project: its activity stopped and Core
+    // moved the session. About the project, never the connection.
+    if (message.type === "server.project_access_ended") {
+      const notice = projectAccessEnded(message.payload);
+      if (notice) await this.deps.onProjectAccessEnded?.(notice);
       return;
     }
 

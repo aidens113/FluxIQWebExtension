@@ -201,6 +201,10 @@ export class FluxIQConnection {
         // The panel follows Core's project from the status, not by asking.
         this.emitStatus();
       },
+      forgetProjectId: async () => {
+        await this.persistSession(compactObject({ ...this.session, projectId: undefined }));
+        this.emitStatus();
+      },
       onProjectName: () => this.emitStatus(),
       choiceStorage: chromeProjectChoiceStorage(),
       onActivity
@@ -340,6 +344,11 @@ export class FluxIQConnection {
       disconnect: () => this.disconnect(),
       announceProjectFocus: () => this.focus.announceHeld(),
       onProjectFocusRefused: (refusal) => this.addActivity("connection", "Project not switched for live updates", refusal.message, "warning"),
+      // The person lost the project: the choice falls back as a cleared one does, and the person is told why.
+      onProjectAccessEnded: async (notice) => {
+        await this.projects.accessEnded(notice);
+        this.addActivity("connection", "Project no longer available", notice.message, "warning");
+      },
       traceCapture: new TracePageCapturer({ credentials: () => this.coreApiCredentials() })
     });
     // The page the automation drives, never an extension page or FluxIQ's

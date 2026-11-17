@@ -668,11 +668,14 @@ Current server message groups:
 - `server.activity`, only to a session that declared the `fluxiq.activity`
   capability
 - `server.project_focused`, Core's answer to `client.focus_project`
+- `server.project_access_ended`, Core saying the person lost the session's
+  project (see [Project Focus](#project-focus))
 
 ### Project Focus
 
 Core pushes `server.activity` to a session only for the session's own project,
-which pairing set (and a reconnect leaves unset). The person's project choice is
+which pairing set (and a reconnect leaves unset, when the session hears every
+project its person may read). The person's project choice is
 kept here (`ProjectContext`, `background/projects/choice-storage.ts`), so without
 telling Core, a chosen project's work never reached the chat as it happened and
 the chat fell back to its slow read. `ProjectFocus` (`background/projects/project-focus.ts`)
@@ -696,6 +699,22 @@ connection: `ServerCommandChannel` hands it to the activity log as a warning
 sets its error, and the choice is kept. An older Core ignores the message. The
 moved project is also the one a token call naming no project reaches on Core,
 which the extension already names explicitly on every panel call.
+
+A focus is decided once, but Core does not assume the access behind it later:
+before each `server.activity` of a project reaches this browser, Core asks again
+whether the person may still read that project, and a browser bound to no
+project hears only the projects its person may read. When the person loses the
+session's own project (their access, membership or sharing was removed, they
+were disabled, or the project was deleted), Core stops that project's activity,
+moves the session where a cleared choice would (its pairing's project, or
+none), and sends `server.project_access_ended` with the project, the session's
+new project and a reason. `ServerCommandChannel` reads it
+(`background/projects/access-ended.ts`) and hands it on without touching the
+connection; `ProjectContext.accessEnded` drops a choice of that project exactly
+as clearing it would (the stored choice too), makes the session's project the
+one Core moved it to (or removes it when Core moved it to none), and follows
+Core again from there; and the activity log shows Core's reason as a warning.
+Nothing is sent back: Core has already moved the session.
 
 ### Live Activity
 

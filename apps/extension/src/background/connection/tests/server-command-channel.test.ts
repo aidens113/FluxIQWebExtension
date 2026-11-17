@@ -22,7 +22,7 @@ import type {
   RecordingEventPayload,
   ServerCommandPayload
 } from "../../../shared/protocol";
-import { ProjectFocus, type ProjectFocusRefusal } from "../../projects/index";
+import { ProjectFocus, type ProjectAccessEnded, type ProjectFocusRefusal } from "../../projects/index";
 import type { TraceCapture } from "../../trace-capture/index";
 import type { ActivePage } from "../active-page";
 import type { ActiveRecording } from "../active-recording/index";
@@ -233,6 +233,19 @@ test("a refused project focus is reported and leaves the connection healthy, its
   assert.equal(h.calls.includes("gateway.markFailed"), false);
   assert.equal(h.lastError(), "stale error");
   assert.deepEqual(h.refusals, [], "it is not a refused recording start either");
+});
+
+test("Core saying the person lost the session's project is handed on, and leaves the connection and its error alone", async () => {
+  const notices: ProjectAccessEnded[] = [];
+  const h = harness({}, { onProjectAccessEnded: (notice) => void notices.push(notice) });
+  await h.channel.handleMessage(serverMessage({
+    type: "server.project_access_ended",
+    id: "m-11",
+    payload: { projectId: "project-9", currentProjectId: null, message: "The person can no longer open this project." }
+  }));
+  assert.deepEqual(notices, [{ projectId: "project-9", currentProjectId: null, message: "The person can no longer open this project." }]);
+  assert.equal(h.calls.includes("gateway.markFailed"), false);
+  assert.equal(h.lastError(), "stale error");
 });
 
 test("a session becoming ready clears the error an earlier failure or pairing wait left", async () => {
