@@ -79,6 +79,24 @@ test("relogs in once after 401 or 403 and never includes secrets in failures", a
   assert.equal(deniedRequests, 2);
 });
 
+test("pairing approval sends only its reference code through the authenticated panel session", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const approvals: RequestInit[] = [];
+  globalThis.fetch = async (input, init) => {
+    if (String(input).endsWith("/api/auth/login")) return response(200, { "set-cookie": "fluxiq_session=fixture-panel; Max-Age=3600" });
+    if (String(input).endsWith("/api/client-gateway/approve-pairing")) approvals.push(init ?? {});
+    return response();
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const client = new FluxIQControlClient(origin);
+  await client.login(credentials);
+  await client.approvePairing("123-456");
+  assert.equal(approvals.length, 1);
+  assert.deepEqual(JSON.parse(String(approvals[0]!.body)), { pairingCode: "123-456" });
+  assert.equal(new Headers(approvals[0]!.headers).get("cookie"), "fluxiq_session=fixture-panel");
+  assert.doesNotMatch(String(approvals[0]!.body), /password|totp|pin/u);
+});
+
 test("destination mutations use only the public Automation Studio HTTP endpoints", async (t) => {
   const originalFetch = globalThis.fetch;
   const requests: Array<{ url: string; body?: unknown }> = [];

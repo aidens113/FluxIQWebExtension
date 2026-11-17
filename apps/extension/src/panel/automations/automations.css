@@ -2,7 +2,7 @@
    Colours come from panel/theme/tokens.css; .card-line, .notice, .small-button
    and .link-button from panel/shell/shell.css. */
 
-.automations-screen { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); }
+.automations-screen { scrollbar-width: thin; scrollbar-color: var(--edge) transparent; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); }
 .automations-column { display: grid; align-content: start; gap: var(--space-3); width: 100%; max-width: 560px; margin: 0 auto; }
 .automations-title { font-size: 15px; font-weight: 750; }
 .automations-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); overflow: hidden; }

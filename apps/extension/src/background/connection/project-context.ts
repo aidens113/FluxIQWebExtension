@@ -10,6 +10,7 @@
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../shared/protocol";
 import { askCoreForFirstProject, fetchProjectFromCoreSnapshot } from "./core-api";
+import type { ProjectChoice, ProjectChoiceStorage } from "../projects/index";
 
 // A Core answer is reused this long, so a burst of reads (the panel opening,
 // one snapshot per runtime step) asks Core once rather than once each.
@@ -19,6 +20,11 @@ export const CORE_PROJECT_CONTEXT_REUSE_MS = 1_000;
 // the recording start's own lookup bound (active-recording.ts), so a slow Core
 // starts a recording under the stored project rather than under none.
 export const CORE_PROJECT_CONTEXT_LOOKUP_BOUND_MS = 1_000;
+
+// A panel read goes on with the project held here and asks Core again in the
+// background no more often than this, so a project the person switched to in
+// FluxIQ is followed within a beat without a snapshot fetch in front of each call.
+export const CORE_PROJECT_CONTEXT_REFRESH_MS = 15_000;
 
 export type ProjectContextDeps = {
   readonly settings: () => FluxIQSettings;
@@ -30,6 +36,8 @@ export type ProjectContextDeps = {
   readonly onActivity: (kind: string, label: string, detail?: string, tone?: ActivityEntry["tone"]) => void;
   readonly now?: () => number;
   readonly lookupBoundMs?: number;
+  // Where the person's chosen project is kept between worker runs, by server address. Absent: kept in memory only.
+  readonly choiceStorage?: ProjectChoiceStorage;
 };
 
 type CoreLookup = {
@@ -48,14 +56,88 @@ export class ProjectContext {
   private leaseScoped = false;
   // What Core last called a project, kept here only: a restarted worker learns it again at the next read.
   private named: { readonly projectId: string; readonly name: string } | undefined;
+  // The project the person chose in the panel; it applies to every call that names none. Undefined: follow Core.
+  private chosen: ProjectChoice | undefined;
+  // When Core was last asked in this lease, answered or not; undefined until it has been.
+  private checkedAt: number | undefined;
+  // Rises with every choice the person makes, so a stored choice read before one never overwrites it.
+  private choices = 0;
 
   constructor(private readonly deps: ProjectContextDeps) {}
+
+  /** Reads the choice kept for the current server address, and says whether it changed the held one. Call at start and when the address changes. */
+  async loadChoice(): Promise<boolean> {
+    const storage = this.deps.choiceStorage;
+    if (!storage) return false;
+    const choices = this.choices;
+    const stored = await storage.read(this.deps.settings().coreApiUrl);
+    // The person chose while this was read: their choice is newer than what was stored.
+    if (choices !== this.choices) return false;
+    if ((this.chosen?.projectId) === stored?.projectId) return false;
+    this.chosen = stored;
+    this.deps.onProjectName?.();
+    return true;
+  }
+
+  /** The project the person chose, or undefined when this browser follows Core. */
+  chosenProject(): string | undefined {
+    return this.chosen?.projectId;
+  }
+
+  /** Who decided the current project: the person's choice, else Core. */
+  chosenBy(): "person" | "core" {
+    return this.chosen ? "person" : "core";
+  }
+
+  /** Chooses a project for every call that names none; null follows Core again. */
+  async choose(choice: ProjectChoice | null): Promise<void> {
+    this.choices++;
+    this.chosen = choice ?? undefined;
+    await this.deps.choiceStorage?.write(this.deps.settings().coreApiUrl, choice);
+    this.deps.onProjectName?.();
+    // Following Core again: learn its project now rather than at the next beat.
+    if (!choice) this.refreshInBackground("follow_core");
+  }
+
+  /** Tells the context what a project is called, from a listing, so the status can carry its name. */
+  noteName(projectId: string, name: string): void {
+    if (this.chosen?.projectId === projectId && this.chosen.name !== name) {
+      this.chosen = { projectId, name };
+      void this.deps.choiceStorage?.write(this.deps.settings().coreApiUrl, this.chosen).catch(/* best-effort: only the stored name is stale, the choice itself is held */ () => undefined);
+    }
+    this.learnName(projectId, name);
+  }
+
+  /**
+   * The project a panel call uses. The person's choice wins; else the project
+   * held here, which is not fetched per call: Core is asked once per lease and
+   * then again in the background at most every `CORE_PROJECT_CONTEXT_REFRESH_MS`.
+   * Only a browser with nothing held waits on Core, as `resolve` does.
+   */
+  async forPanel(reason: string): Promise<string | undefined> {
+    if (this.chosen) return this.chosen.projectId;
+    const recording = nonEmpty(this.activeRecordingProjectId);
+    if (recording) return recording;
+    const held = nonEmpty(this.deps.session().projectId);
+    if (!this.deps.session().token) return held;
+    if (held && this.checkedAt !== undefined) {
+      if (this.now() - this.checkedAt >= CORE_PROJECT_CONTEXT_REFRESH_MS) this.refreshInBackground(reason);
+      return held;
+    }
+    return this.resolve(reason);
+  }
+
+  private refreshInBackground(reason: string): void {
+    if (!this.deps.session().token) return;
+    void this.coreLookup(reason).catch(/* best-effort: the held project answers until the next refresh */ () => undefined);
+  }
 
   /** A new Core lease may name another project even within the cache's reuse window. */
   invalidate(): void {
     this.generation++;
     this.lookup = undefined;
     this.named = undefined;
+    this.checkedAt = undefined;
     this.leaseScoped = true;
   }
 
@@ -69,12 +151,18 @@ export class ProjectContext {
 
   /** The best project known without asking Core: the recording's, else the stored one. */
   current(): string | undefined {
-    return nonEmpty(this.activeRecordingProjectId ?? this.deps.session().projectId);
+    return nonEmpty(this.activeRecordingProjectId ?? this.chosen?.projectId ?? this.deps.session().projectId);
+  }
+
+  /** The project panel reads use without asking: the person's choice, else the stored one. */
+  held(): string | undefined {
+    return nonEmpty(this.chosen?.projectId ?? this.deps.session().projectId);
   }
 
   /** What Core calls the current project, or nothing when it has not said or the project has since changed. */
   currentName(): string | undefined {
     const project = this.current();
+    if (this.chosen && this.chosen.projectId === project && this.chosen.name) return this.chosen.name;
     return this.named !== undefined && this.named.projectId === project ? this.named.name : undefined;
   }
 
@@ -87,6 +175,7 @@ export class ProjectContext {
     const generation = this.generation;
     const recording = nonEmpty(this.activeRecordingProjectId);
     if (recording) return recording;
+    if (this.chosen) return this.chosen.projectId;
     if (!this.deps.session().token) return this.current();
     const named = await this.boundedCoreLookup(reason);
     if (generation !== this.generation) return undefined;
@@ -114,7 +203,11 @@ export class ProjectContext {
     if (this.reusable(this.lookup, now)) return this.lookup.answer;
     const lookup: CoreLookup = { startedAt: now, answer: this.askCore(reason) };
     this.lookup = lookup;
-    void lookup.answer.finally(() => { lookup.settledAt = this.now(); });
+    const generation = this.generation;
+    void lookup.answer.finally(() => {
+      lookup.settledAt = this.now();
+      if (generation === this.generation) this.checkedAt = lookup.settledAt;
+    });
     return lookup.answer;
   }
 

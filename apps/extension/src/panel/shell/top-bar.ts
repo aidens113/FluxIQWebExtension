@@ -1,8 +1,8 @@
-// The slim top bar: FluxIQ, the Chat / Automations tabs, the connection dot, the
-// gear, and Open FluxIQ. Recording is not here: "Show me how" sits beside "+" in the
+// The header, always visible: on the left the logo and the project switcher
+// (`panel/projects`), in the centre the Chat / Automations tabs, on the right the
+// connection dot, the labelled Settings button and Open FluxIQ. Below 420 px the
+// tabs take a row of their own, so nothing is clipped in the 380 px popup. Recording is not here: "Show me how" sits beside "+" in the
 // chat's composer (`panel/recording`), where a person is already saying what they want.
-// At 360 px what is left is the brand, two tabs and three small controls, each named
-// ("Settings", "Open FluxIQ", and the dot's connection sentence).
 //
 // The gear keeps the id `settingsButton` and the accessible name "Settings",
 // which the Lab presses. The tabs are an ARIA tablist: arrow keys, Home and End
@@ -30,6 +30,8 @@ export type TopBarParts = {
   onGear(): void;
   /** The Open FluxIQ icon (`panel/open-fluxiq`). */
   readonly openFluxIQ: HTMLElement;
+  /** The project switcher (`panel/projects`), beside the logo. Absent: the bar names FluxIQ instead. */
+  readonly projects?: HTMLElement;
 };
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -67,15 +69,15 @@ export function createTopBar(parts: TopBarParts): TopBar {
   const dot = createElement("span", { className: "dot dot-grey top-dot", attrs: { role: "img", "aria-label": "Checking the connection", title: "Checking the connection" } });
   const gear = createElement("button", {
     id: "settingsButton",
-    className: "icon-button top-icon",
-    attrs: { type: "button", title: "Settings", "aria-label": "Settings", "aria-pressed": "false" }
-  }, [gearIcon()]);
+    className: "small-button top-settings",
+    attrs: { type: "button", title: "Settings", "aria-pressed": "false" }
+  }, [gearIcon(), createElement("span", { className: "top-settings-label", text: "Settings" })]);
   gear.addEventListener("click", parts.onGear);
 
   const element = createElement("header", { className: "top-bar" }, [
     createElement("div", { className: "top-brand" }, [
       createElement("span", { className: "brand-mark", attrs: { "aria-hidden": "true" } }, [logoMark(24)]),
-      createElement("h1", { className: "top-name", text: "FluxIQ" })
+      ...(parts.projects === undefined ? [createElement("h1", { className: "top-name", text: "FluxIQ" })] : [parts.projects])
     ]),
     tablist,
     createElement("div", { className: "top-actions" }, [dot, gear, parts.openFluxIQ])

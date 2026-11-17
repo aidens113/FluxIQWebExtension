@@ -21,6 +21,7 @@ import { browserClientLabel } from "../../../shared/browser";
 import { HEARTBEAT_INTERVAL_MS } from "../../../shared/constants";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings, ServerCommandPayload } from "../../../shared/protocol";
 import { effectiveSettings } from "../../capture-policy/index";
+import { ProjectFocus } from "../../projects/index";
 import { GatewaySession, type GatewaySessionDeps } from "../gateway-session";
 
 const SYNTHETIC_TOKEN = "synthetic-token.0";
@@ -299,6 +300,21 @@ test("a rejection answered before the session is ready is queued, not written to
 });
 
 // --- What the extension hands Core ---------------------------------------------
+
+test("a project focus is never queued while offline, and goes out on the socket once the session is ready", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN } });
+  await h.outbox.setLineage("lineage-1");
+  const focus = new ProjectFocus({ send: h.session.send, connected: () => h.session.state() === "connected", chosenProject: () => "project-2" });
+  await focus.chosen("project-2");
+  assert.equal((await h.store.read()).entries.length, 0, "a focus queued offline would reach a later session than the one it was for");
+  let sent: ReturnType<OpeningSocket["messages"]> = [];
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+    await focus.announceHeld();
+    sent = socket.messages().slice(1);
+  });
+  assert.deepEqual(sent.map(({ type, payload }) => ({ type, payload })), [{ type: "client.focus_project", payload: { projectId: "project-2" } }]);
+});
 
 test("a message sent while offline is queued under the extension's project, recording and client id, and flushed after a token resume", async () => {
   const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, context: { projectId: "project-1", recordingId: "rec-1" } });

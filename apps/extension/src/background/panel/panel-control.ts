@@ -31,11 +31,12 @@ import { isActivityOverlayPreference } from "../activity/index";
 import { isControlPage } from "../control-page";
 import { relayConversation } from "./conversation-relay";
 import { HUMANNESS_MESSAGES, relayHumanness } from "./humanness-relay";
-import { fluxIQKeysAddress, fluxIQWebAddress } from "./open-fluxiq";
+import { fluxIQPurposeAddress, fluxIQWebAddress } from "./open-fluxiq";
 import type { PanelRelayContext } from "./relay-context";
 import { relayFailure } from "./relay-failure";
 import { handBackRun, stopRun, takeOverRun } from "./run-control";
 import { mergeSettings } from "./settings-save";
+import { PROJECT_MESSAGES, relayProjects, type ProjectsRelayContext } from "../projects/index";
 import { relayThreadChange } from "./thread-change-relay";
 
 type ControlResult = { readonly handled: false } | { readonly handled: true; readonly response: unknown };
@@ -45,6 +46,8 @@ type ControlMessage = { readonly type?: string; readonly [key: string]: unknown 
 /** What the panel's requests reach the rest of the worker and the browser through. */
 export type PanelControlDeps = {
   readonly relay: PanelRelayContext;
+  /** The project messages: Core's calls and the worker's project choice (`background/projects/`). */
+  readonly projects: ProjectsRelayContext;
   readonly readSettings: () => Promise<FluxIQSettings>;
   readonly writeSettings: (settings: FluxIQSettings) => Promise<void>;
   /** Core's recording-capture policy a save is clamped by: the last one Core gave, or its default. */
@@ -53,8 +56,6 @@ export type PanelControlDeps = {
   readonly applySettings: (settings: FluxIQSettings) => void;
   readonly status: () => Promise<ExtensionStatus>;
   readonly openTab: (url: string) => Promise<void>;
-  /** What starts this browser's own unlock, when nobody has unlocked it yet. Asked for as the person presses; a failure leaves the keys page plain. */
-  readonly unlockTicket: () => Promise<string | undefined>;
   readonly activity: {
     readonly read: () => Promise<ExtensionActivityState>;
     readonly setOverlay: (overlay: ActivityOverlayPreference) => Promise<ExtensionActivityState>;
@@ -74,6 +75,7 @@ const PANEL_MESSAGES: ReadonlySet<string> = new Set([
   RUNTIME_MESSAGES.panelFlowHumannessRead,
   RUNTIME_MESSAGES.panelFlowHumannessSet,
   RUNTIME_MESSAGES.panelTaskHumannessSet,
+  ...PROJECT_MESSAGES,
   RUNTIME_MESSAGES.panelStopRun,
   RUNTIME_MESSAGES.panelTakeOverRun,
   RUNTIME_MESSAGES.panelHandBackRun,
@@ -96,11 +98,11 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
   if (message.type === RUNTIME_MESSAGES.panelOpenFluxIQ) {
     let automation: { projectId: string; flowId: string } | undefined;
     if (message.purpose !== undefined) {
-      if (message.purpose !== "model-key" || message.runId !== undefined || message.flowId !== undefined) return relayFailure("invalid_request", "That request names an unknown purpose.");
-      const keys = fluxIQKeysAddress((await deps.readSettings()).coreApiUrl, await deps.unlockTicket());
-      if (!keys) return relayFailure("invalid_request", "The FluxIQ address in settings is not a web address.");
-      await deps.openTab(keys);
-      return { ok: true, url: keys };
+      if ((message.purpose !== "model-key" && message.purpose !== "projects") || message.runId !== undefined || message.flowId !== undefined) return relayFailure("invalid_request", "That request names an unknown purpose.");
+      const page = fluxIQPurposeAddress((await deps.readSettings()).coreApiUrl, message.purpose);
+      if (!page) return relayFailure("invalid_request", "The FluxIQ address in settings is not a web address.");
+      await deps.openTab(page);
+      return { ok: true, url: page };
     }
     if (message.runId !== undefined) {
       if (typeof message.runId !== "string" || !message.runId.trim() || message.runId.length > 2048) return relayFailure("invalid_request", "A valid runId is required.");
@@ -132,6 +134,7 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
     if (!isActivityOverlayPreference(message.overlay)) return relayFailure("invalid_request", "The overlay must be expanded, collapsed or hidden.");
     return { ok: true, state: await deps.activity.setOverlay(message.overlay) };
   }
+  if (PROJECT_MESSAGES.includes(message.type ?? "")) return relayProjects(message, deps.projects);
   if (message.type === RUNTIME_MESSAGES.panelStopRun) return stopRun(message as Partial<PanelStopRunRequest>, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelTakeOverRun) return takeOverRun(message as Partial<PanelTakeOverRunRequest>, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelHandBackRun) return handBackRun(message as Partial<PanelHandBackRunRequest>, deps.relay);

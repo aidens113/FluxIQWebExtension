@@ -3,6 +3,8 @@ import { extensionViewPanelDriver, pagePanelDriver } from "./panel-driver.js";
 import type { RunningTopology } from "../coordinator.js";
 import { installDeterministicNetworkGuard, type DeterministicNetworkGuard, type DeterministicNetworkPolicy } from "../network-guard.js";
 import { launchBrowser, openSidePanel } from "../run-scenario/index.js";
+import { stopExtensionWorkers } from "./stop-extension-workers.js";
+import { preconfigureExtensionWhenReady, type ExtensionAddresses } from "./preconfigure-extension.js";
 import type { ChatBrowserSession } from "./types.js";
 
 /** A request the extension's service worker made, as Playwright saw it leave the worker. */
@@ -24,7 +26,7 @@ const PANEL_PATH = "sidepanel/index.html";
  * launch and before any page is opened, as the run lane does
  * (`guarded-browser/tests/launch-containment.test.ts` pins the order).
  */
-export async function openChromeChatSession(input: { topology: RunningTopology; extensionPath: string; scenarioUrl: string; workerRequests: WorkerRequest[]; policy: DeterministicNetworkPolicy }): Promise<ChatBrowserSession> {
+export async function openChromeChatSession(input: { topology: RunningTopology; extensionPath: string; scenarioUrl: string; workerRequests: WorkerRequest[]; policy: DeterministicNetworkPolicy; addresses?: ExtensionAddresses }): Promise<ChatBrowserSession> {
   process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = "1";
   const { context, browserVersion } = await launchBrowser(input.topology, input.extensionPath);
   let guard: DeterministicNetworkGuard;
@@ -42,10 +44,17 @@ export async function openChromeChatSession(input: { topology: RunningTopology; 
   });
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker", { timeout: 15_000 });
   const extensionOrigin = `chrome-extension://${new URL(worker.url()).hostname}`;
+  // The extension is configured for the isolated Core, and restarted on it, before any page is opened: the panel probes its web address on first load.
   const control = context.pages()[0] ?? await context.newPage();
-  await control.goto(`${extensionOrigin}/${PANEL_PATH}`, { waitUntil: "domcontentloaded" });
   const scenario = await context.newPage();
-  await scenario.goto(input.scenarioUrl, { waitUntil: "domcontentloaded" });
+  const openScenario = async () => { await scenario.goto(input.scenarioUrl, { waitUntil: "domcontentloaded" }); };
+  if (input.addresses) {
+    // The worker is stopped after the write, so the one that starts again builds its connection from it; opening the scenario page is what starts it.
+    await preconfigureExtensionWhenReady(() => context.serviceWorkers().find(candidate => candidate.url().startsWith("chrome-extension://")), input.addresses, { stop: () => stopExtensionWorkers(context, control), wake: openScenario });
+  } else {
+    await openScenario();
+  }
+  await control.goto(`${extensionOrigin}/${PANEL_PATH}`, { waitUntil: "domcontentloaded" });
   const session: ChatBrowserSession = {
     browser: "chrome",
     context,

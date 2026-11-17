@@ -20,7 +20,7 @@ import type {
   ServerCommandPayload
 } from "../../../../shared/protocol";
 import type { ActivePage } from "../../active-page";
-import type { ActiveRecording } from "../../active-recording";
+import type { ActiveRecording } from "../../active-recording/index";
 import type { ContentAttachment } from "../../content-attachment";
 import { EventSequence } from "../../event-sequence";
 import type { GatewaySession } from "../../gateway-session";

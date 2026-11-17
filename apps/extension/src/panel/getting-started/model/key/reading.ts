@@ -1,5 +1,9 @@
-// What the panel knows about the person's model key, in four words. `unknown` is
-// every failed or unreadable answer: it never blocks anyone and never claims anything.
+import type { ModelKeyAvailability } from "fluxiq/ui";
 
-/** `ready` a key is enabled and opens on this browser; `missing` none is enabled; `locked` one is, and this browser cannot open it yet. */
-export type ModelKeyReading = "ready" | "missing" | "locked" | "unknown";
+/** Configuration metadata only; no reading gates connection, chat or deterministic work. */
+export type ModelKeyReading =
+  | "ready"
+  | "missing"
+  | "unknown"
+  | "upgrade_required"
+  | Extract<ModelKeyAvailability, { state: "unavailable" }>;

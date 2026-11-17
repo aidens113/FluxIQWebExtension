@@ -35,8 +35,9 @@ import { observedTabFrames, sendToTab } from "../tabs";
 import type { SnapshotCaptureOptions } from "../../shared/snapshot-capture-options";
 import { currentAutomationTabId, ExtensionRuntimeCommandRouter } from "../../runtime";
 import { TracedCommands, withTraceMetadata, type TraceCapture } from "../trace-capture/index";
+import { projectFocusRefusal, type ProjectFocusRefusal } from "../projects/index";
 import type { ActivePage } from "./active-page";
-import type { ActiveRecording } from "./active-recording";
+import type { ActiveRecording } from "./active-recording/index";
 import type { ContentAttachment } from "./content-attachment";
 import { captureMergedTabSnapshot, prepareMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
@@ -97,6 +98,14 @@ export type ServerCommandChannelDeps = {
    * as an untraced one.
    */
   readonly traceCapture?: TraceCapture;
+  /**
+   * Tells Core, once a session is ready, the project the person chose
+   * (`projects/project-focus.ts`): a new session starts at its pairing's project.
+   * Absent, nothing is sent.
+   */
+  readonly announceProjectFocus?: () => Promise<void>;
+  /** Hears Core refuse a project focus. It is about the project, not the connection, which stays up. */
+  readonly onProjectFocusRefused?: (refusal: ProjectFocusRefusal) => void;
 };
 
 export class ServerCommandChannel {
@@ -123,6 +132,13 @@ export class ServerCommandChannel {
     }
 
     if (message.type === "server.error") {
+      // A refused project focus leaves the session ready on its earlier project:
+      // neither the connection's error nor a failure.
+      const focusRefusal = projectFocusRefusal(message.payload);
+      if (focusRefusal) {
+        this.deps.onProjectFocusRefused?.(focusRefusal);
+        return;
+      }
       this.deps.setLastError(message.payload.message);
       // A refused recording start is scoped to the recording, not to the
       // connection: the socket is healthy and marking it failed would tear
@@ -173,6 +189,8 @@ export class ServerCommandChannel {
     this.deps.setLastError(undefined);
     this.deps.gateway.markSessionReady();
     this.deps.onActivity("connection", "Connected to FluxIQ", "Client session ready", "success");
+    // Before anything else is sent, so Core's activity for the chosen project reaches this session from the start.
+    await this.deps.announceProjectFocus?.();
     await this.deps.page.sendBrowserState();
     await this.deps.gateway.flushQueue();
     // A command an earlier worker lost while it was in flight is reported now,

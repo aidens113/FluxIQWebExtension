@@ -22,9 +22,10 @@ import type {
   RecordingEventPayload,
   ServerCommandPayload
 } from "../../../shared/protocol";
+import { ProjectFocus, type ProjectFocusRefusal } from "../../projects/index";
 import type { TraceCapture } from "../../trace-capture/index";
 import type { ActivePage } from "../active-page";
-import type { ActiveRecording } from "../active-recording";
+import type { ActiveRecording } from "../active-recording/index";
 import type { ContentAttachment } from "../content-attachment";
 import { EventSequence } from "../event-sequence";
 import type { GatewaySession } from "../gateway-session";
@@ -33,7 +34,7 @@ import type { RecordingStartRefusal } from "../recording-start/index";
 import { RuntimeStatusTracker } from "../runtime-status";
 import { ServerCommandChannel, type ServerCommandChannelDeps } from "../server-command-channel";
 
-function harness(savedSettings: Partial<FluxIQSettings> = {}) {
+function harness(savedSettings: Partial<FluxIQSettings> = {}, extra: Partial<ServerCommandChannelDeps> = {}) {
   const calls: string[] = [];
   const refusals: RecordingStartRefusal[] = [];
   const accepted: Array<[string, string | null | undefined]> = [];
@@ -111,7 +112,8 @@ function harness(savedSettings: Partial<FluxIQSettings> = {}) {
     stopRecording: async (notifyServer) => {
       stops.push(notifyServer);
     },
-    disconnect: () => calls.push("facade.disconnect")
+    disconnect: () => calls.push("facade.disconnect"),
+    ...extra
   };
 
   return {
@@ -194,6 +196,43 @@ test("a session becoming ready persists it, then publishes browser state before 
   }) as Extract<ClientGatewayServerMessage, { type: "server.session_ready" }>);
   assert.deepEqual(h.calls, ["persistSession", "gateway.markSessionReady", "page.sendBrowserState", "gateway.flushQueue"]);
   assert.equal(h.activities.at(-1)?.label, "Connected to FluxIQ");
+});
+
+test("every ready session, a reconnect's too, tells Core the chosen project once it is ready and before anything else is sent", async () => {
+  const focusSent: Array<{ type: string; payload: unknown }> = [];
+  const h = harness({}, { announceProjectFocus: async () => {
+    h.calls.push("focus.announce");
+    await focus.announceHeld();
+  } });
+  // As the facade wires it: the focus goes out only once the gateway was marked ready.
+  const focus = new ProjectFocus({
+    send: async (type, payload) => void focusSent.push({ type, payload }),
+    connected: () => h.calls.includes("gateway.markSessionReady"),
+    chosenProject: () => "project-2"
+  });
+  const ready = serverMessage({ type: "server.session_ready", id: "m-8", payload: { sessionId: "session-1", token: "token-1" } }) as Extract<ClientGatewayServerMessage, { type: "server.session_ready" }>;
+  await h.channel.handleSessionReady(ready);
+  await h.channel.handleSessionReady({ ...ready, id: "m-9", payload: { sessionId: "session-2", token: "token-2" } });
+  assert.deepEqual(h.calls.slice(0, 5), ["persistSession", "gateway.markSessionReady", "focus.announce", "page.sendBrowserState", "gateway.flushQueue"]);
+  assert.deepEqual(focusSent, [
+    { type: "client.focus_project", payload: { projectId: "project-2" } },
+    { type: "client.focus_project", payload: { projectId: "project-2" } }
+  ]);
+});
+
+test("a refused project focus is reported and leaves the connection healthy, its error unchanged", async () => {
+  const refusals: ProjectFocusRefusal[] = [];
+  const h = harness({}, { onProjectFocusRefused: (refusal) => void refusals.push(refusal) });
+  await h.channel.handleMessage(serverMessage({
+    type: "server.error",
+    id: "m-10",
+    correlationId: "focus-1",
+    payload: { code: "project_focus.refused", message: "The person who paired this browser cannot open that project here.", metadata: { projectId: "project-9" } }
+  }));
+  assert.deepEqual(refusals, [{ code: "project_focus.refused", message: "The person who paired this browser cannot open that project here.", projectId: "project-9" }]);
+  assert.equal(h.calls.includes("gateway.markFailed"), false);
+  assert.equal(h.lastError(), "stale error");
+  assert.deepEqual(h.refusals, [], "it is not a refused recording start either");
 });
 
 test("a session becoming ready clears the error an earlier failure or pairing wait left", async () => {

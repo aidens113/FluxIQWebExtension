@@ -1,3 +1,4 @@
 export type { ModelKeyReading } from "./reading";
-export { modelKeyFromReply, modelKeyLockWordsFromReply } from "./from-reply";
+export { modelKeyFromReply } from "./from-reply";
+export { modelKeyUnavailableLine } from "./unavailable-line";
 export { createModelKeyReader, KEY_BEAT_MS, type KeyReaderHost, type ModelKeyReader } from "./reader";

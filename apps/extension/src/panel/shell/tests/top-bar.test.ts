@@ -69,3 +69,16 @@ test("Settings/gated screens keep a reachable tab; Enter/Space stay native", asy
   assert.deepEqual(chosen, ["automations"]);
   assert.equal(tabs[1]!.getAttribute("aria-selected"), "true");
 }));
+
+test("the project switcher sits on the left and Settings is a labelled button that keeps its id", async () => {
+  await withFakeDocument(() => {
+    const switcher = document.createElement("div");
+    const bar = createTopBar({ onTab: () => {}, onGear: () => {}, openFluxIQ: document.createElement("button"), projects: switcher as unknown as HTMLElement });
+    const root = fake(bar.element);
+    assert.equal(root.byClass("top-brand")[0]!.children.includes(switcher as unknown as FakeElement), true);
+    assert.equal(root.byClass("top-name").length, 0);
+    const settings = root.byClass("top-settings")[0]!;
+    assert.equal(settings.id, "settingsButton");
+    assert.equal(root.byClass("top-settings-label")[0]!.textContent, "Settings");
+  });
+});

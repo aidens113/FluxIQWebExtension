@@ -1,3 +1,4 @@
+import type { ModelKeyAvailability } from "fluxiq/ui";
 import {
   CLIENT_GATEWAY_PROTOCOL_VERSION,
   type ClientGatewayActionCommand,
@@ -186,6 +187,8 @@ export type ExtensionStatus = {
   projectId?: string | null | undefined;
   /** What Core calls that project, once it has said; absent until then. */
   projectName?: string | undefined;
+  /** Who decided the project: the person's choice in the panel, or Core's current project. */
+  projectChosenBy?: "person" | "core" | undefined;
   activeTabId?: number | undefined;
   activeTabUrl?: string | undefined;
   queueSize: number;
@@ -209,25 +212,28 @@ export type ExtensionStatus = {
   credentialDurability?: "lasting" | "browser_session" | undefined;
 };
 
-/** The panel's conversation requests (`panel-conversation.ts`). */
+/** The panel's conversation requests (`panel/conversation.ts`). */
 export type {
   PanelConversationAnswerRequest,
   PanelConversationDeleteRequest,
   PanelConversationReadRequest,
   PanelConversationRenameRequest,
   PanelConversationSendRequest
-} from "./panel-conversation";
-/** The panel's humanness requests for one Flow or one task (`panel-humanness.ts`). */
-export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelFlowHumannessReadRequest, PanelFlowHumannessSetRequest, PanelHumannessReply, PanelTaskHumannessSetRequest } from "./panel-humanness";
+} from "./panel/index";
+/** The panel's project requests and the worker's change push (`panel/projects.ts`). */
+export type { PanelChangesMessage, PanelCreateProjectReply, PanelCreateProjectRequest, PanelListProjectsReply, PanelProjectSummary, PanelSelectProjectRequest } from "./panel/index";
+/** The panel's humanness requests for one Flow or one task (`panel/humanness.ts`). */
+export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelFlowHumannessReadRequest, PanelFlowHumannessSetRequest, PanelHumannessReply, PanelTaskHumannessSetRequest } from "./panel/index";
 
 /**
  * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
- * `purpose: "model-key"`, the keys page, where a model key is added. The three are mutually exclusive.
+ * `purpose: "model-key"`, the ordinary keys configuration page; with `purpose: "projects"`, the projects page.
+ * A purpose excludes `flowId` and `runId`, and `flowId` and `runId` exclude each other.
  */
 export type PanelOpenFluxIQRequest = {
   flowId?: string | undefined;
   runId?: string | undefined;
-  purpose?: "model-key" | undefined;
+  purpose?: "model-key" | "projects" | undefined;
 };
 
 /**
@@ -348,7 +354,7 @@ export const AUTOMATION_PANEL_MESSAGES = {
   renameTask: RUNTIME_MESSAGES.panelRenameTask,
   /** `remove-task` with `{ projectId, taskId }`: forgets the task's own memory entry and no Flow, saved part, result or attempt. Answers `{ taskId, removed }`. */
   removeTask: RUNTIME_MESSAGES.panelRemoveTask,
-  /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider`, `enabled` and, when Core says, `unlocked` and `lockedBecause` only. */
+  /** `secret-keys` `snapshot`. Answers `{ keys: PanelModelKeySummary[] }`; metadata only, never key values. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,
@@ -380,6 +386,17 @@ export const AUTOMATION_PANEL_MESSAGES = {
 } as const;
 
 export type AutomationPanelMessageType = (typeof AUTOMATION_PANEL_MESSAGES)[keyof typeof AUTOMATION_PANEL_MESSAGES];
+
+/** Safe model metadata. Null availability means malformed status; absence permits legacy compatibility. */
+export type PanelModelKeySummary = {
+  readonly kind?: string;
+  readonly provider?: string;
+  readonly enabled: boolean;
+  readonly heldByYou?: boolean;
+  readonly availability?: ModelKeyAvailability | null;
+  /** Only an old explicit refusal is retained, so an incompatible server never looks ready. */
+  readonly unlocked?: false;
+};
 
 /** The fields automation panel requests carry beside `type`. Every field is optional on the wire and checked by the relay. */
 export type AutomationPanelRequest = {

@@ -1,6 +1,6 @@
 // Keeps the model key reading fresh while the browser is connected. It reads once
 // when the connection comes up, again on a short beat while the key is missing or
-// locked (the person is adding or unlocking it in another tab), and again whenever
+// unavailable (configuration or recovery may change in another tab), and again whenever
 // the panel regains focus (`refresh`), and it stops beating the moment the key is ready. A
 // failed read is `unknown` and is not retried on a beat: it says nothing, so
 // nothing waits on it. A late answer from an earlier read never overwrites a newer
@@ -9,7 +9,7 @@
 import type { ModelKeyReading } from "./reading";
 import type { SetupPort } from "../../setup-port";
 
-/** How often a missing or locked key is read again. */
+/** How often missing or unavailable configuration is read again. */
 export const KEY_BEAT_MS = 4000;
 
 /** The page's timers, so a test drives them without a browser. */
@@ -37,7 +37,7 @@ export function createModelKeyReader(port: SetupPort, host: KeyReaderHost, chang
   function schedule(): void {
     host.clearTimeout(timer);
     timer = undefined;
-    if (!connected || (reading !== "missing" && reading !== "locked")) return;
+    if (!connected || reading === "ready" || reading === "unknown") return;
     timer = host.setTimeout(() => {
       timer = undefined;
       void read();
@@ -54,7 +54,7 @@ export function createModelKeyReader(port: SetupPort, host: KeyReaderHost, chang
       next = "unknown";
     }
     if (mine !== sequence || !connected) return;
-    const moved = next !== reading;
+    const moved = typeof next === "object" && typeof reading === "object" ? next.code !== reading.code : next !== reading;
     reading = next;
     schedule();
     if (moved) changed();
