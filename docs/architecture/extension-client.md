@@ -1365,7 +1365,15 @@ and in any case at the first good read started after Core accepted it, so it
 never lingers or doubles. While the send is on its way the background shows
 the starting status on the page and in the live line (Live Activity, above).
 The thread is re-read 300 ms after an event that names a conversation or ends
-the work. The 4 s poll stays as the fallback.
+the work. The chat runs no poll: its changes port is `complete`. Core pushes
+`server.conversation_changed` (`{ conversationId, projectId | null }`, no content) for
+every change to a chat the person may read, wherever it was made; the background
+(`ServerCommandChannel` -> `conversationChangedFor`) forwards it as a
+`fluxiq.panel.changes` message naming the conversation, the same message
+`server.activity` produces, so Chrome's side panel and Firefox's popup hear it alike.
+Core replays nothing after a reconnect, so each `server.session_ready` sends one
+`panelChanges` naming no conversation (`resyncChange`), which the port tells as `{}`:
+a full re-read of the thread, the list and the model readiness.
 
 **A described recording can ride with a message** (`ui-components/src/chat/attachment/`). "Attach a recording" beside Send lists the chat's project's finished recordings that have a description (newest first, at most 10; the list is `listRecordings`, Core's `description` kept apart from `title`, filtered by project in the panel). The pick shows as a "Recording: <description>" chip with "Remove attached recording"; one per message. Send adds `onScreen.recordingId` beside any `flowId` or `runId`, the chip clears once the send went and stays when it failed, and it is not kept in the draft. The review after a stop offers "Attach to my next message", which attaches the newest finished, described recording of the project. Core links the recording to the Flow the chat creates.
 

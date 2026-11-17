@@ -39,7 +39,7 @@ import { activeTab, observedTabFrames, allTabs, ensureContentScript, sendToTab }
 import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
-import { chromeProjectChoiceStorage, panelChangesFor, ProjectFocus } from "./projects/index";
+import { chromeProjectChoiceStorage, conversationChangedFor, panelChangesFor, ProjectFocus, resyncChange } from "./projects/index";
 import { RecordedStepIndex } from "./recorded-steps";
 import { ClientGatewayOutbox } from "@fluxiq/client-gateway-websocket";
 import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
@@ -340,6 +340,11 @@ export class FluxIQConnection {
         const change = kept ? panelChangesFor(activity, Date.now()) : undefined;
         if (change) void chrome.runtime.sendMessage(change).catch(/* best-effort: no panel is open to hear it */ () => undefined);
       }),
+      acceptConversationChanged: (payload) => {
+        const change = conversationChangedFor(payload, Date.now());
+        if (change) void chrome.runtime.sendMessage(change).catch(/* best-effort: no panel is open to hear it */ () => undefined);
+      },
+      onSessionResync: () => void chrome.runtime.sendMessage(resyncChange(Date.now())).catch(/* best-effort: no panel is open to hear it */ () => undefined),
       stopRecording: (notifyServer) => this.stopRecording(notifyServer),
       disconnect: () => this.disconnect(),
       announceProjectFocus: () => this.focus.announceHeld(),
