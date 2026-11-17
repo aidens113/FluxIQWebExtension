@@ -118,3 +118,56 @@ test("a choice made while the stored one is still being read is kept, not overwr
   await loading;
   assert.equal(h.context.chosenProject(), "p-new");
 });
+
+// Core's `server.project_access_ended`: the person lost a project, and Core moved the session.
+function buildForgetting(t: { after(fn: () => void): void }, stored: string | undefined, answers: string[]) {
+  const h = build(t, stored, answers);
+  const context = new ProjectContext({
+    settings: () => ({ coreApiUrl: "http://127.0.0.1:3000" }) as FluxIQSettings,
+    session: () => h.session,
+    adoptProjectId: async (projectId) => { h.session.projectId = projectId; },
+    forgetProjectId: async () => { delete h.session.projectId; },
+    onProjectName: () => { h.state.changes++; },
+    onActivity: () => undefined,
+    choiceStorage: h.storage,
+    now: () => h.state.clock
+  });
+  return { ...h, context };
+}
+
+test("a chosen project whose access ended is dropped as a cleared choice is, and the browser follows Core again", async (t) => {
+  const h = buildForgetting(t, "p1", ["p1"]);
+  await h.context.choose({ projectId: "lost", name: "Lost" });
+  const changes = h.state.changes;
+
+  assert.equal(await h.context.accessEnded({ projectId: "lost", currentProjectId: "p1" }), true);
+
+  assert.equal(h.context.chosenProject(), undefined);
+  assert.equal(h.context.chosenBy(), "core");
+  assert.equal(await h.storage.read("http://127.0.0.1:3000"), undefined);
+  assert.ok(h.state.changes > changes, "the status is told");
+  await settle();
+  assert.equal(await h.context.forPanel("panel"), "p1");
+});
+
+test("a session project whose access ended becomes the one Core moved the session to, or none", async (t) => {
+  const moved = buildForgetting(t, "lost", ["p2"]);
+  assert.equal(await moved.context.accessEnded({ projectId: "lost", currentProjectId: "p2" }), true);
+  assert.equal(moved.session.projectId, "p2");
+
+  const none = buildForgetting(t, "lost", ["p3"]);
+  assert.equal(await none.context.accessEnded({ projectId: "lost", currentProjectId: null }), true);
+  assert.notEqual(none.session.projectId, "lost");
+  await settle();
+  assert.equal(none.session.projectId, "p3", "following Core again, the browser learns the project Core now names");
+});
+
+test("an ended project this browser neither chose nor holds changes nothing", async (t) => {
+  const h = buildForgetting(t, "p1", ["p1"]);
+  await h.context.choose({ projectId: "pc" });
+  const changes = h.state.changes;
+  assert.equal(await h.context.accessEnded({ projectId: "elsewhere", currentProjectId: null }), false);
+  assert.equal(h.context.chosenProject(), "pc");
+  assert.equal(h.session.projectId, "p1");
+  assert.equal(h.state.changes, changes);
+});

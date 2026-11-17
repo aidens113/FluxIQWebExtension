@@ -1,3 +1,4 @@
+export { projectAccessEnded, type ProjectAccessEnded } from "./access-ended";
 export { chromeProjectChoiceStorage, projectChoiceStorage, type ProjectChoice, type ProjectChoiceStorage } from "./choice-storage";
 export { projectFocusRefusal, type ProjectFocusRefusal } from "./focus-refusal";
 export { panelChangesFor } from "./panel-changes";
