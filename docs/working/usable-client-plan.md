@@ -24,11 +24,11 @@ Related: [Hosted platform launch](./hosted-platform-launch-plan.md), [MVP launch
 
 **Next (follow-ups, each its own task):**
 
-1. Fold the cloud-plan review (below) into `hosted-platform-launch-plan.md` when Codex resumes t914's uncommitted privacy WIP in `fxwork/t914` (105 extension files; give it its own task and check whether one gate at the background capture authority suffices).
-2. A Core structure-audit rule failing when a server entry reaches an unmarked hook module (the class of break `next build` alone caught).
-3. A pairing-change push so the panel stops reading the gateway snapshot every 7.5 s.
-4. Hosted: project-focus authority reads people from the instance's own identity service, which a hosted tenant may not use; activity access is checked when focus is set, not per push.
-5. The real-SQLite test group was not run in full for t915 (its marked files changed in t915 were run by path).
+1. Fold the cloud-plan review (below) into `hosted-platform-launch-plan.md` when Codex resumes t914's uncommitted privacy WIP in `fxwork/t914` (105 extension files; give it its own task and check whether one gate at the background capture authority suffices). Still waiting (2026-11-17): that WIP edits `hosted-platform-launch-plan.md`, so folding into `dev`'s copy now would conflict with it.
+2. A Core structure-audit rule failing when a server entry reaches an unmarked hook module (the class of break `next build` alone caught). In progress, task t916 (`server-client-audit-rule.md`).
+3. A pairing-change push so the panel stops reading the gateway snapshot on timers (three readers: the global pairing prompt at 1-10 s backoff, the Clients view at 5 s, Settings > Connect at 4 s; the panel had no push channel at all). In progress, task t916 (`panel-pairing-push.md`).
+4. Project focus: the authority reads people from the instance's own identity service, which a hosted tenant may not use; activity access is checked when focus is set, not per push; a focus between a guarded route's two authentications makes that call 401. In progress, task t916 (`project-focus-hardening.md`).
+5. The real-SQLite test group was not run in full for t915 (its marked files changed in t915 were run by path). In progress: the 2026-11-17 full sweep on `dev` covers it (`sweep-20261117.md`).
 
 **Decision (lead, 2026-11-16):** build today's work on t914's committed tip (both repositories) in a new paired task, rather than re-implementing the unlock removal on `dev`, so the two never conflict. t914's committed foundation lands on `dev` with this task.
 
@@ -138,6 +138,15 @@ Workers build against these at the same time; a change needs the lead.
 - Validation: `node packages/test-runner/dist/extension-chat-check/cli.js --browser chrome --scenario everything-store --page ./ --no-ask --model-key` (worker run) -> exit 0, all 20 checks true, evidence `C:/Users/osrs_/FluxStuff/evidence/t198/2026-11-17T01-19-48-302Z-chrome`; lead: `node scripts/structure-audit.mjs` on the merged extension `dev` -> passed (251 warnings, 551 baselined); `git diff --stat task/t915-usable-client <merge>` in Core -> empty (identical tree); `git push origin dev` in both repositories -> accepted (`5e704b497..aa5568c46`, `a79b09a1f..42b7fcc30`).
 - Outcome: done; the user's test instance keeps running from `fxwork/t915`.
 - Follow-up: the Next list in Current State; after the user's test, `pnpm task prune` or `pnpm task abandon t915` to clean the worktrees (both branches are merged).
+
+### 2026-11-17 — Follow-ups 2-4 dispatched on t916; full sweep on `dev`
+- Agent: Senior supervisor; workers server-client-audit-rule (worker), panel-pairing-push and project-focus-hardening (worker-heavy), sweep (pending its worktree).
+- Changed: this document. Task t916 started Core-paired (`fxwork/t916`, both sides at `dev`: extension `dba0383e2`, Core `aa5568c46`); a sweep worktree started from `dev` for the full suites.
+- Why: the Next list. Follow-up 1 waits: `git status --short -- docs` in `fxwork/t914` shows Codex's uncommitted edit of `hosted-platform-launch-plan.md`. Core's main checkout is still on Codex's `task/t911-runtime-lease-isolation` with 72 uncommitted paths, so all Core work runs in t916's own Core worktree.
+- Partition: audit rule owns Core `scripts/structure-audit*` (mirrored verbatim to the extension); pairing push owns the gateway's pairing, event-bus, sessions and facade files plus the panel's three snapshot readers and a new SSE route under `apps/web/src/app/api/client-gateway/`; project focus owns `client-gateway/service/project-focus/`, `activity-publisher.ts`, the automation-studio focus authority, the contracts gateway message file, `apps/web/src/app/api/programs/**` and the extension's `background/projects/`.
+- Validation: `pnpm task start client-followups --worktree --core --skip-workspace-build` -> t916 created, Core libraries built (fluxiq 108 s); `curl http://127.0.0.1:3000/` -> 200 in 0.32 s (the user's t915 test instance is still up; workers were told not to use ports 3000 and 4777).
+- Outcome: running.
+- Follow-up: verify each report, integrate, live-check the pairing push on a second port, finish t916 in both repositories.
 
 ## Open Questions
 
