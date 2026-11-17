@@ -169,6 +169,13 @@ Workers build against these at the same time; a change needs the lead.
 - Outcome: t916 ready to finish; t918 ready to finish after it.
 - Follow-up: the approved-client proof on t916, then finish t916; finish t918; a second sweep on the new `dev`, then promote.
 
+### 2026-11-17 — t916 merged into both `dev` branches; t918 checked on the new `dev`
+- Agent: Senior supervisor.
+- Changed: t916 finished here (`pnpm task finish t916`, `dev` `dba0383e2..6b8aa675e`); in Core, `dev` `aa5568c46..a956c2219`, a merge commit with t916's exact tree made with `git commit-tree`, because Core's main checkout is on Codex's `task/t911-runtime-lease-isolation` with 72 uncommitted paths and must not be switched. t918's branches merged the new `dev` on both sides with no conflict.
+- Validation: `git push origin dev` -> Core `aa5568c46..a956c2219`, extension `dba0383e2..6b8aa675e`; t918 after merging `dev`, one command at a time: Core libraries build, `pnpm --filter fluxiq check`, `node scripts/structure-audit.mjs` -> exit 0 (passed, 914 baselined); fluxiq `vitest run src/programs/_shared/assistant src/programs/automation-studio/api/handlers/across-projects` -> 44 passed; `FLUXIQ_TEST_GROUP=real-sql vitest run .../fluxnode/tests/managed-hosts.test.ts` -> 15 passed; extension `pnpm --filter @fluxiq-web-extension/domain check` -> exit 0; `node scripts/test-domain.mjs script-examples/tests/parity carried-row-service-repair carried-service-repair` -> 12 pass, 0 fail; `test-extension.mjs src/content/actions/tests src/runtime/tests` -> 549 pass, 0 fail; photo-social `honest-and-naive-paths.test.js` -> 13 pass, 0 fail; `node scripts/structure-audit.mjs` -> passed; `node scripts/check/core-mirror.mjs` -> match.
+- Outcome: t918 ready to merge.
+- Follow-up: merge t918 on both sides, then the second sweep of the day on the new `dev`; promote both repositories to `main` if it passes. The t916 Core worktree (`fxwork/t916/!FluxIQ`) and the t915 worktrees serving the user's test instance remain for `pnpm task prune`.
+
 ## Open Questions
 
 None blocking.

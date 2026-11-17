@@ -29,9 +29,9 @@ function browserResult(overrides: Partial<BrowserActionResult> = {}): BrowserAct
 
 test("an unknown action type becomes a failed gateway result carrying Core's failure record and the requested type", (t) => {
   t.mock.method(Date, "now", () => 7_000);
-  const mapped = browserActionFromGatewayCommand(command("web.dom.hover", { parameters: { selector: "#menu" } }));
+  const mapped = browserActionFromGatewayCommand(command("web.dom.teleport", { parameters: { selector: "#menu" } }));
   assert.ok(isWebAutomationActionRejection(mapped), "the command is rejected, not rewritten into another action");
-  assert.match(mapped.message, /web\.dom\.hover/);
+  assert.match(mapped.message, /web.dom.teleport/);
   const result = gatewayActionResultFromRejection(mapped);
   assert.deepEqual(result, {
     commandId: "cmd-1",
@@ -40,14 +40,14 @@ test("an unknown action type becomes a failed gateway result carrying Core's fai
     message: mapped.message,
     error: mapped.message,
     failure: { category: "blocked_by_capability_or_policy", code: "web.action.unsupported_type", retryable: false, stage: "dispatch" },
-    metadata: { requestedActionType: "web.dom.hover" }
+    metadata: { requestedActionType: "web.dom.teleport" }
   });
   // Core drops a failure record its parser refuses, so what reaches the wire must survive it whole.
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
 });
 
 test("a rejection reports the requested type exactly as it was sent", () => {
-  for (const requested of ["", "WEB.DOM.CLICK", "click", "web.dom.hover"]) {
+  for (const requested of ["", "WEB.DOM.CLICK", "click", "web.dom.teleport"]) {
     const mapped = browserActionFromGatewayCommand(command(requested));
     assert.ok(isWebAutomationActionRejection(mapped), `${JSON.stringify(requested)} is rejected`);
     assert.equal(gatewayActionResultFromRejection(mapped).metadata?.requestedActionType, requested);
