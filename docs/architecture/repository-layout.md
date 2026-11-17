@@ -524,7 +524,9 @@ sentence is screened with it, and dropped when it is missing or stale -- on
 three of them), then one
 combined `node --test` over the structure-audit, Lab, task, worktree,
 build-cache and check tests, then `node scripts/structure-audit.mjs`, then
-`pnpm -r check`.
+`pnpm -r --no-bail check`. `--no-bail`, as `pnpm test` has, runs every
+package's check even after one fails, so a sweep reports them all; without it
+the first failing package hid the checks after it (2026-11-17).
 Tests are never cached; only the package builds and checks behind them are.
 
 `scripts/check/core-build.mjs` refuses a FluxIQ Core that is unbuilt or whose
