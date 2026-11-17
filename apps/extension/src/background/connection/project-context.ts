@@ -31,6 +31,8 @@ export type ProjectContextDeps = {
   readonly session: () => FluxIQSession;
   // Records a project Core named on the session and persists it.
   readonly adoptProjectId: (projectId: string) => Promise<void>;
+  // Removes the session's project and persists that, when Core says its person lost it and moved the session to none.
+  readonly forgetProjectId?: () => Promise<void>;
   // Told when Core names the current project's name, which the status carries to the panel.
   readonly onProjectName?: () => void;
   readonly onActivity: (kind: string, label: string, detail?: string, tone?: ActivityEntry["tone"]) => void;
@@ -97,6 +99,38 @@ export class ProjectContext {
     this.deps.onProjectName?.();
     // Following Core again: learn its project now rather than at the next beat.
     if (!choice) this.refreshInBackground("follow_core");
+  }
+
+  /**
+   * Core says the person who paired this browser can no longer read
+   * `projectId`, and moved the session to `currentProjectId`
+   * (`server.project_access_ended`, `projects/access-ended.ts`). A choice of
+   * that project is dropped as clearing it would be, the session's project
+   * becomes Core's, and the browser follows Core again from there. A recording
+   * keeps its own project. Says whether anything held here changed.
+   */
+  async accessEnded(notice: { readonly projectId: string; readonly currentProjectId: string | null }): Promise<boolean> {
+    let changed = false;
+    if (this.chosen?.projectId === notice.projectId) {
+      this.choices++;
+      this.chosen = undefined;
+      await this.deps.choiceStorage?.write(this.deps.settings().coreApiUrl, null);
+      changed = true;
+    }
+    if (nonEmpty(this.deps.session().projectId) === notice.projectId) {
+      if (notice.currentProjectId) await this.deps.adoptProjectId(notice.currentProjectId);
+      else await this.deps.forgetProjectId?.();
+      changed = true;
+    }
+    if (this.named?.projectId === notice.projectId) this.named = undefined;
+    if (!changed) return false;
+    // A Core answer read before the loss may still name the lost project: it is neither reused nor adopted.
+    this.generation++;
+    this.lookup = undefined;
+    this.checkedAt = undefined;
+    this.deps.onProjectName?.();
+    this.refreshInBackground("project_access_ended");
+    return true;
   }
 
   /** Tells the context what a project is called, from a listing, so the status can carry its name. */
