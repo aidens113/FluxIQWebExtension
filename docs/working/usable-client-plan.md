@@ -1,9 +1,9 @@
 # Usable Client Plan
 
 Status: Active
-Status detail: Merged into both `dev` branches (extension `42b7fcc30`, Core `aa5568c46`) with t914's committed foundation; follow-ups listed under Next.
+Status detail: t915 and follow-ups 2-5 (t916, t918) on both `dev` branches; t919 fixes what the second 2026-11-17 sweep found; `main` waits for the next day's sweep; follow-ups 1, 6 and 7 open.
 Created: 2026-11-16
-Last updated: 2026-11-16
+Last updated: 2026-11-17
 Owner: Senior supervisor agent
 Scope: Make the extension and the Core web panel usable for a person testing them today: no model-key unlock for connected clients, project and chat navigation entirely inside the extension, the settings a person needs, and a panel that is fast to open and move around.
 Paired document: none yet (Core edits are recorded here; a Core-side record is owed if the Core part grows beyond this task)
@@ -25,10 +25,10 @@ Related: [Hosted platform launch](./hosted-platform-launch-plan.md), [MVP launch
 **Next (follow-ups, each its own task):**
 
 1. Fold the cloud-plan review (below) into `hosted-platform-launch-plan.md` when Codex resumes t914's uncommitted privacy WIP in `fxwork/t914` (105 extension files; give it its own task and check whether one gate at the background capture authority suffices). Still waiting (2026-11-17): that WIP edits `hosted-platform-launch-plan.md`, so folding into `dev`'s copy now would conflict with it.
-2. A Core structure-audit rule failing when a server entry reaches an unmarked hook module (the class of break `next build` alone caught). In progress, task t916 (`server-client-audit-rule.md`).
-3. A pairing-change push so the panel stops reading the gateway snapshot on timers (three readers: the global pairing prompt at 1-10 s backoff, the Clients view at 5 s, Settings > Connect at 4 s; the panel had no push channel at all). In progress, task t916 (`panel-pairing-push.md`).
-4. Project focus: the authority reads people from the instance's own identity service, which a hosted tenant may not use; activity access is checked when focus is set, not per push; a focus between a guarded route's two authentications makes that call 401. In progress, task t916 (`project-focus-hardening.md`).
-5. The real-SQLite test group was not run in full for t915 (its marked files changed in t915 were run by path). Run in the 2026-11-17 sweep: 1 failure of 2998 (FluxNode nested map, see the ledger).
+2. Done (t916, on `dev` 2026-11-17): Core's `server-client-boundary` audit rule fails a server entry that reaches an unmarked hook module (`server-client-audit-rule.md`).
+3. Done (t916): `GET /api/client-gateway/changes` (server-sent events) and one shared browser subscription replace the three snapshot timers; a caller is signalled only when its own filtered view changed (`panel-pairing-push.md`, `pairing-push-caller-scope.md`).
+4. Done (t916): project focus authorizes from the host's identity source, binds a call's project once (no 401 race), delivers activity to a person-paired session only while its person may read the project, and sends `server.project_access_ended` when that ends; each runtime relays only its own projects' activity (`project-focus-hardening.md`, `project-focus-delivery.md`).
+5. Done: the real-SQLite group ran in full in both 2026-11-17 sweeps; its one failure (FluxNode nested map, a test fixture) was fixed in t918 and the second sweep passed it (453 files).
 6. Conversation turns a run writes still reach the panel by an adaptive poll (`conversation/thread/poller.ts`, 1-10 s); the panel's new push channel could carry conversation changes too. Its own task.
 7. Hosted scale-out: the IAM and identity change signals that end a paired session's activity access are process-wide and in-process; a write made by another server process is not announced. Fine for a one-server launch; a multi-process hosted deployment needs a shared change signal (hosted-platform plan).
 
@@ -175,6 +175,16 @@ Workers build against these at the same time; a change needs the lead.
 - Validation: `git push origin dev` -> Core `aa5568c46..a956c2219`, extension `dba0383e2..6b8aa675e`; t918 after merging `dev`, one command at a time: Core libraries build, `pnpm --filter fluxiq check`, `node scripts/structure-audit.mjs` -> exit 0 (passed, 914 baselined); fluxiq `vitest run src/programs/_shared/assistant src/programs/automation-studio/api/handlers/across-projects` -> 44 passed; `FLUXIQ_TEST_GROUP=real-sql vitest run .../fluxnode/tests/managed-hosts.test.ts` -> 15 passed; extension `pnpm --filter @fluxiq-web-extension/domain check` -> exit 0; `node scripts/test-domain.mjs script-examples/tests/parity carried-row-service-repair carried-service-repair` -> 12 pass, 0 fail; `test-extension.mjs src/content/actions/tests src/runtime/tests` -> 549 pass, 0 fail; photo-social `honest-and-naive-paths.test.js` -> 13 pass, 0 fail; `node scripts/structure-audit.mjs` -> passed; `node scripts/check/core-mirror.mjs` -> match.
 - Outcome: t918 ready to merge.
 - Follow-up: merge t918 on both sides, then the second sweep of the day on the new `dev`; promote both repositories to `main` if it passes. The t916 Core worktree (`fxwork/t916/!FluxIQ`) and the t915 worktrees serving the user's test instance remain for `pnpm task prune`.
+
+### 2026-11-17 — Second sweep found three failures; fixed in t919; `main` waits for the next sweep
+- Agent: Senior supervisor.
+- Sweep (`dev`: Core `f2b71222c`, extension `dbb15f4b7`, logs in the session scratchpad): Core `pnpm build` exit 0, `pnpm check` exit 0, `pnpm test` exit 1 (contracts 112 files, client-gateway-websocket 29, sdk 20, ui-components 121, web 496 passed; fluxiq parallel 1 failed of 19030 tests, real-sql 453 files passed); extension `pnpm build` exit 0, `pnpm check` exit 1, `pnpm test` exit 1 (11 packages passed; domain 3096 pass, 0 fail, with 1 of 455 entries failing to load).
+- Failures: (1) `parked-expiry.test.ts` "the public delete method settles parked asks before removing project records": its stand-in service had no `projects.removals`, which t916 made `deleteProject` run through (passed in the first sweep; t916's narrow checks did not cover `service/runtime-session`); (2) the extension check refused: the getting-started reachability reader imports `@fluxiq/contracts/platform` (`f7fac69ae`, t915), which Core's `browserBundles.entries` did not list; (3) `domain/src/io/tests/input-model.test.ts` failed to load: `web.dom.hover` (`a111d62cd`, t903) was neither recordable nor in its dispatch-only list.
+- Found: (2) and (3) were already in the first sweep. The lead's triage of that sweep missed the failed-to-load entry, and the extension's `pnpm check` ran `pnpm -r check`, which stops at the first failing package: the domain fixtures' type errors stopped it before the extension's own check ran.
+- Changed (t919): the fixture uses the real `AutomationStudioProjectRemovals` and checks the removal is announced once, after the index write; `packages/contracts/src/platform.ts` added to Core's `browserBundles.entries`; `web.dom.hover` listed as dispatch-only (the recorder treats pointer movement as passive evidence); the root `check` runs `pnpm -r --no-bail check`, as `pnpm test` already did, so a sweep reports every package (`check-prefix.test.mjs` and `repository-layout.md` follow).
+- Validation: t919, one command at a time: fluxiq `vitest run .../runtime-session/tests/parked-expiry.test.ts` -> 18 passed; `pnpm --filter fluxiq check` -> exit 0; Core `node scripts/structure-audit.mjs` -> exit 0; Core structure-audit rule tests -> exit 0; Core libraries build -> exit 0; extension `node scripts/test-domain.mjs io/tests/input-model` -> "Web automation input model tests passed."; `node --test scripts/build-cache/tests/check-prefix.test.mjs` -> 2 pass, 0 fail; `pnpm build` -> exit 0; `pnpm -r --no-bail check` -> exit 0, all 11 packages Done; `node scripts/structure-audit.mjs` -> exit 0; `node scripts/check/core-mirror.mjs` -> exit 0.
+- Outcome: t919 ready to merge. Both of the day's full sweeps are used (user rule: at most two a day), so promotion to `main` waits for the next day's sweep on `dev` with t919.
+- Follow-up: merge t919 on both sides; the next sweep, then fast-forward `main` in both repositories if it passes.
 
 ## Open Questions
 

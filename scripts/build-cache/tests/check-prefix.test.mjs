@@ -43,8 +43,10 @@ test("pnpm check builds what its tests import, then one node --test over exactly
   assert.deepEqual(steps.slice(0, at), CHECK_FIRST);
   assert.deepEqual(globsOf(scripts.check), SUITES.flatMap((suite) => globsOf(scripts[suite])));
   // The Core build gate also stands before `pnpm -r check` bundles the extension
-  // against Core's dist (scripts/check/core-build.mjs).
-  assert.deepEqual(steps.slice(at + 1), ["node scripts/structure-audit.mjs", "pnpm -r check"]);
+  // against Core's dist (scripts/check/core-build.mjs). `--no-bail`, as `pnpm test`
+  // has: a sweep reports every package's check, rather than stopping at the first
+  // failure and leaving the packages after it unchecked.
+  assert.deepEqual(steps.slice(at + 1), ["node scripts/structure-audit.mjs", "pnpm -r --no-bail check"]);
 });
 
 test("pnpm lab:test builds what its tests import before them", () => {

@@ -273,7 +273,11 @@ const dispatchOnlyOutputs = [
   // registered for it.
   "web.dom.assert", "web.dom.dialog", "web.browser.download", "web.dom.extract",
   // A Flow's next-page step (contract C1) is built from a detected list, never recorded.
-  "web.dom.next_page"
+  "web.dom.next_page",
+  // A hover (t903) is authored where a page reveals a control only under the
+  // pointer; the recorder treats pointer movement as passive evidence
+  // (`recording/recorded-step-reader.ts`), so no recorded event produces one.
+  "web.dom.hover"
 ];
 // Every action input names one output. Only the tab switch and the tab close
 // share theirs: both are `web.browser.tab`, told apart by the operation the node carries.
