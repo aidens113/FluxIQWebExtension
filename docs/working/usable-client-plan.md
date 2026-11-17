@@ -1,7 +1,7 @@
 # Usable Client Plan
 
 Status: Active
-Status detail: Discovery running; implementation will build on task t914's committed tip in a new paired task.
+Status detail: Built and accepted on paired task t915 (on top of t914); merging into both `dev` branches; follow-ups listed under Next.
 Created: 2026-11-16
 Last updated: 2026-11-16
 Owner: Senior supervisor agent
@@ -13,15 +13,24 @@ Related: [Hosted platform launch](./hosted-platform-launch-plan.md), [MVP launch
 
 **User request (2026-11-16):** "we need to get a working version of the extension/panel that I can test done today. The UI base looks good on the surface, but is functionality unusable. The panel is slow, seems to be missing some needed configuration stuff/ux navigation, and generally just needs to be reworked. Extension needs to actually be able to navigate through different chats and projects entirely through the extension, right now you cant do anything. And ENSURE that dumb unlock key feature is removed. if a client is connected, they are CONNECTED, meaning they have access to the basic feature of the fluxiq framework (llm)".
 
-**Findings so far:**
+**Done (accepted 2026-11-16, report `final-acceptance.md`):**
 
-- The unlock removal the user wants was already built by Codex on task t914 (Core `79f175d2a`, extension `1285dd320`, 2026-11-14) and verified by unit tests only. t914 never merged, so `dev`, which the user runs, still has the unlock.
-- t914 holds 17 Core commits (820 files, +34,605/-3,492) and 11 extension commits of hosted-platform foundation, all unmerged. Its worktree also holds 105 uncommitted extension files of an unfinished content-script "admission" privacy refactor, idle since 2026-11-14 23:26. That WIP stays untouched in `fxwork/t914`.
-- `pnpm dev` serves the Core panel with `next dev --turbopack`, a development server that compiles each route on first request; this is a likely cause of the slow panel and is being measured.
+- **Unlock removed.** A connected panel, paired extension or SDK session uses the configured model key with no unlock, password, key step or "key locked" wait, after logout, reconnect and Core restart. Codex built the per-use authority on t914 (`79f175d2a`, `1285dd320`); t915 deleted the dead lock path and unlock types, moved stored result-check authorizations to per-use authority (none were created since 2026-11-04; a grant path now exists through `update-flow-settings`), removed `secrets:Unlock`, rewrote the docs, and folded the rule into AGENTS.md. Keys saved before t914 need one panel sign-in to upgrade (no recovery prompt otherwise).
+- **Extension:** project list, create and switch in a header switcher (shared `createProjectSwitcher`), chat bar (title, Chats, New chat), chats titled from their first message, `client.focus_project` so live activity follows the chosen project, one person's projects and chats shared with the panel (domain-scope fix), Settings project row, deep links to `/projects` and `/chats/<id>`, no per-call snapshot fetch, reachability before pairing, UI fixes from the audit.
+- **Panel:** `pnpm dev` serves a production build (`--dev` for hot reload); pages 0.1-0.3 s; Projects, Chats and Connect-a-client pages; Home and Runs read across projects in two IAM-filtered calls; base styles for bare controls, an unclosed `@media` block fixed, layouts, contrast and phone navigation fixed; shared project switcher.
+- **Bugs fixed on the way:** the part-run driving gate (on Core `dev` since t907 `fded721c0`), persistence fixtures and an unmarked real-SQLite test (on Core `dev` since t909), a slow cold-import test, a zod import in the neutral runtime contracts, stale tests from t914, and two server-graph imports that broke `next build`.
 
-**Decision (lead, 2026-11-16):** build today's work on t914's committed tip (both repositories) in a new paired task, rather than re-implementing the unlock removal on `dev`, so the two never conflict. t914's committed foundation lands on `dev` with this task once local panel and extension journeys are verified live.
+**Running test instance (for the user):** production panel at http://127.0.0.1:3000 (gateway ws://127.0.0.1:4777/client), started from `C:/Users/osrs_/FluxStuff/fxwork/t915/!FluxIQWebExtension` with that tree's own test data; unpacked extension at `fxwork/t915/!FluxIQWebExtension/apps/extension/dist/chrome`; the test owner's sign-in is in that tree's `test-runs/panel-test-credential.txt` (git-ignored). The user's usual `pnpm dev` in the main checkout runs against the main Core checkout, which is on Codex's unfinished `task/t911-runtime-lease-isolation` with uncommitted changes, so it does not show this work until that checkout is back on Core `dev`.
 
-**Next:** discovery reports (below), then file-partitioned implementation briefs, then a live check of every journey in a headed browser, then hand the user a running instance.
+**Next (follow-ups, each its own task):**
+
+1. Fold the cloud-plan review (below) into `hosted-platform-launch-plan.md` when Codex resumes t914's uncommitted privacy WIP in `fxwork/t914` (105 extension files; give it its own task and check whether one gate at the background capture authority suffices).
+2. A Core structure-audit rule failing when a server entry reaches an unmarked hook module (the class of break `next build` alone caught).
+3. A pairing-change push so the panel stops reading the gateway snapshot every 7.5 s.
+4. Hosted: project-focus authority reads people from the instance's own identity service, which a hosted tenant may not use; activity access is checked when focus is set, not per push.
+5. The real-SQLite test group was not run in full for t915 (its marked files changed in t915 were run by path).
+
+**Decision (lead, 2026-11-16):** build today's work on t914's committed tip (both repositories) in a new paired task, rather than re-implementing the unlock removal on `dev`, so the two never conflict. t914's committed foundation lands on `dev` with this task.
 
 **UI polish phase (user, 2026-11-16):** "make sure to work on the UI of the panel, is that part of the plan? there are other things like weird not properly styled UI elements". The plan had fixed only the defects the walk-through hit, so a visual phase is added: two audits (Core web panel `reports/panel-ui-audit.md`, extension side panel `reports/extension-ui-audit.md`) screenshot every page and state in light and dark at desktop and narrow widths, trace each badly styled element to its cause, and compare against the website's look (getfluxiq.com, local `FluxIQWebsite`); fix workers follow, partitioned by folder, shared tokens and base styles first.
 
@@ -115,6 +124,13 @@ Workers build against these at the same time; a change needs the lead.
 - Decision (lead): the two walk-through projects stored with no domain are not migrated; only t914's unmerged panel pages ever wrote domain-less projects, so the user's data should hold none, and new projects get the active domain.
 - Validation: worker-reported, re-run at integration below. Lead: `driving-gate.test.ts` fails identically on t914's untouched tip (1 failed, 15 passed), so it was pre-existing; `pnpm --filter @fluxiq/ui-components exec vitest run src/chat` -> 109 files, 734 passed after the context-line change.
 - Follow-up: Home's 7.5 s gateway snapshot read needs a pairing-change push (Core pairing listener plus an event route) before it can stop polling.
+
+### 2026-11-16 — UI polish, late fixes and final acceptance
+- Agent: Senior supervisor; workers panel-ui-audit, extension-ui-audit, panel-ui-base, panel-ui-shell, panel-ui-settings, panel-ui-content, extension-ui-fixes, shared-chat-ui-fixes, chat-title-refresh, no-key-reply, home-speed, cross-project-reads, core-test-triage, preexisting-test-fixes, proof-keys-address, final-acceptance (reports in this folder).
+- Changed (t915): the UI phase's fixes; chat titles refresh after a send; a keyless message gets only the setup reply while a confident Flow run still runs (lead corrected the worker's version, which stopped running Flows without a key); `list-recent-flow-runs` and `list-workspace-flow-summaries` (session-only, IAM-filtered; their missing `FILTERED_WORKSPACE_LISTS` entries would have refused every ordinary person on the service profile); the neutral `./runtime` contracts keep zod out (humanness schema moved to `humanness/schema/`); pre-existing failures fixed (persistence fixtures and flow-base from t909, the load-order test, stale web tests from t914, the task-screen wording test, the credential-messages cwd test); the paired route test classifies and checks the project endpoints' narrowing.
+- Validation (final-acceptance worker, production build): Core `check` for contracts, fluxiq, ui-components and web -> pass; Core and extension `node scripts/structure-audit.mjs` -> passed; ui-components 811, contracts 995, fluxiq parallel group 3097, extension 1690 tests pass; web 3297/3299, the two failures being the route test fixed after by the lead (`npx vitest run .../[endpoint]/tests/route.test.ts` -> 79 passed); panel pages 100-330 ms; every page in light and dark at 1440 and 390 px without styling defects or horizontal scroll; extension journeys pass with no unlock step; approved-client proof: all 20 checks true, run exit 2 at its network guard (the new reachability probe hits the default address before the proof configures its own: harness ordering, fix dispatched as `proof-network-order.md`).
+- Outcome: accepted for merge once the proof passes.
+- Follow-up: the Next list in Current State.
 
 ## Open Questions
 
