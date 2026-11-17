@@ -107,6 +107,7 @@ function dependencies(page: CoveredPage): ContentActionDependencies {
     watchRobotCheck: (() => undefined) as unknown as ContentActionDependencies["watchRobotCheck"],
     watchIgnoredPress: (() => undefined) as unknown as ContentActionDependencies["watchIgnoredPress"],
     watchPressAnswered: () => undefined,
+    watchPressReadiness: () => undefined,
     success: (action: BrowserActionCommand, startedAt: number, message: string, validation: BrowserActionResult["validation"]) => ({
       commandId: action.commandId, actionType: action.actionType, status: "succeeded", validation, message, startedAt, finishedAt: startedAt + 1
     })
