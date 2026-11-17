@@ -119,7 +119,7 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
     stage(`open ${options.browser}`);
     const policy = chatNetworkPolicy(topology, proxy.origin);
     session = options.browser === "chrome"
-      ? await openChromeChatSession({ topology, extensionPath: labPaths.extensionPath, scenarioUrl: pageUrl, workerRequests, policy })
+      ? await openChromeChatSession({ topology, extensionPath: labPaths.extensionPath, scenarioUrl: pageUrl, workerRequests, policy, addresses: { gatewayUrl: topology.gatewayUrl, coreApiUrl: proxy.origin } })
       : await openFirefoxChatSession({ profileDir: path.join(topology.allocation.runRoot, "firefox-profile"), addonPath: path.join(options.repositoryRoot, "apps", "extension", "dist", "firefox"), scenarioUrl: pageUrl, policy });
     result.browserVersion = session.browserVersion;
     stage("pair");

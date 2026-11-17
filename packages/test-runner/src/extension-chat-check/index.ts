@@ -5,6 +5,7 @@
 // answer the extension sends. `cli.ts` runs it.
 export { approvalFlowGraph, saveApprovalFlow, type ApprovalFlow } from "./approval-flow.js";
 export { chatNetworkPolicy } from "./chat-network-policy.js";
+export { preconfigureExtension, type ExtensionAddresses } from "./preconfigure-extension.js";
 export { captureBrowserWindows } from "./browser-window-capture.js";
 export { startCoreRecordingProxy, type CoreRecordingProxy, type ObservedCoreCall } from "./core-recording-proxy.js";
 export { evidenceWriter, type EvidenceWriter } from "./evidence-writer.js";
