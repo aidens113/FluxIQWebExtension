@@ -1,7 +1,7 @@
 # Usable Client Plan
 
 Status: Active
-Status detail: Built and accepted on paired task t915 (on top of t914); merging into both `dev` branches; follow-ups listed under Next.
+Status detail: Merged into both `dev` branches (extension `42b7fcc30`, Core `aa5568c46`) with t914's committed foundation; follow-ups listed under Next.
 Created: 2026-11-16
 Last updated: 2026-11-16
 Owner: Senior supervisor agent
@@ -131,6 +131,13 @@ Workers build against these at the same time; a change needs the lead.
 - Validation: lead runs in t915: `npx vitest run "src/app/api/programs/[programId]/[endpoint]/tests/route.test.ts"` in apps/web -> 79 passed; `npx vitest run src/runtime/conversations` in packages/fluxiq -> 52 files, 384 passed; `npx vitest run src/screens/tasks` in packages/ui-components -> 22 passed; `pnpm --filter @fluxiq/contracts exec vitest run` -> 112 files, 995 passed; `pnpm --filter @fluxiq/contracts check` and `pnpm --filter fluxiq check` -> exit 0 after the humanness schema move; `node --test scripts/build-cache/tests/*.test.mjs` in Core -> 74 pass; `node apps/extension/scripts/test-extension.mjs src/background/tests/credential-messages.test.ts` from the repository root and from apps/extension -> 4 pass each; `node scripts/run-fluxiq-web.mjs` -> `next build` passed and "Ready in 3.5s".
 - Outcome: the final-acceptance worker reported (production build) type checks and structure audits passing in both repositories; ui-components 811, contracts 995, fluxiq parallel group 3097, extension 1690 and web 3297 of 3299 tests passing, the two being the route test the lead then fixed; panel pages 100-330 ms; every page clean in light and dark at 1440 and 390 px; extension journeys passing with no unlock step; the approved-client proof with all 20 checks true but exit 2 at its network guard (the new reachability probe reaches the default address before the proof configures its own; harness fix dispatched as `proof-network-order.md`). Accepted for merge once the proof passes.
 - Follow-up: the Next list in Current State.
+
+### 2026-11-16 — Proof fixed; t915 merged into both `dev` branches
+- Agent: Senior supervisor; worker proof-network-order (report in this folder).
+- Changed: the approved-client proof writes the extension's addresses through the service worker and restarts it before the panel opens (guard unchanged). Core `dev` `5e704b497..aa5568c46` (merge commit with t915's exact tree, parents `dev` `04e7b1650` and t915, made with `git commit-tree` because `dev` is checked out nowhere in Core and the user's test panel runs from the t915 worktree); extension `dev` `a79b09a1f..42b7fcc30` (`git merge --no-ff` in the main checkout after setting aside the pre-existing uncommitted AGENTS.md and Cline-rules edits, restored afterwards unchanged). Both bring t914's committed commits. `pnpm task finish` was not used because it removes the worktree the user's running test instance serves from; the t915 branches and worktrees remain for that instance and can be pruned after the user's test. Codex's t914 worktree and its uncommitted WIP are untouched.
+- Validation: `node packages/test-runner/dist/extension-chat-check/cli.js --browser chrome --scenario everything-store --page ./ --no-ask --model-key` (worker run) -> exit 0, all 20 checks true, evidence `C:/Users/osrs_/FluxStuff/evidence/t198/2026-11-17T01-19-48-302Z-chrome`; lead: `node scripts/structure-audit.mjs` on the merged extension `dev` -> passed (251 warnings, 551 baselined); `git diff --stat task/t915-usable-client <merge>` in Core -> empty (identical tree); `git push origin dev` in both repositories -> accepted (`5e704b497..aa5568c46`, `a79b09a1f..42b7fcc30`).
+- Outcome: done; the user's test instance keeps running from `fxwork/t915`.
+- Follow-up: the Next list in Current State; after the user's test, `pnpm task prune` or `pnpm task abandon t915` to clean the worktrees (both branches are merged).
 
 ## Open Questions
 
