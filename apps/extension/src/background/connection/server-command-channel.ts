@@ -77,6 +77,10 @@ export type ServerCommandChannelDeps = {
   readonly emitStatus: () => void;
   /** Takes a `server.activity` payload: what FluxIQ is doing now, for the panel and the overlay. */
   readonly acceptActivity: (activity: unknown) => void;
+  /** Takes a `server.conversation_changed` payload: a chat changed, so the panel reads it again. */
+  readonly acceptConversationChanged?: (payload: unknown) => void;
+  /** The session is ready (again): Core replays nothing, so the panel reads everything again. */
+  readonly onSessionResync?: () => void;
   // Re-entry through the facade for the three public paths a command can take.
   readonly recordEvent: (payload: RecordingEventPayload, tabId?: number, frameId?: number) => Promise<void>;
   readonly stopRecording: (notifyServer: boolean) => Promise<void>;
@@ -169,6 +173,12 @@ export class ServerCommandChannel {
       return;
     }
 
+    // A chat changed, wherever it was changed: a signal for the panel, no command, never answered.
+    if (message.type === "server.conversation_changed") {
+      this.deps.acceptConversationChanged?.(message.payload);
+      return;
+    }
+
     // Core asking what became of a command whose answer never reached it (Core
     // C8): answered from what this browser kept, never by running anything.
     if (message.type === "server.reconcile_command") {
@@ -198,6 +208,8 @@ export class ServerCommandChannel {
     // FluxIQ" a pairing left behind included.
     this.deps.setLastError(undefined);
     this.deps.gateway.markSessionReady();
+    // Nothing is replayed after a reconnect: the chat reads everything again.
+    this.deps.onSessionResync?.();
     this.deps.onActivity("connection", "Connected to FluxIQ", "Client session ready", "success");
     // Before anything else is sent, so Core's activity for the chosen project reaches this session from the start.
     await this.deps.announceProjectFocus?.();
