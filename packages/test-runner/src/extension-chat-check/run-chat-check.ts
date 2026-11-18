@@ -14,6 +14,7 @@ import { openFirefoxChatSession } from "./open-firefox-session.js";
 import { proveAskAnswered, proveChatBuild, proveChatRelay, proveApprovedClientAccess, type AskAnswerObservation, type ChatBuildObservation, type ApprovedClientAccessObservation, type ChatRelayObservation } from "./prove/index.js";
 import { scriptedModelChildEnvironment, scriptedModelKey, startScriptedModelServer, type ScriptedModelServer } from "../attempt-lane/scripted-model/index.js";
 import { approvedClientModelScript } from "./model-fixture/index.js";
+import { LAB_PROJECT_DOMAIN_ID } from "../flow-lane/index.js";
 import { threadReader } from "./thread-reader.js";
 import type { Page } from "@playwright/test";
 import type { ChatBrowser, ChatBrowserSession, ChatCheckContext } from "./types.js";
@@ -169,6 +170,7 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
         configureKey: async () => {
           await control.secretKeysCall("create-key", { name: "Approved-client fixture", value: scriptedModelKey(), kind: "llm", provider: "anthropic", authorizationPassword: owned.authorizationPassword ?? "", authorizationPin });
         },
+        writePanelTurn: async (conversationId, text) => { await control.automationStudioCall("append-turn", { projectId, conversationId, text }, {}, LAB_PROJECT_DOMAIN_ID); },
         selectProject: () => control.selectProject(projectId),
         model: { calls: () => modelStub!.calls(), receipts: modelScript.receipts },
         fluxiqOrigin: owned.fluxiqOrigin,

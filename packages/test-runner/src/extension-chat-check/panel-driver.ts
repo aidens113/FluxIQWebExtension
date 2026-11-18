@@ -32,7 +32,13 @@ export type ChatPanelDriver = {
   /** Presses the button with exactly this label once it shows; fails after `timeoutMs`. */
   press(label: string, timeoutMs: number): Promise<void>;
   text(): Promise<string>;
+  /** Leaves a mark on the panel's live document; a reload or reopen of the panel loses it. */
+  markDocument(): Promise<void>;
+  /** True while the document that was marked is still the one showing, so nothing reloaded it. */
+  documentIsMarked(): Promise<boolean>;
 };
+
+const DOCUMENT_MARK = "__chatCheckDocumentMark";
 
 /** A panel page Playwright drives: the Firefox popup, or any panel page Playwright was handed. */
 export function pagePanelDriver(page: Page): ChatPanelDriver {
@@ -59,6 +65,8 @@ export function pagePanelDriver(page: Page): ChatPanelDriver {
       await button.click();
     },
     text: () => page.locator("body").innerText({ timeout: 5_000 }),
+    markDocument: () => page.evaluate((key) => { (globalThis as unknown as Record<string, unknown>)[key] = true; }, DOCUMENT_MARK),
+    documentIsMarked: () => page.evaluate((key) => (globalThis as unknown as Record<string, unknown>)[key] === true, DOCUMENT_MARK),
   };
 }
 
@@ -116,6 +124,11 @@ export function extensionViewPanelDriver(control: Page, panelPath: string, openS
       }
     },
     text: () => run<string>("text", ""),
+    async markDocument() {
+      const outcome = await run<string>("mark", DOCUMENT_MARK);
+      if (outcome !== "marked") throw new Error(`The side panel's document could not be marked: ${outcome}`);
+    },
+    async documentIsMarked() { return await run<string>("is-marked", DOCUMENT_MARK) === "yes"; },
   };
 }
 
@@ -150,6 +163,11 @@ function inView({ panelPath, action, argument, composer, sendSelector }: { panel
   if (!panel) return `no side panel view among ${views.length} extension view(s): ${views.map(view => view.location.pathname).join(", ")}`;
   const document = panel.document;
   if (action === "text") return document.body?.innerText ?? "";
+  if (action === "mark") {
+    (panel as any)[argument] = true;
+    return "marked";
+  }
+  if (action === "is-marked") return (panel as any)[argument] === true ? "yes" : "no";
   if (action === "send") {
     const box = document.querySelector(composer) as HTMLTextAreaElement | null;
     if (!box) return "no composer";
