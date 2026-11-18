@@ -96,6 +96,22 @@ export function setRecordingState(nextRecording: boolean): void {
   }
 }
 
+/**
+ * Ends recording and discards everything pending, sending none of it. Unlike
+ * `setRecordingState(false)`, which flushes the typed text first, this is for a
+ * document FluxIQ may no longer read.
+ */
+export function suspendRecording(): void {
+  recording = false;
+  observer.disconnect();
+  if (inputTimer) clearTimeout(inputTimer);
+  inputTimer = undefined;
+  pendingInput = undefined;
+  if (mutationTimer) clearTimeout(mutationTimer);
+  mutationTimer = undefined;
+  pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+}
+
 /** Holds a typed value back until the field goes quiet, then emits one `dom.input`. */
 export function scheduleInputEvent(element: Element): void {
   pendingInput = { element, inputValue: captureSettings.inputValues ? readElementValue(element) : undefined };

@@ -53,6 +53,9 @@ HTTP; reading current trust and then queueing an unadopted proof is not an atomi
 credential transaction. The isolated native-auth probe showed native UI alone
 does not prevent injection or capture, so integration uses a preclaimed tab.
 
+When the extension may touch a tab, and when its content script is inert or
+revoked, is described in [browser content admission](browser-content-admission.md).
+
 ## Responsibilities
 
 Cross-document action transport belongs to Next page. The focused

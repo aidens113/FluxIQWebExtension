@@ -9,4 +9,6 @@ export type WebNodeLayerAct = {
   actionType: string;
   /** The parameters as written, before any binding is resolved: `submit` on a type is read from them. */
   parameters: Readonly<Record<string, unknown>> | undefined;
+  /** The runtime observed this act answer a layer the build did not open. Never taken from model input. */
+  answered?: true | undefined;
 };

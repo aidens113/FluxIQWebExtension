@@ -14,10 +14,31 @@
 // `e2e/content/tests/dialog-identity/tests/dialog-bound-identity.spec.ts`.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import baseTest from "node:test";
 import { agreesWithRecordedDialog, dialogName } from "../dialog";
 import { scoreTargetCandidates, type RecordedIdentity } from "../score";
 import { vetoCandidate } from "../veto";
+
+/**
+ * The name readers test a stub element against the page's element classes and look
+ * ids up in `document`. Each test installs empty ones and puts back what was there,
+ * so this file passes alone and leaves nothing for a later file to lean on (t941).
+ */
+const PAGE_GLOBALS = ["document", "HTMLElement", "HTMLInputElement", "HTMLSelectElement", "HTMLTextAreaElement"] as const;
+function withPage(body: () => void): void {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const previous = new Map(PAGE_GLOBALS.map((name) => [name, Object.getOwnPropertyDescriptor(globals, name)]));
+  for (const name of PAGE_GLOBALS) globals[name] = name === "document" ? { getElementById: () => null } : class {};
+  try {
+    body();
+  } finally {
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globals, name, descriptor);
+      else delete globals[name];
+    }
+  }
+}
+const test = (name: string, body: () => void): void => void baseTest(name, () => withPage(body));
 
 type Child = StubElement | string;
 
