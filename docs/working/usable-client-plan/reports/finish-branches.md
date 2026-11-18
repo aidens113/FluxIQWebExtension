@@ -34,3 +34,27 @@
   absorbs that call although its own comment says attempt 4 asks none. Drop it to 3 when Core is fixed.
 - One intermediate proof (`run-mwm2glmb`, failed) ran with `FLUXIQ_LAB_ALLOW_BEHIND_CORE=1` because the shared Core was then 5 Core
   commits behind. The final run did not need it.
+
+## Phase 2: t905 stage A (2026-11-18)
+
+- Core merge conflicts (3) resolved by me: wait reasons follow dev (stuck_in_a_loop kept, model_key_locked dropped); entry.test
+  field order. The lead committed the merge as f16e969b9. Extension side merged cleanly.
+- Captured-row identity guard (Opus, `t905-captured-row-guard.md`): red reproduced. Under an accepting authority the child echoed
+  copies, and the parent's saved trace lost its dataset markers; no raw-text leak was observed. The guard checks originals against
+  the live run's own record map, by identity only, before any copy. Captured or unanswerable inputs go to the child uncopied, with
+  unknown input use. The stage-B provenance gap for root and external inputs remains, as specified.
+- Regressions t905 brought to dev's own answer-first tests: 38 failures in 10 files. I proved the same files pass on Core dev
+  (147/147). An Opus worker fixed 36 at their causes, all in t905's unvalidated WIP: a publication clashed with the store's
+  fixed-per-run schema; a hand fix's rows dropped out of the feed; t905's own tests had stale paths; the fake domain never reported
+  a read's place (`t905-answer-first-regressions.md`). Decisions I made on the last two (`t905-result-datasets.md`):
+  - `keep.test:51` follows D1 (a look is never the result: collected 3, duplicates 0).
+  - A superseded result publication is retired, so Data/export lists the current result plus the per-call capture datasets.
+  - Capture datasets stay, because every run's rows are collected.
+- Closed-store regression (service-wiring 2/7; dev 7/7): t905 `280c4bdad` had removed `saveTyped`'s fallback for a store that
+  fails to open. Restored narrowly for an unavailable store only; every other open failure still propagates
+  (`t905-closed-store.md`, `t905-closed-store-fix.md`).
+- Open, for separate tasks:
+  - In `service.ts` and `generation-catch.ts`, a throw after model calls is labelled a pre-model refusal and shown as a setup step,
+    which hid the store clash above. This is dev code.
+  - Retiring a publication writes an actor-less `deleted` audit event through `deleteRunDatasets`. A dedicated "superseded"
+    method would read more honestly.
