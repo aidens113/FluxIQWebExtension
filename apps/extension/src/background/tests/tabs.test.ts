@@ -51,6 +51,8 @@ function installChromeStub(frames: Record<number, FrameState>, injection: Inject
   const stub = {
     runtime,
     tabs: {
+      // The tab gate reads the tab before every send and injection (`../tab-gate/`).
+      get: (tabId: number) => Promise.resolve({ id: tabId, url: "https://example.test/" }),
       sendMessage: (_tabId: number, _message: unknown, third?: unknown, fourth?: unknown) => {
         const options = typeof third === "object" && third !== null ? third as { frameId?: number } : undefined;
         const callback = (typeof third === "function" ? third : fourth) as ((response: unknown) => void) | undefined;

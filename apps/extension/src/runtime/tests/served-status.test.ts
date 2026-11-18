@@ -14,6 +14,8 @@ type Injection = { target: Record<string, unknown> };
 async function withScripting<T>(answer: (injection: Injection) => Promise<unknown[]>, run: (targets: unknown[]) => Promise<T>): Promise<T> {
   const targets: unknown[] = [];
   (globalThis as { chrome?: unknown }).chrome = {
+    // The tab gate reads the tab before it injects (`../../background/tab-gate/`).
+    tabs: { get: (tabId: number) => Promise.resolve({ id: tabId, url: "https://shop.test/" }) },
     scripting: {
       executeScript: (injection: Injection) => {
         targets.push(injection.target);

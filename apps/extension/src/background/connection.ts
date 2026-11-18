@@ -36,6 +36,8 @@ import type {
 } from "../shared/protocol";
 import type { ActivityDisplay, ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
 import { activeTab, observedTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
+import { configureOwnPages, tabReads } from "./tab-gate";
+import { ownPageAddresses } from "../shared/own-pages";
 import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
@@ -100,7 +102,7 @@ export class FluxIQConnection {
   readonly panelProjects: PanelProjectAccess;
   private readonly attachment: ContentAttachment;
   private readonly evidence: RecordingEvidenceReporter;
-  private readonly tabs: TabRecorder;
+  private readonly tabRecorder: TabRecorder;
   private readonly page: ActivePage;
   private readonly recording: ActiveRecording;
   private readonly intake: RecordedEventIntake;
@@ -125,6 +127,9 @@ export class FluxIQConnection {
     // What a recording captures is the person's settings under Core's policy
     // (`capture-policy/`): every recording message to a page carries these.
     const recordingSettings = () => this.effectiveSettings();
+    // FluxIQ's own pages are this connection's panel and gateway, read per
+    // decision so a settings change applies at once (`tab-gate/`).
+    configureOwnPages(() => ownPageAddresses(this.settings));
 
     this.capturePolicy = new CapturePolicySource({
       call: (endpoint, payload) => callCoreProgram(this.coreApiCredentials(), endpoint, payload),
@@ -257,7 +262,7 @@ export class FluxIQConnection {
         coreApiUrl: this.settings.coreApiUrl
       })
     });
-    this.tabs = new TabRecorder({
+    this.tabRecorder = new TabRecorder({
       recordingState: () => this.recording.state(),
       recordingId: () => this.recording.recordingId(),
       runtimeBusy: () => this.runtimeStatus.current().state === "running",
@@ -275,8 +280,8 @@ export class FluxIQConnection {
       onActivity,
       emitStatus,
       updateTab: (tab) => this.handleTabUpdated(tab),
-      noteTabChange: (tab, lastActive) => this.tabs.noteTabUpdate(tab, lastActive),
-      noteTabRemoved: (tabId, lastActive) => this.tabs.noteTabRemoved(tabId, lastActive)
+      noteTabChange: (tab, lastActive) => this.tabRecorder.noteTabUpdate(tab, lastActive),
+      noteTabRemoved: (tabId, lastActive) => this.tabRecorder.noteTabRemoved(tabId, lastActive)
     });
     this.recording = new ActiveRecording({
       send: this.gateway.send,
@@ -364,12 +369,12 @@ export class FluxIQConnection {
       activeTabId: () => this.page.tabId(),
       activeTabs: async () => {
         const [focused, all] = await Promise.all([
-          chrome.tabs.query({ active: true, lastFocusedWindow: true }),
-          chrome.tabs.query({ active: true })
+          tabReads().query({ active: true, lastFocusedWindow: true }),
+          tabReads().query({ active: true })
         ]);
         return [...focused, ...all].map((tab) => ({ id: tab.id, url: tab.url }));
       },
-      tabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url,
+      tabUrl: async (tabId) => (await tabReads().get(tabId)).url,
       ownOrigins: () => [this.settings.coreApiUrl || DEFAULT_CORE_API_URL, this.settings.gatewayUrl]
     });
     this.activity = new ActivityRelay({
