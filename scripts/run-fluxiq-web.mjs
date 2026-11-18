@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { createInterface } from "node:readline";
+import { prepareWorkspace } from "./run-fluxiq-web/index.mjs";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -24,8 +26,18 @@ const env = {
 };
 
 console.log(`[FluxIQ Web Automation] FLUXIQ_ROOT=${repoRoot}`);
+// One command for a person: dependencies, Core's libraries and the panel host
+// are brought up to date first (each step reuses what is already current), so
+// setup never meets a missing package or a Core built before its source. A
+// Core shared with other task worktrees is only checked; a stale one, or a
+// failed step, ends the launcher with one line saying what to do.
+try {
+  await prepareWorkspace({ repoRoot, coreRoot: fluxiqRoot, env, log: (line) => console.log(`[FluxIQ Web Automation] ${line}`) });
+} catch (error) {
+  console.error(`[FluxIQ Web Automation] ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+}
 console.log("[FluxIQ Web Automation] Preparing repo-local FluxIQ runtime...");
-await run("node", [path.join(repoRoot, "domain", "scripts", "build-web-panel-host.mjs")], env);
 await run("node", [path.join(repoRoot, "domain", "scripts", "setup-fluxiq.mjs")], {
   ...env,
   FLUXIQ_WEB_AUTOMATION_ROOT: repoRoot
@@ -44,14 +56,30 @@ console.log(`[FluxIQ Web Automation] FLUXIQ_HOST_MODULE=${env.FLUXIQ_HOST_MODULE
 
 const child = spawn("pnpm", ["--dir", fluxiqRoot, "--filter", "@fluxiq/web", devServer ? "dev" : "start"], {
   env,
-  stdio: "inherit",
+  stdio: ["inherit", "pipe", "inherit"],
   shell: process.platform === "win32"
+});
+
+// Until someone owns this FluxIQ, the panel prints a one-time setup link at
+// start. Every line is passed through as printed; the link is also framed so
+// it is not lost among the start-up lines.
+const SETUP_LINK = /First-time setup: open (\S+)/u;
+createInterface({ input: child.stdout, crlfDelay: Infinity }).on("line", (line) => {
+  console.log(line);
+  const link = SETUP_LINK.exec(line)?.[1];
+  if (link) console.log(setupBanner(link));
 });
 
 child.on("exit", (code, signal) => {
   if (signal) process.kill(process.pid, signal);
   process.exit(code ?? 0);
 });
+
+function setupBanner(link) {
+  const rule = "=".repeat(Math.max(72, link.length + 4));
+  const lines = ["", rule, "  FluxIQ first-time setup: open this link to choose your name and password.", "  It works once. Restart FluxIQ for a new one.", "", `  ${link}`, rule, ""];
+  return lines.join("\n");
+}
 
 function run(command, args, childEnv) {
   return new Promise((resolve, reject) => {
