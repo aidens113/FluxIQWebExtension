@@ -48,7 +48,17 @@ and IAM exist, while the page, live email, tenant isolation (HC2) and the extens
 the first owner claims it with a setup code and admins invite employees (exists today). The unit adds OIDC
 single sign-on (Okta, Entra, Google Workspace) through Core's existing identity-provider port, membership on
 first sign-in limited to the company's domain, IdP groups mapped to roles, and the fix for invited people
-showing as enabled before they accept; directory-driven removal (SCIM) and licensing follow launch. Units, interfaces I1-I4 and the dated schedule are in the hosted-cloud lane report, held locally until the tenant-isolation units merge (both repositories are public).
+showing as enabled before they accept; directory-driven removal (SCIM) and licensing follow launch.
+**Pricing and billing roles (user, 2026-11-18, "we'll likely tweak it later"):** hosted pricing per dedicated
+browser plus seats for teams; self-hosted enterprise as an annual per-seat license delivered as a signed,
+offline-verifiable license file; customers keep their own model keys (no resale of model usage at launch).
+FluxIQ alone sets prices: Stripe products and prices, mapped to Core entitlements by the commerce config file the
+cloud package writes, so a price change is configuration, not code (an operator admin page follows launch).
+Enterprise admins never set FluxIQ prices; they get a billing-admin IAM role, seats, invoices and billing contact
+(hosted), license status (self-hosted: seats used, expiry, renewal), spending limits on their company model key per
+team or person, and usage reports by team for internal chargeback. Customers setting their own prices (reselling,
+publishers selling Flows) is the post-launch marketplace on Stripe Connect, pending the user's decisions on fee,
+refunds and tax. Launch needs checkout with one or two simple plans; seats, invoicing and the license file follow. Units, interfaces I1-I4 and the dated schedule are in the hosted-cloud lane report, held locally until the tenant-isolation units merge (both repositories are public).
 
 ## Evidence And Readiness
 
