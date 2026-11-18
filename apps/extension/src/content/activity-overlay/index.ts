@@ -11,7 +11,7 @@
 
 export { activityContentMessage } from "./content-message";
 export { isModelProse } from "./model-prose";
-export { showActivityOverlay } from "./overlay";
+export { showActivityOverlay, suspendActivityOverlay } from "./overlay";
 export { StatusPill } from "./status-pill";
 export { activityOverlayView, type ActivityOverlayView } from "./overlay-view";
 export { ACTIVITY_PHASE_APPEARANCE, type ActivityPhaseAppearance, type ActivityPhaseMark } from "./phase-appearance";
