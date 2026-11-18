@@ -18,6 +18,7 @@
 
 export { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./watch.mjs";
 export { scanCoreBuildEntries } from "./entries.mjs";
+export { DOWNSTREAM_ROOT, neededCorePackageNames } from "./needed.mjs";
 export { coreBuildCurrency } from "./currency.mjs";
 export { coreBuildMissing } from "./unbuilt.mjs";
 export { scanNewest } from "./staleness.mjs";

@@ -14,13 +14,21 @@
 
 type RecordingListener = (event: Event) => void;
 
-const listening = new WeakSet<ShadowRoot>();
+const listening = new Map<ShadowRoot, Readonly<Record<string, RecordingListener>>>();
+
+/** Removes the listeners given to every open shadow root, without reading the page. */
+export function forgetShadowRootEvents(): void {
+  for (const [root, listeners] of listening) {
+    for (const [type, listener] of Object.entries(listeners)) root.removeEventListener(type, listener, true);
+  }
+  listening.clear();
+}
 
 /** Adds `listeners`, in the capture phase, to each open shadow root on the event's path that does not have them yet. */
 export function listenInOpenShadowRoots(event: Event, listeners: Readonly<Record<string, RecordingListener>>): void {
   for (const entry of event.composedPath()) {
     if (!(entry instanceof ShadowRoot) || listening.has(entry)) continue;
-    listening.add(entry);
+    listening.set(entry, listeners);
     for (const [type, listener] of Object.entries(listeners)) entry.addEventListener(type, listener, true);
   }
 }

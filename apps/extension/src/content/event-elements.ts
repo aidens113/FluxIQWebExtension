@@ -10,11 +10,17 @@ import { hasClickHandler, isActionableElement } from "./element-traits";
 
 const MAX_OBSERVED_EVENT_ELEMENTS = 500;
 
-const observedEventElements = new WeakSet<Element>();
+let observedEventElements = new WeakSet<Element>();
 const queue: Element[] = [];
 
 /** Elements seen in an event path, oldest first. Read by the snapshot path. */
 export const observedEventElementQueue: readonly Element[] = queue;
+
+/** A revoked document keeps no touched page nodes. */
+export function forgetObservedEventElements(): void {
+  queue.length = 0;
+  observedEventElements = new WeakSet();
+}
 
 /** Records the element a user acted on plus any click-handling ancestor on the path. */
 export function rememberEventPathElements(event: Event): void {

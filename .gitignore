@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .fluxiq/
+# The data root's serving owner file (packages/fluxiq/src/server/data-root-owner).
+.fluxiq.owner
 .turbo/
 .DS_Store
 *.log

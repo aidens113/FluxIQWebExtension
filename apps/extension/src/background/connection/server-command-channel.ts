@@ -80,6 +80,8 @@ export type ServerCommandChannelDeps = {
   readonly acceptActivity: (activity: unknown) => void;
   /** Takes a `server.conversation_changed` payload: a chat changed, so the panel reads it again. */
   readonly acceptConversationChanged?: (payload: unknown) => void;
+  /** Takes a `server.model_access_changed` payload: the person's model key state changed, so the panel shows it. */
+  readonly acceptModelAccessChanged?: (payload: unknown) => void;
   /** The session is ready (again): Core replays nothing, so the panel reads everything again. */
   readonly onSessionResync?: () => void;
   // Re-entry through the facade for the three public paths a command can take.
@@ -177,6 +179,11 @@ export class ServerCommandChannel {
     // A chat changed, wherever it was changed: a signal for the panel, no command, never answered.
     if (message.type === "server.conversation_changed") {
       this.deps.acceptConversationChanged?.(message.payload);
+      return;
+    }
+
+    if (message.type === "server.model_access_changed") {
+      this.deps.acceptModelAccessChanged?.(message.payload);
       return;
     }
 
