@@ -1,20 +1,16 @@
-// The setup port over the background's `fluxiq.panel.modelReadiness` message.
+// The setup port over the background's `fluxiq.panel.modelReadiness` message: the same reading the chat's key card
+// uses (`readModelAccess`), so a reply is understood in one place.
 
-import { RUNTIME_MESSAGES } from "../../shared/constants";
+import { readModelAccess } from "../chat/transport";
 import type { PanelStore } from "../state";
-import { modelKeyFromReply } from "./model";
 import type { SetupPort } from "./setup-port";
 
-/** Reads the model key through `request`. */
+/** Reads the AI key through `request`. */
 export function extensionSetupPort(request: PanelStore["request"]): SetupPort {
   return {
     async readModelKey() {
-      try {
-        const reply = await request({ type: RUNTIME_MESSAGES.panelModelReadiness });
-        return modelKeyFromReply(reply);
-      } catch {
-        return "unknown";
-      }
+      const read = await readModelAccess(request);
+      return read.ok ? read.state : "unknown";
     }
   };
 }

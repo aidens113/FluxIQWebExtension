@@ -1,10 +1,14 @@
 // The getting-started screen as data: whether it replaces the chat, and its
-// numbered steps -- Start FluxIQ, Sign in, Connect this browser, Approve it,
-// and optional model configuration -- each marked done, under way, a problem,
-// or still to do. Pure, so every state is tested without a DOM.
+// numbered steps -- Start FluxIQ, Sign in, Connect this browser, and Approve it --
+// each marked done, under way, a problem, or still to do. Pure, so every state is
+// tested without a DOM. The AI key is not a step: the shared key card says its
+// state in the chat and in Settings.
 //
-// A tick is only ever for something detected: FluxIQ reached (pairing, connected),
-// signed in and approved (the browser is paired), a key listed (the key reading).
+// A tick is only ever for something detected: a valid FluxIQ found at the configured
+// address (its discovery document), signed in (the browser is paired), connected. Step 4
+// is never ticked while the browser is not connected: a stored approval says only that
+// FluxIQ approved this browser once, and after a refused or lost connection FluxIQ may
+// have removed it (the background does not say which yet).
 //
 // When the background lost the wait it was on (its worker was stopped
 // mid-pairing or mid-connect, `panel/state/background-loss.ts`), the screen
@@ -13,9 +17,7 @@
 //
 // The screen shows while FluxIQ is not connected, this browser is not approved
 // yet, or something critical is wrong (the background does not answer). Once the
-// browser is connected the chat comes back. A model key that is missing or unavailable
-// does not hold the chat back (the Lab types into it right after it connects and
-// adds its key): `card` says the setup card shows above the chat instead.
+// browser is connected the chat comes back.
 //
 // The Connect button's names are the Lab's: it presses /^(Connect|Try again|Try now)$/
 // (packages/test-runner/src/demo-workspace/browser-session.ts), so exactly one of
@@ -23,17 +25,17 @@
 
 import type { ExtensionStatus } from "../../../shared/protocol";
 import type { BackgroundLoss } from "../../state";
-import { modelKeyUnavailableLine, type ModelKeyReading } from "../model";
+import type { ServerFinding } from "../reachability";
 import * as words from "./step-words";
 
 /** Where one step stands. `current` is the next thing to do; `waiting` is under way. */
 export type StartStepState = "done" | "current" | "waiting" | "problem" | "todo";
 
-/** Connection steps followed by optional model configuration. */
-export type StartStepKey = "start" | "signin" | "connect" | "approve" | "key";
+/** The connection steps. */
+export type StartStepKey = "start" | "signin" | "connect" | "approve";
 
-/** One numbered step. */
-export type StartStep = { readonly key: StartStepKey; readonly title: string; readonly state: StartStepState; readonly line?: string };
+/** One numbered step. `change` says the step offers to change the FluxIQ web address. */
+export type StartStep = { readonly key: StartStepKey; readonly title: string; readonly state: StartStepState; readonly line?: string; readonly change?: boolean };
 
 /** The connect step's button: its words, and what pressing it asks the background. */
 export type StartConnect = { readonly label: "Connect" | "Try again" | "Try now" | "Cancel"; readonly action: "connect" | "disconnect" };
@@ -51,8 +53,8 @@ export type StartGuide = {
   readonly pairingCode?: string | undefined;
   /** Shows "Check the connection address", which opens settings. */
   readonly addressLink: boolean;
-  /** Connected, and model configuration needs attention: the card shows above the usable chat. */
-  readonly card: boolean;
+  /** What was found at the configured web address while disconnected; absent when not asked. */
+  readonly server?: ServerFinding | undefined;
 };
 
 const HEADING = "Get started with FluxIQ";
@@ -62,14 +64,19 @@ const LOST_LINES: Readonly<Record<BackgroundLoss, string>> = {
   connecting: "The extension restarted before it connected. Press Connect to try again."
 };
 
+const START = "Start FluxIQ";
+const SIGN_IN = "Sign in to FluxIQ";
+const CONNECT = "Connect this browser";
+const APPROVE = "Approve this browser in FluxIQ";
+
 /**
  * The guide for `status`. `noAnswer` is true when the background did not
  * answer the panel; the next status to arrive ends it. `lost` is the wait the
- * background lost, from the panel store. `key` is the model key reading, used
- * only once connected (before that nothing can read it).
+ * background lost, from the panel store. `server` is what the configured web
+ * address answered before pairing.
  */
-export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss, key: ModelKeyReading = "unknown", reachable?: boolean): StartGuide {
-  const base = { gated: true, heading: HEADING, line: words.SETUP_LINE, addressLink: false, card: false };
+export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss, server?: ServerFinding): StartGuide {
+  const base = { gated: true, heading: HEADING, line: words.SETUP_LINE, addressLink: false };
   if (noAnswer && status === undefined) {
     return {
       ...base,
@@ -81,24 +88,19 @@ export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolea
   if (status === undefined) return { ...base, line: "Checking the connection...", steps: [] };
 
   const state = status.connectionState;
-  if (state === "connected") {
-    return { ...base, gated: false, steps: [...doneSteps(), ...keySteps(key)], card: key !== "ready" && key !== "unknown" };
-  }
+  if (state === "connected") return { ...base, gated: false, steps: doneSteps() };
 
   const paired = status.paired;
-  const signin = paired
-    ? step("signin", "Sign in to FluxIQ", "done", undefined, "Signed in")
-    : step("signin", "Sign in to FluxIQ", "todo", words.SIGN_IN_LINE);
-  const approve = paired
-    ? step("approve", "Approve this browser in FluxIQ", "done", undefined, "This browser is approved")
-    : step("approve", "Approve this browser in FluxIQ", "todo");
-  const later = [step("key", "Add a model key", "todo", words.KEY_LATER_LINE)];
-  const running = step("start", "Start FluxIQ", "current", words.START_LINE);
+  const signin = paired ? step("signin", SIGN_IN, "done", "Signed in") : step("signin", SIGN_IN, "todo", words.SIGN_IN_LINE);
+  // Never done while not connected; after a refused or lost connection it says FluxIQ may have removed this browser.
+  const approveAfter = state === "error" || state === "reconnecting" ? words.MAY_HAVE_BEEN_REMOVED_LINE : paired ? words.APPROVED_EARLIER_LINE : undefined;
+  const approve = step("approve", APPROVE, "todo", approveAfter);
+  const running = step("start", START, "current", words.START_LINE);
 
   if (lost !== undefined) {
     return {
       ...base,
-      steps: [running, signin, step("connect", "Connect this browser", "problem", LOST_LINES[lost]), approve, ...later],
+      steps: [running, signin, step("connect", CONNECT, "problem", LOST_LINES[lost]), approve],
       connect: { label: "Connect", action: "connect" }
     };
   }
@@ -108,11 +110,10 @@ export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolea
       return {
         ...base,
         steps: [
-          step("start", "Start FluxIQ", "done", undefined, "FluxIQ is running"),
-          paired ? signin : step("signin", "Sign in to FluxIQ", "waiting", words.SIGN_IN_TO_APPROVE_LINE),
-          step("connect", "Connect this browser", "done", undefined, "Connected"),
-          step("approve", "Approve this browser in FluxIQ", "waiting", words.APPROVE_LINE),
-          ...later
+          step("start", START, "done", "FluxIQ is running"),
+          paired ? signin : step("signin", SIGN_IN, "waiting", words.SIGN_IN_TO_APPROVE_LINE),
+          step("connect", CONNECT, "done", "Connected"),
+          step("approve", APPROVE, "waiting", words.APPROVE_LINE)
         ],
         pairingCode: status.pairingReferenceCode ?? NO_CODE
       };
@@ -120,63 +121,52 @@ export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolea
       return {
         ...base,
         steps: [
-          step("start", "Start FluxIQ", "problem", words.START_PROBLEM),
+          step("start", START, "problem", words.START_PROBLEM, true),
           signin,
-          step("connect", "Connect this browser", "todo", words.CONNECT_FAILED_LINE),
-          approve,
-          ...later
+          step("connect", CONNECT, "todo", words.CONNECT_FAILED_LINE),
+          approve
         ],
         connect: { label: "Try again", action: "connect" },
         addressLink: true
       };
     case "connecting":
-      return { ...base, steps: [running, signin, step("connect", "Connect this browser", "waiting", "Connecting to FluxIQ..."), approve, ...later], connect: { label: "Cancel", action: "disconnect" } };
+      return { ...base, steps: [running, signin, step("connect", CONNECT, "waiting", "Connecting to FluxIQ..."), approve], connect: { label: "Cancel", action: "disconnect" } };
     case "reconnecting":
-      return { ...base, steps: [running, signin, step("connect", "Connect this browser", "waiting", "Lost the connection. Trying again..."), approve, ...later], connect: { label: "Try now", action: "connect" } };
+      return { ...base, steps: [running, signin, step("connect", CONNECT, "waiting", "Lost the connection. Trying again..."), approve], connect: { label: "Try now", action: "connect" } };
     case "disconnected": {
-      // `reachable`: FluxIQ answered at its web address before pairing, so step one is done and sign-in is the person's next.
-      const answering = reachable === true;
+      // Step one is done only when the configured address answered with FluxIQ's own discovery document, and it says where.
+      const found = server?.found === true;
+      const first = server === undefined
+        ? running
+        : found
+          ? step("start", START, "done", words.foundLine(server.host), true)
+          : step("start", START, "current", words.notFoundLine(server.host), true);
       return {
         ...base,
         steps: [
-          answering ? step("start", "Start FluxIQ", "done", undefined, "FluxIQ is running") : running,
-          answering && !paired ? step("signin", "Sign in to FluxIQ", "current", words.SIGN_IN_LINE) : signin,
-          step("connect", "Connect this browser", "todo", paired ? words.CONNECT_AGAIN_LINE : words.CONNECT_LINE),
-          approve,
-          ...later
+          first,
+          found && !paired ? step("signin", SIGN_IN, "current", words.SIGN_IN_LINE) : signin,
+          step("connect", CONNECT, "todo", paired ? words.CONNECT_AGAIN_LINE : words.CONNECT_LINE),
+          approve
         ],
-        connect: { label: "Connect", action: "connect" }
+        connect: { label: "Connect", action: "connect" },
+        ...(server === undefined ? {} : { server })
       };
     }
   }
 }
 
-/** One step; `doneTitle` replaces the title once it is done. */
-function step(key: StartStepKey, title: string, state: StartStepState, line?: string, doneTitle?: string): StartStep {
-  const shown = state === "done" && doneTitle !== undefined ? doneTitle : title;
-  return line === undefined ? { key, title: shown, state } : { key, title: shown, state, line };
+/** One step; `change` adds the offer to change the FluxIQ web address. */
+function step(key: StartStepKey, title: string, state: StartStepState, line?: string, change?: boolean): StartStep {
+  return { key, title, state, ...(line === undefined ? {} : { line }), ...(change === true ? { change } : {}) };
 }
 
 /** Steps one to four once the browser is connected: FluxIQ was reached, and the browser is signed in and approved. */
 function doneSteps(): StartStep[] {
   return [
-    step("start", "Start FluxIQ", "done", undefined, "FluxIQ is running"),
-    step("signin", "Sign in to FluxIQ", "done", undefined, "Signed in"),
-    step("connect", "Connect this browser", "done", undefined, "Connected"),
-    step("approve", "Approve this browser in FluxIQ", "done", undefined, "This browser is approved")
+    step("start", START, "done", "FluxIQ is running"),
+    step("signin", SIGN_IN, "done", "Signed in"),
+    step("connect", CONNECT, "done", "Connected"),
+    step("approve", APPROVE, "done", "This browser is approved")
   ];
-}
-
-/** Optional model configuration once connected. An unreadable status claims nothing. */
-function keySteps(key: ModelKeyReading): StartStep[] {
-  switch (key) {
-    case "ready":
-      return [step("key", "Add a model key", "done", undefined, "Model key configured")];
-    case "missing":
-      return [step("key", "Add a model key", "current", words.KEY_MISSING_LINE)];
-    case "unknown":
-      return [];
-    default:
-      return [step("key", "Model key unavailable", "problem", modelKeyUnavailableLine(key))];
-  }
 }

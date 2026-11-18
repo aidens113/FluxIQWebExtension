@@ -1,7 +1,8 @@
-// The one seam the setup screens read the model key through. The panel's default is
-// `extensionSetupPort`; a spec passes a fake in `PanelPorts.setup`.
+// The one seam the screens read the AI key through: the key card in Settings reads its state here, and the chat's
+// card reads the same reply (`panel/chat/transport/ports/model-keys`). The panel's default is `extensionSetupPort`;
+// a spec passes a fake in `PanelPorts.setup`.
 
-import type { ModelKeyReading } from "./model";
+import type { ModelKeyReading } from "./model-key-reading";
 
 /** What setup reads. A failed read answers `unknown`, never throws. */
 export type SetupPort = {

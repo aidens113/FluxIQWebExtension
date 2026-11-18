@@ -129,7 +129,7 @@ export function startJourneyPanel(surface: PanelSurface): void {
           world.sent.push({ type: message.type, purpose: message.purpose });
           save(world);
           return Promise.resolve({ ok: true, payload: {} });
-        case "fluxiq.panel.modelReadiness": return Promise.resolve({ ok: true, payload: { keys: keys() } });
+        case "fluxiq.panel.modelReadiness": return Promise.resolve({ ok: true, payload: { keys: keys(), modelAccess: world.key === "missing" ? { status: "no_key", message: "Add an AI key to start.", key: null, lastCall: null } : { status: "ready", message: "Anthropic is ready.", key: { name: "Work key", provider: "anthropic", model: "claude-haiku-5-5" }, lastCall: null } } });
         case "fluxiq.panel.activityRead": {
           for (const name of world.pending.filter((pending) => pending.startsWith("scene:"))) scene(name.slice(6) as "work", core, false);
           const settled = load();
@@ -184,7 +184,7 @@ export function startJourneyPanel(surface: PanelSurface): void {
         default: return undefined;
       }
     },
-    ports: { setup: { readModelKey: async () => load().key }, tasks: { port: tasks, results: tasks.results }, taskMemory, library }
+    ports: { setup: { readModelKey: async () => (load().key === "ready" ? { kind: "ready" as const, provider: "Anthropic", keyName: "Work key" } : { kind: "no-key" as const }) }, tasks: { port: tasks, results: tasks.results }, taskMemory, library }
   });
   // The status the background holds survives the popup closing: remember each move, as the background would.
   const show = scope.__show;

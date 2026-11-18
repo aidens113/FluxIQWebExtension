@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultSettings } from "../../../shared/browser";
 import type { ExtensionStatus } from "../../../shared/protocol";
+import { KEY_WRITE_MESSAGES } from "../../chat";
 import { fake, withFakeDocument } from "../../chat/tests/fake-dom";
 import type { ModelKeyReading } from "../../getting-started";
 import type { PanelContext } from "../../shell";
 import type { PanelStore } from "../../state";
+import { recordingRequest, storeWith } from "./store-fixture";
 import { approvalLine } from "../approval-line";
-import { modelKeyLine } from "../model-key-line";
 import { projectLine } from "../project-line";
 import { createSettingsView } from "../settings-view";
 
+const READY: ModelKeyReading = { kind: "ready", provider: "Anthropic", keyName: "Work key" };
 const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const status = (extra: Partial<ExtensionStatus> = {}): ExtensionStatus => ({ connectionState: "connected", recordingState: "idle", gatewayUrl: defaultSettings().gatewayUrl, settings: defaultSettings(), clientId: "fixture", paired: true, queueSize: 0, eventCount: 0, recentActivities: [], projectId: "project-1", ...extra });
 
@@ -51,7 +53,7 @@ function view(current: ExtensionStatus, reading: ModelKeyReading | "none", chang
 test("settings read top down: connection, model, behaviour, permissions, appearance, help, then Advanced holding the addresses and Forget", async () => {
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
-    const settings = view(status(), "ready");
+    const settings = view(status(), READY);
     settings.shown();
     await tick();
     const root = fake(settings.element);
@@ -68,7 +70,7 @@ test("settings read top down: connection, model, behaviour, permissions, appeara
     for (const id of ["captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled"]) assert.equal(permissions.descendants().some((node) => node.id === id), true, `${id} is under Permissions`);
     assert.equal(advanced.descendants().some((node) => node.textContent === "Forget this pairing"), true);
     assert.equal(advanced.textContent.includes("spend"), false, "no spending setting is drawn");
-    assert.equal(root.textContent.includes("Your model key is configured."), true);
+    assert.equal(root.textContent.includes("Anthropic is ready, using Work key."), true);
     assert.equal(root.textContent.includes("FluxIQ approved this browser."), true);
   }));
 });
@@ -84,27 +86,111 @@ test("Advanced starts closed: a person reads what they care about first", async 
   }));
 });
 
-test("the key line separates configuration, unavailability and a failed read", () => {
-  assert.equal(modelKeyLine("ready", true), "Your model key is configured.");
-  assert.match(modelKeyLine("missing", true), /No supported model key/);
-  assert.match(modelKeyLine("upgrade_required", true), /Update FluxIQ/);
-  assert.match(modelKeyLine({ state: "unavailable", code: "legacy_recovery_required" }, true), /recover or replace/);
-  assert.match(modelKeyLine({ state: "unavailable", code: "host_protection_unavailable" }, true), /host operator/);
-  assert.match(modelKeyLine({ state: "unavailable", code: "ciphertext_invalid" }, true), /replace it/);
-  assert.match(modelKeyLine("unknown", true), /Couldn't check/);
-  assert.match(modelKeyLine("ready", false), /Connect to FluxIQ/);
+test("the Model section is the shared key card: each state in its words, read through the one setup port", async () => {
+  const states: Array<[ModelKeyReading, RegExp]> = [
+    [{ kind: "no-key" }, /Add an AI key to start/u],
+    [{ kind: "cant-open", keyName: "Work key" }, /can't read it any more/u],
+    [{ kind: "not-accepted", provider: "Anthropic", keyName: "Work key" }, /did not accept Work key/u],
+    [{ kind: "unreachable", provider: "Anthropic" }, /couldn't reach Anthropic/u],
+    [{ kind: "update-fluxiq" }, /too old/u],
+    ["unknown", /Couldn't check your AI key just now/u]
+  ];
+  for (const [reading, words] of states) {
+    await withChrome(() => withFakeDocument(async () => {
+      modelDocument();
+      const settings = view(status(), reading);
+      settings.shown();
+      await tick();
+      assert.match(fake(settings.element).textContent, words);
+    }));
+  }
 });
 
-test("model configuration failure preserves connected and approved status", async () => {
+test("the Model section says to connect, and reads nothing, while the browser is not connected", async () => {
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
-    const settings = view(status(), { state: "unavailable", code: "host_protection_unavailable" });
+    let reads = 0;
+    const store = storeWith(status({ connectionState: "disconnected" }));
+    const readModelKey = async (): Promise<ModelKeyReading> => {
+      reads += 1;
+      return READY;
+    };
+    const settings = createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, { setup: { readModelKey } });
+    settings.shown();
+    await tick();
+    const root = fake(settings.element);
+    assert.match(root.textContent, /Connect to FluxIQ to see your AI key./u);
+    assert.equal(reads, 0);
+    assert.equal(root.byClass("model-key-card").length, 0);
+  }));
+});
+
+test("the card's Open FluxIQ and Change model open FluxIQ's Settings at AI keys; Try now reads again and opens nothing", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    const sent: Array<Record<string, unknown>> = [];
+    let reads = 0;
+    const store = storeWith(status(), recordingRequest(sent));
+    const readModelKey = async (): Promise<ModelKeyReading> => {
+      reads += 1;
+      return reads === 1 ? { kind: "unreachable", provider: "Anthropic" } : READY;
+    };
+    const settings = createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, { setup: { readModelKey } });
+    settings.shown();
+    await tick();
+    const root = fake(settings.element);
+    const named = (name: string) => root.descendants().find((node) => node.tagName === "BUTTON" && node.textContent === name);
+    named("Try now")!.dispatch("click");
+    await tick();
+    assert.equal(reads, 2);
+    assert.deepEqual(sent.filter((message) => message.type === "fluxiq.panel.openFluxIQ"), []);
+    assert.match(root.textContent, /Anthropic is ready/u);
+    named("Change model")!.dispatch("click");
+    await tick();
+    assert.deepEqual(sent.filter((message) => message.type === "fluxiq.panel.openFluxIQ"), [{ type: "fluxiq.panel.openFluxIQ", purpose: "model-key" }]);
+  }));
+});
+
+test("Save sends the key once to the background, with no password, and shows its refusal in its own words", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    const sent: Array<Record<string, unknown>> = [];
+    const unknownMessage = "The extension doesn't know that request yet.";
+    const request = (async (message: Record<string, unknown>) => {
+      sent.push(message);
+      return message.type === KEY_WRITE_MESSAGES.save ? { ok: true, value: { ok: false, sentence: unknownMessage } } : { ok: true, value: {} };
+    }) as unknown as PanelStore["request"];
+    const store = storeWith(status(), request);
+    const readModelKey = async (): Promise<ModelKeyReading> => ({ kind: "no-key" });
+    const settings = createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, { setup: { readModelKey } });
+    settings.shown();
+    await tick();
+    const root = fake(settings.element);
+    const named = (name: string) => root.descendants().find((node) => node.tagName === "BUTTON" && node.textContent === name);
+    named("Add a key")!.dispatch("click");
+    const fields = root.descendants().filter((node) => node.tagName === "INPUT" && node.getAttribute("type") === "password");
+    assert.equal(fields.length, 1, "one key field and no password field");
+    fields[0]!.value = "sk-ant-PASTED-0001";
+    named("Save and check")!.dispatch("click");
+    await tick();
+    const writes = sent.filter((message) => message.type === KEY_WRITE_MESSAGES.save);
+    assert.deepEqual(writes, [{ type: KEY_WRITE_MESSAGES.save, provider: "anthropic", key: "sk-ant-PASTED-0001", name: "Anthropic key" }]);
+    assert.equal(sent.filter((message) => JSON.stringify(message).includes("PASTED")).length, 1, "the value is in that one message only");
+    assert.match(root.textContent, new RegExp(unknownMessage.replace(/[.']/gu, "."), "u"));
+    assert.equal(root.textContent.includes("PASTED"), false);
+  }));
+});
+
+test("model access trouble preserves connected and approved status", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    const settings = view(status(), { kind: "cant-open", keyName: "Work key" });
     settings.shown();
     await tick();
     const text = fake(settings.element).textContent;
-    assert.match(text, /host operator/u);
+    assert.match(text, /can't read it any more/u);
     assert.match(text, /FluxIQ approved this browser/u);
-    assert.doesNotMatch(text, /Unlock it|password once/iu);
+    assert.doesNotMatch(text, /unlock|vault|seal|credential|scope|token|bidsb/iu);
   }));
 });
 
@@ -112,7 +198,8 @@ test("approval and project are said in words, never as codes", () => {
   assert.equal(approvalLine(status()), "FluxIQ approved this browser.");
   assert.match(approvalLine(status({ connectionState: "pairing" })), /Waiting for you to approve/);
   assert.match(approvalLine(status({ connectionState: "disconnected", paired: false })), /isn't approved yet/);
-  assert.match(approvalLine(status({ connectionState: "disconnected" })), /approved this browser earlier/);
+  assert.equal(approvalLine(status({ connectionState: "disconnected" })), "This browser was approved earlier. Connect to check it still is.");
+  for (const connectionState of ["error", "reconnecting"] as const) assert.equal(approvalLine(status({ connectionState })), "FluxIQ may have removed this browser. Connect again to ask for approval.");
   assert.match(projectLine(status()), /the one you chose in FluxIQ/);
   assert.equal(projectLine(status()).includes("project-1"), false);
   assert.match(projectLine(status({ projectId: null })), /No project is chosen yet. Choose one with Change/);
@@ -125,7 +212,7 @@ test("the Project row names the project and its Change button opens the switcher
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
     let opened = 0;
-    const settings = view(status({ projectName: "Company website" }), "ready", () => { opened += 1; });
+    const settings = view(status({ projectName: "Company website" }), READY, () => { opened += 1; });
     settings.shown();
     await tick();
     const root = fake(settings.element);

@@ -14,7 +14,7 @@ test("a lost pairing: no code, the code expired, Connect gets a new one", () => 
   assert.equal(guide.gated, true);
   assert.equal(guide.pairingCode, undefined);
   assert.deepEqual(guide.connect, { label: "Connect", action: "connect" });
-  assert.deepEqual(states(guide), ["start:current", "signin:todo", "connect:problem", "approve:todo", "key:todo"]);
+  assert.deepEqual(states(guide), ["start:current", "signin:todo", "connect:problem", "approve:todo"]);
   assert.match(guide.steps[2]?.line ?? "", /code expired/u);
   assert.match(guide.steps[2]?.line ?? "", /Connect/u);
 });
@@ -27,7 +27,7 @@ test("a lost pairing whose status still says pairing (no answer) never shows the
 
 test("a lost connection attempt says the extension restarted and offers Connect", () => {
   const guide = startGuide(statusWith({ paired: true }), false, "connecting");
-  assert.deepEqual(states(guide), ["start:current", "signin:done", "connect:problem", "approve:done", "key:todo"]);
+  assert.deepEqual(states(guide), ["start:current", "signin:done", "connect:problem", "approve:todo"]);
   assert.match(guide.steps[2]?.line ?? "", /restarted/u);
   assert.deepEqual(guide.connect, { label: "Connect", action: "connect" });
 });

@@ -6,6 +6,7 @@ import { fake, withFakeDocument } from "../../../chat/tests/fake-dom";
 import type { PanelContext } from "../../../shell";
 import type { PanelResult, PanelStore } from "../../../state";
 import { statusWith } from "../../../tests/status-fixture";
+import type { DiscoveryAnswer } from "../../reachability";
 import { startGuide } from "../steps";
 import { createStartView } from "../view";
 
@@ -19,25 +20,118 @@ function pendingRequest() {
 }
 async function flush() { for (let i = 0; i < 6; i++) await Promise.resolve(); }
 
-test("configuration has one fifth row and no extra browser unlock action", async () => {
+const FOUND = { origin: "http://127.0.0.1:3100", host: "127.0.0.1:3100", found: true, gatewayUrl: "ws://127.0.0.1:4877/client" };
+const buttonNamed = (root: ReturnType<typeof fake>, name: string) => root.descendants().find((node) => node.tagName === "BUTTON" && node.textContent === name);
+const requestsOf = (calls: unknown[], type: string) => calls.filter((call) => (call as { type: string }).type === type) as Array<Record<string, unknown>>;
+const SETTINGS = { gatewayUrl: "ws://127.0.0.1:4777/client", coreApiUrl: "http://127.0.0.1:3100", autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true, requestsEnabled: false };
+
+test("four steps, no key row: each has a number and a title, and Open FluxIQ sits under the sign-in step", async () => {
   await withFakeDocument(async () => {
-    const status = statusWith({ connectionState: "connected", paired: true });
+    const status = statusWith({ connectionState: "pairing", pairingReferenceCode: "482913", paired: false });
+    const store = { request: async () => ({ ok: true, value: {} }) } as unknown as PanelStore;
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
+    view.render(startGuide(status, false), status);
+    const root = fake(view.element);
+    const steps = root.byClass("start-step");
+    assert.equal(steps.length, 4);
+    assert.deepEqual(root.byClass("start-step-title").map((node) => node.textContent), ["Start FluxIQ", "Sign in to FluxIQ", "Connect this browser", "Approve this browser in FluxIQ"]);
+    assert.ok(buttonNamed(fake(steps[1]), "Open FluxIQ"), "Open FluxIQ is under step two");
+    assert.equal(buttonNamed(fake(steps[3]), "Open FluxIQ"), undefined, "and not under the approval step");
+    assert.equal(fake(steps[1]).byClass("start-actions")[0]!.hidden, false);
+    assert.ok(buttonNamed(fake(steps[3]), "Cancel approval request"), "Cancel says what it cancels");
+    assert.equal(buttonNamed(fake(steps[3]), "Cancel"), undefined, "no bare Cancel under the approval");
+    assert.doesNotMatch(root.textContent, /unlock|password|model key/iu);
+  });
+});
+
+test("step one says where FluxIQ was found and Change checks the new address before saving it with the connection address the document names", async () => {
+  await withFakeDocument(async () => {
+    const status = statusWith({ settings: { ...SETTINGS, coreApiUrl: "http://127.0.0.1:3000" } });
     const calls: unknown[] = [];
-    const store = { request: async (message: unknown) => {
+    const store = { current: () => status, subscribe: () => () => undefined, request: async (message: unknown) => {
       calls.push(message);
       return { ok: true, value: {} };
-    } } as PanelStore;
-    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
-    view.render(startGuide(status, false, undefined, { state: "unavailable", code: "ciphertext_invalid" }), status);
+    } } as unknown as PanelStore;
+    const probed: string[] = [];
+    let answer: DiscoveryAnswer = { found: false };
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined, async (address) => {
+      probed.push(address);
+      return answer;
+    });
+    view.render(startGuide(status, false, undefined, FOUND), status);
     const root = fake(view.element);
-    assert.equal(root.byClass("start-step").length, 5);
-    assert.equal(root.byClass("start-mark").at(-1)?.textContent, "5");
-    const key = root.byClass("start-step").at(-1)!;
-    assert.match(key.textContent, /Model key unavailable/u);
-    assert.doesNotMatch(root.textContent, /unlock|password/iu);
-    key.descendants().find((node) => node.tagName === "BUTTON" && node.textContent === "Open FluxIQ")!.dispatch("click");
+    assert.equal(root.byClass("start-step-line")[0]!.textContent, "FluxIQ found at 127.0.0.1:3100");
+    assert.equal(root.byClass("start-actions")[0]!.hidden, false, "Change shows although the step is done");
+    buttonNamed(root, "Change")!.dispatch("click");
+    const field = root.descendants().find((node) => node.id === "serverAddressField")!;
+    assert.equal(field.value, "http://127.0.0.1:3100", "the field starts at the address that was found");
+    const form = root.byClass("start-change")[0]!;
+    assert.equal(form.hidden, false);
+    // Nothing valid there: nothing is saved, and it says so.
+    field.value = "http://127.0.0.1:9999/some/page";
+    buttonNamed(root, "Check and save")!.dispatch("click");
     await flush();
-    assert.deepEqual(calls, [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "model-key" }]);
+    assert.deepEqual(probed, ["http://127.0.0.1:9999"], "only the origin is asked");
+    assert.deepEqual(calls, []);
+    assert.match(form.byClass("notice")[0]!.textContent, /No FluxIQ answered at 127\.0\.0\.1:9999/u);
+    assert.equal(form.hidden, false);
+    // A FluxIQ answers: the web address and its connection address are saved together.
+    answer = { found: true, gatewayUrl: "ws://127.0.0.1:4877/client" };
+    field.value = "http://127.0.0.1:3100";
+    buttonNamed(root, "Check and save")!.dispatch("click");
+    await flush();
+    const saves = requestsOf(calls, RUNTIME_MESSAGES.panelSaveSettings);
+    assert.equal(saves.length, 1);
+    const saved = saves[0]!.settings as Record<string, unknown>;
+    assert.deepEqual({ web: saved.coreApiUrl, gateway: saved.gatewayUrl, auto: saved.autoReconnect }, { web: "http://127.0.0.1:3100", gateway: "ws://127.0.0.1:4877/client", auto: true });
+    assert.equal(form.hidden, true);
+  });
+});
+
+test("an address that is not an http address is refused without asking anything", async () => {
+  await withFakeDocument(async () => {
+    const status = statusWith();
+    const calls: unknown[] = [];
+    const probed: string[] = [];
+    const store = { current: () => status, subscribe: () => () => undefined, request: async (message: unknown) => {
+      calls.push(message);
+      return { ok: true, value: {} };
+    } } as unknown as PanelStore;
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined, async (address) => {
+      probed.push(address);
+      return { found: false };
+    });
+    view.render(startGuide(status, false, undefined, FOUND), status);
+    const root = fake(view.element);
+    buttonNamed(root, "Change")!.dispatch("click");
+    root.descendants().find((node) => node.id === "serverAddressField")!.value = "ftp://flux.example";
+    buttonNamed(root, "Check and save")!.dispatch("click");
+    await flush();
+    assert.deepEqual([probed, calls], [[], []]);
+    assert.match(root.byClass("start-change")[0]!.byClass("notice")[0]!.textContent, /web address/u);
+  });
+});
+
+test("Connect uses the connection address the found FluxIQ names, saved first, so a person types one address", async () => {
+  await withFakeDocument(async () => {
+    const status = statusWith({ settings: SETTINGS });
+    const calls: Array<{ type: string }> = [];
+    const store = { current: () => status, subscribe: () => () => undefined, request: async (message: { type: string }) => {
+      calls.push(message);
+      return { ok: true, value: {} };
+    } } as unknown as PanelStore;
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
+    view.render(startGuide(status, false, undefined, FOUND), status);
+    fake(view.element).descendants().find((node) => node.id === "connectButton")!.dispatch("click");
+    await flush();
+    assert.deepEqual(calls.map((call) => call.type), [RUNTIME_MESSAGES.panelSaveSettings, RUNTIME_MESSAGES.connect]);
+    // Nothing to save when the saved connection address is already the document's.
+    calls.length = 0;
+    const same = statusWith({ settings: { ...SETTINGS, gatewayUrl: FOUND.gatewayUrl } });
+    view.render(startGuide(same, false, undefined, FOUND), same);
+    fake(view.element).descendants().find((node) => node.id === "connectButton")!.dispatch("click");
+    await flush();
+    assert.deepEqual(calls.map((call) => call.type), [RUNTIME_MESSAGES.connect]);
   });
 });
 

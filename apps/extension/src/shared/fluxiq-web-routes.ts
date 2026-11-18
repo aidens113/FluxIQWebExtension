@@ -3,7 +3,7 @@
 // `/projects` (list, create, rename, open), `/chats/<conversationId>?project=<projectId>`
 // (one chat; the project is needed to find it), `/flows/<flowId>?project=<projectId>`,
 // `/runs/<runId>`, `/data` (every project's collected tables) and
-// `/security/keys`. Pure, so the background (which opens the tab) and the
+// `/settings#ai-keys` (Settings, AI keys). Pure, so the background (which opens the tab) and the
 // panel (which opens a data link itself) share one table.
 // Only http(s) addresses are accepted, and no query or fragment of the
 // configured address survives.
@@ -46,7 +46,8 @@ export function fluxIQWebPageAddress(coreApiUrl: string | undefined, page: FluxI
       url.pathname = "/data";
       break;
     case "keys":
-      url.pathname = "/security/keys";
+      url.pathname = "/settings";
+      url.hash = "ai-keys";
       break;
   }
   return url.toString();

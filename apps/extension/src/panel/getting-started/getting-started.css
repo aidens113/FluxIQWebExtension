@@ -57,7 +57,7 @@
 .start-step[data-state="problem"] .start-state { color: var(--danger-text); }
 .start-step[data-state="waiting"] .start-state { color: var(--accent-text); }
 .start-step-line { color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
-.start-step[data-state="done"] .start-actions,
+.start-step[data-state="done"] .start-actions:not(.start-keep),
 .start-step[data-state="done"] .start-approve { display: none; }
 
 .start-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
@@ -74,13 +74,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The setup card (setup-card.ts): above the chat, in place of the chat's own model-key line. It shows
-   only while the chat's empty state is on screen (a chat holding work is never nagged) and hides the
-   chat's line while it does, so nothing about the key is told twice. */
-.setup-card { display: grid; gap: 6px; flex: 0 0 auto; margin: var(--space-2) var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--divider); border-radius: 12px; background: var(--surface-muted); }
-.setup-card-done { color: var(--success); font-size: 12px; line-height: 1.4; }
-.setup-card-step { font-size: 14px; font-weight: 700; }
-.setup-card-line { color: var(--muted); font-size: 12px; line-height: 1.45; }
-.chat-screen:not(:has(.chat-empty:not([hidden]))) > .setup-card { display: none; }
-.chat-screen:has(> .setup-card:not([hidden])) .chat-key-line,
-.chat-screen:has(> .setup-card[data-dismissed="true"]) .chat-key-line { display: none; }
+/* "Change" on step one: one field, the FluxIQ web address. */
+.start-change { display: grid; gap: var(--space-2); }
+.start-change[hidden] { display: none; }
+.start-change-label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.start-change-field { width: 100%; min-width: 0; }
+.start-change-field { min-height: 36px; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface-muted); color: var(--text); padding: 7px 9px; font-weight: 400; }

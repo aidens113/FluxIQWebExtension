@@ -1,5 +1,5 @@
-// What each setup step says, in one place so the screen, the card and the tests agree.
-// Plain words: no addresses, no codes, nothing a beginner has to decode.
+// What each setup step says, in one place so the screen and the tests agree.
+// Plain words: nothing a beginner has to decode. The one address shown is the FluxIQ web address.
 
 /** FluxIQ has no installer yet, so this says only what a person needs: it runs on this computer and stays running. */
 export const START_LINE = "FluxIQ needs to be running on this computer. Start it and keep it running while you use this panel. When it is running, its web page opens.";
@@ -10,6 +10,13 @@ export const CONNECT_LINE = "Press Connect so FluxIQ can work in this browser.";
 export const CONNECT_AGAIN_LINE = "Connect to pick up where you left off.";
 export const CONNECT_FAILED_LINE = "Can't reach FluxIQ.";
 export const APPROVE_LINE = "In FluxIQ, check that its request shows this code, then press Confirm pairing.";
-export const KEY_LATER_LINE = "For work that uses AI, add a model key in FluxIQ. Saved Flows can run without one when they don't use AI.";
-export const KEY_MISSING_LINE = "To use AI, open FluxIQ and add a model key. Saved Flows that don't use AI can still run.";
+/** The browser was approved once, and nothing since has said it still is. */
+export const APPROVED_EARLIER_LINE = "This browser was approved earlier. Connect to check it still is.";
+/** After a connection that was refused or lost: FluxIQ may have been told to forget this browser. */
+export const MAY_HAVE_BEEN_REMOVED_LINE = "FluxIQ may have removed this browser. Connect again to ask for approval.";
 export const SETUP_LINE = "A few steps, then ask FluxIQ for anything in the chat.";
+
+/** Where FluxIQ was found, with the "Change" that follows it on screen. */
+export const foundLine = (host: string): string => `FluxIQ found at ${host}`;
+/** Where FluxIQ was looked for and did not answer. */
+export const notFoundLine = (host: string): string => `FluxIQ isn't answering at ${host}. Start it and keep it running, or change the address.`;
