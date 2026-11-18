@@ -402,6 +402,28 @@ Workers build against these at the same time; a change needs the lead.
   - t931: fluxiq and web checks exit 0; Core 588 passed, 4 skipped; web workspaces, instrumentation, sync, owner-claim, auth, setup and fluxiq tests 369/369 twice; both audits passed. The finish first refused because t949 had moved Core dev; dev was merged in (one test file) and both finishes exited 0.
 - Outcome: five more units are on `dev`, dev's known test failures are gone, and new installs have no default login. Open: t928 fix round (critical path), then t925's live round; t905; t946; checkout; HC-keys, HC6a and HC2b C after t928 and t925.
 
+### 2026-11-18 — t928 merged: keys save from the panel and paired clients with no unlock
+
+- Agent: Senior supervisor; sub-supervisor key-backend (fix round: key-choice-fix and sqlite-leak on Opus, protocol-split and activity-join on Sonnet).
+- Changed:
+  - **t928 merged** (Core `9c7ba4524`, extension `15284bee2`). A model key is saved, replaced and removed from a signed-in panel and from a paired extension with no password, PIN or unlock; IAM decides. The paired route admits the three key writes. A save runs the provider's free check and pushes one model-access change after the check is recorded.
+  - **Fix round, after the security review and the lead's re-run:**
+    - A save sets only the saver's own key choice. Only a workspace with no assistant key takes the first save, and removing the workspace key leaves others at No key. Every caller chooses the person's own choice, then the workspace choice under consent, then their newest own key.
+    - The model-access ledger reads lazily and closes with its runtime, and `FluxIQ.close()` awaits `settled()`, which removed the `global.sqlite` handle leak.
+    - Activity carries each key write's outcome as `result` and `errorKind`, joined on the server, so request ids never leave it.
+    - `shared/model-key-messages.ts` is split out of `shared/protocol.ts` (818 to 793 lines).
+  - **Next for t925:** dev is merged into both of its trees (Core `c447a817d`, extension `d883c832a`). Its live round has started: the constants switch, one Activity entry type, the after-screenshots, and the approved-client proof of the whole first-run journey in both clients.
+  - **Found on dev, not from t928:** `subflow-trial/tests/run.test.ts` "hands the start hook the brief's host lease ... (A11)" fails on dev itself (lead's baseline on the shared Core at `b01953e5f`: 1 failed, 10 passed). It is now its own task.
+  - **Shared Core sync failure:** the sync failed because the panel's `next build` type-check worker ran out of Node's default heap ("Linting and checking validity of types", then "Next.js build worker exited with code: 134"). The Docker image already builds with a larger heap for this reason; the local build gets the same through its worker environment as its own task.
+  - **Started:** HC-keys (hosted customers save their own key; the push asks IAM), web-build-heap, subflow-a11-host-lease and identity-no-pin (Identity Access still stores and requires PINs; the MVP has none).
+- Validation: lead's `verify-t928b.sh` on dev merged in:
+  - contracts, fluxiq and web checks exit 0;
+  - Core vitest over secret-keys, `_shared`, runtime models, llm and assistant, program-route, client-gateway, platform IAM, panel-assistant, identity-access, `src/tests` and subflow-trial: 5067 passed, 1 failed (A11, the same as dev's baseline);
+  - web vitest over api/security, `lib/workspaces`, panel changes, key-sessions, discovery and programs: 618 passed;
+  - extension check and build exit 0; `test-extension.mjs src/background src/shared src/panel` "# pass 1743 # fail 0";
+  - both audits passed; finishes exit 0; pushed.
+- Outcome: the key problem the user reported is fixed on `dev` in both repositories. Next: t925's live proof, then the next full sweep and promotion.
+
 ## Open Questions
 
 None blocking.
