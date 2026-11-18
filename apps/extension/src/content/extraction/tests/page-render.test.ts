@@ -40,7 +40,8 @@
 // does that on live fixtures.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import { awaitListComplete } from "../list-wait";
 import { awaitListPresent, type ListWait } from "../page-render";
 
 /** The settle a part-drawn list's page may end the wait on, and the one an empty one may not. */
@@ -319,4 +320,132 @@ test("a read told an empty list is a valid answer is still waited for, held to o
     clearTimeout(gate);
     page.restore();
   }
+});
+
+// A one-page read's growth windows end when the page says it is done (task
+// speed S10, t893, `../../action-runtime/page-work/`): the 900 ms after the
+// list's end is scrolled into view, and the 900 ms the list must hold still,
+// were most of a replayed read's time on local-classifieds although the page
+// had long finished (`run-mwaqjkxp-ae3d862c`, s12: 2.3 s). The page world now
+// answers -- after the frames that run the page's scroll and intersection
+// handlers -- and a page still loading more is waited for, its growth seen.
+// A page with no page world keeps the windows.
+//
+// The page is a stand-in: a list whose items move when its end is scrolled
+// into view, a page world answering whether work is outstanding, a frame clock
+// and an observer.
+
+const WATCHED = "fluxiq:page-work-watched";
+const BUSY = "fluxiq:page-work-busy";
+const DRAINED = "fluxiq:page-work-drained";
+const ITEM = ".listing";
+/** The windows a page that cannot say still pays (`list-wait.ts` LIST_GROWTH_WINDOW_MS, `page-render.ts` LIST_GROWTH_SETTLE_MS). */
+const GROWTH_WINDOW_MS = 900;
+
+class Listing {
+  top: number;
+  nextElementSibling: Listing | null = null;
+  constructor(private readonly list: Listing[], index: number) {
+    this.top = 100 + index * 120;
+  }
+  getBoundingClientRect(): { top: number } {
+    return { top: this.top };
+  }
+  /** The page scrolls: every listing moves up, as a window scrolled to the list's end moves them. */
+  scrollIntoView(): void {
+    for (const listing of this.list) listing.top -= 240;
+  }
+}
+
+/** `onReveal`: what the page does when its list's end comes into view -- nothing, or loads `count` more over `ms`. */
+function feed(t: TestContext, options: { pageWorld?: boolean; listings?: number; onReveal?: { count: number; ms: number; times: number } } = {}) {
+  const globals = globalThis as Record<string, unknown>;
+  const names = ["window", "document", "MutationObserver", "requestAnimationFrame", "cancelAnimationFrame"] as const;
+  const previous = Object.fromEntries(names.map((name) => [name, globals[name]]));
+  const list: Listing[] = [];
+  const add = (count: number): void => {
+    for (let index = 0; index < count; index += 1) list.push(new Listing(list, list.length));
+  };
+  add(options.listings ?? 10);
+  const view = new EventTarget();
+  let busy = 0;
+  if (options.pageWorld !== false) {
+    view.addEventListener(WATCHED, (event) => event.preventDefault());
+    view.addEventListener(BUSY, (event) => { if (busy > 0) event.preventDefault(); });
+  }
+  let loadsLeft = options.onReveal?.times ?? 0;
+  let scrolled = false;
+  const original = Listing.prototype.scrollIntoView;
+  // The page's scroll handler runs with the next frame, as a real `scroll` event does, and begins a load the page world counts.
+  const onScroll = (): void => {
+    if (!scrolled || options.onReveal === undefined || loadsLeft === 0) return;
+    scrolled = false;
+    loadsLeft -= 1;
+    busy += 1;
+    setTimeout(() => {
+      add(options.onReveal!.count);
+      busy -= 1;
+      if (busy === 0) view.dispatchEvent(new Event(DRAINED));
+    }, options.onReveal.ms);
+  };
+  Listing.prototype.scrollIntoView = function scrollIntoView(this: Listing) {
+    original.call(this);
+    scrolled = true;
+  };
+  Object.assign(globals, {
+    window: view,
+    document: { readyState: "complete", querySelectorAll: () => [...list] },
+    MutationObserver: class { observe(): void {} disconnect(): void {} },
+    requestAnimationFrame: (callback: () => void) => setTimeout(() => { onScroll();
+      callback(); }, 16) as unknown as number,
+    cancelAnimationFrame: (id: number) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>)
+  });
+  t.after(() => {
+    Object.assign(globals, previous);
+    Listing.prototype.scrollIntoView = original;
+  });
+  return { count: () => list.length };
+}
+
+async function timed<T>(run: () => Promise<T>): Promise<{ value: T; took: number }> {
+  const startedAt = Date.now();
+  const value = await run();
+  return { value, took: Date.now() - startedAt };
+}
+
+test("a list already at its end: the reveal's window closes when the page says nothing more is coming", async (t) => {
+  const page = feed(t);
+  const { value, took } = await timed(() => awaitListComplete(ITEM, Number.MAX_SAFE_INTEGER, Date.now() + 10_000));
+  assert.equal(value, "complete");
+  assert.equal(page.count(), 10);
+  assert.ok(took < GROWTH_WINDOW_MS / 2, `the page said so after its frames, not the window: ${took} ms`);
+});
+
+test("a feed that loads more when its end comes into view is waited for, and its growth read, before the page says it is done", async (t) => {
+  const page = feed(t, { onReveal: { count: 5, ms: 150, times: 2 } });
+  const { value, took } = await timed(() => awaitListComplete(ITEM, Number.MAX_SAFE_INTEGER, Date.now() + 10_000));
+  assert.equal(value, "complete");
+  assert.equal(page.count(), 20, "both parts it loaded");
+  assert.ok(took < GROWTH_WINDOW_MS + 300, `the last reveal, which brought nothing, ended on the page's word: ${took} ms`);
+});
+
+test("a page with no page world keeps the reveal's whole window", async (t) => {
+  feed(t, { pageWorld: false });
+  const { value, took } = await timed(() => awaitListComplete(ITEM, Number.MAX_SAFE_INTEGER, Date.now() + 10_000));
+  assert.equal(value, "complete");
+  assert.ok(took >= GROWTH_WINDOW_MS - 20, `waited ${took} ms`);
+});
+
+test("the list that must hold still is read once the page says it is done", async (t) => {
+  feed(t);
+  const { value, took } = await timed(() => awaitListPresent(ITEM, 1, true, { deadline: Date.now() + 10_000, hasUnreadItem: () => true }));
+  assert.equal(value.presence, "appeared");
+  assert.equal(value.stoppedOn, "list_present");
+  assert.ok(took < GROWTH_WINDOW_MS / 2, `the page said so, not the window: ${took} ms`);
+});
+
+test("with no page world, the list must hold still the whole window", async (t) => {
+  feed(t, { pageWorld: false });
+  const { took } = await timed(() => awaitListPresent(ITEM, 1, true, { deadline: Date.now() + 10_000, hasUnreadItem: () => true }));
+  assert.ok(took >= GROWTH_WINDOW_MS - 20, `waited ${took} ms`);
 });

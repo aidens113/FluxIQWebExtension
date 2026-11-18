@@ -48,6 +48,17 @@
 // control is a whole page like the first, and so is one reached in a new
 // document through the worker's checkpoint.
 //
+// **The page says when a reveal brought all it will** (task speed S10, t893).
+// A reveal that moved waited its whole `LIST_GROWTH_WINDOW_MS` for growth that,
+// on a list already at its end, never comes: on local-classifieds most of a
+// replayed read's time (`run-mwaqjkxp-ae3d862c`). Now the page world is asked
+// (`action-runtime/page-work/`): two frames after the reveal, once its scroll
+// and intersection handlers have run, the page has either begun to load more --
+// a timer, a request, a frame the page world counts until it is done -- or
+// begun nothing. When that work is done and the document held still a task,
+// the window closes; growth it brought is seen first. A page that cannot say --
+// no page world, a hidden tab that draws no frames -- keeps the window.
+//
 // **A reveal that ran out while the list still grew says so (`"growing"`).**
 // `LIST_REVEALS` keeps a read of one page from sweeping an endless feed, so the
 // last reveal growing the list is the page showing that the list goes on past
@@ -75,6 +86,7 @@
 // own (`pagination.ts`). A press that fails again is pressed again only while
 // that budget lasts; then the list is read as it stands.
 
+import { askPageQuiet } from "../action-runtime/page-work";
 import { newRetryBudget, offeredListRetry, RETRY_GROWTH_WINDOW_MS, spendRetry, type RetryBudget } from "./load-retry";
 
 /** What a wait saw: its condition, nothing within its window, or the command's deadline. */
@@ -87,7 +99,7 @@ export type WaitOutcome = "changed" | "unchanged" | "timed_out";
  */
 export type ListCompletion = "complete" | "growing" | "timed_out";
 
-/** How long a revealed list has to grow: the window `pagination.ts` gives a lazy feed after a scroll. */
+/** How long a revealed list has to grow, where the page cannot say it is done: the window `pagination.ts` gives a lazy feed after a scroll. */
 const LIST_GROWTH_WINDOW_MS = 900;
 const LIST_GROWTH_POLL_MS = 50;
 /**
@@ -103,15 +115,25 @@ const MOVED_PX = 2;
  * Polls `condition` until it holds, its window closes, or the command's
  * deadline passes, and says which: the window closing first is the page not
  * responding, the deadline passing first is the read running out of time.
+ *
+ * `quiet`, where a caller asks it, is the page's own answer to whether it has
+ * finished what it set in motion (`action-runtime/page-work/`): its settling
+ * closes the window as `"unchanged"` at once, after `condition` is asked once
+ * more. A page that cannot say leaves the window to decide.
  */
-export async function waitUntil(condition: () => boolean, windowMs: number, pollMs: number, actionDeadline: number | undefined): Promise<WaitOutcome> {
+export async function waitUntil(condition: () => boolean, windowMs: number, pollMs: number, actionDeadline: number | undefined, quiet?: Promise<boolean>): Promise<WaitOutcome> {
   const windowEnd = Date.now() + windowMs;
   const commandEndsFirst = actionDeadline !== undefined && actionDeadline <= windowEnd;
   const end = commandEndsFirst ? actionDeadline : windowEnd;
+  // The page saying it has finished what it set in motion closes the window: nothing more is coming on its own (`quiet`, t893).
+  const page: { quiet: "asking" | "settled" | "cannot_say" } = { quiet: quiet === undefined ? "cannot_say" : "asking" };
+  const answered = quiet?.then((settled) => { page.quiet = settled ? "settled" : "cannot_say"; });
   while (!condition()) {
+    if (page.quiet === "settled") return "unchanged";
     const now = Date.now();
     if (now >= end) return commandEndsFirst ? "timed_out" : "unchanged";
-    await new Promise<void>((resolve) => { setTimeout(resolve, Math.min(pollMs, end - now)); });
+    const poll = new Promise<void>((resolve) => { setTimeout(resolve, Math.min(pollMs, end - now)); });
+    await (page.quiet === "asking" && answered !== undefined ? Promise.race([poll, answered]) : poll);
   }
   return "changed";
 }
@@ -143,7 +165,14 @@ export async function awaitListComplete(item: string, wanted: number, actionDead
     // A reveal that moved nothing waits for nothing, but a Retry already on
     // screen is still pressed: the failed part may be what the list ends on.
     const moved = revealListEnd(item);
-    const grew = await awaitArrivalOrRetry(() => matchCount(item) > before, () => matches(item), moved ? LIST_GROWTH_WINDOW_MS : 0, retries, actionDeadline);
+    // The page answers when what the reveal set in motion is done, after the frames that run its scroll and intersection handlers.
+    const quiet = moved ? askPageQuiet(Math.min(Date.now() + LIST_GROWTH_WINDOW_MS, actionDeadline ?? Number.MAX_SAFE_INTEGER), { afterFrames: true }) : undefined;
+    let grew: WaitOutcome;
+    try {
+      grew = await awaitArrivalOrRetry(() => matchCount(item) > before, () => matches(item), moved ? LIST_GROWTH_WINDOW_MS : 0, retries, actionDeadline, quiet?.settled);
+    } finally {
+      quiet?.stop();
+    }
     if (grew === "timed_out") return "timed_out";
     if (grew === "unchanged") {
       if (actionDeadline !== undefined && Date.now() >= actionDeadline) return "timed_out";
@@ -168,9 +197,11 @@ export async function awaitListComplete(item: string, wanted: number, actionDead
  * and the wait ends there as `"unchanged"` rather than waiting out a load that
  * will not come. A scroll-paged read waits here too (`pagination.ts`).
  */
-export async function awaitArrivalOrRetry(arrived: () => boolean, shown: () => readonly Element[], windowMs: number, retries: RetryBudget, actionDeadline: number | undefined): Promise<WaitOutcome> {
+export async function awaitArrivalOrRetry(arrived: () => boolean, shown: () => readonly Element[], windowMs: number, retries: RetryBudget, actionDeadline: number | undefined, quiet?: Promise<boolean>): Promise<WaitOutcome> {
   let pressed: HTMLElement | undefined;
   let waitMs = windowMs;
+  // The page's answer is about what came before the first wait: a Retry pressed sets new work in motion, and its window decides.
+  let asked = quiet;
   for (;;) {
     const offered: { retry: HTMLElement | undefined } = { retry: undefined };
     const outcome = await waitUntil(() => {
@@ -178,7 +209,8 @@ export async function awaitArrivalOrRetry(arrived: () => boolean, shown: () => r
       const retry = offeredListRetry(shown());
       offered.retry = retry === pressed ? undefined : retry;
       return offered.retry !== undefined;
-    }, waitMs, LIST_GROWTH_POLL_MS, actionDeadline);
+    }, waitMs, LIST_GROWTH_POLL_MS, actionDeadline, asked);
+    asked = undefined;
     if (outcome !== "changed" || offered.retry === undefined) return outcome;
     if (!spendRetry(retries)) return "unchanged";
     pressed = offered.retry;
