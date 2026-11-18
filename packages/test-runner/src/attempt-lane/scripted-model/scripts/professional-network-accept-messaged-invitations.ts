@@ -19,7 +19,10 @@ const READ_NODE = "web.output.dom-extract_list";
 const PRESS_NODE = "web.output.dom-click";
 
 type Field = { key: string; sample?: string; label?: string };
-type DraftStep = { step: number; actionId: string; disposition?: string; written?: boolean };
+type DraftStep = {
+  step: number; actionId: string; callId?: string; disposition?: string; written?: boolean; replacedBy?: number;
+  input?: { parameters?: { recordOutput?: { purpose?: string } }; recordOutput?: { purpose?: string } };
+};
 
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
 
@@ -74,11 +77,36 @@ function draftSteps(request: ScriptedModelRequest): readonly DraftStep[] {
   return Array.isArray(draft?.value.steps) ? draft.value.steps as readonly DraftStep[] : [];
 }
 
-function stepOf(request: ScriptedModelRequest, actionId: string): number {
-  const proposed = draftSteps(request).filter((step) => step.actionId === actionId && (step.disposition === "kept" || step.disposition === "added" || step.written === true));
-  const last = proposed.at(-1);
-  if (!last) throw new Error(`The draft holds no kept step of ${actionId}: ${JSON.stringify(draftSteps(request))}`);
-  return last.step;
+/**
+ * The number the draft gives the step one of this script's own calls ran, by that call's identity. Never the last
+ * step of its kind: a conversation that opens over the page after the press by hand is closed with a press too,
+ * and a repeat put on that press would look for its control in every row.
+ */
+function stepOfCall(request: ScriptedModelRequest, callId: string, actionId: string): number {
+  const matches = draftSteps(request).filter((step) => step.callId === callId && step.replacedBy === undefined);
+  if (matches.length !== 1) throw new Error(`The draft has no unique step for ${callId}: ${JSON.stringify(draftSteps(request))}`);
+  const step = matches[0]!;
+  if (step.actionId !== actionId || !(step.disposition === "kept" || step.disposition === "added" || step.written === true)) throw new Error(`Step ${step.step}, of ${callId}, is not a ${actionId} in the Flow: ${JSON.stringify(step)}`);
+  return step.step;
+}
+
+/** The read the repeat goes over and the press it repeats: by hand, or as the reshaping form wrote them. */
+const loopCallsOf = (form: AcceptMessagedForm) => form === "reshape" ? { read: "write-read", press: "write-accept" } : { read: "read-invitations", press: "accept-first" };
+
+/** Take the chosen read's actual call into the Flow; an unrelated look is never its substitute. */
+function finishFromRead(request: ScriptedModelRequest, callId: string, summary: string): Record<string, unknown> {
+  const calls = evidenceOf(request).filter((entry) => entry.callId === callId && entry.toolId === "core.run_node");
+  if (calls.length !== 1 || calls[0]!.value.ok !== true) throw new Error(`There is no successful final read ${callId} to keep`);
+  const matches = draftSteps(request).filter((step) => step.callId === callId);
+  if (matches.length !== 1) throw new Error(`The draft has no unique call identity for final read ${callId}`);
+  const step = matches[0]!;
+  const output = step.input?.parameters?.recordOutput ?? step.input?.recordOutput;
+  if (step.actionId !== READ_NODE || step.written === true || step.replacedBy !== undefined || output?.purpose === "intermediate") throw new Error(`The final read ${callId} is not an available result step`);
+  if (step.disposition === "kept") return finish(summary);
+  if (step.disposition !== "taken") throw new Error(`The final read ${callId} is ${step.disposition ?? "not identified as taken"}`);
+  // Core's draft amendments name a step by the number the draft shows; `add` puts a step the model ran into the Flow.
+  // The step is the one whose own call identity is this read's, found above, so its number names that call and no other.
+  return { kind: "evidence_tool_decision", summary: "Keep the chosen result read in the Flow.", decision: { kind: "amend_draft", amendments: [{ step: step.step, change: "add" }] } };
 }
 
 /** What stands over the page on a first visit, each only while it shows. */
@@ -96,7 +124,6 @@ function readBack(request: ScriptedModelRequest, page: string): Record<string, u
   const forward = latestOf(request, "core.run_flow");
   if (forward && forward.value.passed !== true) throw new Error(`The forward run did not pass: ${JSON.stringify(forward.value).slice(0, 1500)}`);
   const made = callsMade(request);
-  if (made.has("read-accepted")) return finish("Accepted the three invitations with a message, and listed them.");
   const detected = evidenceOf(request).filter((entry) => entry.toolId === "web.detect_repeating_structure").at(-1);
   if (!made.has("detect-after")) {
     const card = pageLine(page, /"Lucia Romano View/u);
@@ -134,26 +161,25 @@ function readNotesBack(request: ScriptedModelRequest, page: string): Record<stri
   const message = [...fields].filter((field) => !(field.sample ?? "").includes(nameField.sample ?? " ")).sort((left, right) => (right.sample ?? "").length - (left.sample ?? "").length)[0];
   if (!message) throw new Error("The conversations' fields hold no message apart from the whole row");
   const name = nameField.key;
-  if (!made.has("back-read")) {
-    return toolCall("Read the new connections' conversations, name and first message.", "back-read", "core.run_node", readOf(detected, { name, message: message.key }, [{ field: tag, contains: "New connection" }], {
-      recordOutput: { datasetId: "accepted", schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "name", valueType: "string" }, { id: "message", label: "message", valueType: "string" }] }, writeMode: "append" },
-    }));
-  }
-  return finish("Read the three accepted people and their notes from Messaging, pressing nothing.");
+  return toolCall("Read the new connections' conversations, name and first message.", "back-read", "core.run_node", readOf(detected, { name, message: message.key }, [{ field: tag, contains: "New connection" }], {
+    recordOutput: { datasetId: "accepted", schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "name", valueType: "string" }, { id: "message", label: "message", valueType: "string" }] }, writeMode: "append" },
+  }));
 }
 
 /** The first attempt has left the invitations answered: no invitation row of the person it began with is left to press. */
 function afterAnAnswer(request: ScriptedModelRequest, page: string): boolean {
   const mine = [...callsMade(request)].some((callId) => callId.startsWith("back-"));
-  return mine || (/^PAGE "(Received invitations|My Network)/mu.test(page) && !pageLine(page, /"Ximena Ruiz View/u) && !evidenceOf(request).some((entry) => entry.toolId === "web.detect_repeating_structure"));
+  return mine || /^PAGE "Messaging/mu.test(page) || (/^PAGE "(Received invitations|My Network)/mu.test(page) && !pageLine(page, /"Ximena Ruiz View/u) && !evidenceOf(request).some((entry) => entry.toolId === "web.detect_repeating_structure"));
 }
 
 const decideOf = (form: AcceptMessagedForm): ScriptedReply => (request) => {
+  const made = callsMade(request);
+  if (form === "notes-back" && made.has("back-read")) return finishFromRead(request, "back-read", "Read the three accepted people and their notes from Messaging, pressing nothing.");
+  if (made.has("read-accepted")) return finishFromRead(request, "read-accepted", "Accepted the three invitations with a message, and listed them.");
   const page = currentPageOf(request);
   if (form === "notes-back" && afterAnAnswer(request, page)) return readNotesBack(request, page);
   const arriving = clearAndArrive(request, page);
   if (arriving) return arriving;
-  const made = callsMade(request);
   const structure = evidenceOf(request).find((entry) => entry.toolId === "web.detect_repeating_structure");
   if (!structure) {
     const card = pageLine(page, /"Ximena Ruiz View/u);
@@ -166,11 +192,12 @@ const decideOf = (form: AcceptMessagedForm): ScriptedReply => (request) => {
   if (!made.has("accept-first")) return toolCall("Accept the first invitation that has a message, by hand, to see that it works.", "accept-first", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: acceptOf(page, "Ximena Ruiz") } }, consequences: ACT }, form !== "reshape");
   if (form === "reshape" && !made.has("write-read")) return toolCall("Write the Flow's read of the list, with the columns the Flow will carry.", "write-read", "core.run_node", { ...readOf(structure, { person: columns.name, note: columns.message, headline: columns.headline }, withMessage), write: true });
   if (form === "reshape" && !made.has("write-accept")) return toolCall("Write the accept as a step of the Flow, for the rows the repeat reaches.", "write-accept", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: acceptOf(page, "Lucia Romano") } }, consequences: ACT, write: true });
+  const loop = loopCallsOf(form);
   if (!made.has("forward") && !repeating(request)) {
-    const amendment = { step: stepOf(request, PRESS_NODE), change: "repeat", over: stepOf(request, READ_NODE) };
+    const amendment = { step: stepOfCall(request, loop.press, PRESS_NODE), change: "repeat", over: stepOfCall(request, loop.read, READ_NODE) };
     return { kind: "evidence_tool_decision", summary: "Repeat the accept over the rows the read keeps.", decision: { kind: "amend_draft", amendments: [amendment] } };
   }
-  if (!made.has("forward")) return toolCall("Run forward on the rows not done yet.", "forward", "core.run_flow", { from: stepOf(request, READ_NODE) });
+  if (!made.has("forward")) return toolCall("Run forward on the rows not done yet.", "forward", "core.run_flow", { from: stepOfCall(request, loop.read, READ_NODE) });
   return readBack(request, page);
 };
 
@@ -195,6 +222,15 @@ const answersByRows: ScriptedReply = (request) => {
 /** Enough for every step of its honest path, and few enough that a loop fails it. */
 const MOST_DECISIONS = 24;
 
+/**
+ * The judges of the notes-back series, one per judgement its honest path asks for: the first attempt's result;
+ * the second attempt's replay, which finds nothing left to accept and reads no row; the Messaging read that
+ * attempt then explores; and the third attempt's replay of the Flow the second saved, which no judged whole run
+ * stands behind yet, so Core judges it (`flow_not_proven`). From the fourth attempt on the replay stands on its
+ * record and asks no judge. Each refuses a run that read no row.
+ */
+const NOTES_BACK_JUDGES = 4;
+
 /** `professional-network-accept-messaged-invitations`, in the form asked for. A wrong form name is refused rather than run as another. */
 export function professionalNetworkAcceptMessagedScript(form: string = "plain"): ScriptedModelScript {
   if (form !== "plain" && form !== "reshape" && form !== "thin" && form !== "notes-back") throw new Error(`This script has no form "${form}". It has plain, reshape, thin and notes-back`);
@@ -204,7 +240,7 @@ export function professionalNetworkAcceptMessagedScript(form: string = "plain"):
     replies: {
       panel_command: form === "notes-back" ? [startAttempt, startAttempt] : [startAttempt],
       evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
-      loop_verification: form === "notes-back" ? [answersByRows, answersByRows, answersByRows] : [answersRequest],
+      loop_verification: form === "notes-back" ? Array.from({ length: NOTES_BACK_JUDGES }, () => answersByRows) : [answersRequest],
     },
   });
 }
