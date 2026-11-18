@@ -74,6 +74,10 @@ export const RUNTIME_MESSAGES = {
   panelRenameTask: "fluxiq.panel.renameTask",
   panelRemoveTask: "fluxiq.panel.removeTask",
   panelModelReadiness: "fluxiq.panel.modelReadiness",
+  // The model key card: save, replace and remove the person's own key (secret-keys, t928).
+  panelModelKeySave: "fluxiq.panel.modelKeySave",
+  panelModelKeyReplace: "fluxiq.panel.modelKeyReplace",
+  panelModelKeyRemove: "fluxiq.panel.modelKeyRemove",
   panelGenerateFromRecording: "fluxiq.panel.generateFromRecording",
   panelTestGeneratedAutomation: "fluxiq.panel.testGeneratedAutomation",
   panelSaveGeneratedAutomation: "fluxiq.panel.saveGeneratedAutomation",

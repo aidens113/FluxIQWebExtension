@@ -17,6 +17,7 @@
 import { pairedClientModelAccessState, readModelAccessState } from "@fluxiq/contracts/platform";
 import { readModelKeyAvailability } from "fluxiq/ui";
 import { AUTOMATION_PANEL_MESSAGES, type PanelRelayResponse, type AutomationPanelRequest, type PanelModelKeySummary } from "../../shared/protocol";
+import { MODEL_KEY_MESSAGES, relayModelKey } from "../model-access/index";
 import { relayPartsRequest } from "./parts-relay";
 
 export type AutomationRelayDeps = {
@@ -54,6 +55,7 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
     return entryId ? deps.removeRecordedStep(entryId) : missing("entryId");
   }
   if (type === AUTOMATION_PANEL_MESSAGES.modelReadiness) return modelReadiness(deps);
+  if (MODEL_KEY_MESSAGES.has(type)) return relayModelKey(type, message, deps.call);
 
   const projectId = text(message.projectId) ?? text(deps.projectId());
   if (!projectId) return failure("no_project", "FluxIQ has not said which project this browser belongs to yet. Connect, then try again.");

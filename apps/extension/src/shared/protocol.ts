@@ -1,3 +1,4 @@
+import type { ModelAccessState } from "@fluxiq/contracts/platform";
 import type { ModelKeyAvailability } from "fluxiq/ui";
 import {
   CLIENT_GATEWAY_PROTOCOL_VERSION,
@@ -356,6 +357,12 @@ export const AUTOMATION_PANEL_MESSAGES = {
   removeTask: RUNTIME_MESSAGES.panelRemoveTask,
   /** `secret-keys` `snapshot`. Answers `{ keys: PanelModelKeySummary[] }`; metadata only, never key values. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
+  /** `secret-keys` `save-model-key` with `{ provider, value, name? }`: the person's own model key. Answers `{ modelAccess }`; the key is never echoed. */
+  modelKeySave: RUNTIME_MESSAGES.panelModelKeySave,
+  /** `secret-keys` `replace-model-key` with `{ value }`: the same key slot, a new value. Answers `{ modelAccess }`. */
+  modelKeyReplace: RUNTIME_MESSAGES.panelModelKeyReplace,
+  /** `secret-keys` `remove-model-key` with `{}`. Answers `{ modelAccess }`. */
+  modelKeyRemove: RUNTIME_MESSAGES.panelModelKeyRemove,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,
   /** `run-runtime-session` with `{ projectId, flowId }` for the proposal's Flow: no run intent, so the test is not repaired. */
@@ -398,8 +405,24 @@ export type PanelModelKeySummary = {
   readonly unlocked?: false;
 };
 
+/** The providers a person's own model key may be saved for. */
+export const MODEL_KEY_PROVIDERS = ["anthropic", "deepseek"] as const;
+export type ModelKeyProvider = (typeof MODEL_KEY_PROVIDERS)[number];
+
+/** Core's pushed model-access state (`server.model_access_changed`), passed on to the side panel. Carries no key id and no key value. */
+export const PANEL_MODEL_ACCESS_CHANGED = "fluxiq.panel.modelAccessChanged";
+export type PanelModelAccessChangedMessage = {
+  readonly type: typeof PANEL_MODEL_ACCESS_CHANGED;
+  readonly modelAccess: ModelAccessState;
+  readonly at: number;
+};
+
 /** The fields automation panel requests carry beside `type`. Every field is optional on the wire and checked by the relay. */
 export type AutomationPanelRequest = {
+  /** The person's model key (`modelKeySave`, `modelKeyReplace`); never logged, stored or echoed. */
+  key?: string | undefined;
+  /** Which provider the key is for (`modelKeySave`); `name` below is its optional name. */
+  provider?: string | undefined;
   projectId?: string | undefined;
   flowId?: string | undefined;
   runId?: string | undefined;
