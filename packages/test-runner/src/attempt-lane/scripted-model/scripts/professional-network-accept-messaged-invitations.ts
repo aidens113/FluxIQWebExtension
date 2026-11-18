@@ -224,10 +224,12 @@ const MOST_DECISIONS = 24;
 
 /**
  * The judges of the notes-back series, one per judgement its honest path asks for: the first attempt's result;
- * the second attempt's replay, which finds nothing left to accept and reads no row; the Messaging read that
- * attempt then explores; and the third attempt's replay of the Flow the second saved, which no judged whole run
- * stands behind yet, so Core judges it (`flow_not_proven`). From the fourth attempt on the replay stands on its
- * record and asks no judge. Each refuses a run that read no row.
+ * the second attempt's replay, which finds nothing left to accept and reads no row, and which Core judges
+ * because no judged whole run stands behind the first Flow (`flow_not_proven`); the Messaging read that attempt
+ * then explores; and the third attempt's replay of the Flow the second saved, judged for the same reason. From
+ * the fourth attempt on the replay stands on its record: a repeat over no remaining row has run, not failed to
+ * be reached, so it asks no judge, and a fifth judge request is refused, which fails the script. Each refuses a
+ * run that read no row.
  */
 const NOTES_BACK_JUDGES = 4;
 
