@@ -207,9 +207,37 @@ export type ExtensionStatus = {
    * `connectionState` is `error` for it; absent otherwise. Never the ticket.
    */
   enrolmentRefusalCode?: string | undefined;
+  /** Why this browser's approval ended, while it waits for the person to pair it again; absent otherwise (`ExtensionPairingEnded`). */
+  pairingEnded?: ExtensionPairingEnded | undefined;
   lastMessageAt?: number | undefined;
   /** How long the pairing lasts: "browser_session" when this browser cannot keep it between sessions. Absent or "lasting": nothing to say. */
   credentialDurability?: "lasting" | "browser_session" | undefined;
+};
+
+/**
+ * How this browser's approval ended (`background/connection/pairing-ended/`),
+ * kept across worker restarts until the person connects again or forgets the
+ * pairing, or a session is ready.
+ *
+ * - `revoked`: FluxIQ revoked it (`server.revoked`). The credential is gone,
+ *   the socket is closed, `connectionState` is `disconnected` and `paired` is
+ *   false; nothing reconnects or asks to pair until the person presses Connect.
+ * - `expired`, `refused`: the saved approval was not accepted (it ran out, or
+ *   FluxIQ no longer knew it), so FluxIQ asked for a new one at once:
+ *   `connectionState` is `pairing` with a reference code while that socket stays.
+ */
+export type ExtensionPairingEnded = {
+  state: "revoked" | "expired" | "refused";
+  /**
+   * For `revoked`, FluxIQ's reason (`ClientGatewayRevocationReason`:
+   * `revoked_by_user`, `revoked_by_admin`, `password_changed`,
+   * `account_disabled`, `account_deleted`, `credentials_rotated`,
+   * `revoked_by_operator`, `credential_reused`). A reason this build does not
+   * know reads as revoked all the same.
+   */
+  reason?: string | undefined;
+  /** When this browser learned it, in epoch milliseconds. */
+  at: number;
 };
 
 /** The panel's conversation requests (`panel/conversation.ts`). */

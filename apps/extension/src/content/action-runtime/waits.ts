@@ -10,6 +10,8 @@
 //
 // `wait-conditions.ts` builds the full condition set on `waitUntil`.
 
+import { ContentRevokedError, revokedEpoch } from "../revoked";
+
 /** How often a predicate is re-checked when no DOM mutation would announce the change. */
 const POLL_INTERVAL_MS = 50;
 
@@ -26,13 +28,19 @@ export type WaitProgress = { startedAt: number; lastChangeAt: number };
  * synchronously, so an already-satisfied wait costs nothing and a throw from it
  * (an invalid selector, say) propagates instead of being retried until the
  * timeout.
+ *
+ * A revocation of this document (`../revoked/`) ends the wait with
+ * `ContentRevokedError` at the next check -- never with `undefined`, which would
+ * read as the condition not holding -- and stops reading the page.
  */
 export function waitUntil<T>(
   evaluate: (progress: WaitProgress) => T | undefined,
   timeoutMs: number = DEFAULT_WAIT_TIMEOUT_MS
 ): Promise<T | undefined> {
   const startedAt = Date.now();
+  const epoch = revokedEpoch.current();
   const progress: WaitProgress = { startedAt, lastChangeAt: startedAt };
+  if (epoch > 0) return Promise.reject(new ContentRevokedError());
   const immediate = evaluate(progress);
   if (immediate !== undefined) return Promise.resolve(immediate);
   return new Promise<T | undefined>((resolve, reject) => {
@@ -45,6 +53,11 @@ export function waitUntil<T>(
     };
     const check = (): void => {
       if (settled) return;
+      if (revokedEpoch.current() !== epoch) {
+        stop();
+        reject(new ContentRevokedError());
+        return;
+      }
       let value: T | undefined;
       try {
         value = evaluate(progress);

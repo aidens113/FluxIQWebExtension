@@ -116,6 +116,12 @@ export function preparePickRecord(sessionId: string): boolean {
   return true;
 }
 
+/** Gives the page back and drops the pick without telling the worker; retired ids stay retired. */
+export function suspendPick(): void {
+  releaseSession(session);
+  lease = undefined;
+}
+
 /** Explicit administrative reset. Ordinary drains, cancellation and replacement never forget retirement. */
 export function stopPick(): void {
   releaseSession(session);

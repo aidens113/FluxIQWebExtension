@@ -25,7 +25,7 @@ export type AuthenticationTabRoute = Readonly<{
   includeDescendants?: boolean;
 }>;
 
-export type AuthenticationTabSnapshot = Readonly<{ tabId: number; url?: string | undefined }>;
+export type AuthenticationTabSnapshot = Readonly<{ tabId: number; url?: string | undefined; pendingUrl?: string | undefined }>;
 
 export type AuthenticationTabsOptions = Readonly<{
   store: AuthenticationTabSessionStore;

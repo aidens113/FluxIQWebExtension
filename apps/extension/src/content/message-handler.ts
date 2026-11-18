@@ -13,6 +13,10 @@ import { BUILD_IDENTITY_MESSAGE, currentBuildIdentity } from "../shared/build-id
 // A page of iframes runs one copy of this script per frame, so `executeAction`
 // also carries who it is for -- see `isAddressedToThisFrame`.
 //
+// `fluxiq.revoked` (`shared/own-pages/revoked-message.ts`) takes this document's
+// script out of service: what it holds is discarded unsent and work in flight
+// ends in a page-free refusal (`./revoked/`, `./lifecycle/`). It is answered in every document.
+//
 // `extraction.propose` is the one message that answers about page structure
 // rather than acting: it infers the extraction a picked element proposes, for
 // the picker to show and for the content harness to prove inference on a real
@@ -69,6 +73,9 @@ import { PAGE_CHALLENGE_MESSAGE, type PageChallengeResponse } from "../shared/pa
 import { TRACE_PAGE_CAPTURE_MESSAGE, type TracePageCaptureResponse } from "../shared/trace-page-capture";
 import type { BrowserActionCommand } from "./types";
 import { guardedCommandListener, ownDocument, type ContentRoute } from "./own-document";
+import { CONTENT_REVOKED_MESSAGE } from "../shared/own-pages";
+import { ContentRevokedError, contentRevokedRefusal, revokedEpoch, revokedFence } from "./revoked";
+import { suspendContent } from "./lifecycle";
 
 /** The id the browser always gives a tab's main frame; every child frame has a positive one. */
 const TOP_FRAME_ID = 0;
@@ -129,9 +136,28 @@ export function installMessageHandler(): void {
  * refuses. Each answer replies exactly once, now or later.
  */
 export function routeMessage(message: unknown): ContentRoute | undefined {
+  const routed = routeUnfenced(message);
+  // Everything but the ping and the revocation is fenced: after this document
+  // is revoked it is refused before it starts, and a reply that was being built
+  // when it was revoked becomes the page-free `interrupted` refusal (`./revoked/`).
+  return routed === undefined || routed.liveness === true ? routed : revokedFence(routed);
+}
+
+function routeUnfenced(message: unknown): ContentRoute | undefined {
   const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; capturePolicy?: unknown; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown; request?: unknown };
   if (typed.type === "fluxiq.ping") {
-    return { liveness: true, answer: (sendResponse) => sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION }) };
+    return { liveness: true, answer: (sendResponse) => sendResponse({ ok: true, active: isActiveContentInstance() && revokedEpoch.current() === 0, version: CONTENT_SCRIPT_VERSION }) };
+  }
+  if (typed.type === CONTENT_REVOKED_MESSAGE) {
+    // Answered at once in every document, like the ping, and from a superseded
+    // copy too: it discards, so it can only make this copy quieter.
+    return {
+      liveness: true,
+      answer: (sendResponse) => {
+        suspendContent();
+        sendResponse({ ok: true });
+      }
+    };
   }
   if (!isActiveContentInstance()) return undefined;
   if (typed.type === PAGE_CHANGES_MESSAGE) {
@@ -173,7 +199,8 @@ export function routeMessage(message: unknown): ContentRoute | undefined {
     return {
       answer: (sendResponse) => void executeAction(action, typed.extraction)
         .then(sendResponse)
-        .catch((error: unknown) => sendResponse(actionFailure(action, error)))
+        // A revoked document builds no failure: that would read its page.
+        .catch((error: unknown) => sendResponse(error instanceof ContentRevokedError ? contentRevokedRefusal("interrupted") : actionFailure(action, error)))
     };
   }
   if (typed.type === FACT_CHECK_MESSAGE) {

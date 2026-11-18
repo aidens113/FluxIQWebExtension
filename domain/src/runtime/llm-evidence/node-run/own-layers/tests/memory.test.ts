@@ -38,6 +38,19 @@ test("a layer that a press opened on the same page is the build's own; one alrea
   assert.equal(layers.owns(OTHER, "t20"), false);
 });
 
+test("answering an interruption remembers no new layer as owned, including after a host restart", async () => {
+  const store = coreBuildStateStore();
+  const persistence = createWebNodeBuildStatePersistence(() => store);
+  const layers = createWebNodeOwnLayers(persistence);
+  const answering = { ...PRESS, answered: true as const };
+  layers.acted(BUILD, page(PAGE), page([...PAGE, ...CHOOSER]), answering);
+  assert.equal(layers.owns(BUILD, "t20"), false);
+  await persistence.settled();
+  const restarted = createWebNodeOwnLayers(createWebNodeBuildStatePersistence(() => store));
+  await restarted.restore(BUILD);
+  assert.equal(restarted.owns(BUILD, "t20"), false);
+});
+
 // A timed popup that opens in the instant after a press (bigbox's email offer, a consent wall that waits) is
 // not the build's own: a layer the capture recognised by kind is an interruption by what it is.
 test("a layer recognised by kind is never the build's own, even when it appeared right after a press", () => {

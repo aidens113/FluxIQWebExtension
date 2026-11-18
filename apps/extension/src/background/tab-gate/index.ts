@@ -13,6 +13,7 @@ export { configureOwnPages, currentOwnPageAddresses, isOwnPage, isOwnPageTab, wi
 export type { OwnPageAddresses, OwnPageCandidate } from "./own-pages";
 export { ownPageRefusalFor, refuseOwnPageTab } from "./guard";
 export { sendTabMessage } from "./page-message";
+export { revokeTabContent } from "./revoke";
 export { executeInTab } from "./page-script";
 export { captureWindow } from "./window-capture";
 export { activateTab, closeTab, goBackInTab, navigateTab, openTab, openTabForPerson, reloadTab } from "./tab-acts";

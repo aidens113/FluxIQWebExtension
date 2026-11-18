@@ -6,6 +6,7 @@ void main();
 
 async function main(): Promise<void> {
   const result = await setupWebAutomationFluxIQ(repoRoot);
+  if (result.migration) console.error("[FluxIQ setup] Upgraded your FluxIQ data to the current layout; the previous files are kept under .fluxiq/legacy/.");
   console.log(JSON.stringify({
     root: result.paths.root,
     fluxiq: result.paths.fluxiq,

@@ -25,9 +25,9 @@ export function currentFrameViewportOffset(): RectDescriptor | undefined {
   return frameViewportOffset;
 }
 
-/** Answers geometry requests from child frames and refreshes our own on resize and scroll. */
-export function installFrameGeometryBridge(): void {
-  window.addEventListener("message", (event) => {
+/** Answers geometry requests from child frames and refreshes our own on resize and scroll; returns what takes it down. */
+export function installFrameGeometryBridge(): () => void {
+  const message = (event: MessageEvent): void => {
     const data = event.data as { type?: string; requestId?: unknown; geometry?: unknown } | undefined;
     if (!data || typeof data !== "object") return;
     if (data.type === FRAME_GEOMETRY_REQUEST) {
@@ -45,14 +45,23 @@ export function installFrameGeometryBridge(): void {
       const geometry = rectFromUnknown(data.geometry);
       if (geometry) frameViewportOffset = geometry;
     }
-  });
-  window.addEventListener("resize", () => {
+  };
+  const resize = (): void => {
     if (isTopFrame()) frameViewportOffset = { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
     else void requestFrameGeometry();
-  }, true);
-  window.addEventListener("scroll", () => {
+  };
+  const scroll = (): void => {
     if (!isTopFrame()) void requestFrameGeometry();
-  }, true);
+  };
+  window.addEventListener("message", message);
+  window.addEventListener("resize", resize, true);
+  window.addEventListener("scroll", scroll, true);
+  return () => {
+    window.removeEventListener("message", message);
+    window.removeEventListener("resize", resize, true);
+    window.removeEventListener("scroll", scroll, true);
+    frameViewportOffset = undefined;
+  };
 }
 
 export function requestFrameGeometry(): Promise<RectDescriptor | undefined> {
