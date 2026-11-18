@@ -255,13 +255,13 @@ export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHuman
 
 /**
  * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
- * `purpose: "model-key"`, the ordinary keys configuration page; with `purpose: "projects"`, the projects page.
+ * `purpose: "model-key"`, the ordinary keys configuration page; with `purpose: "projects"`, the projects page; with `purpose: "pairing"`, the home page with `?pairing=1`.
  * A purpose excludes `flowId` and `runId`, and `flowId` and `runId` exclude each other.
  */
 export type PanelOpenFluxIQRequest = {
   flowId?: string | undefined;
   runId?: string | undefined;
-  purpose?: "model-key" | "projects" | undefined;
+  purpose?: "model-key" | "projects" | "pairing" | undefined;
 };
 
 /**

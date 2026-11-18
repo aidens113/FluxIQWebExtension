@@ -238,3 +238,62 @@ The after-screenshots worker is Sonnet, not Haiku as the brief suggested. The UI
   2. Stop the panel and release the slot.
   3. Rebuild ui-components and the extension through slots, and re-run the extension chat and settings tests.
   4. Wait for the t928 merge, then do phase 3 steps 1-4.
+
+## Whole-UI wave (2026-11-17/18): journey audit, visual sweep, fixes
+User (via lead): "IT SHOULD BE SECURE BUT ALSO VERY EASY FOR PEOPLE TO USE! ... install the extension, create account/log in, connect extension (or any other client), add key, and be able to start talking to fluxiq via client OR panel immediately. No extra steps of any kind!" and "there are still quite a few small issues/bugs that cause weird looking experience".
+
+### Audits
+- **Journey audit** (worker-heavy; report `key-security-ux/journey-audit.md`):
+  - Step maps for four journeys, an ideal journey of 4 clicks and 2 screens that keeps pairing approval, and a 14-item fix list.
+  - Main blocker: neither client can save a key yet (in flight: t928).
+  - Home's "Could not check what needs you" was caught live: `list-conversations` returned 400 "schema migration lock was lost", from Core `schema-migrations.ts:128-129,232`, while the first pairing creates a project. Routed to t911, along with the robustness of the cross-project list (`list.ts`).
+  - One security finding was kept off-repository; the lead fixed it on Core dev (`96b33bbc3`).
+- **Visual sweep** (Sonnet; report `key-security-ux/visual-sweep.md`): 28 findings, with layout-shift measurements. Settings' CLS was 0.16 at 1440 and 0.39 at 390. It stopped early because `renew` re-queued its slot; the lead has since fixed the slot tool.
+
+### Fix workers (Sonnet; reports beside this one)
+- `extension-flow`:
+  - the connection request goes out by itself (Journey 1: from 4 steps and a Connect click to 3 steps and no clicks);
+  - Connect replaces Disconnect after a disconnect; one key card;
+  - "Access was removed" and "Not connected" replace the false "approved";
+  - the theme follows the device on first run.
+- `panel-chrome`:
+  - toasts, modal footers, buttons no longer 140-175 px tall on phones, dev pages at 390, pairing-modal rows;
+  - the top bar's second row is reserved at 390 (the main cause of the layout shift there); the Ask button;
+  - the pairing dialog names the browser; Saved logins opens;
+  - sign-in hints (P1, P3, P28, E6's panel side).
+  - Its own checks could not run: the slot never came. My checks below cover its files.
+- `panel-pages`:
+  - chats: assistant chats named "Assistant", untitled ones named from their first words; New chat no longer keeps the old URL;
+  - Projects refreshes after a create from the header;
+  - Settings' layout shift and column;
+  - Home's Connected card shows approved, waiting and folded rows, and drops revoked ones;
+  - Activity says "tried to add a key" unless the result is known;
+  - hierarchy and programs fixes.
+- `assistant-shared`:
+  - a message with no project goes to the person's own assistant thread (Journey 2 needs no project step);
+  - the chosen project survives a reload and `?project=`;
+  - one scrollbar look; the dock's key card is not clipped, and there is only one no-key card.
+- `extension-visual`: sweep #20-#25 and the stale step words. It found why the extension's chat list missed assistant chats (the background read only project chats).
+- `extension-loose-ends`, the lead's grants:
+  - the background merges `list-panel-threads` into the extension's chat list;
+  - E6: `purpose: "pairing"` opens home with `?pairing=1`, and the approve step uses it;
+  - "Extract Data From This Page" is now "Extract data from this page" in the UI and in the Lab's journey (its unit test passes; no provider-free live journey exists to run).
+
+### My integration edits
+- **Hidden-path fix:** `is-hidden-panel-path.ts` no longer reaches into Settings, which failed the structure audit and would have pulled Settings code into the middleware. It lists the one own path, and a test keeps it equal to Settings' list.
+- **Panel theme:** follows the device on first run (`parse-theme.ts`, `read-theme.ts`, the init script, the Appearance wording, and tests).
+- **Assistant title:** the empty chat is titled "FluxIQ assistant" (`panel-chat-options.ts` with a test).
+- **Pairing layout test:** updated, because the browser's name moved from a row into the title.
+- **Quickstart** (`docs/user/quickstart.md`): sections 1-2 rewritten for t927's one-time setup link, the extension's three steps, and the automatic connection request. admin/admin and `/get-started` are gone.
+
+### Checks (observed, each through the slot queue)
+- `pnpm --filter @fluxiq/ui-components check` -> exit 0. `vitest run src/chat src/model-access src/theme` -> 117 files, 777 tests passed. `ui-components:build` -> exit 0.
+- `pnpm --filter @fluxiq/web check` -> exit 0.
+- web vitest over app/tests, app/product, app/styles, app/connect, app/(panel), panel-shell, chat-widget, settings-page, chats, projects, security, home, programs, automation-studio/hierarchy, model-keys and accounts -> 1 failed, 1,465 passed. The failure was the outdated pairing layout test; after updating it, the pairing tests passed 15 of 15.
+- `pnpm --filter @fluxiq-web-extension/extension check` -> exit 0. `test-extension.mjs` over 13 panel folders, shared/tests and background/panel -> 805 tests, 805 pass.
+- `node scripts/structure-audit.mjs` -> Core "passed (552 warning(s), 914 baselined)"; extension "passed (253 warning(s), 551 baselined)".
+
+### Not verified
+- Nothing of this wave has been seen live yet. The after-screenshots wait for t928 to be merged into t925, so they show the real key journey.
+- A saved key in either client (t928).
+- The extension's merged chat list and the `?pairing=1` sign-in against a real Core.

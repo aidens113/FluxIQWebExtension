@@ -1,7 +1,7 @@
 // Journey D: pick and extract data, then Flow, then Run, then the dataset
 // preview and export, all through the real extension and panel.
 //
-// A person opens the extension's "Extract Data From This Page", clicks one
+// A person opens the extension's "Extract data from this page", clicks one
 // example item, keeps the columns the task wants, and confirms while the
 // extension records. The panel's Generate Subflow turns the recording into a
 // Flow, and the panel runs it with No LLM intervention. The journey passes
@@ -138,14 +138,14 @@ export async function extractionJourney(session: JourneySession, options: Extrac
 }
 
 /**
- * The picker, from "Extract Data From This Page" to the confirmation's
+ * The picker, from "Extract data from this page" to the confirmation's
  * captured count. The scenario page stays in front while the extension is
  * driven: foregrounding the extension page makes the active tab unsupported
  * and disables Stop recording (`w2-extraction-exit-live.md`).
  */
 async function pickAndConfirm(session: JourneySession, input: { exampleItemTestId: string; expected: Parameters<typeof reviewPickedFields>[2]["expected"]; optionalFields?: readonly string[]; context: { scenarioOrigin: string } }): Promise<{ proposedItems: number; capturedRecords: number; review: FieldReviewSummary }> {
   const { extensionPage, scenarioPage, evidence } = session;
-  await evidence.step("extension", "extraction-open-picker", "Open Extract Data From This Page", () => extensionPage.getByRole("button", { name: "Extract Data From This Page", exact: true }).click());
+  await evidence.step("extension", "extraction-open-picker", "Open Extract data from this page", () => extensionPage.getByRole("button", { name: "Extract data from this page", exact: true }).click());
   await extensionPage.getByText("Click one example item on the page -- a product, a row, a card. FluxIQ finds the rest.", { exact: true }).waitFor();
   await scenarioPage.bringToFront();
   await evidence.step("scenario", "extraction-pick-example", "Click one example item", () => scenarioPage.getByTestId(input.exampleItemTestId).first().click({ position: { x: 6, y: 6 } }));

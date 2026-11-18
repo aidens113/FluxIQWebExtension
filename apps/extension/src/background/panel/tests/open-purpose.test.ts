@@ -90,3 +90,13 @@ test("each deep link is a page Core's web panel serves, with no query of the con
   assert.equal(fluxIQWebPageAddress(base, { kind: "data" }), "https://flux.example/data");
   assert.equal(fluxIQWebPageAddress("ftp://flux.example", { kind: "data" }), undefined);
 });
+
+test("purpose pairing opens the home page with ?pairing=1, keeping the configured path", async (t) => {
+  installChrome(t);
+  const h = depsFor("http://127.0.0.1:4711/some/path?old=1");
+  const result = await handlePanelControl(open({ purpose: "pairing" }), sidepanel, h.deps);
+  assert.deepEqual(h.opened, ["http://127.0.0.1:4711/some/path?pairing=1"]);
+  assert.deepEqual(result, { handled: true, response: { ok: true, url: "http://127.0.0.1:4711/some/path?pairing=1" } });
+  const bad = await handlePanelControl(open({ purpose: "pairing", flowId: "f1" }), sidepanel, h.deps);
+  assert.equal((bad as { response: { ok: boolean } }).response.ok, false);
+});

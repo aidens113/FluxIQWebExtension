@@ -19,3 +19,9 @@ test("other pages keep their paths", () => {
   assert.equal(fluxIQWebPageAddress("http://127.0.0.1:3100", { kind: "projects" }), "http://127.0.0.1:3100/projects");
   assert.equal(fluxIQWebPageAddress("http://127.0.0.1:3100", { kind: "data" }), "http://127.0.0.1:3100/data");
 });
+
+test("the pairing page is the home page with only ?pairing=1", () => {
+  assert.equal(fluxIQWebPageAddress("http://127.0.0.1:3100", { kind: "pairing" }), "http://127.0.0.1:3100/?pairing=1");
+  assert.equal(fluxIQWebPageAddress("https://flux.example/app/?a=1#b", { kind: "pairing" }), "https://flux.example/app/?pairing=1");
+  assert.equal(fluxIQWebPageAddress("ftp://flux.example", { kind: "pairing" }), undefined);
+});

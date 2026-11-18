@@ -12,45 +12,42 @@ In the `!FluxIQWebExtension` folder, run:
 pnpm dev
 ```
 
-Then open `http://127.0.0.1:3000` and sign in. The first time, sign in with
-the username `admin` and the temporary password `admin`. FluxIQ then asks you
-to replace the temporary password with one of at least 12 characters.
+The first time, the terminal prints **FluxIQ first-time setup** with a link.
+Open it, choose your name and password (at least 12 characters), and you are
+signed in. The link works once; restart FluxIQ for a new one. After that, open
+`http://127.0.0.1:3000` and sign in with the name and password you chose.
 
-**It worked if** the FluxIQ web app loads and shows **Programs**.
+**It worked if** the FluxIQ web app opens on **Home**. You can already talk to
+the assistant beside every page once you add your AI key (step 3); you do not
+need a project first.
 
-The panel says the same thing when you open it before FluxIQ is running: its
-**Get started with FluxIQ** screen lists the steps in order (**Start FluxIQ**,
-**Sign in to FluxIQ**, **Connect this browser**, **Approve this browser in
-FluxIQ**), each marked done, next, in progress or needing attention. The first
-step names the address it checked, with **Change** to point it at another
-FluxIQ. Only what the panel has really detected is marked done.
-
-Open `http://127.0.0.1:3000/get-started` for a live checklist of the next
-steps. It shows each step as done, current, or waiting on an earlier step, and
-updates as you go.
+The extension's **Get started with FluxIQ** screen lists the steps in order
+(**Start FluxIQ**, **Connect and approve**, **Add your AI key**), each marked
+done, next, in progress or needing attention. The first step names the address
+it checked ("FluxIQ found at 127.0.0.1:3000"), with **Change** to point it at
+another FluxIQ. Only what the extension has really detected is marked done.
 
 ## 2. Pair your browser (about 1 minute)
 
 1. Click the FluxIQ button in the browser toolbar. If you have not pinned it,
    it is in the **Extensions** menu (the puzzle-piece button). Chrome and Edge
    open the FluxIQ side panel, and Firefox opens the FluxIQ popup.
-2. Under **Connect this browser**, choose **Connect**. The step **Approve
-   this browser in FluxIQ** then shows a six-digit code and an **Open
-   FluxIQ** button.
-3. Switch to the FluxIQ web app. **A browser or app wants to connect** appears
-   with the same code. Check that the codes match, then choose **Confirm**. The
-   request lasts five minutes; you do not need to hurry.
+2. Once FluxIQ is found, the browser asks it for approval by itself: the step
+   **Connect and approve** shows a six-digit code and an **Open FluxIQ**
+   button. There is nothing to press first.
+3. Switch to the FluxIQ web app (sign in if it asks). **A browser or app wants
+   to connect** appears, naming your browser, with the same code. Check that
+   the codes match, then choose **Confirm**. The request lasts five minutes;
+   you do not need to hurry.
 
 **It worked if** the panel's dot turns green, the chat appears, and
 **Settings** (the gear button) says **Connected to FluxIQ** under
 **Connection**.
 
-If the panel says **Can't reach FluxIQ**, first check that `pnpm dev` is still
-running, then choose **Try again**. If it still cannot connect, choose
-**Check the connection address**, or open **Settings** (the gear button) and
-open **Advanced**. **FluxIQ connection address** should be
-`ws://127.0.0.1:4777/client` and **FluxIQ web address** should be
-`http://127.0.0.1:3000`. Choose **Save** after changing either.
+If the extension says **FluxIQ isn't answering**, first check that `pnpm dev`
+is still running, then choose **Try again**. If FluxIQ runs at another
+address, choose **Change** on the first step and type its web address (for
+example `http://127.0.0.1:3000`); the extension finds the rest by itself.
 
 ## 3. Add your AI key (about 1 minute)
 

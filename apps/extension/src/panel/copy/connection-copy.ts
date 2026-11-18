@@ -28,7 +28,7 @@ export function connectionCopy(status: ExtensionStatus): ConnectionCopy {
         sentence: "FluxIQ isn't connected",
         line: (status as StatusWithPairing).paired === true
           ? "Connect to pick up where you left off."
-          : "Connect this browser so FluxIQ can work in it."
+          : "Connect to ask FluxIQ to approve this browser."
       };
     case "connecting":
       return { dot: "amber", sentence: "Connecting to FluxIQ..." };
@@ -37,7 +37,7 @@ export function connectionCopy(status: ExtensionStatus): ConnectionCopy {
     case "error":
       return { dot: "red", sentence: "Can't reach FluxIQ", line: "Make sure FluxIQ is running on this computer, then try again." };
     case "pairing":
-      return { dot: "amber", sentence: "Approve this browser in FluxIQ", line: "In FluxIQ, approve the request that shows this code." };
+      return { dot: "amber", sentence: "Connect and approve in FluxIQ", line: "In FluxIQ, approve the request that shows this code." };
     case "connected":
       return { dot: "green", sentence: "Connected to FluxIQ", line: connectedLine(status) };
   }

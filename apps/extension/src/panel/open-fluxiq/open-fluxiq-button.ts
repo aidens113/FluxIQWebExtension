@@ -29,8 +29,11 @@ export type OpenFluxIQStyle = {
   look: "primary" | "small" | "link" | "icon" | "silent";
   canOpen?: () => boolean;
   /** What the chat opens it for: a model key to add goes straight to the keys page; a question only FluxIQ can show opens the web address. */
-  purpose?: "model-key" | "ask";
+  purpose?: OpenFluxIQPurpose | (() => OpenFluxIQPurpose);
 };
+
+/** `pairing` opens the home page for approving this browser's connection request (its sign-in page says so). */
+export type OpenFluxIQPurpose = "model-key" | "ask" | "pairing";
 
 const FAILED = "Couldn't open FluxIQ. Check its web address in Settings.";
 const LOOKS = { primary: "primary-button", small: "small-button", link: "link-button", icon: "icon-button", silent: "small-button" } as const;
@@ -62,7 +65,8 @@ export function createOpenFluxIQButton(request: PanelStore["request"], style: Op
     const failedAt = address;
     try {
       // A model key is added on FluxIQ's keys page: the background opens that rather than the front page.
-      const message: PanelOpenFluxIQRequest & { type: string } = { type: RUNTIME_MESSAGES.panelOpenFluxIQ, ...(style.purpose === "model-key" ? { purpose: "model-key" as const } : {}) };
+      const purpose = typeof style.purpose === "function" ? style.purpose() : style.purpose;
+      const message: PanelOpenFluxIQRequest & { type: string } = { type: RUNTIME_MESSAGES.panelOpenFluxIQ, ...(purpose === "model-key" || purpose === "pairing" ? { purpose } : {}) };
       const selectedFlowId = flowId?.();
       if (selectedFlowId !== undefined) message.flowId = selectedFlowId;
       const result = await request(message);

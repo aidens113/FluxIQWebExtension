@@ -82,3 +82,11 @@ test("the project switcher sits on the left and Settings is a labelled button th
     assert.equal(root.byClass("top-settings-label")[0]!.textContent, "Settings");
   });
 });
+
+test("Settings in use is marked as the current page, and only while it is open", async () => setup(({ bar }) => {
+  const gear = fake(bar.element).byClass("top-settings")[0]!;
+  bar.showScreen("settings");
+  assert.equal(gear.getAttribute("aria-current"), "page");
+  bar.showScreen("chat");
+  assert.equal(gear.getAttribute("aria-current"), null);
+}));

@@ -212,7 +212,7 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   authentication, balance or connectivity.
 
 While a recording runs, a bar under the top bar on every screen shows its step
-count, "Extract Data From This Page" and "Stop recording". It also holds a
+count, "Extract data from this page" and "Stop recording". It also holds a
 recording refusal (with OK) and any failed recording request. Nothing in the
 panel lists the steps of a run; what FluxIQ decides and does is the chat's to
 show, and internal page reads are never shown as steps. Flow editing, run logs
@@ -271,7 +271,7 @@ either opens a dialog titled "What should FluxIQ learn from this?"
 Firefox's popup adds a note that clicking the page closes it while recording
 goes on) and, once a sentence is given, records the current tab. The chat
 stays on screen: the panel does not move to another tab. The red recording
-bar then holds the step count, "Extract Data From This Page" and "Stop
+bar then holds the step count, "Extract data from this page" and "Stop
 recording". When a recording ends, the panel waits for FluxIQ to save it
 ("Saving your recording so it can go with your next message...", read at most
 40 times, one second apart), attaches it to the next message as a chip with
@@ -1376,7 +1376,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
 the title "What can FluxIQ do for you?", a concept paragraph that ends "You
 can stop it, or take over the page, at any time.", two starts and the
 fill-only examples. Describe focuses the composer and sends nothing; Extract
-switches to Automations and presses "Extract Data From This Page" (or
+switches to Automations and presses "Extract data from this page" (or
 focuses it beside the line saying why it is unavailable). Model readiness is
 read once each time the connected, empty latest chat appears
 (`ui-components/src/chat/onboarding/model-readiness.ts`, through `modelReadiness`); only when no key

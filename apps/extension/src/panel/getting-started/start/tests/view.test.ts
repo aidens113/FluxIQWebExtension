@@ -277,3 +277,19 @@ test("unexpected rejection releases controls with fixed retry feedback", async (
     assert.equal(notice.hidden, true);
   });
 });
+
+test("Open FluxIQ asks for the pairing page while approval is waited for, and the plain page otherwise", async () => {
+  await withFakeDocument(async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const store = { request: async (message: Record<string, unknown>) => {
+      sent.push(message);
+      return { ok: true, value: {} };
+    } } as unknown as PanelStore;
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
+    const waiting = statusWith({ connectionState: "pairing", pairingReferenceCode: "482913", paired: false });
+    view.render(startGuide(waiting, false), waiting);
+    buttonNamed(fake(view.element), "Open FluxIQ")!.dispatch("click");
+    await flush();
+    assert.deepEqual(requestsOf(sent, RUNTIME_MESSAGES.panelOpenFluxIQ), [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "pairing" }]);
+  });
+});

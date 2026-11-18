@@ -1,4 +1,4 @@
-// The "Extract Data From This Page" entry, as data (plan 3.7, "Primary Entry
+// The "Extract data from this page" entry, as data (plan 3.7, "Primary Entry
 // Point"). It sits on the automations tab, and in the recording bar while a
 // recording runs. The sheet itself is `panel/extraction`; this decides only
 // whether its entry can be pressed and what the line under it says.
@@ -9,7 +9,7 @@
 // while none is, it starts one first (`startsRecording`), and the line says so
 // before the person presses rather than after.
 //
-// "Extract Data From This Page" keeps its exact name: the Lab presses it by that
+// "Extract data from this page" keeps its exact name: the Lab presses it by that
 // name (packages/test-runner/src/ui-e2e/journeys/extraction.ts).
 //
 // `working` is the shell's held "FluxIQ is working", as in `record-control.ts`.

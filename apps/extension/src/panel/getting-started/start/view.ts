@@ -50,10 +50,12 @@ export function createStartView(context: PanelContext, openSettings: () => void,
   let latestGuide: StartGuide | undefined;
   const title = createElement("h2", { className: "start-title" });
   const line = createElement("p", { className: "start-line" });
-  const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small" });
+  // While FluxIQ waits for approval its sign-in page should say what it is for, so the button opens it with that purpose.
+  let waitingForApproval = false;
+  const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small", purpose: () => (waitingForApproval ? "pairing" : "ask") });
   const connectButton = createElement("button", { id: "connectButton", className: "primary-button", text: "Connect", attrs: { type: "button" } });
   const addressLink = createElement("button", { className: "link-button", text: "Check the connection address", attrs: { type: "button" } });
-  const changeButton = createElement("button", { className: "link-button", text: "Change", attrs: { type: "button", "aria-label": "Change the FluxIQ web address" } });
+  const changeButton = createElement("button", { className: "small-button", text: "Change", attrs: { type: "button", "aria-label": "Change the FluxIQ web address" } });
   const change = createChangeAddress({ request: store.request, probe, status: () => latestStatus });
   const code = createElement("p", { id: "pairingReferenceCode", className: "pairing-code", attrs: { "aria-label": "Approval code" } });
   const cancelPairing = createElement("button", { className: "small-button", text: "Cancel approval request", attrs: { type: "button" } });
@@ -172,6 +174,7 @@ export function createStartView(context: PanelContext, openSettings: () => void,
       addressLink.hidden = !guide.addressLink;
       connectActions.hidden = connectButton.hidden && addressLink.hidden;
       approveBlock.hidden = guide.pairingCode === undefined;
+      waitingForApproval = guide.pairingCode !== undefined;
       code.textContent = guide.pairingCode ?? "";
       if (status !== undefined) {
         open.observe(status);
