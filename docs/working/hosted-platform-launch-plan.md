@@ -59,6 +59,11 @@ Enterprise admins never set FluxIQ prices; they get a billing-admin IAM role, se
 team or person, and usage reports by team for internal chargeback. Customers setting their own prices (reselling,
 publishers selling Flows) is the post-launch marketplace on Stripe Connect, pending the user's decisions on fee,
 refunds and tax. Launch needs checkout with one or two simple plans; seats, invoicing and the license file follow.
+**Test every mode (user, 2026-11-18: "make sure to test everything. The self-hosted enterprise, the normal local
+panel, and our hosted solution"):** each cloud unit's acceptance runs all three deployment modes locally: `service`
+(our hosted platform) and `self-hosted` (free base now, enterprise once licensing exists) through `fluxiq-cloud up`,
+`smoke` and `down`, and the normal local panel through `node scripts/run-fluxiq-web.mjs`. The license only adds
+company extras (SSO, directory sync, seats, support); local and free self-hosted keep the full base product.
 **Self-hosted enterprise design (lead's proposal, 2026-11-18, user told; builds after launch with enterprise SSO):**
 one codebase, no separate edition: the operator's configuration selects the `self-hosted` profile, our cloud's
 commerce, tenancy and fleet modules stay off there, our credentials never ship, and the server never calls our
