@@ -58,7 +58,22 @@ Enterprise admins never set FluxIQ prices; they get a billing-admin IAM role, se
 (hosted), license status (self-hosted: seats used, expiry, renewal), spending limits on their company model key per
 team or person, and usage reports by team for internal chargeback. Customers setting their own prices (reselling,
 publishers selling Flows) is the post-launch marketplace on Stripe Connect, pending the user's decisions on fee,
-refunds and tax. Launch needs checkout with one or two simple plans; seats, invoicing and the license file follow. Units, interfaces I1-I4 and the dated schedule are in the hosted-cloud lane report, held locally until the tenant-isolation units merge (both repositories are public).
+refunds and tax. Launch needs checkout with one or two simple plans; seats, invoicing and the license file follow.
+**Self-hosted enterprise design (lead's proposal, 2026-11-18, user told; builds after launch with enterprise SSO):**
+one codebase, no separate edition: the operator's configuration selects the `self-hosted` profile, our cloud's
+commerce, tenancy and fleet modules stay off there, our credentials never ship, and the server never calls our
+billing system. Enterprise features are unlocked by a signed license file (FluxIQ holds the private key; Core
+verifies issuer, organization and installation binding, features, seats and validity with the public key, offline;
+backend and UI share one entitlement resolver; grace on expiry, base use and export kept). Both repositories are
+public, so the protection is the license terms plus support and updates, not secrecy; enterprise-only features in a
+private package remain an option for later. The buyer's journey: getfluxiq.com's Enterprise page (checkout or
+invoice for annual seats) leads to an organization area on `app.getfluxiq.com` (download the license, seats,
+expiry, renewal, install instructions); the company installs with the same `@fluxiq/cloud` package or our published
+Docker image, one config (domain, ACME TLS, SMTP, license path), `fluxiq-cloud up`, claims the owner with the
+one-time setup link, and invites employees or connects SSO; renewal swaps in a new license file, air-gapped
+included. Built: the self-hosted profile, its compose, the setup-code claim, the cloud package's local driver. Not
+built: license verification, the organization area, the website's Enterprise page and purchase, published image
+and package, the cloud package's real-server driver. Units, interfaces I1-I4 and the dated schedule are in the hosted-cloud lane report, held locally until the tenant-isolation units merge (both repositories are public).
 
 ## Evidence And Readiness
 
