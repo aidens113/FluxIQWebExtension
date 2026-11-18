@@ -21,6 +21,7 @@ import type {
   TabDescriptor,
   UnsupportedPageState
 } from "../../shared/protocol";
+import { activateTab, isOwnPageTab } from "../tab-gate";
 import { browserStateFromTabs, describeActiveTabLike, unsupportedPageForUrl } from "./browser-state";
 import type { GatewayMessageSender } from "./gateway-session";
 import { eventSourceId } from "./recording-manifest";
@@ -89,8 +90,12 @@ export class ActivePage {
     this.deps.emitStatus();
   }
 
+  // FluxIQ's own pages are never reported (`../tab-gate/`): with the panel in
+  // front, Core hears of no active tab rather than of the panel's address.
   async sendBrowserState(): Promise<void> {
-    await this.deps.send("client.state_update", browserStateFromTabs(await this.deps.activeTab(), await this.deps.allTabs(), this.deps.recordingState()));
+    const active = await this.deps.activeTab();
+    const reported = active === undefined || isOwnPageTab(active) ? undefined : active;
+    await this.deps.send("client.state_update", browserStateFromTabs(reported, await this.deps.allTabs(), this.deps.recordingState()));
   }
 
   async handleTabUpdate(tab: chrome.tabs.Tab): Promise<void> {
@@ -103,6 +108,9 @@ export class ActivePage {
       this.deps.emitStatus();
     }
     if (!tab.id) return;
+    // The panel's own tab is tracked above -- an action aimed at it is then
+    // refused out loud -- but never recorded, attached or reported.
+    if (isOwnPageTab(tab)) return;
     // After the state above, so the evidence captured beside a recorded switch
     // reads the page switched to; before attaching, so the switch is sent ahead
     // of anything that page records.
@@ -133,7 +141,7 @@ export class ActivePage {
   }
 
   async select(tabId: number): Promise<void> {
-    const tab = await chrome.tabs.update(tabId, { active: true });
+    const tab = await activateTab(tabId);
     if (tab.id !== tabId || unsupportedPageForUrl(tab.url)) {
       throw new Error("The requested automation tab is unavailable or unsupported.");
     }

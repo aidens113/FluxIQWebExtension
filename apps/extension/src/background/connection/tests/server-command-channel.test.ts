@@ -266,6 +266,8 @@ test("set_active_tab records the tab before asking the browser to activate it", 
   const previous = holder.chrome;
   holder.chrome = {
     tabs: {
+      // The tab gate reads the tab before anything else (`../../tab-gate/`).
+      get: async (tabId: number) => ({ id: tabId, url: "https://shop.test/" }),
       update: async (tabId: number) => {
         updates.push([tabId, [...h.calls]]);
         return { id: tabId };

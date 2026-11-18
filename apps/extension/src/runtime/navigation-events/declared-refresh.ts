@@ -11,6 +11,7 @@
 // the delay leaves the page, never the address.
 
 import { declaredRefreshDelayMs } from "./refresh-delay";
+import { executeInTab } from "../../background/tab-gate";
 
 /** A refresh due within this long of the load is waited for, as the stable-address second waited it out. */
 const DECLARED_REFRESH_WAITED_MS = 1_000;
@@ -18,7 +19,7 @@ const DECLARED_REFRESH_WAITED_MS = 1_000;
 /** Whether the tab's top document declares a refresh due within `DECLARED_REFRESH_WAITED_MS`. A page that cannot be read declares nothing. */
 export async function refreshDeclaredSoon(tabId: number): Promise<boolean> {
   try {
-    const [answer] = await chrome.scripting.executeScript({
+    const [answer] = await executeInTab({
       target: { tabId, frameIds: [0] },
       func: () => document.querySelector('meta[http-equiv="refresh" i]')?.getAttribute("content") ?? null
     });

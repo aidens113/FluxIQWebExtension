@@ -17,6 +17,7 @@ import type {
   TabDescriptor,
   UnsupportedPageState
 } from "../../shared/protocol";
+import { isOwnPageTab } from "../tab-gate";
 import { browserStateSnapshotFromTabs } from "./browser-state";
 import {
   captureMergedTabSnapshot,
@@ -190,8 +191,10 @@ export class RecordingEvidenceReporter {
         // Fall back to browser tab state below.
       }
     }
+    // FluxIQ's own page in front is reported as no active tab (`../tab-gate/`).
+    const active = await this.deps.activeTab();
     return browserStateSnapshotFromTabs(
-      await this.deps.activeTab(),
+      active === undefined || isOwnPageTab(active) ? undefined : active,
       await this.deps.allTabs(),
       this.deps.recordingState(),
       timestamp,
