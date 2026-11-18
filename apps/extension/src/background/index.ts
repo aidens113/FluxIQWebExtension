@@ -4,6 +4,8 @@ import { browserDescriptor } from "../shared/browser";
 import type { ConnectRequest, ExtensionStatus, RecordingEventPayload } from "../shared/protocol";
 import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
+import { currentOwnPageAddresses, isOwnPage, isOwnPageTab, tabReads } from "./tab-gate";
+import { OWN_PAGE_ADDRESSES_MESSAGE } from "../shared/own-pages";
 import { clearSession, discardPersistentQueue, forgetDeliveryStorage, onSavedStateRepaired, readOrCreateClientId, readSession, readSettings, writeSession, writeSettings } from "./storage";
 import { acceptActionEvidencePort } from "./action-evidence";
 import { handleScriptedNavigationControl } from "./scripted-navigation-control";
@@ -111,19 +113,19 @@ chrome.runtime.onConnect.addListener((port) => {
   acceptActionEvidencePort(port);
 });
 
-chrome.tabs.onActivated.addListener(({ tabId }) => {
-  void chrome.tabs.get(tabId, (tab) => {
+tabReads().onActivated.addListener(({ tabId }) => {
+  void tabReads().get(tabId, (tab) => {
     void getConnection().then((manager) => manager.handleTabUpdated(tab));
   });
 });
 
-chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+tabReads().onUpdated.addListener((_tabId, changeInfo, tab) => {
   if (changeInfo.url || changeInfo.title || changeInfo.status) {
     void getConnection().then((manager) => manager.handleTabUpdated(tab));
   }
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+tabReads().onRemoved.addListener((tabId) => {
   clearExtractionTab(tabId);
   void getConnection().then((manager) => manager.handleTabRemoved(tabId));
 });
@@ -134,11 +136,13 @@ chrome.webNavigation.onCommitted.addListener((details) => {
   // away, so the pick session goes with it rather than confirming against a
   // page it never saw.
   clearExtractionTab(details.tabId);
+  // FluxIQ's own pages never enter the navigation feed (`tab-gate/`).
+  if (isOwnPage(details.url)) return;
   void getConnection().then((manager) => manager.handleNavigationCommitted(details));
 });
 
 chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
-  if (details.frameId !== 0) return;
+  if (details.frameId !== 0 || isOwnPage(details.url)) return;
   void getConnection().then((manager) => manager.handleHistoryStateUpdated(details));
 });
 
@@ -158,6 +162,10 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   if (sender.id === chrome.runtime.id && typed.type === RUNTIME_MESSAGES.overlayPlacementRecall) return await recallOverlayPlacement();
   if (sender.id === chrome.runtime.id && typed.type === RUNTIME_MESSAGES.overlayPlacementKeep) return await keepOverlayPlacement(typed.placement);
   const manager = await getConnection();
+  // A content script asking where FluxIQ's own pages are, so the document a
+  // command reaches can refuse it by its own origin (`content/own-document/`).
+  // Answered after the connection exists, which is what configures them.
+  if (sender.id === chrome.runtime.id && typed.type === OWN_PAGE_ADDRESSES_MESSAGE) return { ok: true, addresses: currentOwnPageAddresses() };
 
   const scriptedNavigation = await handleScriptedNavigationControl(typed, sender, manager);
   if (scriptedNavigation.handled) return scriptedNavigation.response;
@@ -250,6 +258,13 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
     return { ok: true, status: manager.status() };
   }
 
+  // A content script in FluxIQ's own page is heard from and dropped: nothing it
+  // says -- its address, title, snapshot or a recorded event -- leaves the
+  // browser (`tab-gate/`).
+  if ((typed.type === RUNTIME_MESSAGES.contentReady || typed.type === RUNTIME_MESSAGES.contentEvent) && fromOwnPage(sender)) {
+    return { ok: true };
+  }
+
   if (typed.type === RUNTIME_MESSAGES.contentReady) {
     const tabId = sender.tab?.id;
     await manager.handleContentReady(typed.payload as RecordingEventPayload, tabId, sender.frameId);
@@ -276,6 +291,11 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   }
 
   return { ok: false, error: "Unknown FluxIQ extension message." };
+}
+
+/** Whether a runtime message came from a content script running in FluxIQ's own page, by its tab or its own document's address. */
+function fromOwnPage(sender: chrome.runtime.MessageSender): boolean {
+  return (sender.tab !== undefined && isOwnPageTab(sender.tab)) || isOwnPage(sender.url);
 }
 
 // Never awaited by its callers, so a failure to read the Disconnect memory is

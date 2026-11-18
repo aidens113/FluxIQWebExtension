@@ -85,6 +85,8 @@ function installBrowser(t: TestContext, statuses: Record<string, number | Error 
   });
   (globalThis as { chrome?: unknown }).chrome = {
     webNavigation: { onBeforeNavigate: event("onBeforeNavigate"), onCommitted: event("onCommitted"), onErrorOccurred: event("onErrorOccurred") },
+    // The tab gate reads the tab before it injects (`../../background/tab-gate/`).
+    tabs: { get: (tabId: number) => Promise.resolve({ id: tabId, url: "https://shop.test/" }) },
     scripting: {
       executeScript: (details: { target: Record<string, unknown> & { documentIds?: string[] }; func: () => unknown }) => {
         injections.push(details.target);

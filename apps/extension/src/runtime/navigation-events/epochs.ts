@@ -21,6 +21,8 @@
 // nothing with a new `instance`, so an epoch kept by the worker before it --
 // in session storage -- is never compared with one counted by this worker.
 
+import { tabReads, type TabReads } from "../../background/tab-gate";
+
 /** Child frames navigate on their own; only the top frame's navigation moves the page a look is of. */
 const TOP_FRAME_ID = 0;
 
@@ -64,11 +66,13 @@ function install(): void {
   navigation?.onCommitted?.addListener(onTopFrame);
   navigation?.onHistoryStateUpdated?.addListener(onTopFrame);
   navigation?.onReferenceFragmentUpdated?.addListener(onTopFrame);
-  browser?.tabs?.onReplaced?.addListener((added, removed) => {
+  // `chrome.tabs` is read through the tab gate; in a test runner with no `chrome`, there is nothing to hear.
+  const tabs = browser === undefined ? undefined : tabReads() as Partial<TabReads> | undefined;
+  tabs?.onReplaced?.addListener((added, removed) => {
     bump(added);
     bump(removed);
   });
-  browser?.tabs?.onRemoved?.addListener((tabId) => {
+  tabs?.onRemoved?.addListener((tabId) => {
     // A closed tab's id is never given to another tab, so its count is never read again.
     epochs.delete(tabId);
     inFlight.delete(tabId);

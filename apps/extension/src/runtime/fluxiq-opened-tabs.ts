@@ -23,6 +23,7 @@
 // (`automation-tab.ts`): a service worker restart forgets it, and the tabs it
 // held are then left open, which is what happened before it existed.
 
+import { closeTab } from "../background/tab-gate";
 import { forgetAutomationTab, setAutomationTab, tabIsOpen } from "./automation-tab";
 
 /** What closing the recorded tabs did: the tabs closed, and the tab to drive instead, when one is still open. */
@@ -62,7 +63,7 @@ export const fluxiqOpenedTabs = {
     for (const [tabId] of records) {
       forgetAutomationTab(tabId);
       try {
-        await chrome.tabs.remove(tabId);
+        await closeTab(tabId);
         closed.push(tabId);
       } catch {
         /* best-effort: a tab the person or the page already closed has nothing left to close */

@@ -1,18 +1,26 @@
 import type { TabDescriptor } from "../shared/protocol";
+import { executeInTab, sendTabMessage, tabReads, withoutOwnPages } from "./tab-gate";
 
 const REQUIRED_CONTENT_SCRIPT_VERSION = 2;
 
 /** The id the browser always gives a tab's main frame; every child frame has a positive one. */
 const TOP_FRAME_ID = 0;
 
+/**
+ * The tab in front, FluxIQ's own page included: the connection tracks where the
+ * browser is, so an action aimed at the panel is refused out loud rather than
+ * sent somewhere else. What is reported to Core passes `withoutOwnPages` first
+ * (`connection/active-page.ts`).
+ */
 export async function activeTab(): Promise<TabDescriptor | undefined> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await tabReads().query({ active: true, currentWindow: true });
   return tab ? describeTab(tab) : undefined;
 }
 
+/** Every tab but FluxIQ's own pages: every caller reports or records the list, and none of those may name them. */
 export async function allTabs(): Promise<TabDescriptor[]> {
-  const tabs = await chrome.tabs.query({});
-  return tabs.map(describeTab);
+  const tabs = await tabReads().query({});
+  return withoutOwnPages(tabs).map(describeTab);
 }
 
 export async function allTabFrames(tabId: number): Promise<chrome.webNavigation.GetAllFrameResultDetails[]> {
@@ -50,16 +58,9 @@ export function describeTab(tab: chrome.tabs.Tab): TabDescriptor {
   return descriptor;
 }
 
+/** A message into the tab, through the tab gate: FluxIQ's own pages are refused before it is sent (`tab-gate/`). */
 export async function sendToTab<TResponse = unknown>(tabId: number, message: unknown, frameId?: number): Promise<TResponse> {
-  return new Promise((resolve, reject) => {
-    const callback = (response: unknown) => {
-      const error = chrome.runtime.lastError;
-      if (error) reject(new Error(error.message));
-      else resolve(response as TResponse);
-    };
-    if (frameId !== undefined) chrome.tabs.sendMessage(tabId, message, { frameId }, callback);
-    else chrome.tabs.sendMessage(tabId, message, callback);
-  });
+  return await sendTabMessage<TResponse>(tabId, message, frameId);
 }
 
 /**
@@ -88,7 +89,7 @@ export async function ensureContentScript(tabId: number, frameId: number = TOP_F
   } catch {
     // Reinject below.
   }
-  await chrome.scripting.executeScript({
+  await executeInTab({
     target: { tabId, frameIds: [frameId] },
     files: ["content/index.js"]
   });

@@ -32,6 +32,7 @@ import type {
 } from "../../shared/protocol";
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
 import { observedTabFrames, sendToTab } from "../tabs";
+import { activateTab, refuseOwnPageTab } from "../tab-gate";
 import type { SnapshotCaptureOptions } from "../../shared/snapshot-capture-options";
 import { currentAutomationTabId, ExtensionRuntimeCommandRouter } from "../../runtime";
 import { TracedCommands, withTraceMetadata, type TraceCapture } from "../trace-capture/index";
@@ -240,8 +241,11 @@ export class ServerCommandChannel {
     }
     if (payload.command === "set_active_tab") {
       const tabId = Number(payload.tabId);
+      // FluxIQ's own page is refused before the page names it, so it never
+      // becomes the tab later commands run on (`../tab-gate/`).
+      await refuseOwnPageTab(tabId);
       this.deps.page.setTabId(tabId);
-      await chrome.tabs.update(tabId, { active: true });
+      await activateTab(tabId);
       this.deps.emitStatus();
       return;
     }
