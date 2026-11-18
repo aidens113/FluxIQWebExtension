@@ -554,7 +554,13 @@ The domain keeps four memories across the calls of one build: whether it has
 reached its start location (`node-run/arrival.ts`), the addresses it has been
 shown and may navigate to (`node-run/shown-addresses.ts`), the values a
 continued Flow already holds (`node-run/held-literals/`), and the layers its
-own presses opened (`node-run/own-layers/`). Core, not the domain, says which
+own presses opened (`node-run/own-layers/`). A press the runtime observed
+answering an interruption owns none of the fresh layers seen after it, even
+those tied to its control: answering a sometimes-present layer cannot make
+follow-on cleanup required. This fact comes from the before/after page
+evidence, never model input or timing. A required opener still owns its
+chooser; Core still requires the person's acts and keeps explicitly routed
+steps under their own conditions. Core, not the domain, says which
 build a call belongs to and whether it starts that build afresh. Inside every
 `executeTool` the domain reads `automationStudioEvidenceBuildScope()` (from
 `fluxiq/automation`; Core's
