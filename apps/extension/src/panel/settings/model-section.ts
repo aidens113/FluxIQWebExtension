@@ -1,7 +1,7 @@
 // Settings > AI key: the shared AI-key card, in its full form. It reads the key's state through the setup port (the one
 // reader, `panel/getting-started`) and shows it in place: the same words and the same single action as the chat's card.
 // The extension cannot write a key yet, so its Save says to add the key in FluxIQ, with Open FluxIQ, which opens the
-// panel's Settings at AI keys. "Try now" reads again. Nothing reads while the browser is not connected: the section
+// panel's Settings at AI keys. "Try now" reads again. The card follows the key as the background pushes it (no timer, no second reader). Nothing reads while the browser is not connected: the section
 // says to connect instead. The pasted value is the card's and the port's business, never kept here.
 
 import { createModelKeyCard, defaultModelKeyProviders, type ModelKeyCard, type ModelKeyHostAction } from "@fluxiq/ui-components";
@@ -49,7 +49,7 @@ export function createModelSection(context: PanelContext, setup?: SetupPort): Mo
   function refresh(): void {
     if (!visible || !connected) return;
     if (card === undefined) {
-      card = createModelKeyCard({ port: modelKeysPort(store.request, read), variant: "full", providers: defaultModelKeyProviders, onAction });
+      card = createModelKeyCard({ port: modelKeysPort(store.request, read, setup?.subscribeModelKey?.bind(setup)), variant: "full", providers: defaultModelKeyProviders, onAction });
       slot.append(card.element);
       return;
     }

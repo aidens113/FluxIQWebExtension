@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultSettings } from "../../../shared/browser";
 import type { ExtensionStatus } from "../../../shared/protocol";
+import type { ModelAccessState } from "@fluxiq/ui-components";
 import { KEY_WRITE_MESSAGES } from "../../chat";
 import { fake, withFakeDocument } from "../../chat/tests/fake-dom";
 import type { ModelKeyReading } from "../../getting-started";
@@ -225,5 +226,32 @@ test("the Project row names the project and its Change button opens the switcher
     away.shown();
     await tick();
     assert.equal(fake(away.element).descendants().find((node) => node.id === "changeProjectButton")!.hidden, true);
+  }));
+});
+
+test("the AI key card follows the pushed key state at once, with no second read", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    let reads = 0;
+    let push: ((state: ModelAccessState | null) => void) | undefined;
+    const setup = {
+      readModelKey: async (): Promise<ModelKeyReading> => {
+        reads += 1;
+        return { kind: "no-key" };
+      },
+      subscribeModelKey: (listener: (state: ModelAccessState | null) => void) => ((push = listener), () => undefined)
+    };
+    const settings = createSettingsView({ store: storeWith(status()), surface: "popup" } as PanelContext, () => undefined, { setup });
+    settings.shown();
+    await tick();
+    const root = fake(settings.element);
+    assert.equal(reads, 1);
+    assert.ok(root.textContent.includes("No key"));
+    push!({ kind: "no-credit", provider: "Anthropic", keyName: "Work key" });
+    assert.ok(root.textContent.includes("No credit"));
+    assert.ok(root.textContent.includes("Replace key"));
+    push!({ kind: "ready", provider: "Anthropic", keyName: "Work key" });
+    assert.ok(root.textContent.includes("Anthropic is ready, using Work key."));
+    assert.equal(reads, 1, "pushes read nothing");
   }));
 });

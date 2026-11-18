@@ -297,3 +297,18 @@ User (via lead): "IT SHOULD BE SECURE BUT ALSO VERY EASY FOR PEOPLE TO USE! ... 
 - Nothing of this wave has been seen live yet. The after-screenshots wait for t928 to be merged into t925, so they show the real key journey.
 - A saved key in either client (t928).
 - The extension's merged chat list and the `?pairing=1` sign-in against a real Core.
+
+## t928 hand-over prep (2026-11-18)
+- **Item 3, the banner that lagged the pushed key state** (worker `key-push-card`):
+  - Cause: t928's live run used dev's old extension card, which re-read the key on a 4 s poll. Here, no key surface subscribed to the push at all; each read on open, after a write or after a reply.
+  - Fix: `ModelKeysPort.subscribe` in ui-components. The card draws a pushed state at once, and a null push means read again.
+  - The extension port listens for `fluxiq.panel.modelAccessChanged`. The panel port (worker `panel-key-push-activity`) listens for the `model-access` event on the page's one change stream, and Settings' key list and Home follow it too. No timers and no delays.
+- **Item 1, No credit:** a seventh card state (badge "No credit", sentence naming the provider and the key, action Replace key), mapped from `no_credit` in ui-components and in the panel's reader.
+- **Item 2, Activity:** per the lead's decision, the server joins each outcome onto its request's own entry (`result`, `errorKind`), and request ids stay on the server; the server side is routed to t928. I removed the worker's client-side request-id join (`join-outcomes.ts`, the `requestId` and `ran` fields) so only one path exists. The panel reads `result` and `errorKind` and says "could not add the key because ..." in plain words.
+- **Item 4:** the shared constants switch after t928 merges.
+- **Checks, through the slot queue:**
+  - ui-components check exit 0; model-access and onboarding tests 39/39; ui-components build done;
+  - extension check exit 0; chat, settings, getting-started and shell tests 292/292; extension structure audit passed;
+  - `pnpm --filter @fluxiq/web check` exit 0, re-run after the join removal: exit 0;
+  - web vitest on panel-changes, model-keys, security, chat-widget, home and settings-page: 91 files, 820 passed;
+  - Core structure audit "passed (552 warning(s), 914 baselined)", after I fixed one packed test line.

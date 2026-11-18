@@ -8,10 +8,11 @@ import type { PanelStore } from "../../../../state";
 import { readModelAccess } from "./read-model-access";
 import { KEY_WRITE_MESSAGES, sendKeyWrite } from "./send-key-write";
 
-/** Builds the port over `request`; `read` replaces the default reading. */
-export function modelKeysPort(request: PanelStore["request"], read: () => Promise<ModelKeysResult<{ state: ModelAccessState }>> = () => readModelAccess(request)): ModelKeysPort {
+/** Builds the port over `request`; `read` replaces the default reading; `subscribe` (the background's pushed key state) lets the card follow the key as it is pushed. */
+export function modelKeysPort(request: PanelStore["request"], read: () => Promise<ModelKeysResult<{ state: ModelAccessState }>> = () => readModelAccess(request), subscribe?: ModelKeysPort["subscribe"]): ModelKeysPort {
   return {
     readState: read,
+    ...(subscribe === undefined ? {} : { subscribe }),
     save: async ({ provider, name, value }) => sendKeyWrite(request, { type: KEY_WRITE_MESSAGES.save, provider, key: value, ...(name ? { name } : {}) }),
     replace: async (_keyId, value) => sendKeyWrite(request, { type: KEY_WRITE_MESSAGES.replace, key: value }),
     remove: async () => sendKeyWrite(request, { type: KEY_WRITE_MESSAGES.remove }),

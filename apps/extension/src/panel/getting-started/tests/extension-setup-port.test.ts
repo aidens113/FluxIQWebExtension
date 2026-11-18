@@ -34,3 +34,13 @@ test("the port sends the readiness message and survives a failed or rejected req
   });
   assert.equal(await broken.readModelKey(), "unknown");
 });
+
+test("the port follows the background's pushed key state through the runtime listener", () => {
+  let heard: ((message: unknown) => void) | undefined;
+  const port = extensionSetupPort(async () => { throw new Error("no read expected"); }, (listener) => ((heard = listener), () => undefined));
+  const states: unknown[] = [];
+  port.subscribeModelKey!((state) => states.push(state));
+  heard!({ type: "fluxiq.panel.modelAccessChanged", modelAccess: access("ready"), at: 1 });
+  heard!({ type: "fluxiq.panel.status" });
+  assert.deepEqual(states, [{ kind: "ready", provider: "DeepSeek", keyName: "Work key" }]);
+});

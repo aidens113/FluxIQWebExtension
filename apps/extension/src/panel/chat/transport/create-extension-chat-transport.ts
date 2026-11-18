@@ -3,7 +3,7 @@ import type { ExtensionStatus } from "../../../shared/protocol";
 import type { PanelStore } from "../../state";
 import { downloadFile } from "../../automations";
 import { listenToRuntime } from "../feed";
-import { activityPort, changesPort, conversationPort, modelKeysPort, modelsPort, recordingsPort, resultsPort, runsPort, taskSettingsPort, type RuntimeListen } from "./ports";
+import { activityPort, changesPort, conversationPort, modelKeysPort, modelsPort, subscribeModelAccess, recordingsPort, resultsPort, runsPort, taskSettingsPort, type RuntimeListen } from "./ports";
 
 /**
  * The chat's transport over the extension's background: each port sends the
@@ -26,7 +26,7 @@ export function createExtensionChatTransport(
     runs: runsPort(request),
     recordings: recordingsPort(request),
     models: modelsPort(request),
-    modelKeys: modelKeysPort(request),
+    modelKeys: modelKeysPort(request, undefined, (listener) => subscribeModelAccess(listen, listener)),
     results: resultsPort(request, listen, download),
     ...(status === undefined ? {} : { taskSettings: taskSettingsPort(request, status) })
   };
