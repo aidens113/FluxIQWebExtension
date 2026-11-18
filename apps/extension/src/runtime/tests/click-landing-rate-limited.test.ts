@@ -103,7 +103,9 @@ function installBrowser(t: TestContext, setup: BrowserSetup): Browser {
   (globalThis as { chrome?: unknown }).chrome = {
     webNavigation: { onBeforeNavigate: event("onBeforeNavigate"), onCommitted: event("onCommitted"), onErrorOccurred: event("onErrorOccurred") },
     tabs: {
-      get: (tabId: number) => (pressedUrl instanceof Error ? Promise.reject(pressedUrl) : Promise.resolve({ id: tabId, url: pressedUrl })),
+      // An address that went unread is a tab the browser reports without one;
+      // the tab itself is there, so the tab gate's read before going back succeeds.
+      get: (tabId: number) => Promise.resolve(pressedUrl instanceof Error ? { id: tabId } : { id: tabId, url: pressedUrl }),
       goBack: (tabId: number) => {
         assert.equal(tabId, TAB_ID);
         browser.wentBack += 1;

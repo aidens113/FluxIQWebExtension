@@ -5,6 +5,7 @@ import type { ActivityEntry } from "../../shared/protocol";
 import type { CoreApiCredentials } from "./core-api";
 import { uploadStateAsset } from "./core-api";
 import type { DomSnapshotPayload } from "./dom-snapshot";
+import { captureWindow, tabReads } from "../tab-gate";
 
 export type ScreenImageSize = { width: number; height: number };
 
@@ -59,9 +60,10 @@ export class StateAssetStore {
 }
 
 async function captureVisibleViewportPngBytes(tabId: number): Promise<{ bytes: ArrayBuffer; imageSize: ScreenImageSize; coordinateSpace: "viewport" }> {
-  const tab = await chrome.tabs.get(tabId);
+  const tab = await tabReads().get(tabId);
   if (tab.windowId === undefined) throw new Error("Tab window is unavailable for screenshot capture.");
-  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+  // The window's front tab is what is captured; the gate refuses FluxIQ's own page there.
+  const dataUrl = await captureWindow(tab.windowId);
   const bytes = await bytesFromDataUrl(dataUrl);
   return { bytes, imageSize: pngImageSize(bytes), coordinateSpace: "viewport" };
 }

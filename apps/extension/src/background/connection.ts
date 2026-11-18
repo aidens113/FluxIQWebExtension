@@ -36,6 +36,8 @@ import type {
 } from "../shared/protocol";
 import type { ActivityDisplay, ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
 import { activeTab, observedTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
+import { configureOwnPages, tabReads } from "./tab-gate";
+import { ownPageAddresses } from "../shared/own-pages";
 import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
@@ -75,6 +77,7 @@ import {
   type TabSnapshotTransport
 } from "./connection/index";
 import { inFlightRecordArea } from "./connection/in-flight/index";
+import { chromePairingEndedStorage } from "./connection/pairing-ended/index";
 import { TracePageCapturer } from "./trace-capture/index";
 
 type StatusListener = (status: ExtensionStatus) => void;
@@ -100,7 +103,7 @@ export class FluxIQConnection {
   readonly panelProjects: PanelProjectAccess;
   private readonly attachment: ContentAttachment;
   private readonly evidence: RecordingEvidenceReporter;
-  private readonly tabs: TabRecorder;
+  private readonly tabRecorder: TabRecorder;
   private readonly page: ActivePage;
   private readonly recording: ActiveRecording;
   private readonly intake: RecordedEventIntake;
@@ -125,6 +128,9 @@ export class FluxIQConnection {
     // What a recording captures is the person's settings under Core's policy
     // (`capture-policy/`): every recording message to a page carries these.
     const recordingSettings = () => this.effectiveSettings();
+    // FluxIQ's own pages are this connection's panel and gateway, read per
+    // decision so a settings change applies at once (`tab-gate/`).
+    configureOwnPages(() => ownPageAddresses(this.settings));
 
     this.capturePolicy = new CapturePolicySource({
       call: (endpoint, payload) => callCoreProgram(this.coreApiCredentials(), endpoint, payload),
@@ -158,6 +164,16 @@ export class FluxIQConnection {
       clearError: () => { this.lastError = undefined; },
       beforeConnect: () => this.page.refresh(),
       onHostLease: () => this.projects.invalidate(),
+      // How this browser's approval ended outlives the worker, so the panel still says it after a restart.
+      pairingEndedStorage: chromePairingEndedStorage(),
+      onPairingEnded: (ended) => {
+        if (ended.state === "revoked") {
+          this.lastError = "FluxIQ revoked this browser's approval. Connect to pair it again.";
+          this.addActivity("pairing", "Approval revoked", "FluxIQ revoked this browser's approval, so it disconnected.", "danger");
+        } else {
+          this.addActivity("pairing", ended.state === "expired" ? "Approval expired" : "Approval not accepted", "FluxIQ asked to approve this browser again.", "warning");
+        }
+      },
       // Session storage (worker memory without it): queued page data never
       // outlives the browser session that recorded it.
       outbox: new ClientGatewayOutbox(
@@ -193,6 +209,8 @@ export class FluxIQConnection {
         keepAlive: () => chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError)
       }
     });
+    // How an approval ended in an earlier worker: a revoked browser still reads as revoked.
+    void this.gateway.loadPairingEnded().then((changed) => (changed ? this.emitStatus() : undefined)).catch(/* best-effort: an unreadable record leaves the status without it */ () => undefined);
     this.projects = new ProjectContext({
       settings: () => this.settings,
       session: () => this.session,
@@ -257,7 +275,7 @@ export class FluxIQConnection {
         coreApiUrl: this.settings.coreApiUrl
       })
     });
-    this.tabs = new TabRecorder({
+    this.tabRecorder = new TabRecorder({
       recordingState: () => this.recording.state(),
       recordingId: () => this.recording.recordingId(),
       runtimeBusy: () => this.runtimeStatus.current().state === "running",
@@ -275,8 +293,8 @@ export class FluxIQConnection {
       onActivity,
       emitStatus,
       updateTab: (tab) => this.handleTabUpdated(tab),
-      noteTabChange: (tab, lastActive) => this.tabs.noteTabUpdate(tab, lastActive),
-      noteTabRemoved: (tabId, lastActive) => this.tabs.noteTabRemoved(tabId, lastActive)
+      noteTabChange: (tab, lastActive) => this.tabRecorder.noteTabUpdate(tab, lastActive),
+      noteTabRemoved: (tabId, lastActive) => this.tabRecorder.noteTabRemoved(tabId, lastActive)
     });
     this.recording = new ActiveRecording({
       send: this.gateway.send,
@@ -364,12 +382,12 @@ export class FluxIQConnection {
       activeTabId: () => this.page.tabId(),
       activeTabs: async () => {
         const [focused, all] = await Promise.all([
-          chrome.tabs.query({ active: true, lastFocusedWindow: true }),
-          chrome.tabs.query({ active: true })
+          tabReads().query({ active: true, lastFocusedWindow: true }),
+          tabReads().query({ active: true })
         ]);
         return [...focused, ...all].map((tab) => ({ id: tab.id, url: tab.url }));
       },
-      tabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url,
+      tabUrl: async (tabId) => (await tabReads().get(tabId)).url,
       ownOrigins: () => [this.settings.coreApiUrl || DEFAULT_CORE_API_URL, this.settings.gatewayUrl]
     });
     this.activity = new ActivityRelay({
@@ -419,6 +437,8 @@ export class FluxIQConnection {
     if (activeTabId !== undefined) status.activeTabId = activeTabId;
     if (activeTabUrl) status.activeTabUrl = activeTabUrl;
     if (gateway.pairingReferenceCode) status.pairingReferenceCode = gateway.pairingReferenceCode;
+    const pairingEnded = this.gateway.pairingEnded();
+    if (pairingEnded) status.pairingEnded = { ...pairingEnded };
     if (recordingStartedAt !== undefined) status.recordingStartedAt = recordingStartedAt;
     if (lastActivityAt !== undefined) status.lastActivityAt = lastActivityAt;
     if (unsupportedPage) status.unsupportedPage = unsupportedPage;
@@ -488,6 +508,8 @@ export class FluxIQConnection {
    * dropped here either way, and with it nothing can open what Core still holds.
    */
   async forgetPairing(): Promise<boolean> {
+    // Forgetting starts over: a revoked or refused approval is no longer this browser's to report.
+    await this.gateway.forgetPairingEnded().catch(/* best-effort: the next connect clears it as well */ () => undefined);
     // Only over a live socket: `send` would otherwise queue it for a later connection, whose credential is about to be gone.
     if (this.gateway.state() !== "connected") return false;
     try {

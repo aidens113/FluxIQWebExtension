@@ -3,6 +3,7 @@
 
 import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import type { FluxIQSettings } from "../../shared/protocol";
+import { ownPageRefusalFor, tabReads, withoutOwnPages } from "../tab-gate";
 import { unsupportedPageForUrl } from "./browser-state";
 
 export type ContentAttachmentDeps = {
@@ -22,9 +23,13 @@ export class ContentAttachment {
 
   // A tab joining a recording late still has a URL the recording never saw.
   // Claiming it here stops that URL arriving as a navigation the user made.
+  //
+  // FluxIQ's own page is never attached: a recording started with the panel in
+  // front simply does not record it (`../tab-gate/`).
   async attachTabForRecording(tabId: number): Promise<void> {
+    if (await ownPageRefusalFor(tabId) !== undefined) return;
     if (this.deps.isRecording() && !this.deps.hasRecordedTab(tabId)) {
-      const tab = await chrome.tabs.get(tabId);
+      const tab = await tabReads().get(tabId);
       if (tab.url && !unsupportedPageForUrl(tab.url)) this.deps.noteRecordedTab(tabId, tab.url, Date.now());
     }
     await this.deps.ensureContentScript(tabId);
@@ -37,7 +42,8 @@ export class ContentAttachment {
   }
 
   async broadcast(message: unknown, injectMissing: boolean): Promise<void> {
-    const tabs = await chrome.tabs.query({});
+    // FluxIQ's own pages are left out here, not only refused by the gate, so a broadcast never counts them as failures.
+    const tabs = withoutOwnPages(await tabReads().query({}));
     await Promise.allSettled(tabs.map(async (tab) => {
       if (tab.id === undefined || unsupportedPageForUrl(tab.url)) return;
       if (injectMissing) await this.deps.ensureContentScript(tab.id);

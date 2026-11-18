@@ -1,6 +1,8 @@
 import { webAutomationFactCheckResultPayload, type WebAutomationFactCheckCommand } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult, ClientGatewayActionResult } from "../shared/protocol";
 import { SESSION_PAGE_LOAD_PACE } from "../background/page-pace";
+import { OwnPageRefusal, ownPageRefusalFor } from "../background/tab-gate";
+import { ownPageRefusedResult } from "./own-page";
 import { sendToTab } from "../background/tabs";
 import { browserActionFailure, runBrowserActionCommand } from "./action-runner";
 import { currentAutomationTabId } from "./automation-tab";
@@ -63,7 +65,9 @@ export class ExtensionRuntimeCommandRouter {
       const { result, tabId, frameId } = await runBrowserActionCommand(request);
       await this.options.sendActionResult(result, tabId, frameId);
     } catch (error) {
-      await this.options.sendActionResult(browserActionFailure(action, error instanceof Error ? error.message : "Runtime action failed."));
+      // FluxIQ's own page, refused by the gate or by the document itself, anywhere in the run: a refusal, not a fault.
+      if (error instanceof OwnPageRefusal) await this.options.sendActionResult(ownPageRefusedResult(action, Date.now(), "a tab FluxIQ may automate", error));
+      else await this.options.sendActionResult(browserActionFailure(action, error instanceof Error ? error.message : "Runtime action failed."));
     }
   }
 
@@ -72,13 +76,38 @@ export class ExtensionRuntimeCommandRouter {
    * or the active one before any action has driven a tab -- with no wait
    * (`fact-check-runner.ts`). The route never fails the command: a page that
    * could not be read answers its claims `unknown`, which is the answer.
+   *
+   * The one exception is FluxIQ's own page: a check that would read the panel
+   * is refused out loud (`background/tab-gate/`), not answered `unknown`, so
+   * the model learns why rather than meeting a page that never answers.
    */
   async evaluateFacts(check: WebAutomationFactCheckCommand): Promise<void> {
     const startedAt = Date.now();
+    const tabId = currentAutomationTabId() ?? this.options.activeTabId();
+    const refusal = tabId === undefined ? undefined : await ownPageRefusalFor(tabId);
+    if (refusal !== undefined) {
+      await this.options.sendGatewayResult?.({ commandId: check.commandId, status: "failed", startedAt, completedAt: Date.now(), message: refusal.message, error: refusal.message });
+      return;
+    }
+    // A document that refuses as FluxIQ's own page -- a tab that moved there
+    // after the check above, or a FluxIQ page framed in this one -- makes the
+    // check a refusal too, rather than claims quietly answered `unknown`.
+    let refused: OwnPageRefusal | undefined;
     const result = await runFactCheck(check.request, {
-      tabId: currentAutomationTabId() ?? this.options.activeTabId(),
-      send: (tabId, message, frameId) => sendToTab(tabId, message, frameId)
+      tabId,
+      send: async (target, message, frameId) => {
+        try {
+          return await sendToTab(target, message, frameId);
+        } catch (error) {
+          if (error instanceof OwnPageRefusal) refused = error;
+          throw error;
+        }
+      }
     });
+    if (refused !== undefined) {
+      await this.options.sendGatewayResult?.({ commandId: check.commandId, status: "failed", startedAt, completedAt: Date.now(), message: refused.message, error: refused.message });
+      return;
+    }
     await this.options.sendGatewayResult?.({
       commandId: check.commandId,
       status: "succeeded",
