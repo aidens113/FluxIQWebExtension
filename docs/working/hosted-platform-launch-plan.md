@@ -36,8 +36,19 @@ home by 11-20. Otherwise 12-10 launches invite-only with free or test-mode billi
 the critical path (submit about 12-02). After launch: marketplace, shared compute, OS environments, enterprise
 licensing.
 
-**Next:** HC1 content inertness, HC2a workspace-scope routing, HC3 one-server stack, HC4 billing engine,
-HC5a environments design and record. Units, interfaces I1-I4 and the dated schedule are in the hosted-cloud lane report, held locally until the tenant-isolation units merge (both repositories are public).
+**Next:** HC1 content inertness, HC2a workspace-scope routing, HC3 the cloud platform package
+(`@fluxiq/cloud`, `fluxiq-cloud up|down|status|smoke`, one config file; local Docker rehearsal of the real
+server, only config values differing), HC4 billing engine (Stripe, tested on stripe-mock), HC5a environments
+design and record; all five dispatched 2026-11-17 (tasks t934, t936-t939). The user's decisions (2026-11-17):
+all cloud testing local in Docker for now, it WILL run on a real server with a domain, payments through Stripe,
+the company is FluxIQ, port 4000 is never used (NoMachine). **Sign-up:** hosted sign-up is Core's own page at
+`app.getfluxiq.com/signup`, with the website linking to it; Core's provisioning, welcome, per-account workspaces
+and IAM exist, while the page, live email, tenant isolation (HC2) and the extension's hosted sign-in remain.
+**Enterprise sign-in (planned after HC2, same sign-in code):** a self-hosted company panel has no public sign-up;
+the first owner claims it with a setup code and admins invite employees (exists today). The unit adds OIDC
+single sign-on (Okta, Entra, Google Workspace) through Core's existing identity-provider port, membership on
+first sign-in limited to the company's domain, IdP groups mapped to roles, and the fix for invited people
+showing as enabled before they accept; directory-driven removal (SCIM) and licensing follow launch. Units, interfaces I1-I4 and the dated schedule are in the hosted-cloud lane report, held locally until the tenant-isolation units merge (both repositories are public).
 
 ## Evidence And Readiness
 
