@@ -41,6 +41,7 @@ import { ownPageAddresses } from "../shared/own-pages";
 import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
+import { modelAccessChangedFor } from "./model-access/index";
 import { chromeProjectChoiceStorage, conversationChangedFor, panelChangesFor, ProjectFocus, resyncChange } from "./projects/index";
 import { RecordedStepIndex } from "./recorded-steps";
 import { ClientGatewayOutbox } from "@fluxiq/client-gateway-websocket";
@@ -360,6 +361,10 @@ export class FluxIQConnection {
       }),
       acceptConversationChanged: (payload) => {
         const change = conversationChangedFor(payload, Date.now());
+        if (change) void chrome.runtime.sendMessage(change).catch(/* best-effort: no panel is open to hear it */ () => undefined);
+      },
+      acceptModelAccessChanged: (payload) => {
+        const change = modelAccessChangedFor(payload, Date.now());
         if (change) void chrome.runtime.sendMessage(change).catch(/* best-effort: no panel is open to hear it */ () => undefined);
       },
       onSessionResync: () => void chrome.runtime.sendMessage(resyncChange(Date.now())).catch(/* best-effort: no panel is open to hear it */ () => undefined),
