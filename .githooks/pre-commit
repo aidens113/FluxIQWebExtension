@@ -1,0 +1,16 @@
+#!/bin/sh
+# Keep docs/working/README.md current in the same commit that changes a
+# working document. The index records each document's header and line count,
+# so every edit to a working document makes it stale; the pre-push audit then
+# refused the push, which happened four times on 2026-11-18 alone. Only the
+# working-docs rule runs, and its --update only lowers or removes baseline
+# entries (it refuses to record a new violation), so nothing is hidden here.
+if git diff --cached --name-only --diff-filter=ACMRD | grep -q '^docs/working/'; then
+  if node scripts/structure-audit.mjs --update --rule working-docs > /dev/null 2>&1; then
+    git add docs/working/README.md
+  else
+    node scripts/structure-audit.mjs --rule working-docs 2>&1 | grep -E "FAIL|structure-audit:"
+    echo "pre-commit: a working document breaks the working-docs rule, so nothing was committed. Fix it and commit again." >&2
+    exit 1
+  fi
+fi
