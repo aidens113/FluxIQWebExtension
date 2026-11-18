@@ -7,7 +7,29 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { OwnDocumentVerdict } from "../own-document";
-import { installWhenOrdinary } from "../lifecycle";
+
+/**
+ * The barrel also loads suspend-content, whose imports (the recorder, the
+ * instance claim) touch `window` and build a MutationObserver as they load, so
+ * it is loaded under a stub page, never as a static import: a static import
+ * made this file's load throw outside any test, which node:test reports only as
+ * "asynchronous activity after the test ended" with every test passing (t941).
+ */
+async function loadInstallWhenOrdinary() {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const names = ["window", "MutationObserver"] as const;
+  const previous = new Map(names.map((name) => [name, Object.getOwnPropertyDescriptor(globals, name)]));
+  globals["window"] = {};
+  globals["MutationObserver"] = class { observe = () => undefined; disconnect = () => undefined; takeRecords = () => []; };
+  try {
+    return (await import("../lifecycle")).installWhenOrdinary;
+  } finally {
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globals, name, descriptor);
+      else delete globals[name];
+    }
+  }
+}
 
 /** Verdicts handed out in order, and the retries that were scheduled instead of waited for. */
 function scripted(verdicts: OwnDocumentVerdict[]) {
@@ -24,6 +46,7 @@ function scripted(verdicts: OwnDocumentVerdict[]) {
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 test("an own document starts nothing", async () => {
+  const installWhenOrdinary = await loadInstallWhenOrdinary();
   let started = 0;
   const { deps, retries } = scripted(["own"]);
   installWhenOrdinary([() => {
@@ -36,6 +59,7 @@ test("an own document starts nothing", async () => {
 });
 
 test("an unconfirmed document is asked again, and starts everything once it is ordinary", async () => {
+  const installWhenOrdinary = await loadInstallWhenOrdinary();
   const started: string[] = [];
   const { deps, retries } = scripted(["unconfirmed", "ordinary"]);
   const install = (name: string) => () => {
@@ -52,6 +76,7 @@ test("an unconfirmed document is asked again, and starts everything once it is o
 });
 
 test("the content script's real installs register no listener in an own document and all of them in an ordinary one", async () => {
+  const installWhenOrdinary = await loadInstallWhenOrdinary();
   const globals = globalThis as unknown as Record<string, unknown>;
   const names = ["window", "document", "location", "MutationObserver", "Element"] as const;
   const previous = new Map(names.map((name) => [name, Object.getOwnPropertyDescriptor(globals, name)]));
