@@ -274,9 +274,13 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
     draw();
   }
 
+  /** This panel saw the browser connected: a later loss is the person's or FluxIQ's doing, so nothing asks again by itself. */
+  let everConnected = false;
+
   function draw(): void {
     const status = store.current();
-    const guide = startGuide(status, noAnswer, store.lost(), reachability.current());
+    if (status?.connectionState === "connected") everConnected = true;
+    const guide = startGuide(status, noAnswer, store.lost(), reachability.current(), { wasConnected: everConnected, autoSent: start.autoSent() });
     const next = shellScreen(state, guide.gated);
     start.render(guide, status);
     if (next !== screen) {

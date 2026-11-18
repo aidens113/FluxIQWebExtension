@@ -1,4 +1,4 @@
-// Settings > Model: the shared AI-key card, in its full form. It reads the key's state through the setup port (the one
+// Settings > AI key: the shared AI-key card, in its full form. It reads the key's state through the setup port (the one
 // reader, `panel/getting-started`) and shows it in place: the same words and the same single action as the chat's card.
 // The extension cannot write a key yet, so its Save says to add the key in FluxIQ, with Open FluxIQ, which opens the
 // panel's Settings at AI keys. "Try now" reads again. Nothing reads while the browser is not connected: the section
@@ -25,8 +25,8 @@ export function createModelSection(context: PanelContext, setup?: SetupPort): Mo
   const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "silent", purpose: "model-key" });
   const notConnected = createElement("p", { className: "card-line", text: MODEL_NOT_CONNECTED, hidden: true });
   const slot = createElement("div", { className: "model-section-card", hidden: true });
-  const element = createElement("section", { className: "settings-group", attrs: { "aria-label": "Model" } }, [
-    createElement("h3", { className: "settings-group-title", text: "Model" }),
+  const element = createElement("section", { className: "settings-group", attrs: { "aria-label": "AI key" } }, [
+    createElement("h3", { className: "settings-group-title", text: "AI key" }),
     notConnected,
     slot,
     open.element

@@ -1,6 +1,6 @@
 // Settings, opened by the gear in place of the chat, read top down by what a
 // person cares about: Connection (state, approval, project, reconnect, Disconnect),
-// Model (the shared AI-key card), Behaviour (the Humanness slider, status on the
+// AI key (the shared key card), Behaviour (the Humanness slider, status on the
 // page), Permissions (what FluxIQ may record or request), one Save, Appearance
 // (theme, applied at once and kept per browser), and Report a problem. Under
 // Advanced, the two addresses and Forget this pairing behind a confirmation
@@ -59,7 +59,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const { store } = context;
   let dirty = false;
   let editRevision = 0;
-  let mutation: "save" | "disconnect" | "forget" | undefined;
+  let mutation: "save" | "disconnect" | "connect" | "forget" | undefined;
   let isShown = false;
 
   const back = createElement("button", { className: "icon-button settings-back", text: "←", attrs: { type: "button", "aria-label": "Close settings", title: "Close settings" } });
@@ -77,6 +77,8 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const humanness = createHumannessControl();
   const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: SAVE_LABEL, attrs: { type: "button" } });
   const disconnectButton = createElement("button", { id: "disconnectButton", className: "small-button", text: "Disconnect", attrs: { type: "button" } });
+  // Disconnect and Connect take the same place: after Disconnect there is a way back, never a dead end.
+  const connectButton = createElement("button", { id: "settingsConnectButton", className: "small-button", text: "Connect", hidden: true, attrs: { type: "button" } });
   const message = createElement("p", { className: "card-line success-line", hidden: true, attrs: { role: "status" } });
   const notice = createElement("div", { className: "notice danger", hidden: true, attrs: { role: "alert" } });
   // The on-page status preference is the chat's (`panel/chat/settings`); settings only hold it.
@@ -102,7 +104,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
         durability,
         projectRow,
         form.parts.reconnect,
-        createElement("div", { className: "card-actions" }, [disconnectButton])
+        createElement("div", { className: "card-actions" }, [disconnectButton, connectButton])
       ]),
       model.element,
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Behaviour" } }, [
@@ -212,6 +214,21 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     }
   }
 
+  async function connect(): Promise<void> {
+    if (mutation !== undefined) return;
+    clearOutcome();
+    mutation = "connect";
+    renderBusy();
+    try {
+      failed(await store.request({ type: RUNTIME_MESSAGES.connect }));
+    } catch {
+      showFailure("Couldn't connect. Try Connect again.");
+    } finally {
+      mutation = undefined;
+      renderBusy();
+    }
+  }
+
   async function forgetPairing(): Promise<boolean> {
     if (mutation !== undefined) return false;
     clearOutcome();
@@ -236,12 +253,16 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     saveButton.textContent = mutation === "save" ? "Saving..." : SAVE_LABEL;
     disconnectButton.disabled = mutation !== undefined;
     // Pressed once, Disconnect has nothing left to do: it goes, and comes back with the next connection.
-    disconnectButton.hidden = store.current()?.connectionState === "disconnected";
+    const idle = store.current()?.connectionState === "disconnected";
+    disconnectButton.hidden = idle;
+    connectButton.hidden = !idle;
+    connectButton.disabled = mutation !== undefined;
     forget.setBusy(mutation !== undefined);
   }
 
   saveButton.addEventListener("click", () => void save());
   disconnectButton.addEventListener("click", () => void disconnect());
+  connectButton.addEventListener("click", () => void connect());
 
   function render(): void {
     renderBusy();

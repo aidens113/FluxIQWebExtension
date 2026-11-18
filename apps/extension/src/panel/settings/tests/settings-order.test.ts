@@ -58,7 +58,7 @@ test("settings read top down: connection, model, behaviour, permissions, appeara
     await tick();
     const root = fake(settings.element);
     const groups = root.descendants().filter((node) => node.className.includes("settings-group ") || node.className === "settings-group").map((node) => node.getAttribute("aria-label"));
-    assert.deepEqual(groups, ["Connection", "Model", "Behaviour", "Permissions", "Appearance", "Help", "Advanced"]);
+    assert.deepEqual(groups, ["Connection", "AI key", "Behaviour", "Permissions", "Appearance", "Help", "Advanced"]);
     const advanced = root.descendants().find((node) => node.tagName === "DETAILS")!;
     const inside = (id: string) => advanced.descendants().some((node) => node.id === id);
     for (const id of ["gatewayUrl", "coreApiUrl"]) assert.equal(inside(id), true, id);
@@ -198,8 +198,8 @@ test("approval and project are said in words, never as codes", () => {
   assert.equal(approvalLine(status()), "FluxIQ approved this browser.");
   assert.match(approvalLine(status({ connectionState: "pairing" })), /Waiting for you to approve/);
   assert.match(approvalLine(status({ connectionState: "disconnected", paired: false })), /isn't approved yet/);
-  assert.equal(approvalLine(status({ connectionState: "disconnected" })), "This browser was approved earlier. Connect to check it still is.");
-  for (const connectionState of ["error", "reconnecting"] as const) assert.equal(approvalLine(status({ connectionState })), "FluxIQ may have removed this browser. Connect again to ask for approval.");
+  for (const connectionState of ["disconnected", "error", "reconnecting"] as const) assert.equal(approvalLine(status({ connectionState })), "Not connected. Connect again.", connectionState);
+  assert.equal(approvalLine(status({ connectionState: "error", enrolmentRefusalCode: "enrolment.revoked" })), "Access was removed. Connect again to ask for approval.");
   assert.match(projectLine(status()), /the one you chose in FluxIQ/);
   assert.equal(projectLine(status()).includes("project-1"), false);
   assert.match(projectLine(status({ projectId: null })), /No project is chosen yet. Choose one with Change/);

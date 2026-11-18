@@ -14,7 +14,8 @@ import { createSettingsForm } from "../address-form";
 import { createForgetConfirmation } from "../forget-confirmation";
 import { PROBLEM_REPORT_COPIED } from "../problem-report-plan";
 import { createSettingsView } from "../settings-view";
-import { storeWith } from "./store-fixture";
+import { RUNTIME_MESSAGES } from "../../../shared/constants";
+import { recordingRequest, storeWith } from "./store-fixture";
 
 const ALLOWED: ExtensionCaptureAllowed = { captureMutations: true, captureInputValues: true, captureSnapshots: true, directRequests: false };
 const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
@@ -88,6 +89,42 @@ test("Disconnect is hidden once the browser is disconnected, and shown while it 
       await tick();
       assert.equal(fake(settings.element).descendants().find((node) => node.id === "disconnectButton")!.hidden, hidden, connectionState);
     }
+  }));
+});
+
+test("after Disconnect a Connect button takes its place, and pressing it asks the background to connect", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    for (const [connectionState, shown] of [["connected", false], ["pairing", false], ["error", false], ["disconnected", true]] as const) {
+      const sent: Array<Record<string, unknown>> = [];
+      const settings = createSettingsView({ store: storeWith(status({ connectionState }), recordingRequest(sent)), surface: "popup" } as PanelContext, () => undefined, { setup: { readModelKey: async (): Promise<ModelKeyReading> => ({ kind: "no-key" }) } });
+      settings.shown();
+      await tick();
+      const root = fake(settings.element);
+      const connect = root.descendants().find((node) => node.id === "settingsConnectButton")!;
+      const disconnect = root.descendants().find((node) => node.id === "disconnectButton")!;
+      assert.equal(connect.hidden, !shown, connectionState);
+      assert.equal(disconnect.hidden, shown, `${connectionState}: exactly one of Connect and Disconnect`);
+      if (!shown) continue;
+      assert.equal(connect.textContent, "Connect");
+      const before = sent.length;
+      connect.dispatch("click");
+      await tick();
+      assert.deepEqual(sent.slice(before).map((message) => message.type), [RUNTIME_MESSAGES.connect]);
+      assert.equal(connect.disabled, false, "free again once the request is answered");
+    }
+  }));
+});
+
+test("the key section is named AI key, in Core's words", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    const settings = view(status());
+    settings.shown();
+    await tick();
+    const text = fake(settings.element).textContent;
+    assert.match(text, /AI key/u);
+    assert.doesNotMatch(fake(settings.element).byClass("settings-group-title").map((node) => node.textContent).join("|"), /Model/u);
   }));
 });
 

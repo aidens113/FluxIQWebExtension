@@ -226,3 +226,15 @@ The after-screenshots worker is Sonnet, not Haiku as the brief suggested. The UI
 - Saving a key from either client before t928: the panel card sends no password (Core still asks for one), and the extension's relay does not know the three messages yet. Both show Core's or the relay's refusal.
 - The extension audit's first open probed the built-in default 127.0.0.1:3000 (t924's port) once, read-only, before it was pointed at 3100.
 - Firefox popup; invite email delivery; two-factor enrolment; the Roles and Authentication Policy tabs; 360 px rendering of the new card in a real browser.
+
+## Follow-ups (lead, 2026-11-17 evening), state at the restart pause
+- **Done, uncommitted in Core t925 (13 files):**
+  - E13: the thread header gets the chat's first message (`chat/threads/first-person-message.ts` and a `firstMessage()` dep), with an end-to-end test that fails without the fix.
+  - A key bar above the composer (`chat/onboarding/composer-key-bar.ts`, the card's new `onState`): the card's words and its one action while the key is not ready, read again after each new reply or failed send.
+  - Checks: ui-components `pnpm check` passed; vitest over threads, onboarding, model-access, threads-widget and chat-widget: 11 files, 100 tests passed; Core structure audit passed.
+- **Home "Could not check what needs you": not yet confirmed live.** The panel was building on the audit's data under the slot `t925-trace` when the pause came; I stopped it and released the slot. The probe script is `scratchpad/home-probe.mjs`: sign in, then call `list-conversations` (no project), `list-recent-flow-runs`, `list-workspace-flow-summaries`, and each project's `list-conversations`. The candidate cause is in Core `framework/automation-service/service/conversation-requests/list.ts`, which is t911's file: one project's `withStore` or row failure fails the whole cross-project list.
+- **To resume:**
+  1. Hold a slot, start the panel on the audit's data, run the probe, and send the lead the failing read and its cause.
+  2. Stop the panel and release the slot.
+  3. Rebuild ui-components and the extension through slots, and re-run the extension chat and settings tests.
+  4. Wait for the t928 merge, then do phase 3 steps 1-4.

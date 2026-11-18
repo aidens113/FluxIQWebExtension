@@ -25,7 +25,7 @@ const buttonNamed = (root: ReturnType<typeof fake>, name: string) => root.descen
 const requestsOf = (calls: unknown[], type: string) => calls.filter((call) => (call as { type: string }).type === type) as Array<Record<string, unknown>>;
 const SETTINGS = { gatewayUrl: "ws://127.0.0.1:4777/client", coreApiUrl: "http://127.0.0.1:3100", autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true, requestsEnabled: false };
 
-test("four steps, no key row: each has a number and a title, and Open FluxIQ sits under the sign-in step", async () => {
+test("three steps, the AI key last: each has a number and a title, and Open FluxIQ sits under Connect and approve", async () => {
   await withFakeDocument(async () => {
     const status = statusWith({ connectionState: "pairing", pairingReferenceCode: "482913", paired: false });
     const store = { request: async () => ({ ok: true, value: {} }) } as unknown as PanelStore;
@@ -33,14 +33,14 @@ test("four steps, no key row: each has a number and a title, and Open FluxIQ sit
     view.render(startGuide(status, false), status);
     const root = fake(view.element);
     const steps = root.byClass("start-step");
-    assert.equal(steps.length, 4);
-    assert.deepEqual(root.byClass("start-step-title").map((node) => node.textContent), ["Start FluxIQ", "Sign in to FluxIQ", "Connect this browser", "Approve this browser in FluxIQ"]);
+    assert.equal(steps.length, 3);
+    assert.deepEqual(root.byClass("start-step-title").map((node) => node.textContent), ["Start FluxIQ", "Connect and approve", "Add your AI key"]);
     assert.ok(buttonNamed(fake(steps[1]), "Open FluxIQ"), "Open FluxIQ is under step two");
-    assert.equal(buttonNamed(fake(steps[3]), "Open FluxIQ"), undefined, "and not under the approval step");
-    assert.equal(fake(steps[1]).byClass("start-actions")[0]!.hidden, false);
-    assert.ok(buttonNamed(fake(steps[3]), "Cancel approval request"), "Cancel says what it cancels");
-    assert.equal(buttonNamed(fake(steps[3]), "Cancel"), undefined, "no bare Cancel under the approval");
-    assert.doesNotMatch(root.textContent, /unlock|password|model key/iu);
+    assert.equal(buttonNamed(fake(steps[2]), "Open FluxIQ"), undefined, "and not under the key step");
+    assert.ok(buttonNamed(fake(steps[1]), "Cancel approval request"), "Cancel says what it cancels");
+    assert.equal(buttonNamed(fake(steps[1]), "Cancel"), undefined, "no bare Cancel under the approval");
+    assert.equal(root.descendants().find((node) => node.id === "pairingReferenceCode")!.textContent, "482913", "the code shows at once");
+    assert.doesNotMatch(root.textContent, /unlock|vault|seal|credential|token|scope|password|model key/iu);
   });
 });
 
@@ -58,7 +58,7 @@ test("step one says where FluxIQ was found and Change checks the new address bef
       probed.push(address);
       return answer;
     });
-    view.render(startGuide(status, false, undefined, FOUND), status);
+    view.render(startGuide(status, false, undefined, FOUND, { autoSent: true }), status);
     const root = fake(view.element);
     assert.equal(root.byClass("start-step-line")[0]!.textContent, "FluxIQ found at 127.0.0.1:3100");
     assert.equal(root.byClass("start-actions")[0]!.hidden, false, "Change shows although the step is done");
@@ -101,7 +101,7 @@ test("an address that is not an http address is refused without asking anything"
       probed.push(address);
       return { found: false };
     });
-    view.render(startGuide(status, false, undefined, FOUND), status);
+    view.render(startGuide(status, false, undefined, FOUND, { autoSent: true }), status);
     const root = fake(view.element);
     buttonNamed(root, "Change")!.dispatch("click");
     root.descendants().find((node) => node.id === "serverAddressField")!.value = "ftp://flux.example";
@@ -112,7 +112,7 @@ test("an address that is not an http address is refused without asking anything"
   });
 });
 
-test("Connect uses the connection address the found FluxIQ names, saved first, so a person types one address", async () => {
+test("FluxIQ found: the request goes out by itself, once, with the connection address the found FluxIQ names saved first", async () => {
   await withFakeDocument(async () => {
     const status = statusWith({ settings: SETTINGS });
     const calls: Array<{ type: string }> = [];
@@ -121,17 +121,63 @@ test("Connect uses the connection address the found FluxIQ names, saved first, s
       return { ok: true, value: {} };
     } } as unknown as PanelStore;
     const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
+    const connect = () => fake(view.element).descendants().find((node) => node.id === "connectButton")!;
+    assert.equal(view.autoSent(), false);
     view.render(startGuide(status, false, undefined, FOUND), status);
-    fake(view.element).descendants().find((node) => node.id === "connectButton")!.dispatch("click");
+    assert.equal(view.autoSent(), true);
+    assert.equal(connect().hidden, true, "no Connect to press while the request is going out");
     await flush();
     assert.deepEqual(calls.map((call) => call.type), [RUNTIME_MESSAGES.panelSaveSettings, RUNTIME_MESSAGES.connect]);
-    // Nothing to save when the saved connection address is already the document's.
+    // Drawn again with the same finding: nothing is sent a second time, and Connect is the retry button.
     calls.length = 0;
+    view.render(startGuide(status, false, undefined, FOUND, { autoSent: view.autoSent() }), status);
+    await flush();
+    assert.equal(calls.length, 0);
+    assert.equal(connect().hidden, false);
+    assert.equal(connect().textContent, "Connect");
+    // Pressed, with nothing to save when the saved connection address is already the document's.
     const same = statusWith({ settings: { ...SETTINGS, gatewayUrl: FOUND.gatewayUrl } });
-    view.render(startGuide(same, false, undefined, FOUND), same);
-    fake(view.element).descendants().find((node) => node.id === "connectButton")!.dispatch("click");
+    view.render(startGuide(same, false, undefined, FOUND, { autoSent: true }), same);
+    connect().dispatch("click");
     await flush();
     assert.deepEqual(calls.map((call) => call.type), [RUNTIME_MESSAGES.connect]);
+  });
+});
+
+test("nothing is sent by itself when no FluxIQ was found, or after the panel saw the browser connected", async () => {
+  await withFakeDocument(async () => {
+    const status = statusWith({ settings: SETTINGS });
+    const calls: Array<{ type: string }> = [];
+    const store = { current: () => status, subscribe: () => () => undefined, request: async (message: { type: string }) => {
+      calls.push(message);
+      return { ok: true, value: {} };
+    } } as unknown as PanelStore;
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
+    view.render(startGuide(status, false, undefined, { origin: "http://127.0.0.1:3000", host: "127.0.0.1:3000", found: false }), status);
+    view.render(startGuide(status, false, undefined, FOUND, { wasConnected: true }), status);
+    await flush();
+    assert.deepEqual(calls, []);
+    assert.equal(view.autoSent(), false);
+  });
+});
+
+test("a request that failed leaves Connect as the retry, with the failure in words", async () => {
+  await withFakeDocument(async () => {
+    const status = statusWith({ settings: { ...SETTINGS, gatewayUrl: FOUND.gatewayUrl } });
+    let calls = 0;
+    const store = { current: () => status, subscribe: () => () => undefined, request: async () => {
+      calls++;
+      return { ok: false, sentence: "Can't reach FluxIQ." };
+    } } as unknown as PanelStore;
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
+    view.render(startGuide(status, false, undefined, FOUND), status);
+    await flush();
+    const root = fake(view.element), connect = root.descendants().find((node) => node.id === "connectButton")!;
+    assert.equal(calls, 1);
+    assert.equal(connect.hidden, false, "Connect comes back as the retry");
+    assert.equal(root.byClass("notice").at(-1)!.textContent, "Can't reach FluxIQ.");
+    view.render(startGuide(status, false, undefined, FOUND, { autoSent: view.autoSent() }), status);
+    assert.equal(calls, 1, "and nothing is sent again by itself");
   });
 });
 
