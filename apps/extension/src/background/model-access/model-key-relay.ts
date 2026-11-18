@@ -5,7 +5,8 @@
 // failure that happens to repeat it is cut before it reaches the panel.
 
 import { pairedClientModelAccessState, readModelAccessState } from "@fluxiq/contracts/platform";
-import { AUTOMATION_PANEL_MESSAGES, MODEL_KEY_PROVIDERS, type AutomationPanelRequest, type ModelKeyProvider, type PanelRelayResponse } from "../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES, type AutomationPanelRequest, type PanelRelayResponse } from "../../shared/protocol";
+import { MODEL_KEY_PROVIDERS, type ModelKeyProvider } from "../../shared/model-key-messages";
 
 export type ModelKeyCall = (endpoint: string, payload: Record<string, unknown>, programId?: string) => Promise<PanelRelayResponse>;
 

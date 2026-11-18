@@ -139,3 +139,48 @@ The brief's `packages/contracts/src/platform/client-gateway/` does not exist. Th
    - Identity Access still stores and requires PINs (t927);
    - the `program-gated` doc in `_shared/api.ts` should say "may mean IAM only";
    - t925 must handle `no_credit`, join the activity outcome rows by `requestId`, and fix the side panel's "Add a model key" banner, which lagged after a ready push in the live run.
+
+## Fix round (security review F1-F3, lead items 5-7)
+
+The trees were taken after the lead's verify-t928 merged dev in (Core 761765f2f, extension 6ca11b08e) and released its slot.
+
+1. **F1 (confirmed): saving no longer moves the workspace's key.** Worker key-choice-fix, Opus; report `key-backend/key-choice-fix.md`.
+   - `ModelKeySettings` gains a per-person choice (`personKeyChoices`, own keys only) and a `noAssistantKey` marker.
+   - `save-model-key` calls `keySavedBy`. That sets the saver's choice, and fills the workspace slot only when it is empty, checked and written in one synchronous step.
+   - `chooseAutomationStudioCallerModelKey` takes `ownKeyId` and picks in this order: the person's own choice, then the workspace choice under the consent rule, then their newest own key.
+   - The chats, default Flows, the model-access state and the panel assistant (`key-model-source.ts`) all use it.
+   - Removing the workspace key leaves the workspace with none; nobody is switched to another person's key.
+   - Tests cover two admins and a member with an offered key, from the panel and through the real paired route; a solo first save; replace and remove; and removing the workspace key.
+   - Lead decision (stands as built): after a removal, the next save fills the empty slot.
+2. **F3:** the comment at `program-route.ts:41` is corrected: the person pressing Remove is the confirmation, and IAM decides. Lines 186-189 now state the first-save exception.
+3. **F2:** one line in Core `docs/programs/global-programs.md` (Secret Keys): an offered key may pay for members' Flows and standing result checks, and withdrawing the offer stops it at the next use.
+5. **`protocol.ts` split.** Worker protocol-split, Sonnet. The model-key and model-access message types moved to the new `apps/extension/src/shared/model-key-messages.ts`, with every importer updated and no re-export. `protocol.ts` went from 818 to 793 lines; the message strings are unchanged.
+6. **`global.sqlite` handle leak.** Worker sqlite-leak, Opus; report `key-backend/sqlite-leak.md`.
+   - Cause, traced on every SQLite handle: the model-access ledger read `secret-keys/model-access-ledger` from `global.sqlite` at construction. Nothing waited for that read, so it ran past the close.
+   - Fix: the ledger reads lazily and has a `close()`, which `detach()` calls.
+   - I closed the remaining gap: a runtime `settled()` member, which `FluxIQ.close()` (`framework/index.ts`) awaits before program state closes its connections. A write already in flight now lands before close.
+   - New test in `_shared/model-access/tests/ledger-store.test.ts`: a close right after a save leaves no handle open, runs no SQL after the close, and the refusal is read back by a new instance.
+   - It fails without the await ("expected [ Array(1) ] to deeply equal []"). I mutated the file, then restored it and confirmed the restore with `cmp`.
+7. **Activity outcome join.** Worker activity-join, Sonnet.
+   - `audit-read/assemble.ts` holds outcome rows by request id and action, and joins each onto its decision entry. It keeps reading, bounded, until a pending outcome meets its decision row. The outcome rows themselves are not sent.
+   - `shape-activity-entry.ts` adds `result` and, on failure, `errorKind`. No request id leaves the server.
+   - The new test file is `security/server/tests/activity-outcome-join.test.ts`.
+   - The worker could not run anything because the slot gate stalled for two hours; my sweep ran it.
+   - The local type `JoinedActivityEntry` stands until t925 unifies it with its shared `ActivityEntry` (lead's decision).
+
+### Fix-round sweep (one heavy slot, after every edit)
+
+- Core library build -> exit 0. `pnpm --filter fluxiq check` -> exit 0. `pnpm --filter @fluxiq/web check` -> exit 0.
+- fluxiq `npx vitest run src/programs/secret-keys src/server/program-route src/programs/_shared src/runtime/llm src/runtime/models src/runtime/conversations/assistant/model src/programs/automation-studio/api/panel-assistant src/client-gateway src/platform/iam src/framework` -> 1258 files passed, 1 failed; 9852 tests passed, 1 failed.
+  - The failure: `framework/automation-service/service/subflow-trial/tests/run.test.ts` "hands the start hook the brief's host lease … (A11)" (`seen[0]` undefined). It fails every time.
+  - t928 changes nothing under `automation-service` or `engine` against its merge base (7431351c0, t930). That is dev's own defect, not this branch's.
+- web `npx vitest run src/app/api/security src/lib/workspaces src/app/api/panel/changes src/server/key-sessions src/app/api/keys src/app/api/discovery src/app/api/programs` -> 52 files and 611 tests passed, 7 failed.
+  - All 7 are in `web-workspaces.test.ts`, with the known `No "prepareLocalFirstRun" export … owner-claim mock` message (13 occurrences), which is dev's t927 breakage.
+  - No EBUSY. The two named leak tests pass. The security tests, including the new join test, pass.
+- Structure audits: Core passed (554 warnings, 911 baselined); extension passed (253, 551).
+- Extension: `test-extension.mjs background shared` -> 1039 pass, 0 fail. `pnpm --filter @fluxiq-web-extension/extension check` -> exit 0. Build -> exit 0.
+
+### Not verified (fix round)
+
+- No live run. What clients see changes only in that another person's save no longer moves your key; the saver's own answer is unchanged.
+- F4 (the push not asking IAM) and the hosted profile refusing key writes are deferred to the hosted unit, per the lead.

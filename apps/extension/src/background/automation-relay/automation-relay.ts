@@ -16,7 +16,8 @@
 
 import { pairedClientModelAccessState, readModelAccessState } from "@fluxiq/contracts/platform";
 import { readModelKeyAvailability } from "fluxiq/ui";
-import { AUTOMATION_PANEL_MESSAGES, type PanelRelayResponse, type AutomationPanelRequest, type PanelModelKeySummary } from "../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES, type PanelRelayResponse, type AutomationPanelRequest } from "../../shared/protocol";
+import type { PanelModelKeySummary } from "../../shared/model-key-messages";
 import { MODEL_KEY_MESSAGES, relayModelKey } from "../model-access/index";
 import { relayPartsRequest } from "./parts-relay";
 
