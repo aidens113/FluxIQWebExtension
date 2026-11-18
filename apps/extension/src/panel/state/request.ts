@@ -7,7 +7,7 @@
 // defect E2, which used to surface as "Cannot read properties of undefined").
 
 import { runtimeSendMessage } from "../../shared/browser";
-import { errorSentence, EXTENSION_RESTARTED } from "../copy";
+import { errorSentence, EXTENSION_RESTARTED, relayFailureSentence } from "../copy";
 import type { PanelResult } from "./result";
 
 /** What the background answers for a message type it does not know. */
@@ -49,5 +49,9 @@ export async function panelRequest<T>(message: PanelMessage): Promise<PanelResul
     // Core's own refusal code, kept apart from `code` so it never reads as a relay failure.
     ...(typeof typed.coreCode === "string" && CORE_CODE.test(typed.coreCode) ? { coreCode: typed.coreCode } : {})
   };
-  return raw === undefined ? { ok: false, sentence: errorSentence(""), ...code } : { ok: false, sentence: errorSentence(raw), detail: raw, ...code };
+  // A mapped sentence for the raw text wins; an unmapped one falls to the relay's own failure code, so a person is told what failed.
+  const mapped = raw === undefined ? errorSentence("") : errorSentence(raw);
+  const named = typeof typed.code === "string" ? relayFailureSentence(typed.code, raw) : undefined;
+  const sentence = named !== undefined && (mapped === errorSentence("") || typed.code === "timed_out") ? named : mapped;
+  return raw === undefined ? { ok: false, sentence, ...code } : { ok: false, sentence, detail: raw, ...code };
 }

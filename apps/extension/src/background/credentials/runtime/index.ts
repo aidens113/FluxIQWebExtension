@@ -1,0 +1,1 @@
+export { boundHostedCredentials } from "./bound";

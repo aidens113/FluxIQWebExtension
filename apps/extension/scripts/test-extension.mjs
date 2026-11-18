@@ -83,6 +83,17 @@ if (entryPoints.length > 0) await build({
 // A failing assertion reports the test's source line, not the bundle's.
 process.setSourceMapsEnabled(true);
 
+// node:test reports an error thrown outside any test (while a bundle loads, or
+// from a timer a test left running) only as a one-line "# Error: ... asynchronous
+// activity after the test ended" and exits 1 with every test passing, naming no
+// file. This listener changes nothing about the exit code: it prints the stack so
+// that failure says where it came from (t941: a test file's static import loaded
+// a module that needs a page before the test had stubbed one).
+process.on("uncaughtException", (error) => {
+  console.error(`test-extension: uncaught exception outside a test (the run will exit 1):
+${error instanceof Error ? error.stack : String(error)}`);
+});
+
 // No test starts until every file is loaded. node:test starts the first test a
 // file registers while that file is still being imported, so without this gate
 // the first files' tests ran while later bundles were evaluated, and

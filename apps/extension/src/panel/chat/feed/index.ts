@@ -4,3 +4,4 @@ export type { ActivityFeed, ActivityFeedReach, ActivityFeedSnapshot } from "@flu
 export { threadRefreshWanted } from "@fluxiq/ui-components";
 export { createActivityFeed, type ExtensionActivityFeedDeps } from "./activity-feed";
 export { listenToRuntime } from "./runtime-listener";
+export { createSharedActivityFeed, type SharedActivityFeed } from "./shared-activity-feed";

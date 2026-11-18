@@ -3,6 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { assertEagerFiles } from "../../scripts/check/lazy-modules/index.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // package.json's "fluxiqHostModule" is the one declaration of the host's path;
@@ -34,6 +35,7 @@ await build({
   sourcemap: false,
   logLevel: "info"
 });
+await assertEagerFiles("web panel host", [outfile]);
 
 await stampHostBuildIdentity(path.dirname(root), outfile);
 

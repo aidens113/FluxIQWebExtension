@@ -16,6 +16,8 @@
 //   it from one, and leaves its action as it was. Missing evidence never
 //   becomes a failure.
 
+import { executeInTab } from "../background/tab-gate";
+
 /** The id the browser always gives a tab's main frame. */
 const TOP_FRAME_ID = 0;
 
@@ -31,7 +33,7 @@ export async function servedStatus(tabId: number, documentId: string | undefined
     ? { tabId, documentIds: [documentId] }
     : { tabId, frameIds: [TOP_FRAME_ID] };
   try {
-    const [injection] = await chrome.scripting.executeScript({ target, func: readServedStatus });
+    const [injection] = await executeInTab({ target, func: readServedStatus });
     const status: unknown = injection?.result;
     return typeof status === "number" && Number.isInteger(status) && status > 0
       ? { status }

@@ -531,7 +531,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // the build's own from here on (`./own-layers/opened-by.ts`). Never a look, a navigation or a read.
     const pressedOnPage = node.effect === "mutate" && !webMovesThePage(node);
     const interruption = pressedOnPage && webAnsweredLayer(current?.evidence, after?.evidence, handle, (layer) => run.layers.owns(buildOf(run), layer));
-    if (pressedOnPage) run.layers.acted(buildOf(run), current?.evidence, after?.evidence, { handle, actionType: node.actionType, parameters: written });
+    if (pressedOnPage) run.layers.acted(buildOf(run), current?.evidence, after?.evidence, { handle, actionType: node.actionType, parameters: written, answered: interruption ? true : undefined });
     // The page, with what the node did to it written on the same result rather
     // than around it. One shape, the one every other page has: the compact
     // view's `page` text, where every handle the model may use is printed.

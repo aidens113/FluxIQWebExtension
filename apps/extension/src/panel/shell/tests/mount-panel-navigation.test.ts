@@ -344,3 +344,16 @@ test("a followed run of the automation on screen keeps its thread", async () => 
   assert.equal(byId("panelScreen-chat").hidden, false);
   assert.match(byId("conversationInput").placeholder, /Orders/u);
 }));
+
+test("the header holds the project switcher, names the status's project, and opening it asks the background for the list", async () => mounted(async ({ root, status, push, messages }) => {
+  const bar = root.byClass("top-bar")[0]!;
+  assert.ok(bar.byClass("project-switcher-button").length === 1, "the switcher is in the header");
+  assert.ok(bar.byClass("top-tab").length === 2 && bar.byClass("top-settings").length === 1);
+  Object.assign(status, { projectId: "p-1", projectName: "Alpha" });
+  push();
+  await settle();
+  assert.equal(root.byClass("project-switcher-name")[0]!.textContent, "Alpha");
+  root.byClass("project-switcher-button")[0]!.dispatch("click");
+  await settle();
+  assert.ok(messages.some((message) => message.type === M.panelListProjects), "the sheet read the list through the background");
+}));

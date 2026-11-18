@@ -3,11 +3,19 @@ import { BUILD_IDENTITY_MESSAGE, currentBuildIdentity } from "../shared/build-id
 // and the reply shapes are a contract with `background/`: `fluxiq.ping` answers
 // even from a superseded instance so the worker can tell a stale script from a
 // missing one, and every other message is ignored unless this instance owns the
-// window. Returning `true` keeps the message channel open for an async reply --
-// returning `false` closes it, so the two are not interchangeable.
+// window. A message this frame does not answer is routed to nothing, so the
+// listener returns `false` and the channel stays free for the frame it is for;
+// every answered command waits for this document's own-page decision
+// (`./own-document/`) and so keeps the channel open (`true`). In one of
+// FluxIQ's own pages every command but the ping is refused there, before any
+// read.
 //
 // A page of iframes runs one copy of this script per frame, so `executeAction`
 // also carries who it is for -- see `isAddressedToThisFrame`.
+//
+// `fluxiq.revoked` (`shared/own-pages/revoked-message.ts`) takes this document's
+// script out of service: what it holds is discarded unsent and work in flight
+// ends in a page-free refusal (`./revoked/`, `./lifecycle/`). It is answered in every document.
 //
 // `extraction.propose` is the one message that answers about page structure
 // rather than acting: it infers the extraction a picked element proposes, for
@@ -64,6 +72,10 @@ import { EXTRACTION_PROPOSE_MESSAGE, type ExtractionProposeResponse } from "../s
 import { PAGE_CHALLENGE_MESSAGE, type PageChallengeResponse } from "../shared/page-challenge-message";
 import { TRACE_PAGE_CAPTURE_MESSAGE, type TracePageCaptureResponse } from "../shared/trace-page-capture";
 import type { BrowserActionCommand } from "./types";
+import { guardedCommandListener, ownDocument, type ContentRoute } from "./own-document";
+import { CONTENT_REVOKED_MESSAGE } from "../shared/own-pages";
+import { ContentRevokedError, contentRevokedRefusal, revokedEpoch, revokedFence } from "./revoked";
+import { suspendContent } from "./lifecycle";
 
 /** The id the browser always gives a tab's main frame; every child frame has a positive one. */
 const TOP_FRAME_ID = 0;
@@ -111,101 +123,135 @@ function recordingCapturePolicy(value: unknown): AutomationStudioRecordingCaptur
 }
 
 export function installMessageHandler(): void {
-  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; capturePolicy?: unknown; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown; request?: unknown };
-    if (typed.type === "fluxiq.ping") {
-      sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
-      return false;
-    }
-    if (!isActiveContentInstance()) return false;
-    if (typed.type === PAGE_CHANGES_MESSAGE) {
-      // Synchronous and cheap: which copy answers and how many changes it has counted (`page-changes/`).
-      sendResponse(pageChangeCounter.mark(CONTENT_INSTANCE_ID));
-      return false;
-    }
-    if (typed.type === BUILD_IDENTITY_MESSAGE) {
-      if (!isTopFrame()) return false;
-      sendResponse(currentBuildIdentity());
-      return false;
-    }
-    if (typed.type === "recording") {
-      // The worker sends settings already under Core's recording-capture
-      // policy; they are clamped again here, a second fence, against the
-      // policy sent beside them or Core's default when none came.
-      const clamped = clampAutomationStudioRecordingCaptureSettings({
-        captureMutations: typed.settings?.captureMutations ?? captureSettings.mutations,
-        captureInputValues: typed.settings?.captureInputValues ?? captureSettings.inputValues,
-        captureSnapshots: typed.settings?.captureSnapshots ?? captureSettings.snapshots
-      }, recordingCapturePolicy(typed.capturePolicy));
-      captureSettings.mutations = clamped.captureMutations;
-      captureSettings.inputValues = clamped.captureInputValues;
-      captureSettings.snapshots = clamped.captureSnapshots;
-      setRecordingState(Boolean(typed.recording));
-      sendResponse({ ok: true });
-      return true;
-    }
-    if (typed.type === "captureSnapshot") {
-      // The frame merge of a search's look asks every frame for its hidden elements too.
-      void captureSnapshotForResponse(typed.includeHidden === true ? { includeHidden: true } : {}).then(sendResponse);
-      return true;
-    }
-    if (typed.type === "executeAction" && typed.action) {
-      if (!isAddressedToThisFrame(typed)) return false;
-      // `extraction` rides beside the action when the worker carries a
-      // paginated list read across documents (`action-runtime/extraction-continuation.ts`).
-      void executeAction(typed.action, typed.extraction)
-        .then(sendResponse)
-        .catch((error: unknown) => sendResponse(actionFailure(typed.action as BrowserActionCommand, error)));
-      return true;
-    }
-    if (typed.type === FACT_CHECK_MESSAGE) {
-      if (!isAddressedToThisFrame(typed)) return false;
-      // Synchronous, so the channel closes with the reply already sent. A
-      // request with no query list is answered with none, which the worker
-      // reads as every claim unknown.
-      const reading = webAutomationFactCheckRequestValue(typed.request);
-      const reply: FactCheckContentResponse = reading ? evaluateFactBatch(reading, domFactPage()) : { answers: [] };
-      sendResponse(reply);
-      return false;
-    }
-    if (typed.type === TRACE_PAGE_CAPTURE_MESSAGE) {
-      if (!isTopFrame() || !isAddressedToThisFrame(typed)) return false;
-      void captureTracePage().then(sendResponse, (error: unknown) => sendResponse(tracePageCaptureFailure(error)));
-      return true;
-    }
-    if (typed.type === PAGE_CHALLENGE_MESSAGE) {
-      if (!isTopFrame()) return false;
-      // The read is synchronous. A document still being parsed -- a click's
-      // landing is asked about the moment it commits -- is read once it has
-      // been, so an empty body is not taken for a page with no check on it.
-      if (document.readyState !== "loading") {
-        sendResponse(pageChallenge());
-        return false;
+  // Every command is routed, then held until this document is known not to be
+  // one of FluxIQ's own pages (`./own-document/`).
+  chrome.runtime.onMessage.addListener(guardedCommandListener(routeMessage, ownDocument));
+}
+
+/**
+ * The answer this frame gives `message`, or undefined when this frame gives
+ * none. Decided from the message and this frame's place alone -- whether this
+ * copy owns the window, whether it is the top frame -- and never from the
+ * page, so a document that turns out to be FluxIQ's has read nothing when it
+ * refuses. Each answer replies exactly once, now or later.
+ */
+export function routeMessage(message: unknown): ContentRoute | undefined {
+  const routed = routeUnfenced(message);
+  // Everything but the ping and the revocation is fenced: after this document
+  // is revoked it is refused before it starts, and a reply that was being built
+  // when it was revoked becomes the page-free `interrupted` refusal (`./revoked/`).
+  return routed === undefined || routed.liveness === true ? routed : revokedFence(routed);
+}
+
+function routeUnfenced(message: unknown): ContentRoute | undefined {
+  const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; capturePolicy?: unknown; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown; request?: unknown };
+  if (typed.type === "fluxiq.ping") {
+    return { liveness: true, answer: (sendResponse) => sendResponse({ ok: true, active: isActiveContentInstance() && revokedEpoch.current() === 0, version: CONTENT_SCRIPT_VERSION }) };
+  }
+  if (typed.type === CONTENT_REVOKED_MESSAGE) {
+    // Answered at once in every document, like the ping, and from a superseded
+    // copy too: it discards, so it can only make this copy quieter.
+    return {
+      liveness: true,
+      answer: (sendResponse) => {
+        suspendContent();
+        sendResponse({ ok: true });
       }
-      document.addEventListener("DOMContentLoaded", () => sendResponse(pageChallenge()), { once: true });
-      return true;
-    }
-    const extraction = extractionContentMessage(typed);
-    if (extraction) {
-      if (!isTopFrame()) return false;
-      return handleExtractionMessage(extraction, sendResponse) === "open";
-    }
-    const activity = activityContentMessage(typed);
-    if (activity) {
-      if (!isTopFrame()) return false;
-      showActivityOverlay(activity);
-      sendResponse({ ok: true });
-      return false;
-    }
-    if (typed.type === EXTRACTION_PROPOSE_MESSAGE) {
-      if (!isAddressedToThisFrame(typed)) return false;
-      // Inference is synchronous, so the channel closes with the reply already
-      // sent, as `fluxiq.ping` does.
-      sendResponse(proposeExtraction(typed.selector));
-      return false;
-    }
-    return false;
-  });
+    };
+  }
+  if (!isActiveContentInstance()) return undefined;
+  if (typed.type === PAGE_CHANGES_MESSAGE) {
+    // Cheap: which copy answers and how many changes it has counted (`page-changes/`).
+    return { answer: (sendResponse) => sendResponse(pageChangeCounter.mark(CONTENT_INSTANCE_ID)) };
+  }
+  if (typed.type === BUILD_IDENTITY_MESSAGE) {
+    if (!isTopFrame()) return undefined;
+    return { answer: (sendResponse) => sendResponse(currentBuildIdentity()) };
+  }
+  if (typed.type === "recording") {
+    return {
+      answer: (sendResponse) => {
+        // The worker sends settings already under Core's recording-capture
+        // policy; they are clamped again here, a second fence, against the
+        // policy sent beside them or Core's default when none came.
+        const clamped = clampAutomationStudioRecordingCaptureSettings({
+          captureMutations: typed.settings?.captureMutations ?? captureSettings.mutations,
+          captureInputValues: typed.settings?.captureInputValues ?? captureSettings.inputValues,
+          captureSnapshots: typed.settings?.captureSnapshots ?? captureSettings.snapshots
+        }, recordingCapturePolicy(typed.capturePolicy));
+        captureSettings.mutations = clamped.captureMutations;
+        captureSettings.inputValues = clamped.captureInputValues;
+        captureSettings.snapshots = clamped.captureSnapshots;
+        setRecordingState(Boolean(typed.recording));
+        sendResponse({ ok: true });
+      }
+    };
+  }
+  if (typed.type === "captureSnapshot") {
+    // The frame merge of a search's look asks every frame for its hidden elements too.
+    return { answer: (sendResponse) => void captureSnapshotForResponse(typed.includeHidden === true ? { includeHidden: true } : {}).then(sendResponse) };
+  }
+  if (typed.type === "executeAction" && typed.action) {
+    if (!isAddressedToThisFrame(typed)) return undefined;
+    const action = typed.action;
+    // `extraction` rides beside the action when the worker carries a
+    // paginated list read across documents (`action-runtime/extraction-continuation.ts`).
+    return {
+      answer: (sendResponse) => void executeAction(action, typed.extraction)
+        .then(sendResponse)
+        // A revoked document builds no failure: that would read its page.
+        .catch((error: unknown) => sendResponse(error instanceof ContentRevokedError ? contentRevokedRefusal("interrupted") : actionFailure(action, error)))
+    };
+  }
+  if (typed.type === FACT_CHECK_MESSAGE) {
+    if (!isAddressedToThisFrame(typed)) return undefined;
+    // One synchronous pass. A request with no query list is answered with
+    // none, which the worker reads as every claim unknown.
+    return {
+      answer: (sendResponse) => {
+        const reading = webAutomationFactCheckRequestValue(typed.request);
+        const reply: FactCheckContentResponse = reading ? evaluateFactBatch(reading, domFactPage()) : { answers: [] };
+        sendResponse(reply);
+      }
+    };
+  }
+  if (typed.type === TRACE_PAGE_CAPTURE_MESSAGE) {
+    if (!isTopFrame() || !isAddressedToThisFrame(typed)) return undefined;
+    return { answer: (sendResponse) => void captureTracePage().then(sendResponse, (error: unknown) => sendResponse(tracePageCaptureFailure(error))) };
+  }
+  if (typed.type === PAGE_CHALLENGE_MESSAGE) {
+    if (!isTopFrame()) return undefined;
+    return {
+      answer: (sendResponse) => {
+        // The read is synchronous. A document still being parsed -- a click's
+        // landing is asked about the moment it commits -- is read once it has
+        // been, so an empty body is not taken for a page with no check on it.
+        if (document.readyState !== "loading") sendResponse(pageChallenge());
+        else document.addEventListener("DOMContentLoaded", () => sendResponse(pageChallenge()), { once: true });
+      }
+    };
+  }
+  const extraction = extractionContentMessage(typed);
+  if (extraction) {
+    if (!isTopFrame()) return undefined;
+    return { answer: (sendResponse) => void handleExtractionMessage(extraction, sendResponse) };
+  }
+  const activity = activityContentMessage(typed);
+  if (activity) {
+    if (!isTopFrame()) return undefined;
+    return {
+      answer: (sendResponse) => {
+        showActivityOverlay(activity);
+        sendResponse({ ok: true });
+      }
+    };
+  }
+  if (typed.type === EXTRACTION_PROPOSE_MESSAGE) {
+    if (!isAddressedToThisFrame(typed)) return undefined;
+    // Inference reads page structure only (D3).
+    return { answer: (sendResponse) => sendResponse(proposeExtraction(typed.selector)) };
+  }
+  return undefined;
 }
 
 /** The reply when the capture itself rejected, which it is written never to do: its kind only, never its message. */

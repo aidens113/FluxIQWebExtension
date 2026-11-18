@@ -124,7 +124,8 @@ test("selecting a tab finishes through the facade's update path; an unavailable 
     [9, tab({ id: 9, active: false, url: "https://shop.test/checkout" })],
     [10, tab({ id: 10, active: false, url: "chrome://settings/" })]
   ]);
-  holder.chrome = { tabs: { update: async (tabId: number) => tabs.get(tabId) ?? tab({ id: -1 }) } };
+  // `get` is the tab gate reading the tab before it fronts it (`../../tab-gate/`).
+  holder.chrome = { tabs: { get: async (tabId: number) => tabs.get(tabId) ?? tab({ id: -1 }), update: async (tabId: number) => tabs.get(tabId) ?? tab({ id: -1 }) } };
   t.after(() => {
     holder.chrome = previous;
   });

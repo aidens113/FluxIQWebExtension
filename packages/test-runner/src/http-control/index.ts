@@ -149,13 +149,8 @@ export class FluxIQControlClient {
     this.cookie = undefined;
   }
 
-  /** The password a panel's pairing dialog takes, so a browser the Lab pairs there is unlocked as a person's would be. */
-  pairingPassword(): string | undefined {
-    return this.credentials?.password;
-  }
-
   async approvePairing(pairingCode: string): Promise<unknown> {
-    return this.request("/api/client-gateway/approve-pairing", { pairingCode, ...(this.credentials?.password ? { password: this.credentials.password } : {}), ...(this.credentials?.totp ? { totp: this.credentials.totp } : {}) }, "gateway.pairing");
+    return this.request("/api/client-gateway/approve-pairing", { pairingCode }, "gateway.pairing");
   }
 
   async gatewaySnapshot(): Promise<unknown> {

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { refusedOutsideControlPage } from "../control-page";
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 
@@ -39,8 +40,20 @@ test("other messages are not this gate's to refuse", () => withChrome(() => {
   assert.equal(refusedOutsideControlPage(RUNTIME_MESSAGES.getStatus, contentScript), false);
 }));
 
+// The test runs from a bundle under `.test-build-scratch/<label>/`, from whichever directory the
+// runner was started in, so the package is found by walking up to its manifest, not from the cwd.
+function packageRoot(): string {
+  let directory = path.dirname(fileURLToPath(import.meta.url));
+  while (!existsSync(path.join(directory, "manifest.chrome.json"))) {
+    const parent = path.dirname(directory);
+    if (parent === directory) throw new Error("apps/extension (manifest.chrome.json) not found above the test bundle");
+    directory = parent;
+  }
+  return directory;
+}
+
 test("the background applies the gate before it acts, and closes its storage to content scripts", () => {
-  const source = readFileSync(path.join(process.cwd(), "src/background/index.ts"), "utf8");
+  const source = readFileSync(path.join(packageRoot(), "src/background/index.ts"), "utf8");
   const gate = source.indexOf("refusedOutsideControlPage(typed.type, sender)");
   assert.ok(gate > 0, "the gate is applied");
   assert.ok(gate < source.indexOf("if (typed.type === RUNTIME_MESSAGES.connect) {"), "before connect");

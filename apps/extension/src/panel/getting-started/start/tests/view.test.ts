@@ -19,6 +19,28 @@ function pendingRequest() {
 }
 async function flush() { for (let i = 0; i < 6; i++) await Promise.resolve(); }
 
+test("configuration has one fifth row and no extra browser unlock action", async () => {
+  await withFakeDocument(async () => {
+    const status = statusWith({ connectionState: "connected", paired: true });
+    const calls: unknown[] = [];
+    const store = { request: async (message: unknown) => {
+      calls.push(message);
+      return { ok: true, value: {} };
+    } } as PanelStore;
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
+    view.render(startGuide(status, false, undefined, { state: "unavailable", code: "ciphertext_invalid" }), status);
+    const root = fake(view.element);
+    assert.equal(root.byClass("start-step").length, 5);
+    assert.equal(root.byClass("start-mark").at(-1)?.textContent, "5");
+    const key = root.byClass("start-step").at(-1)!;
+    assert.match(key.textContent, /Model key unavailable/u);
+    assert.doesNotMatch(root.textContent, /unlock|password/iu);
+    key.descendants().find((node) => node.tagName === "BUTTON" && node.textContent === "Open FluxIQ")!.dispatch("click");
+    await flush();
+    assert.deepEqual(calls, [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "model-key" }]);
+  });
+});
+
 for (const action of ["connect", "disconnect"] as const) {
   test(`late ${action} refusal does not contradict an already observed goal`, async () => {
     await withFakeDocument(async () => {

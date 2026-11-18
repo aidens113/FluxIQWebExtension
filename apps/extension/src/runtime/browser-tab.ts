@@ -19,6 +19,7 @@
 // `actual`, which is what tells the four in-set collapses apart.
 
 import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
+import { activateTab, closeTab as closeBrowserTab, isOwnPage, isOwnPageTab, openTab as openBrowserTab, ownPageRefusalFor, tabReads, withoutOwnPages } from "../background/tab-gate";
 import type {
   BrowserActionCommand,
   BrowserActionResult,
@@ -43,6 +44,7 @@ import {
 import { tabRequestForAction } from "./command-options";
 import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
 import { compareNavigatedUrl } from "./navigation";
+import { ownPageRefusedResult } from "./own-page";
 
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
@@ -96,11 +98,22 @@ export async function runBrowserTabAction(action: BrowserActionCommand, options:
  * detail page's, and a substring would take either. Among tabs at one path the
  * newest wins, which is the one a link has just opened: the browser numbers tabs
  * in the order it creates them.
+ *
+ * FluxIQ's own pages are never a match (`background/tab-gate/`): the panel is
+ * often open beside the run, and a pattern or an id the model chose must not
+ * switch the run onto it.
  */
 export function selectTabForSwitch<T extends SwitchableTab>(
   tabs: readonly T[],
-  request: { tabId?: number | undefined; urlPattern?: string | undefined; urlPath?: string | undefined }
+  request: SwitchMatch
 ): T | undefined {
+  return matchTabForSwitch(withoutOwnPages(tabs), request);
+}
+
+/** What a switch names its tab by. */
+type SwitchMatch = { tabId?: number | undefined; urlPattern?: string | undefined; urlPath?: string | undefined };
+
+function matchTabForSwitch<T extends SwitchableTab>(tabs: readonly T[], request: SwitchMatch): T | undefined {
   if (request.tabId !== undefined) return tabs.find((tab) => tab.id === request.tabId);
   if (request.urlPath !== undefined) return newestTabAtPath(tabs, request.urlPath);
   const pattern = request.urlPattern?.toLowerCase();
@@ -134,26 +147,27 @@ function pagePath(url: string | undefined): string | undefined {
  * fronted the tab a link opened, the tab that opened it.
  */
 function tabBeforeSwitch(front: SwitchableTab | undefined, target: SwitchableTab): number | undefined {
-  if (front?.id !== undefined && front.id !== target.id && pagePath(front.url) !== undefined) return front.id;
+  if (front?.id !== undefined && front.id !== target.id && pagePath(front.url) !== undefined && !isOwnPageTab(front)) return front.id;
   return target.openerTabId !== undefined && target.openerTabId !== target.id ? target.openerTabId : undefined;
 }
 
 // Looks for the switch's tab until it opens. Only a switch by path waits: an id
 // names a tab that exists or never will, and a recording never replays a pattern.
-async function findTabForSwitch(request: SwitchRequest, timeoutMs: number | undefined): Promise<chrome.tabs.Tab | undefined> {
+// A request that only FluxIQ's own page answers is refused at once, not waited on.
+async function findTabForSwitch(request: SwitchRequest, timeoutMs: number | undefined): Promise<chrome.tabs.Tab | "own_page" | undefined> {
   const deadline = Date.now() + (request.urlPath === undefined ? 0 : timeoutMs ?? DEFAULT_SWITCH_WAIT_MS);
   for (;;) {
-    const match = selectTabForSwitch(await chrome.tabs.query({}), request);
+    const tabs = await tabReads().query({});
+    const match = selectTabForSwitch(tabs, request);
+    if (match === undefined && matchTabForSwitch(tabs, request) !== undefined) return "own_page";
     if (match !== undefined || Date.now() >= deadline) return match;
     await new Promise((resolve) => setTimeout(resolve, SWITCH_POLL_MS));
   }
 }
 
 async function openTab(action: BrowserActionCommand, startedAt: number, request: OpenRequest, options: { attachTabForRecording?: ((tabId: number) => Promise<void>) | undefined; verifyLanding?: ((tabId: number, requested: string, startedAt: number) => Promise<BrowserActionResult>) | undefined }): Promise<BrowserActionResult> {
-  const created = await chrome.tabs.create({
-    ...(request.url !== undefined ? { url: request.url } : {}),
-    active: request.active ?? true
-  });
+  if (request.url !== undefined && isOwnPage(request.url)) return ownPageRefusedResult(action, startedAt, "a new tab at a page FluxIQ may automate");
+  const created = await openBrowserTab({ url: request.url, active: request.active ?? true });
   const tabId = created.id;
   if (tabId === undefined) {
     return workerActionResult(action, startedAt, {
@@ -195,7 +209,9 @@ async function switchTab(action: BrowserActionCommand, startedAt: number, reques
     : request.urlPath !== undefined
       ? `a tab at path "${request.urlPath}" active`
       : `a tab whose URL contains "${request.urlPattern ?? ""}" active`;
-  const match = await findTabForSwitch(request, action.timeoutMs);
+  const found = await findTabForSwitch(request, action.timeoutMs);
+  if (found === "own_page") return ownPageRefusedResult(action, startedAt, expected);
+  const match = found;
   const tabId = match?.id;
   if (match === undefined || tabId === undefined) {
     const actual = "no open tab matched";
@@ -206,9 +222,9 @@ async function switchTab(action: BrowserActionCommand, startedAt: number, reques
       failure: workerTargetNotFoundFailure(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, expected, actual)
     });
   }
-  const [front] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [front] = await tabReads().query({ active: true, currentWindow: true });
   const before = tabBeforeSwitch(front, match);
-  await chrome.tabs.update(tabId, { active: true });
+  await activateTab(tabId);
   if (before !== undefined) setAutomationTab(before);
   setAutomationTab(tabId);
   if (match.status !== "complete") await waitForTabReady(tabId);
@@ -232,8 +248,10 @@ async function closeTab(action: BrowserActionCommand, startedAt: number, request
       failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: "no tab named and none open" })
     });
   }
+  const refusal = await ownPageRefusalFor(tabId);
+  if (refusal !== undefined) return ownPageRefusedResult(action, startedAt, `tab ${tabId} closed`, refusal);
   const closingAutomationTab = tabId === currentAutomationTabId();
-  await chrome.tabs.remove(tabId);
+  await closeBrowserTab(tabId);
   forgetAutomationTab(tabId);
   fluxiqOpenedTabs.forget(tabId);
   const expected = `tab ${tabId} closed`;
@@ -249,7 +267,7 @@ async function closeTab(action: BrowserActionCommand, startedAt: number, request
   // The actions after a close run in the tab in front, so FluxIQ fronts the tab
   // it drove before rather than leaving the choice to the browser.
   const returnedTo = closingAutomationTab ? await latestOpenAutomationTab() : undefined;
-  if (returnedTo !== undefined) await chrome.tabs.update(returnedTo, { active: true });
+  if (returnedTo !== undefined) await activateTab(returnedTo);
   const landed = returnedTo === undefined ? undefined : await readTabUrl(returnedTo);
   return workerActionResult(action, startedAt, {
     status: "succeeded",

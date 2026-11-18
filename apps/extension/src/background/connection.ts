@@ -36,9 +36,12 @@ import type {
 } from "../shared/protocol";
 import type { ActivityDisplay, ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
 import { activeTab, observedTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
+import { configureOwnPages, tabReads } from "./tab-gate";
+import { ownPageAddresses } from "../shared/own-pages";
 import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
+import { chromeProjectChoiceStorage, conversationChangedFor, panelChangesFor, ProjectFocus, resyncChange } from "./projects/index";
 import { RecordedStepIndex } from "./recorded-steps";
 import { ClientGatewayOutbox } from "@fluxiq/client-gateway-websocket";
 import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
@@ -59,6 +62,7 @@ import {
   fetchCoreRecordings,
   GatewaySession,
   NavigationRecorder,
+  PanelProjectAccess,
   PointerClickFilter,
   ProjectContext,
   RecordedEventIntake,
@@ -73,6 +77,7 @@ import {
   type TabSnapshotTransport
 } from "./connection/index";
 import { inFlightRecordArea } from "./connection/in-flight/index";
+import { chromePairingEndedStorage } from "./connection/pairing-ended/index";
 import { TracePageCapturer } from "./trace-capture/index";
 
 type StatusListener = (status: ExtensionStatus) => void;
@@ -93,9 +98,12 @@ export class FluxIQConnection {
   private readonly transport: TabSnapshotTransport = { sendToTab, allTabFrames: observedTabFrames };
   private readonly gateway: GatewaySession;
   private readonly projects: ProjectContext;
+  private readonly focus: ProjectFocus;
+  /** The panel's hold on the project: which one its calls use, and its choice. */
+  readonly panelProjects: PanelProjectAccess;
   private readonly attachment: ContentAttachment;
   private readonly evidence: RecordingEvidenceReporter;
-  private readonly tabs: TabRecorder;
+  private readonly tabRecorder: TabRecorder;
   private readonly page: ActivePage;
   private readonly recording: ActiveRecording;
   private readonly intake: RecordedEventIntake;
@@ -120,10 +128,13 @@ export class FluxIQConnection {
     // What a recording captures is the person's settings under Core's policy
     // (`capture-policy/`): every recording message to a page carries these.
     const recordingSettings = () => this.effectiveSettings();
+    // FluxIQ's own pages are this connection's panel and gateway, read per
+    // decision so a settings change applies at once (`tab-gate/`).
+    configureOwnPages(() => ownPageAddresses(this.settings));
 
     this.capturePolicy = new CapturePolicySource({
       call: (endpoint, payload) => callCoreProgram(this.coreApiCredentials(), endpoint, payload),
-      projectId: () => this.projects.activeRecordingProject() ?? this.session.projectId,
+      projectId: () => this.projects.current() ?? this.session.projectId,
       // A policy that arrives once a recording has started reaches the page
       // being recorded now; a tab attached later is sent it anyway.
       onChange: () => {
@@ -153,6 +164,16 @@ export class FluxIQConnection {
       clearError: () => { this.lastError = undefined; },
       beforeConnect: () => this.page.refresh(),
       onHostLease: () => this.projects.invalidate(),
+      // How this browser's approval ended outlives the worker, so the panel still says it after a restart.
+      pairingEndedStorage: chromePairingEndedStorage(),
+      onPairingEnded: (ended) => {
+        if (ended.state === "revoked") {
+          this.lastError = "FluxIQ revoked this browser's approval. Connect to pair it again.";
+          this.addActivity("pairing", "Approval revoked", "FluxIQ revoked this browser's approval, so it disconnected.", "danger");
+        } else {
+          this.addActivity("pairing", ended.state === "expired" ? "Approval expired" : "Approval not accepted", "FluxIQ asked to approve this browser again.", "warning");
+        }
+      },
       // Session storage (worker memory without it): queued page data never
       // outlives the browser session that recorded it.
       outbox: new ClientGatewayOutbox(
@@ -188,13 +209,34 @@ export class FluxIQConnection {
         keepAlive: () => chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError)
       }
     });
+    // How an approval ended in an earlier worker: a revoked browser still reads as revoked.
+    void this.gateway.loadPairingEnded().then((changed) => (changed ? this.emitStatus() : undefined)).catch(/* best-effort: an unreadable record leaves the status without it */ () => undefined);
     this.projects = new ProjectContext({
       settings: () => this.settings,
       session: () => this.session,
-      adoptProjectId: (projectId) => this.persistSession(compactObject({ ...this.session, projectId })),
+      adoptProjectId: async (projectId) => {
+        await this.persistSession(compactObject({ ...this.session, projectId }));
+        // The panel follows Core's project from the status, not by asking.
+        this.emitStatus();
+      },
+      forgetProjectId: async () => {
+        await this.persistSession(compactObject({ ...this.session, projectId: undefined }));
+        this.emitStatus();
+      },
       onProjectName: () => this.emitStatus(),
+      choiceStorage: chromeProjectChoiceStorage(),
       onActivity
     });
+    // Tells Core the project the person chose, so its activity reaches this browser as it happens (`projects/project-focus.ts`).
+    this.focus = new ProjectFocus({
+      send: (type, payload) => this.gateway.send(type, payload),
+      connected: () => this.gateway.state() === "connected",
+      chosenProject: () => this.projects.chosenProject(),
+      onSendFailed: (error) => console.warn("FluxIQ could not be told which project this browser is working in.", error instanceof Error ? error.name : "non_error")
+    });
+    this.panelProjects = new PanelProjectAccess({ projects: this.projects, announceChosen: (projectId) => this.focus.chosen(projectId) });
+    // The person's saved project choice for this server address; a session that became ready before it was read hears it now.
+    void this.projects.loadChoice().then((changed) => (changed ? this.focus.announceHeld() : undefined)).catch(/* best-effort: an unreadable stored choice leaves this browser following Core's project */ () => undefined);
     this.attachment = new ContentAttachment({
       sendToTab,
       ensureContentScript,
@@ -233,7 +275,7 @@ export class FluxIQConnection {
         coreApiUrl: this.settings.coreApiUrl
       })
     });
-    this.tabs = new TabRecorder({
+    this.tabRecorder = new TabRecorder({
       recordingState: () => this.recording.state(),
       recordingId: () => this.recording.recordingId(),
       runtimeBusy: () => this.runtimeStatus.current().state === "running",
@@ -251,8 +293,8 @@ export class FluxIQConnection {
       onActivity,
       emitStatus,
       updateTab: (tab) => this.handleTabUpdated(tab),
-      noteTabChange: (tab, lastActive) => this.tabs.noteTabUpdate(tab, lastActive),
-      noteTabRemoved: (tabId, lastActive) => this.tabs.noteTabRemoved(tabId, lastActive)
+      noteTabChange: (tab, lastActive) => this.tabRecorder.noteTabUpdate(tab, lastActive),
+      noteTabRemoved: (tabId, lastActive) => this.tabRecorder.noteTabRemoved(tabId, lastActive)
     });
     this.recording = new ActiveRecording({
       send: this.gateway.send,
@@ -311,9 +353,25 @@ export class FluxIQConnection {
       onActivity,
       emitStatus,
       recordEvent,
-      acceptActivity: (activity) => void this.activity.accept(activity),
+      acceptActivity: (activity) => void this.activity.accept(activity).then((kept) => {
+        // What Core pushed that the panel can act on: it reads again instead of on a timer.
+        const change = kept ? panelChangesFor(activity, Date.now()) : undefined;
+        if (change) void chrome.runtime.sendMessage(change).catch(/* best-effort: no panel is open to hear it */ () => undefined);
+      }),
+      acceptConversationChanged: (payload) => {
+        const change = conversationChangedFor(payload, Date.now());
+        if (change) void chrome.runtime.sendMessage(change).catch(/* best-effort: no panel is open to hear it */ () => undefined);
+      },
+      onSessionResync: () => void chrome.runtime.sendMessage(resyncChange(Date.now())).catch(/* best-effort: no panel is open to hear it */ () => undefined),
       stopRecording: (notifyServer) => this.stopRecording(notifyServer),
       disconnect: () => this.disconnect(),
+      announceProjectFocus: () => this.focus.announceHeld(),
+      onProjectFocusRefused: (refusal) => this.addActivity("connection", "Project not switched for live updates", refusal.message, "warning"),
+      // The person lost the project: the choice falls back as a cleared one does, and the person is told why.
+      onProjectAccessEnded: async (notice) => {
+        await this.projects.accessEnded(notice);
+        this.addActivity("connection", "Project no longer available", notice.message, "warning");
+      },
       traceCapture: new TracePageCapturer({ credentials: () => this.coreApiCredentials() })
     });
     // The page the automation drives, never an extension page or FluxIQ's
@@ -324,12 +382,12 @@ export class FluxIQConnection {
       activeTabId: () => this.page.tabId(),
       activeTabs: async () => {
         const [focused, all] = await Promise.all([
-          chrome.tabs.query({ active: true, lastFocusedWindow: true }),
-          chrome.tabs.query({ active: true })
+          tabReads().query({ active: true, lastFocusedWindow: true }),
+          tabReads().query({ active: true })
         ]);
         return [...focused, ...all].map((tab) => ({ id: tab.id, url: tab.url }));
       },
-      tabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url,
+      tabUrl: async (tabId) => (await tabReads().get(tabId)).url,
       ownOrigins: () => [this.settings.coreApiUrl || DEFAULT_CORE_API_URL, this.settings.gatewayUrl]
     });
     this.activity = new ActivityRelay({
@@ -371,12 +429,16 @@ export class FluxIQConnection {
     const unsupportedPage = this.page.unsupported();
     const recordingBlock = this.recording.block();
     if (this.session.sessionId) status.sessionId = this.session.sessionId;
-    if (this.session.projectId !== undefined) status.projectId = this.session.projectId;
+    const projectId = this.projects.held() ?? this.session.projectId;
+    if (projectId !== undefined) status.projectId = projectId;
+    status.projectChosenBy = this.projects.chosenBy();
     const projectName = this.projects.currentName();
     if (projectName !== undefined) status.projectName = projectName;
     if (activeTabId !== undefined) status.activeTabId = activeTabId;
     if (activeTabUrl) status.activeTabUrl = activeTabUrl;
     if (gateway.pairingReferenceCode) status.pairingReferenceCode = gateway.pairingReferenceCode;
+    const pairingEnded = this.gateway.pairingEnded();
+    if (pairingEnded) status.pairingEnded = { ...pairingEnded };
     if (recordingStartedAt !== undefined) status.recordingStartedAt = recordingStartedAt;
     if (lastActivityAt !== undefined) status.lastActivityAt = lastActivityAt;
     if (unsupportedPage) status.unsupportedPage = unsupportedPage;
@@ -406,7 +468,10 @@ export class FluxIQConnection {
   }
 
   updateSettings(settings: FluxIQSettings): void {
+    const addressChanged = settings.coreApiUrl !== this.settings.coreApiUrl;
     this.settings = settings;
+    // Each server address keeps its own project choice.
+    if (addressChanged) void this.projects.loadChoice().catch(/* best-effort: an unreadable stored choice leaves this browser following Core's project */ () => undefined);
   }
 
   recordingLogPage(page: number, pageSize: number): RecordingLogPage {
@@ -443,6 +508,8 @@ export class FluxIQConnection {
    * dropped here either way, and with it nothing can open what Core still holds.
    */
   async forgetPairing(): Promise<boolean> {
+    // Forgetting starts over: a revoked or refused approval is no longer this browser's to report.
+    await this.gateway.forgetPairingEnded().catch(/* best-effort: the next connect clears it as well */ () => undefined);
     // Only over a live socket: `send` would otherwise queue it for a later connection, whose credential is about to be gone.
     if (this.gateway.state() !== "connected") return false;
     try {
@@ -592,7 +659,7 @@ export class FluxIQConnection {
 
   /** The project this browser's session belongs to, as FluxIQ last said. */
   projectId(): string | null | undefined {
-    return this.session.projectId;
+    return this.projects.held() ?? this.session.projectId;
   }
 
   /**

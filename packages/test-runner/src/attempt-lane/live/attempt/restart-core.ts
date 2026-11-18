@@ -3,12 +3,13 @@ import type { ChatBrowserSession, ChatPanelDriver } from "../../../extension-cha
 import type { ExistingFluxIQControlClient } from "../../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../../failure.js";
 import { extensionStatus } from "../../../run-lifecycle/index.js";
+import { approvedClientModelReadiness } from "../../../extension-chat-check/prove/approved-client/index.js";
 
 /** What a Core restart between attempts looked like from the browser, in the Lab's evidence. */
 export type AttemptCoreRestart = Readonly<{
   /** From the stop to the extension saying it is connected again. */
   reconnectedAfterMs: number;
-  /** What the browser's model key read after it: `unlocked`, or the lock and its reason. */
+  /** Configuration metadata after reconnect; it does not prove model-call access or gate replay. */
   modelKey: string;
   /** `carried_on`: the open panel took the next message by itself. `reopened`: it could not, and was opened again as a person would. */
   panel: "carried_on" | "reopened";
@@ -47,7 +48,7 @@ export async function restartAttemptCore(input: AttemptCoreRestartInput): Promis
   if (connection !== "connected") throw new RunnerFailure("gateway.connection", `The extension did not connect again after Core restarted: it stood at ${connection}`);
   const reconnectedAfterMs = Date.now() - began;
   log(`[attempt] the extension connected again ${Math.round(reconnectedAfterMs / 1000)} s after the restart began`);
-  const modelKey = await waitFor(() => modelKeyReadiness(browser), (readiness) => readiness === "unlocked", SETTLE_MS);
+  const modelKey = await modelKeyReadiness(browser);
   log(`[attempt] the browser's model key reads ${modelKey} after the restart`);
   await control.selectProject(projectId);
   const read = await waitFor(() => panelScope(browser), (scopeNow) => ready(scopeNow, projectId), SETTLE_MS);
@@ -74,10 +75,12 @@ async function connectionState(browser: ChatBrowserSession): Promise<string> {
 
 /** What Core tells the panel about this browser's key: the read the chat's own setup step uses. */
 async function modelKeyReadiness(browser: ChatBrowserSession): Promise<string> {
-  const reply = await browser.control.evaluate(() => (globalThis as unknown as { chrome: { runtime: { sendMessage(message: unknown): Promise<unknown> } } }).chrome.runtime.sendMessage({ type: "fluxiq.panel.modelReadiness" })) as { payload?: { keys?: { unlocked?: boolean; lockedBecause?: string }[] } };
-  const keys = reply.payload?.keys ?? [];
-  if (keys.length === 0) return "no key";
-  return keys.every((key) => key.unlocked === false) ? `locked: ${keys[0]?.lockedBecause ?? "unknown"}` : "unlocked";
+  try {
+    const reply = await browser.control.evaluate(() => (globalThis as unknown as { chrome: { runtime: { sendMessage(message: unknown): Promise<unknown> } } }).chrome.runtime.sendMessage({ type: "fluxiq.panel.modelReadiness" }));
+    return approvedClientModelReadiness(reply);
+  } catch {
+    return "unknown";
+  }
 }
 
 async function panelScope(browser: ChatBrowserSession): Promise<ChatProjectScope | null> {

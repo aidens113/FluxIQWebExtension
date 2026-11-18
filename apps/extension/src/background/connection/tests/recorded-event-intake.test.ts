@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { WEB_AUTOMATION_EVENTS, WEB_AUTOMATION_INPUT_IDS } from "@fluxiq-web-extension/domain/client";
 import type { ActivityEntry, RecordingEventPayload, RecordingState } from "../../../shared/protocol";
 import type { ActivePage } from "../active-page";
-import type { ActiveRecording } from "../active-recording";
+import type { ActiveRecording } from "../active-recording/index";
 import type { ContentAttachment } from "../content-attachment";
 import { EventSequence } from "../event-sequence";
 import { NavigationRecorder, type NavigationOrigin, type NavigationVerdict } from "../navigation-recorder";

@@ -17,6 +17,45 @@ The extension is intentionally not the framework runtime. FluxIQ owns durable
 projects, Automation Studio, recordings, normalization, policy generation,
 authorization, and long-running work. The extension owns browser presence.
 
+## Hosted Connection Foundations
+
+Approved client authentication does not require a second default key unlock.
+Core evaluates current user, workspace, sharing and IAM authority on use; a
+missing model configuration is reported as configuration, not a locked client.
+Normal panel logout does not revoke an independently authenticated client.
+
+`background/credentials` owns private IndexedDB credentials, installation
+identity, revision/lineage changes and revocation intentions. Its transport
+adapter persists server-ready credential changes before acknowledging them.
+Tokens do not belong in content-script-readable local or sync storage.
+
+`background/connect/pkce` implements fixed-client, same-origin hosted sign-in
+through injected ports. A blank tab must be durably claimed before navigation.
+Discovery, exact callback/state, current selection and tab ownership are checked
+around asynchronous work. State and verifier are removed from the persisted
+attempt before the single token exchange; an ambiguous or interrupted exchange
+is never automatically replayed. A usable result follows durable credential
+adoption and final currentness checks.
+
+`background/authentication-attempts` provides private browser-session storage.
+It uses the authentication-tab registry's session identity, a closed state
+parser and a shared per-area queue. Compare-and-swap matches session and revision,
+persists the increment before success and checks identity around storage awaits.
+This serializes one background runtime, not distributed or browser-native storage
+transactions. Corrupt state and unavailable storage fail explicitly; there is
+no local/sync or memory fallback. Valid previous-session state is durably cleared.
+
+These foundations are not activated in the main background connection yet.
+Activation requires recording/content/capture exclusion before acquiring login
+page data, safe authentication-tab recovery, binding-scoped outboxes and guarded
+revocation dispatch. The protocol journals cleanup but performs no revocation
+HTTP; reading current trust and then queueing an unadopted proof is not an atomic
+credential transaction. The isolated native-auth probe showed native UI alone
+does not prevent injection or capture, so integration uses a preclaimed tab.
+
+When the extension may touch a tab, and when its content script is inert or
+revoked, is described in [browser content admission](browser-content-admission.md).
+
 ## Responsibilities
 
 Cross-document action transport belongs to Next page. The focused
@@ -106,9 +145,8 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   person types in a field the switch would hide (it waits for a later event
   of the same run). Builds do not switch the panel. The chat then retargets
   to a thread that shows the run (`ChatPanel.followRun`, below). Above the
-  chat, once the browser is connected and its model key reads missing or
-  locked, a setup card says what is done and the one thing left
-  (below).
+  chat, once the browser is connected, optional model configuration or
+  unavailable key custody can show a dismissible setup card (below).
 - **Automations**, the person's saved automations, newest first, under
   "Your automations", with a "New automation" section below the list.
   Choosing one calls `chat.open({ kind: "automation", flowId, name })` and
@@ -150,18 +188,31 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   -- or when the background does not answer: numbered steps, in order, each
   marked done, under way, needs attention or to do, with their buttons and the
   approval code: 1 Start FluxIQ, 2 Sign in to FluxIQ, 3 Connect this browser,
-  4 Approve this browser in FluxIQ, 5 Add a model key. Step 1 says to run
-  `pnpm dev` in the `!FluxIQWebExtension` folder (there is no installer), and
-  step 2 how to sign in the first time. A step is marked done only for what
-  was detected: FluxIQ reached, the browser paired, a model key listed. A failed
+  4 Approve this browser in FluxIQ, 5 optional model configuration for AI work.
+  Step 1 requires FluxIQ to be running; step 2 describes ordinary first sign-in.
+  A step is marked done only for what was detected: FluxIQ reached, the
+  browser paired, compatible model configuration available. A failed
   connection says so in words with "Try again", and "Check the connection
   address" opens Settings, because that address is there. Once the browser is
-  connected the chat comes back. A model key that reads missing, or a locked
-  browser (a sixth step, "Unlock this browser once"), does not hold the chat
-  back: the setup card sits above a usable chat with "Open FluxIQ" and "Not
-  now", and goes by itself when the key reads ready. The unlock step says why
-  the key locked, in the words every other place uses (`modelKeyLockedWords`). A
-  key read that fails shows nothing and blocks nobody.
+  connected the chat comes back. Missing model configuration and unavailable
+  key custody do not gate connection, the composer or saved Flows that need no
+  model. The card offers "Open FluxIQ" and "Not now" and disappears after a
+  fresh available reading. There is no sixth browser-unlock step or second
+  password prompt. Recovery guidance distinguishes an old server requiring an
+  update, legacy key recovery, unavailable host protection and invalid saved
+  ciphertext. A failed read claims neither configured nor missing; Settings
+  reports that it could not check the key.
+
+  The safe readiness relay carries each key's kind, provider, enabled flag,
+  optional boolean ownership marker (`heldByYou`) and checked `availability`.
+  Administrator-visible foreign keys (`heldByYou:false`), custom secrets and
+  unsupported providers do not establish personal model readiness. Missing
+  provider metadata retains the legacy DeepSeek default; Anthropic aliases
+  normalize consistently with shared chat. Absent availability retains prior
+  enabled-key compatibility, while an explicit old `unlocked:false` requires
+  an update and never becomes another unlock action. Malformed explicit
+  availability remains unknown. Configured status does not attest provider
+  authentication, balance or connectivity.
 
 While a recording runs, a bar under the top bar on every screen shows its step
 count, "Extract Data From This Page" and "Stop recording". It also holds a
@@ -333,6 +384,40 @@ while it pairs, or while FluxIQ checks its token, a message is queued.
   (`runtime.getPlatformInfo`) that resets the idle timer; it is not a gateway
   message, since an unpaired session may not send client data (t706).
 - **A panel opening** still reconnects too (`getStatus` from a control page).
+- **A browser relaunch resumes.** The credential lives in `chrome.storage.local`,
+  so the worker that starts with the browser says hello with it, and Core
+  rotates it and answers `server.session_ready`, with no new approval.
+  Verified live on a relaunched profile (t929).
+
+### When the approval ends
+
+Every reconnect above needs a credential in storage (`paired`), so a browser
+whose approval ended must drop its credential, or it would present a dead one
+on every start and raise a new pairing request each time. `GatewaySession`
+(`background/connection/gateway-session.ts`) does that, and keeps how the
+approval ended in `background/connection/pairing-ended/` (`chrome.storage.local`
+key `fluxiq.pairingEnded`), so a restarted worker still knows (t929).
+
+- **Revoked.** Core sends `server.revoked { reason, message }`, then
+  `server.disconnect`, and closes the socket. The session stops reconnecting,
+  closes the socket, drops the credential and marks the connection
+  `disconnected`. The status then reads `paired: false`, `pairingEnded: {
+  state: "revoked", reason, at }` and a `lastError` saying FluxIQ revoked the
+  approval. Nothing reconnects or asks to pair until the person presses
+  Connect: auto-connect needs `paired`, and Core answers a hello that still
+  carries the revoked credential with the same notice instead of a pairing
+  request. If the close beats the notice, the next reconnect is told again
+  and stops there. The trailing `server.disconnect` is for builds that predate
+  `server.revoked`: they stop on it instead of reconnecting every second.
+- **Expired or refused.** Core asks for a new approval (`server.pairing_required`
+  with `credential: "expired" | "refused"`). The session drops the dead
+  credential and records the state. The connection is `pairing` with a
+  reference code, as for any approval.
+- **Cleared** by Connect (the person asking to pair again), Forget, or a ready
+  session.
+
+The status field is `ExtensionStatus.pairingEnded` (`shared/protocol.ts`).
+`connectionState` keeps its six values.
 
 `e2e/reconnect.spec.ts` covers a restarted worker reconnecting, a dropped socket
 reconnecting, and the alarm being set and firing.
@@ -493,10 +578,14 @@ gates are what stand there. The overlay's last place, the one value a content sc
 keeps, goes through the background instead (`background/overlay-placement.ts`), which
 reads and writes only that key and only a value small enough to be a placement.
 
-**Open FluxIQ for a model key** asks Core for this browser's ticket (`unlockTicket`, in the
-`secret-keys` `snapshot` a paired client reads) and opens the keys page with it in the
-address's fragment, when nobody has unlocked this browser yet. The page offers such a browser
-only to someone who came from it.
+**Open FluxIQ for a model key** opens `/programs/secret-keys` directly on the
+configured HTTP(S) address. It clears the query and fragment and makes no
+preliminary snapshot or custody request. Ordinary sign-in and key-management
+authorization still apply on that page. Current authenticated approval gives
+the client access to its authorized available keys without a separate unlock;
+ending the approving panel session does not revoke that independent client.
+Explicit client revocation and current account/workspace permissions remain
+authoritative for every request.
 
 **A browser's name** in its hello is what its person reads when choosing among theirs:
 "Chrome on Windows" (`browserClientLabel`).
@@ -591,6 +680,7 @@ Client messages this extension sends:
 - `client.recording_event`
 - `client.snapshot`
 - `client.action_result`
+- `client.focus_project` (see [Project Focus](#project-focus))
 
 The gateway protocol also defines `client.recording_entry` and
 `client.error`, and FluxIQ's gateway client package can send both, but this
@@ -608,12 +698,61 @@ Current server message groups:
 - `server.set_active_tab`
 - `server.execute_action`
 - `server.disconnect`
+- `server.revoked` (see [When the approval ends](#when-the-approval-ends))
 - `server.command` as a compatibility envelope
 - `server.error`
 - `server.ping`
 - `server.ack`
 - `server.activity`, only to a session that declared the `fluxiq.activity`
   capability
+- `server.project_focused`, Core's answer to `client.focus_project`
+- `server.project_access_ended`, Core saying the person lost the session's
+  project (see [Project Focus](#project-focus))
+
+### Project Focus
+
+Core pushes `server.activity` to a session only for the session's own project,
+which pairing set (and a reconnect leaves unset, when the session hears every
+project its person may read). The person's project choice is
+kept here (`ProjectContext`, `background/projects/choice-storage.ts`), so without
+telling Core, a chosen project's work never reached the chat as it happened and
+the chat fell back to its slow read. `ProjectFocus` (`background/projects/project-focus.ts`)
+sends `client.focus_project` with the chosen project when the person chooses one
+(`projectChoice().choose`, which the panel's project messages use), with `null`
+when the choice is cleared (Core returns the session to its pairing's project),
+and again after every `server.session_ready` while a choice is held, since each
+new session starts at its pairing's project (`ServerCommandChannel.handleSessionReady`
+calls it right after the session is marked ready, before anything else is sent).
+A choice read from storage after the session became ready is sent then. It is
+sent only over a ready session, never put in the offline queue: a focus queued
+while offline would reach a later session than the one it was meant for.
+
+Core checks that the person who paired this browser may read the project in this
+browser's domain, as it checks the person's own paired program calls, then moves
+the session and answers `server.project_focused`. A refusal is a `server.error`
+with a `project_focus.*` code (`invalid`, `not_paired`, `refused`, `unavailable`)
+that leaves the session on its earlier project. It is about the project, not the
+connection: `ServerCommandChannel` hands it to the activity log as a warning
+(`background/projects/focus-refusal.ts`) and never marks the connection failed or
+sets its error, and the choice is kept. An older Core ignores the message. The
+moved project is also the one a token call naming no project reaches on Core,
+which the extension already names explicitly on every panel call.
+
+A focus is decided once, but Core does not assume the access behind it later:
+before each `server.activity` of a project reaches this browser, Core asks again
+whether the person may still read that project, and a browser bound to no
+project hears only the projects its person may read. When the person loses the
+session's own project (their access, membership or sharing was removed, they
+were disabled, or the project was deleted), Core stops that project's activity,
+moves the session where a cleared choice would (its pairing's project, or
+none), and sends `server.project_access_ended` with the project, the session's
+new project and a reason. `ServerCommandChannel` reads it
+(`background/projects/access-ended.ts`) and hands it on without touching the
+connection; `ProjectContext.accessEnded` drops a choice of that project exactly
+as clearing it would (the stored choice too), makes the session's project the
+one Core moved it to (or removes it when Core moved it to none), and follows
+Core again from there; and the activity log shows Core's reason as a warning.
+Nothing is sent back: Core has already moved the session.
 
 ### Live Activity
 
@@ -1264,7 +1403,15 @@ and in any case at the first good read started after Core accepted it, so it
 never lingers or doubles. While the send is on its way the background shows
 the starting status on the page and in the live line (Live Activity, above).
 The thread is re-read 300 ms after an event that names a conversation or ends
-the work. The 4 s poll stays as the fallback.
+the work. The chat runs no poll: its changes port is `complete`. Core pushes
+`server.conversation_changed` (`{ conversationId, projectId | null }`, no content) for
+every change to a chat the person may read, wherever it was made; the background
+(`ServerCommandChannel` -> `conversationChangedFor`) forwards it as a
+`fluxiq.panel.changes` message naming the conversation, the same message
+`server.activity` produces, so Chrome's side panel and Firefox's popup hear it alike.
+Core replays nothing after a reconnect, so each `server.session_ready` sends one
+`panelChanges` naming no conversation (`resyncChange`), which the port tells as `{}`:
+a full re-read of the thread, the list and the model readiness.
 
 **A described recording can ride with a message** (`ui-components/src/chat/attachment/`). "Attach a recording" beside Send lists the chat's project's finished recordings that have a description (newest first, at most 10; the list is `listRecordings`, Core's `description` kept apart from `title`, filtered by project in the panel). The pick shows as a "Recording: <description>" chip with "Remove attached recording"; one per message. Send adds `onScreen.recordingId` beside any `flowId` or `runId`, the chip clears once the send went and stays when it failed, and it is not kept in the draft. The review after a stop offers "Attach to my next message", which attaches the newest finished, described recording of the project. Core links the recording to the Flow the chat creates.
 
@@ -1294,7 +1441,7 @@ window in `chrome.storage.session` (`fluxiq.chatThread.<windowId>`). The
 extension gives the list no `unavailableReason`: its relays name the session's
 project for a message that names none, so the latest chat takes a first message
 before the status names a project. The
-message shapes are `PanelConversation*Request` in `shared/panel-conversation.ts`,
+message shapes are `PanelConversation*Request` in `shared/panel/conversation.ts`,
 re-exported from `shared/protocol.ts`.
 
 **Humanness per Flow and per task** (t900; user, 2026-11-11: "humanness slider
@@ -1317,7 +1464,7 @@ message, one Core call each:
 A task's level is read from its `list-project-tasks` row. Core refuses an
 out-of-range level by name; the panel shows Core's sentence and carries its code
 as `coreCode` (`background/connection/core-api.ts`, `panel/state/request.ts`).
-The shapes are in `shared/panel-humanness.ts`, re-exported from `shared/protocol.ts`.
+The shapes are in `shared/panel/humanness.ts`, re-exported from `shared/protocol.ts`.
 
 The mounted extension view accepts the bounded project-only navigation event fluxiq:chat-project with exactly { projectId }. It opens the ordinary chat tab and exposes data-fluxiq-chat-project plus data-fluxiq-chat-scope-state (loading, ready, error) for setup validation. Ready follows a successful authorized thread read; the event itself grants no permissions and executes no model capability. The Lab uses this same view and the ordinary composer.
 
@@ -1333,8 +1480,10 @@ The mounted extension view accepts the bounded project-only navigation event flu
   (`page-url.ts`). Core builds from that page. If the browser cannot say which
   tab is active, nothing is sent, and the panel is told why.
 
-Core runs a chosen capability for the paired person's project, on that person's
-unlocked model key, and answers `response.execution`. For a build or a run
+Core runs a chosen capability for the paired person's authorized project and,
+when a model is needed, their authorized configured model key, and answers
+`response.execution`. Model-free deterministic execution needs no model key.
+For a build or a run
 that is `started`. The result arrives later as a thread turn, and progress
 arrives as activity stamped with the thread's id. Every word of those turns is
 Core's: its first reply says in plain words what will happen and names the
@@ -1993,7 +2142,7 @@ once. Stop does not resolve while any pre-boundary continuation can later
 activate the recorder.
 
 A recording starts once
-([`background/connection/active-recording.ts`](../../apps/extension/src/background/connection/active-recording.ts)).
+([`background/connection/active-recording/active-recording.ts`](../../apps/extension/src/background/connection/active-recording/active-recording.ts)).
 Every way into one, a local start or a `server.start_recording`, goes through
 `beginOnce`. A start is marked the moment it is decided, and another that arrives
 meanwhile waits for it. `beginAccepted` first reads which recording a

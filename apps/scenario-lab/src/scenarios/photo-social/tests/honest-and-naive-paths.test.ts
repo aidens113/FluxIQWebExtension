@@ -227,6 +227,8 @@ it("qualification final: correct seven-post union plus a like fails current comp
     await page.goto(lab.origin + '/scenarios/photo-social/p/DNcepNICLlQ/');
     await page.locator('article section').getByRole('button', { name: 'Like', exact: true }).click();
     const fact = studioUnionWorkflow.expected.finalState![0]!;
+    // What a person sees as done: the heart turns to Unlike only once the server has the like (0d46c0b72), so the account record is read after that, not as the click returns.
+    await page.locator('article section').getByRole('button', { name: 'Unlike', exact: true }).waitFor({ state: 'visible', timeout: 6000 });
     const current = JSON.parse((await page.getByTestId(fact.subject).textContent())!);
     assert.deepEqual(current.liked, ['DNcepNICLlQ']);
     assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);

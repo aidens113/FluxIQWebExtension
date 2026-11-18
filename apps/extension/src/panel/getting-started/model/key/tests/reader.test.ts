@@ -1,4 +1,4 @@
-// The model key reader: reads on connect, beats while missing or locked, stops when ready,
+// The model key reader: reads on connect, beats while missing or unavailable, stops when ready,
 // re-reads on focus, and ignores a late answer from an earlier read.
 
 import assert from "node:assert/strict";
@@ -63,12 +63,39 @@ test("a missing key is read again on a short beat, and the beat ends the moment 
   assert.equal(r.changes(), 2);
 });
 
-test("a locked key beats like a missing one", async () => {
-  const r = rig(["locked", "ready"]);
+test("an unavailable key refreshes until configuration becomes available", async () => {
+  const unavailable = { state: "unavailable", code: "host_protection_unavailable" } as const;
+  const r = rig([unavailable, "ready"]);
   r.reader.observe(true);
   await r.settle();
-  assert.equal(r.reader.current(), "locked");
+  assert.deepEqual(r.reader.current(), unavailable);
   assert.equal(r.live().length, 1);
+  r.live()[0]!.run();
+  await r.settle();
+  assert.equal(r.reader.current(), "ready");
+  assert.equal(r.live().length, 0);
+});
+
+test("equal availability observations don't redraw, but a changed cause does", async () => {
+  const r = rig([{ state: "unavailable", code: "legacy_recovery_required" }, { state: "unavailable", code: "legacy_recovery_required" }, { state: "unavailable", code: "ciphertext_invalid" }]);
+  r.reader.observe(true);
+  await r.settle();
+  r.reader.refresh();
+  await r.settle();
+  assert.equal(r.changes(), 1);
+  r.reader.refresh();
+  await r.settle();
+  assert.equal(r.changes(), 2);
+});
+
+test("legacy upgrade status refreshes without an unlock action", async () => {
+  const r = rig(["upgrade_required", "ready"]);
+  r.reader.observe(true);
+  await r.settle();
+  assert.equal(r.reader.current(), "upgrade_required");
+  r.live()[0]!.run();
+  await r.settle();
+  assert.equal(r.reader.current(), "ready");
 });
 
 test("unknown never beats: it says nothing, so nothing waits on it", async () => {

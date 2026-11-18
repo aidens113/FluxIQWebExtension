@@ -36,7 +36,7 @@ async function withChrome(body: () => Promise<void>): Promise<void> {
   }
 }
 
-function view(current: ExtensionStatus, reading: ModelKeyReading | "none") {
+function view(current: ExtensionStatus, reading: ModelKeyReading | "none", changeProject?: () => void) {
   const store: PanelStore = {
     current: () => current,
     subscribe(listener) {
@@ -45,7 +45,7 @@ function view(current: ExtensionStatus, reading: ModelKeyReading | "none") {
     },
     request: (async () => ({ ok: true, value: {} })) as PanelStore["request"]
   };
-  return createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, reading === "none" ? {} : { setup: { readModelKey: async () => reading } });
+  return createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, { ...(reading === "none" ? {} : { setup: { readModelKey: async () => reading } }), ...(changeProject === undefined ? {} : { changeProject }) });
 }
 
 test("settings read top down: connection, model, behaviour, permissions, appearance, help, then Advanced holding the addresses and Forget", async () => {
@@ -68,7 +68,7 @@ test("settings read top down: connection, model, behaviour, permissions, appeara
     for (const id of ["captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled"]) assert.equal(permissions.descendants().some((node) => node.id === id), true, `${id} is under Permissions`);
     assert.equal(advanced.descendants().some((node) => node.textContent === "Forget this pairing"), true);
     assert.equal(advanced.textContent.includes("spend"), false, "no spending setting is drawn");
-    assert.equal(root.textContent.includes("Your model key is ready."), true);
+    assert.equal(root.textContent.includes("Your model key is configured."), true);
     assert.equal(root.textContent.includes("FluxIQ approved this browser."), true);
   }));
 });
@@ -84,12 +84,28 @@ test("Advanced starts closed: a person reads what they care about first", async 
   }));
 });
 
-test("the key line follows the reading, and an unreadable key never claims anything", () => {
-  assert.equal(modelKeyLine("ready", true), "Your model key is ready.");
-  assert.match(modelKeyLine("missing", true), /no model key yet/);
-  assert.match(modelKeyLine("locked", true), /Unlock it in FluxIQ/);
+test("the key line separates configuration, unavailability and a failed read", () => {
+  assert.equal(modelKeyLine("ready", true), "Your model key is configured.");
+  assert.match(modelKeyLine("missing", true), /No supported model key/);
+  assert.match(modelKeyLine("upgrade_required", true), /Update FluxIQ/);
+  assert.match(modelKeyLine({ state: "unavailable", code: "legacy_recovery_required" }, true), /recover or replace/);
+  assert.match(modelKeyLine({ state: "unavailable", code: "host_protection_unavailable" }, true), /host operator/);
+  assert.match(modelKeyLine({ state: "unavailable", code: "ciphertext_invalid" }, true), /replace it/);
   assert.match(modelKeyLine("unknown", true), /Couldn't check/);
   assert.match(modelKeyLine("ready", false), /Connect to FluxIQ/);
+});
+
+test("model configuration failure preserves connected and approved status", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    const settings = view(status(), { state: "unavailable", code: "host_protection_unavailable" });
+    settings.shown();
+    await tick();
+    const text = fake(settings.element).textContent;
+    assert.match(text, /host operator/u);
+    assert.match(text, /FluxIQ approved this browser/u);
+    assert.doesNotMatch(text, /Unlock it|password once/iu);
+  }));
 });
 
 test("approval and project are said in words, never as codes", () => {
@@ -97,10 +113,30 @@ test("approval and project are said in words, never as codes", () => {
   assert.match(approvalLine(status({ connectionState: "pairing" })), /Waiting for you to approve/);
   assert.match(approvalLine(status({ connectionState: "disconnected", paired: false })), /isn't approved yet/);
   assert.match(approvalLine(status({ connectionState: "disconnected" })), /approved this browser earlier/);
-  assert.match(projectLine(status()), /project you chose in FluxIQ/);
+  assert.match(projectLine(status()), /the one you chose in FluxIQ/);
   assert.equal(projectLine(status()).includes("project-1"), false);
-  assert.match(projectLine(status({ projectId: null })), /No project is chosen/);
-  assert.equal(projectLine(status({ projectName: " Company website " })), "This browser works in the project “Company website”. Change it in FluxIQ.");
+  assert.match(projectLine(status({ projectId: null })), /No project is chosen yet. Choose one with Change/);
+  assert.equal(projectLine(status({ projectName: " Company website " })), "Project: “Company website”");
   assert.equal(projectLine(status({ projectName: "Company website" })).includes("project-1"), false);
   assert.match(projectLine(status({ connectionState: "disconnected" })), /Connect to FluxIQ/);
+});
+
+test("the Project row names the project and its Change button opens the switcher, only while connected", async () => {
+  await withChrome(() => withFakeDocument(async () => {
+    modelDocument();
+    let opened = 0;
+    const settings = view(status({ projectName: "Company website" }), "ready", () => { opened += 1; });
+    settings.shown();
+    await tick();
+    const root = fake(settings.element);
+    assert.equal(root.byClass("settings-project-name")[0]!.textContent, "Project: “Company website”");
+    const change = root.descendants().find((node) => node.id === "changeProjectButton")!;
+    assert.equal(change.hidden, false);
+    change.dispatch("click");
+    assert.equal(opened, 1);
+    const away = view(status({ connectionState: "disconnected" }), "none", () => { opened += 1; });
+    away.shown();
+    await tick();
+    assert.equal(fake(away.element).descendants().find((node) => node.id === "changeProjectButton")!.hidden, true);
+  }));
 });

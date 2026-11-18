@@ -50,7 +50,6 @@
       "packages/test-runner/src/tests/demo-llm-exploration-request.test.ts": 2,
       "apps/extension/src/background/automation-relay/tests/automation-relay.test.ts": 1,
       "apps/extension/src/background/connection/recording-evidence.ts": 1,
-      "apps/extension/src/background/connection/tests/active-recording-test-harness.ts": 1,
       "apps/extension/src/background/connection/tests/page-evidence-capture.test.ts": 1,
       "apps/extension/src/background/connection/tests/recorded-event-intake.test.ts": 1,
       "apps/extension/src/background/connection/tests/recording-evidence.test.ts": 1,

@@ -19,3 +19,4 @@ export * from "./look-check";
 export * from "./quoted-path";
 export * from "./rate-limited-landing";
 export * from "./served-status";
+export * from "./own-page";

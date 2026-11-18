@@ -30,7 +30,7 @@ async function asked(call: () => Promise<ChatResult<{ humanness?: number }>>): P
   try {
     return await call();
   } catch {
-    return { ok: false, sentence: "Something went wrong. Try again." };
+    return { ok: false, sentence: "Couldn't reach FluxIQ to change the humanness level. Try again." };
   }
 }
 

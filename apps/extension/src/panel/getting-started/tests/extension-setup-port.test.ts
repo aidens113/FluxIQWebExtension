@@ -6,22 +6,21 @@ import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { PanelResult } from "../../state";
 import { extensionSetupPort } from "../extension-setup-port";
 
-test("the extension port remembers why the key it last read is locked, and forgets once it is not", async () => {
-  let keys: unknown[] = [{ enabled: true, unlocked: false, lockedBecause: "signed_out" }];
+test("the extension port reads configuration changes without an unlock operation", async () => {
+  let keys: unknown[] = [{ kind: "llm", enabled: true, availability: { state: "unavailable", code: "host_protection_unavailable" } }];
   const port = extensionSetupPort(async <T>(): Promise<PanelResult<T>> => ({ ok: true, value: { ok: true, payload: { keys } } as T }));
-  assert.equal(port.lockWords?.(), undefined);
-  assert.equal(await port.readModelKey(), "locked");
-  assert.match(port.lockWords?.() ?? "", /because you signed out/u);
-  keys = [{ enabled: true, unlocked: true }];
+  assert.deepEqual(await port.readModelKey(), { state: "unavailable", code: "host_protection_unavailable" });
+  keys = [{ kind: "llm", enabled: true, availability: { state: "available" } }];
   assert.equal(await port.readModelKey(), "ready");
-  assert.equal(port.lockWords?.(), undefined);
+  keys = [];
+  assert.equal(await port.readModelKey(), "missing");
 });
 
 test("the extension port sends the readiness message and survives a rejected request", async () => {
   const sent: string[] = [];
   const ok = extensionSetupPort(async <T>(message: { type: string }): Promise<PanelResult<T>> => {
     sent.push(message.type);
-    return { ok: true, value: { ok: true, payload: { keys: [{ enabled: true }] } } as T };
+    return { ok: true, value: { ok: true, payload: { keys: [{ kind: "llm", enabled: true }] } } as T };
   });
   assert.equal(await ok.readModelKey(), "ready");
   assert.deepEqual(sent, [RUNTIME_MESSAGES.panelModelReadiness]);

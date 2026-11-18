@@ -433,6 +433,7 @@ function travelClickDependencies(page: TravelPage, target: "chip" | "missing" | 
     watchRobotCheck: (() => undefined) as unknown as ContentActionDependencies["watchRobotCheck"],
     watchIgnoredPress: (() => undefined) as unknown as ContentActionDependencies["watchIgnoredPress"],
     watchPressAnswered: () => undefined,
+    watchPressReadiness: () => undefined,
     success: succeeds
   });
 }

@@ -12,7 +12,9 @@ export const STORAGE_KEYS = {
   clientId: "fluxiq.clientId",
   queuedEvents: "fluxiq.queuedEvents",
   // In `chrome.storage.session`, not `local`: forgotten when the browser closes.
-  disconnectedByPerson: "fluxiq.disconnectedByPerson"
+  disconnectedByPerson: "fluxiq.disconnectedByPerson",
+  // The project the person chose, by server address (`background/projects/choice-storage.ts`).
+  projectChoice: "fluxiq.projectChoice"
 } as const;
 
 export const RUNTIME_MESSAGES = {
@@ -46,6 +48,12 @@ export const RUNTIME_MESSAGES = {
   panelFlowHumannessRead: "fluxiq.panel.flowHumannessRead",
   panelFlowHumannessSet: "fluxiq.panel.flowHumannessSet",
   panelTaskHumannessSet: "fluxiq.panel.taskHumannessSet",
+  // The panel's projects: list, create, and choose the one every call without its own project uses
+  // (`background/projects/`); `panelChanges` is the worker's push when Core's gateway reports work.
+  panelListProjects: "fluxiq.panel.listProjects",
+  panelCreateProject: "fluxiq.panel.createProject",
+  panelSelectProject: "fluxiq.panel.selectProject",
+  panelChanges: "fluxiq.panel.changes",
   panelStopRun:"fluxiq.panel.stopRun",
   // Take over / Hand back: pause a run with the page handed to the person, and let it go on.
   panelTakeOverRun: "fluxiq.panel.takeOverRun",

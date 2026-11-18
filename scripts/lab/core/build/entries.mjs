@@ -8,14 +8,18 @@
 // missing module, recorded as a product failure.
 //
 // What "built" means is taken from Core's own manifests, not from a list kept
-// here: every package under `packages/` that declares a `build` script promises
+// here: every package this workspace needs (`needed.mjs`: the Core packages it
+// depends on, transitively) that declares a `build` script promises
 // the files its `exports`, `main`, `types` and `bin` name, and a Core is built
-// when those files exist. A fourth Core package is covered the day it is added,
+// when those files exist. A Core package nothing here uses is not asked for.
+// A fourth Core package is covered the day it is depended on,
 // and a `dist` that a clean emptied and a build never refilled reads as the
 // incomplete Core it is, rather than as a directory that exists.
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+
+import { DOWNSTREAM_ROOT, neededCorePackageNames } from "./needed.mjs";
 
 /**
  * @typedef {{ name: string, directory: string, expected: string[], missing: string[] }} CorePackageEntries
@@ -24,9 +28,10 @@ import path from "node:path";
 
 /**
  * @param {string} coreRoot
+ * @param {{ downstreamRoot?: string }} [options] the workspace whose dependencies decide which Core packages count
  * @returns {Promise<CoreBuildEntries>}
  */
-export async function scanCoreBuildEntries(coreRoot) {
+export async function scanCoreBuildEntries(coreRoot, { downstreamRoot = DOWNSTREAM_ROOT } = {}) {
   const packagesRoot = path.join(coreRoot, "packages");
   const installed = await exists(path.join(coreRoot, "node_modules"));
   let directories;
@@ -38,12 +43,18 @@ export async function scanCoreBuildEntries(coreRoot) {
     // that holds no Core, which is the thing a person has to fix.
     return { coreRoot, packagesFound: false, installed, packages: [] };
   }
-  const packages = [];
+  const candidates = [];
   for (const entry of directories) {
     if (!entry.isDirectory()) continue;
     const directory = path.join(packagesRoot, entry.name);
     const manifest = await readManifest(path.join(directory, "package.json"));
-    if (manifest === undefined || typeof manifest.scripts?.build !== "string") continue;
+    if (manifest !== undefined) candidates.push({ entry, directory, manifest });
+  }
+  const byName = new Map(candidates.filter(({ manifest }) => typeof manifest.name === "string").map(({ manifest }) => [manifest.name, manifest]));
+  const needed = await neededCorePackageNames(downstreamRoot, byName);
+  const packages = [];
+  for (const { entry, directory, manifest } of candidates) {
+    if (typeof manifest.scripts?.build !== "string" || !needed.has(manifest.name)) continue;
     const expected = entryPoints(manifest);
     const missing = [];
     for (const relative of expected) {

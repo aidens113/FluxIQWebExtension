@@ -4,6 +4,7 @@ import { builtinModules } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { assertEagerBundle } from "../../../scripts/check/lazy-modules/index.mjs";
 import { buildIdentity, hashBuildInputs, readTargetFiles, renderIconPng, verifyExtensionTarget, writeBuildInfo } from "./release/index.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -164,6 +165,10 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
     outfile,
     format: entry.format
   });
+  // The content script is an IIFE, which cannot be split into chunks, so no
+  // entry may reach a module through a dynamic import (scripts/check/lazy-modules).
+  const inMemory = result.outputFiles?.find((file) => path.resolve(file.path) === path.resolve(outfile));
+  assertEagerBundle(`extension ${name} bundle`, [{ file: outfile, text: inMemory ? inMemory.text : await readFile(outfile, "utf8") }]);
   if (options.metafiles && result.metafile) options.metafiles.push(result.metafile);
   if (options.inputs && result.metafile) {
     for (const input of Object.keys(result.metafile.inputs)) {

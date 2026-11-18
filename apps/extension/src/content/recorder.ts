@@ -12,6 +12,7 @@
 
 import { CONTENT_EVENT, CONTENT_READY } from "./messages";
 import { isActiveContentInstance } from "./instance";
+import { ownDocument } from "./own-document";
 import { captureSettings } from "./capture-settings";
 import { compactObject } from "./compact-object";
 import { captureSnapshot } from "./dom-snapshot";
@@ -49,16 +50,27 @@ export function isRecording(): boolean {
 }
 
 /** Tells the background worker this frame has a live content script. */
+// FluxIQ's own page announces nothing: the frame's address, title and
+// snapshot never leave it (`./own-document/`), so the ready message waits for
+// the document's decision before anything is read for it.
 export function sendReady(): void {
   if (!isActiveContentInstance()) return;
-  const payload = basePayload("content.ready", {
-    metadata: { readyState: document.readyState }
+  void ownDocument.verdict().then((verdict) => {
+    if (verdict !== "ordinary" || !isActiveContentInstance()) return;
+    const payload = basePayload("content.ready", {
+      metadata: { readyState: document.readyState }
+    });
+    void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
   });
-  void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
 }
 
+// Recording starts only by a command, which this document answered only once
+// it was known to be ordinary; a document last decided to be anything else
+// sends nothing, and builds nothing to send.
 export function emit(kind: RecordingEventKind, details: Partial<RecordingEventPayload>): void {
   if (!isActiveContentInstance()) return;
+  const decided = ownDocument.last();
+  if (decided !== undefined && decided !== "ordinary") return;
   if (!recording && kind !== "content.ready") return;
   if (EXECUTABLE_KINDS.has(kind)) flushPendingMutation();
   const payload = basePayload(kind, details);
@@ -82,6 +94,22 @@ export function setRecordingState(nextRecording: boolean): void {
     mutationTimer = undefined;
     pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
   }
+}
+
+/**
+ * Ends recording and discards everything pending, sending none of it. Unlike
+ * `setRecordingState(false)`, which flushes the typed text first, this is for a
+ * document FluxIQ may no longer read.
+ */
+export function suspendRecording(): void {
+  recording = false;
+  observer.disconnect();
+  if (inputTimer) clearTimeout(inputTimer);
+  inputTimer = undefined;
+  pendingInput = undefined;
+  if (mutationTimer) clearTimeout(mutationTimer);
+  mutationTimer = undefined;
+  pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
 }
 
 /** Holds a typed value back until the field goes quiet, then emits one `dom.input`. */

@@ -2,6 +2,7 @@ import { executeActionMessage, WEB_AUTOMATION_FAILURE_CODES, webAutomationFailur
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
 import { paceNavigation, withPagePace, withPaceNote, type OriginPace } from "../background/page-pace";
+import { isOwnPage, OwnPageRefusal, ownPageRefusalFor } from "../background/tab-gate";
 import { trackActionDelivery, type ActionDelivery } from "./page-delivery";
 import {
   workerActionFailedFailure,
@@ -34,6 +35,7 @@ import { judgeLookCheck } from "./look-check";
 import { metNavigatingPage } from "./navigating-page";
 import { navigationAddress, navigationTargetTab, verifyNavigationLanding } from "./navigation";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
+import { ownPageRefusedResult } from "./own-page";
 import { parsedUrl } from "../shared/parsed-url";
 
 export type BrowserActionRunRequest = {
@@ -118,6 +120,8 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   if (action.actionType === "web.browser.navigate" && typeof action.url === "string") {
     const address = navigationAddress(action.url, { pages: await navigationBasePages(action, request), ownOrigins: request.ownOrigins ?? [], extensionUrl: extensionBaseUrl() });
     if ("refused" in address) return withTarget(navigationAddressFailure(action, startedAt, address.refused), currentAutomationTabId(), undefined);
+    // FluxIQ's own pages are never driven to (`background/tab-gate/`).
+    if (isOwnPage(address.url)) return withTarget(ownPageRefusedResult(action, startedAt, `a page FluxIQ may automate at "${address.url}"`), currentAutomationTabId(), undefined);
     action = { ...action, url: address.url };
   }
   const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
@@ -131,7 +135,22 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   const runOn = isNavigation && closesOpenedTabs(action) ? await afterClosingOpenedTabs(request) : request;
   const drivenBefore = currentAutomationTabId();
   const tabRequest = await tabRequestFor(action, runOn, isNavigation);
-  const { tabId, drive } = await resolveAutomationTab(tabRequest);
+  // The tab the action would run in is checked before anything reaches it --
+  // before it is fronted, driven or sent to -- whether the command named it, a
+  // lease granted it or it is simply the page in front. FluxIQ's own page is
+  // refused out loud, never swapped for another tab (`background/tab-gate/`).
+  const named = tabRequest?.requestedTabId === undefined ? undefined : await ownPageRefusalFor(tabRequest.requestedTabId);
+  if (named !== undefined) return withTarget(ownPageRefusedResult(action, startedAt, "a tab FluxIQ may automate", named), undefined, undefined);
+  let resolved: Awaited<ReturnType<typeof resolveAutomationTab>>;
+  try {
+    resolved = await resolveAutomationTab(tabRequest);
+  } catch (error) {
+    if (error instanceof OwnPageRefusal) return withTarget(ownPageRefusedResult(action, startedAt, "a tab FluxIQ may automate", error), undefined, undefined);
+    throw error;
+  }
+  const { tabId, drive } = resolved;
+  const reached = await ownPageRefusalFor(tabId);
+  if (reached !== undefined) return withTarget(ownPageRefusedResult(action, startedAt, "a tab FluxIQ may automate", reached), undefined, undefined);
   // Anything but a read sent to the tab ends its kept look: the look after an act is always a fresh capture (`look-reuse/`).
   keptLooks.forget(tabId, action);
   // A Flow's new-tab navigate opened this tab, so it is FluxIQ's to close.
@@ -172,6 +191,9 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     try {
       inFrame = await runActionInFrame(action, startedAt, tabId, frameId, request.pace, delivery, request.noteDispatch);
     } catch (error) {
+      // The document the command reached refused it as FluxIQ's own page
+      // (`content/own-document/`): nothing was done there, and it is said as the refusal it is.
+      if (error instanceof OwnPageRefusal) return withTarget(ownPageRefusedResult(action, startedAt, "a tab FluxIQ may automate", error), undefined, undefined);
       if (delivery.mayHaveReachedPage()) throw error;
       return withTarget(undeliveredActionFailure(action, error), tabId, frameId);
     }
