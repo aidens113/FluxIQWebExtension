@@ -9,7 +9,7 @@ export const SIGN_IN_TO_APPROVE_LINE = "Sign in on FluxIQ's page to approve. Use
 export const CONNECT_LINE = "Press Connect so FluxIQ can work in this browser.";
 export const CONNECT_AGAIN_LINE = "Connect to pick up where you left off.";
 export const CONNECT_FAILED_LINE = "Can't reach FluxIQ.";
-export const APPROVE_LINE = "In FluxIQ, check that its request shows this code, then press Confirm pairing.";
+export const APPROVE_LINE = "In FluxIQ, check that its request shows this code, then press Confirm.";
 /** The browser was approved once, and nothing since has said it still is. */
 export const APPROVED_EARLIER_LINE = "This browser was approved earlier. Connect to check it still is.";
 /** After a connection that was refused or lost: FluxIQ may have been told to forget this browser. */

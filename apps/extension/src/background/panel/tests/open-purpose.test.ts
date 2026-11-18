@@ -32,9 +32,9 @@ function depsFor(coreApiUrl: string) {
 
 const open = (extra: Record<string, unknown>) => ({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, ...extra });
 
-test("the keys page sits at the root of the configured address", () => {
-  assert.equal(fluxIQKeysAddress("https://flux.example/app/?a=1#b"), "https://flux.example/security/keys");
-  assert.equal(fluxIQKeysAddress(undefined), "http://127.0.0.1:3000/security/keys");
+test("the AI keys page sits at the root of the configured address", () => {
+  assert.equal(fluxIQKeysAddress("https://flux.example/app/?a=1#b"), "https://flux.example/settings#ai-keys");
+  assert.equal(fluxIQKeysAddress(undefined), "http://127.0.0.1:3000/settings#ai-keys");
   assert.equal(fluxIQKeysAddress("ftp://flux.example"), undefined);
   assert.equal(fluxIQKeysAddress("not an address"), undefined);
 });
@@ -43,18 +43,18 @@ test("purpose model-key opens the keys page and answers its address", async (t) 
   installChrome(t);
   const h = depsFor("http://127.0.0.1:4711/some/path");
   const result = await handlePanelControl(open({ purpose: "model-key" }), sidepanel, h.deps);
-  assert.deepEqual(h.opened, ["http://127.0.0.1:4711/security/keys"]);
-  assert.deepEqual(result, { handled: true, response: { ok: true, url: "http://127.0.0.1:4711/security/keys" } });
+  assert.deepEqual(h.opened, ["http://127.0.0.1:4711/settings#ai-keys"]);
+  assert.deepEqual(result, { handled: true, response: { ok: true, url: "http://127.0.0.1:4711/settings#ai-keys" } });
 });
 
-test("purpose model-key needs no custody request and clears query and fragment", async (t) => {
+test("purpose model-key opens AI keys with only its own fragment, dropping the old query and fragment", async (t) => {
   installChrome(t);
   const h = depsFor("http://127.0.0.1:4711/app?old=1#unlock=obsolete");
   await handlePanelControl(open({ purpose: "model-key" }), sidepanel, h.deps);
   const url = new URL(h.opened[0]!);
-  assert.equal(url.pathname, "/security/keys");
+  assert.equal(url.pathname, "/settings");
   assert.equal(url.search, "");
-  assert.equal(url.hash, "");
+  assert.equal(url.hash, "#ai-keys");
 });
 
 test("purpose projects opens the projects page and answers its address", async (t) => {

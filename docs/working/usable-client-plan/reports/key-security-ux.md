@@ -1,6 +1,6 @@
 # Key and security UX (task t925, sub-supervisor key-security-ux)
 
-Status: phases 1 (audit) and 2 (design) done, the design revised after an adversarial review; phase 3 (fixes) waits for the lead's check of the design and for t924's model-access contract. The lead's extra item (the /chats list not following the change stream) is fixed and checked.
+Status: phases 1-2 done and approved; phase 3 fixes done and checked by unit tests, typechecks, structure audits and builds; the after-screenshots and the live approved-client proof wait for t928 to land and be merged into t925. The /chats item is fixed.
 
 Trees: Core `fxwork/t925/!FluxIQ` (W = `apps/web/src`, U = `packages/ui-components/src`), extension `fxwork/t925/!FluxIQWebExtension` (X = `apps/extension/src`). Instance: production panel http://127.0.0.1:3100, gateway ws://127.0.0.1:4877/client, fresh data in the t925 extension tree's `.fluxiq`, log `test-runs/t925-panel.log`; owner sign-in in `test-runs/t925-panel-credential.txt` (git-ignored). Still running. The extension audit's Playwright browser is still open and paired (`test-runs/key-security-ux/audit-before/extension/daemon.mjs`).
 
@@ -114,6 +114,107 @@ Worker `chats-list-live` (Sonnet, report `key-security-ux/chats-list-live.md`). 
 - Checks run by me: `npx vitest run src/features/chats` (apps/web) -> 3 files, 12 tests passed; `pnpm --filter @fluxiq/web check` -> web:check built, no tsc errors; `node scripts/structure-audit.mjs` (Core) -> "structure-audit: passed (549 warning(s), 914 baselined)".
 - Not verified: live on 3100 (the running instance serves the build from before the change); that an assistant chat's row link (`/chats/<id>?project=panel`) opens the thread (the chat widget routes project `panel` to the assistant's own port, `features/chat-widget/transport/composed-conversation-port.ts:39`, so it is likely); `pnpm --filter @fluxiq/web build` (not run: it rewrites the `.next` folder the running instance serves from; to run when the instance is restarted for phase 3).
 
+## Phase 3: fixes
+
+Lead's decisions (2026-11-17):
+- The design is approved with the reviewer's corrections.
+- Reveal is removed: a key is replaced, never shown again.
+- Security > Keys moves to Settings > Advanced and no longer handles AI keys.
+- Workspace sharing shows only when there is a second person.
+- The PIN leaves the UI.
+- The budget is nine workers.
+- Backend items 1-4, 6, 8 and 9 went to t924 and the key-backend task (t928). The login defect and `AuthShell.tsx` went to t927.
+- Ownership was granted for `GlobalClientGatewayPairing.tsx`, `app/connect/**`, `not-found.tsx` and `X/shared/{constants,fluxiq-web-routes}.ts`. Later also for `open-purpose.test.ts`, the test-runner keys-page proof, `prove.ts` and `demo-workspace/panel-navigation.ts`, with the tests beside them.
+
+### Workers
+| Worker | Tier | Brief | Outcome | Verified by me |
+|---|---|---|---|---|
+| shared-model-access | Sonnet | `test-runs/key-security-ux/brief-shared-model-access.md` | Partial. Built the six-state card, `ModelKeysPort`, the compact card in the chat's empty state and the composer's disabled reason; ui-components is now 0.15.0. The duplicate chat title (E13) is not wired yet. | ui-components check; `vitest run src/model-access src/chat`: 112 files, 758 tests; structure audit |
+| panel-security | Sonnet | `brief-panel-security.md` | Done. Security has four tabs (Your sign-in, Devices and apps, People, Activity). Also: a plain password dialog, sign-out goes to the sign-in page, no PIN anywhere, the devices list, invite wording, Activity in plain sentences, the account menu, the pairing dialog, and links on the `/connect` and 404 pages. The "Credential vault" row is removed: `vault.unlocked` is a display flag, and nothing on model access or key saving reads it. | web check; 45 files, 341 tests; banned-word grep (I fixed the admin password dialog's "New value", "privileged action" and "Save Credential" myself) |
+| panel-keys | Sonnet | `brief-panel-keys.md` | Done. New `W/features/model-keys/` port and card view. Settings > AI keys at `/settings#ai-keys` with the card and a restyled list (P10 was caused by `.settings-page input { min-height: 36px }`). No Reveal. Remove is one call, with no `mint-press-grant` first, which was the cause of the 400s. Sharing is hidden for one person. Dock and Home show the compact card, and Home's pairing card updates live from `useGatewayChanges`. The advanced manager is at `/settings/saved-logins`, `/security/keys` redirects, and Connect a client moved to Security. | web check; 116 files, 934 tests (worker); my re-run of model-keys and chat-widget: 21 files, 173 tests |
+| extension-keys-connect | Sonnet | `brief-extension-keys-connect.md` | Partial. The card is in Settings > Model and the chat, with one reader (the duplicate parser and the setup card are deleted). Step 1 checks the configured server against a valid discovery document, takes `gatewayUrl` from it, and offers "Change". Step 4 is never Done while disconnected, with new revoke wording. Small fixes E4, E5, E18, E19, E21. The compact chat card does not refresh after a chat failure. | extension check; 325 tests over panel/{settings,chat,getting-started,open-fluxiq,shell} and shared/tests; extension structure audit |
+| chats-list-live | Sonnet | `brief-chats-list-live.md` | Done (see the extra item below) | see the extra item below |
+| after-screenshots | Sonnet | `brief-after-screenshots.md` | Not yet run. It waits for t928 to land on dev and be merged into t925 (lead's decision), so the key journeys show the real flow. | - |
+
+The after-screenshots worker is Sonnet, not Haiku as the brief suggested. The UI changed enough that the before scripts must be rewritten and each finding judged.
+
+### Integration edits I made
+- **Card state** (`U/model-access/state.ts`, `words.ts`): an optional Core message and action label (for `not_permitted` and `key_unopenable`), and the time of the last answer on Ready.
+- **Contract mapper** (`U/model-access/contract/`, new):
+  - `CoreModelAccess` is a structural copy of t924's `ModelAccessState`, because ui-components and apps/web do not depend on @fluxiq/contracts.
+  - `modelAccessFromCore` maps it exactly as the lead specified:
+    - ready -> Ready;
+    - no_key -> No key;
+    - key_unopenable -> Can't open;
+    - not_permitted -> the No key look, with Core's message and "Add your own key";
+    - provider_refused -> Not accepted;
+    - provider_unreachable -> Can't reach;
+    - null -> Update FluxIQ.
+  - 4 tests.
+- **Card actions:** Try now now re-reads in place (`U/model-access/key/card.ts`). Before, every card action pressed Open FluxIQ. `U/chat/widget/options.ts` (`onModelKeyAction`) and `U/chat/chat-widget.ts` now route the other actions to the host. The panel passes them in `ProgramChatWidget.tsx` and `panel-chat-options.ts`: Change model goes to `/settings#assistant-model`, the rest to `/settings#ai-keys`.
+- **Panel port:** `requiresPassword` is false (the lead's interface; Core's secret-keys stops asking for a password once t928 lands). A `modelAccess` in a create or rotate answer is shown without a second read.
+- **Extension port:** writes go through `send-key-write.ts` with no password:
+  - `fluxiq.panel.modelKeySave {provider, key, name?}`;
+  - `modelKeyReplace {key}`;
+  - `modelKeyRemove {}`.
+  - The answer's `modelAccess` becomes the card state. An unknown-message reply shows as a failed save in its own words. The key value travels in that one message only.
+  - The message names are local constants until t928 lands, then `RUNTIME_MESSAGES.panelModelKeySave` and the others.
+- **Tests:**
+  - open-purpose (background) and the test-runner keys-page proof expect `/settings#ai-keys` only, because the proof runs against the Core beside it.
+  - `prove.ts` and `demo-workspace/panel-navigation.ts` find the approval dialog by its new title, "A browser or app wants to connect", and its "Confirm" button.
+  - The check `configurationHasNoUnlockFragment` is renamed `configurationOpensAiKeys`. Its only reader was `prove.ts`. The old name remains only in two historical reports, `final-acceptance.md` and `final-live-check.md`; they record past runs and are left as written.
+  - The extension's approve line says "press Confirm".
+- **Docs:** `docs/user/quickstart.md`:
+  - section 3 is rewritten for the one AI-key journey: either provider, Save and check, the five states, no password or PIN;
+  - the pairing step uses the new dialog and button names;
+  - the getting-started steps are updated.
+- **Crash recovery** (machine crash at 17:13):
+  - I scanned every changed file in both trees for empty or NUL content. Only `U/model-access/key/tests/card.test.ts` was destroyed (14,500 NUL bytes). I restored it from HEAD read-only and reapplied my edit.
+  - I checked my other post-merge edits by content (17 spot checks).
+  - I rebuilt the dist outputs through heavy slots.
+
+### Phase 3 checks (observed)
+- Core libraries through a heavy slot -> ui-components rebuilt; the other four steps matched their stamps.
+- ui-components:
+  - `pnpm --filter @fluxiq/ui-components check` -> passed;
+  - `vitest run src/model-access src/chat` -> 113 files, 763 tests passed (before the crash);
+  - after the restore, `vitest run src/model-access` -> 3 files, 19 tests passed.
+- Web:
+  - `pnpm --filter @fluxiq/web check` -> passed;
+  - vitest on model-keys and chat-widget -> 21 files, 173 passed;
+  - vitest on security, accounts, panel-shell, connect, app routes and chats -> 45 files, 341 passed.
+- `node scripts/structure-audit.mjs`:
+  - Core -> "passed (549 warning(s), 914 baselined)", after I fixed one packing violation in my added test;
+  - extension -> "passed (251 warning(s), 551 baselined)".
+- Extension, through slots where heavy:
+  - `pnpm build` -> exit 0;
+  - `pnpm --filter @fluxiq-web-extension/extension check` -> exit 0;
+  - `test-extension.mjs panel/settings panel/chat panel/getting-started panel/open-fluxiq panel/shell shared/tests` -> 325 pass;
+  - `background/panel` -> 99 pass;
+  - `panel/getting-started` after the step-word change -> 47 pass.
+- Test-runner:
+  - build through a slot -> built;
+  - `keys-page.test.js` -> 2 pass;
+  - `pnpm test` in packages/test-runner through a slot -> 2,853 tests, 2,848 pass, 0 fail, 0 cancelled.
+- Live: the after-screenshots and the approved-client proof under a live slot wait for the t928 merge.
+
+### Open
+- **Waiting on t928** (key writes without a password, and the three relay messages). Then:
+  - switch `send-key-write.ts` to the shared constants;
+  - rebuild;
+  - run the after-screenshots and the approved-client proof once under the live slot.
+- **Left from the design:**
+  - P36: a hidden dialog in the DOM;
+  - E18: the "signed in as" line;
+  - permission checkboxes ticked by default (a product call);
+  - E22/E23: native scrollbars.
+- **Other known gaps:**
+  - "Could not check what needs you" on Home was not reproduced. Candidate cause: Core `list.ts:20-30` throws when any one project's listing throws.
+  - The E13 duplicate title needs `threads/chat-threads.ts:182` to pass the first message.
+  - The composer does not yet say the key-state sentence; only its disabled reason does.
+  - P3, P28 and E6 wait for t927's AuthShell.
+- **Two-step sign-in:** with it on, Core's delete and rotate still ask for the code, which the card does not carry. t928 decides whether they still do.
+
 ## Commands run (sub-supervisor)
 - `node scripts/build-cache/cli.mjs contracts:build sdk:build fluxiq:build client-gateway-websocket:build ui-components:build` (Core t925) -> all five steps "reuse", no errors.
 - `pnpm build` (extension t925) -> exit 0.
@@ -121,6 +222,7 @@ Worker `chats-list-live` (Sonnet, report `key-security-ux/chats-list-live.md`). 
 - The Chats checks above.
 
 ## Not verified
-- Anything about keys working: expected broken until t924 lands.
-- The extension audit's first open probed the built-in default 127.0.0.1:3000 (t924's port) once, read-only, before it was pointed at 3100; nothing was sent there beyond the reachability probe.
-- Firefox popup; invite email delivery; two-factor enrolment; the Roles and Authentication Policy tabs.
+- Any live look at the phase 3 UI: the after-screenshots, the approved-client proof (`node packages/test-runner/dist/extension-chat-check/cli.js --browser chrome --scenario everything-store --page ./ --no-ask --model-key`) and `pnpm --filter @fluxiq/web build` are deferred until t928 is merged into t925, so each runs once against the final code (lead's decision). The before audit's dummy-key journeys also showed keys failing, which t924 has since fixed.
+- Saving a key from either client before t928: the panel card sends no password (Core still asks for one), and the extension's relay does not know the three messages yet. Both show Core's or the relay's refusal.
+- The extension audit's first open probed the built-in default 127.0.0.1:3000 (t924's port) once, read-only, before it was pointed at 3100.
+- Firefox popup; invite email delivery; two-factor enrolment; the Roles and Authentication Policy tabs; 360 px rendering of the new card in a real browser.
