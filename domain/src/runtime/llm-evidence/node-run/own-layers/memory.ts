@@ -22,6 +22,10 @@
 // a value (t885: a timed card that rose as a field was typed in). A layer
 // is what `../layer/element.ts` says it is, or a dialog an element was captured
 // inside (`inDialog`), as `../press-effect/answered-layer.ts` reads one.
+// An act that answered an interruption owns none of the fresh layers, tied or
+// not: cleanup after that answer must not become required when replay skips
+// the original interruption. The runtime passes this already-observed fact
+// into the memory; neither the model nor timing supplies it.
 //
 // **Why a handle is a sound key.** A handle keeps naming the same element
 // across every capture of one Flow (`../../stable-handles.ts`): it is issued per
@@ -53,9 +57,11 @@
 // dialog's controls.
 //
 // **What it does not know.** An unmarked layer that opens on a timer in the
-// instant between a press and the look after it, over nothing else new and tied
-// to nothing, is read as opened by that press; and one a set value raised with
-// no tie to its control is read as an interruption (`./opened-by.ts`). And a
+// instant between a press that answered no interruption and the look after
+// it, over nothing else new and tied to nothing, is read as opened by that
+// press. An interruption answer is excluded by its known provenance. One a set
+// value raised with no tie to its control is read as an interruption
+// (`./opened-by.ts`). And a
 // build Core starts anew to continue a Flow (a stopped build continued later,
 // under a new build id) starts with nothing remembered, so a layer a held step
 // opened is not known to be the Flow's own. Both read as an interruption,
