@@ -80,7 +80,7 @@ test("the reshaping form writes a read of other columns and a press for a later 
 });
 
 test("it repeats over the read, runs forward from it, and says so when the forward run did not pass", () => {
-  const steps = [{ step: 6, actionId: "web.output.dom-extract_list", disposition: "kept" }, { step: 7, actionId: "web.output.dom-click", disposition: "kept" }];
+  const steps = [{ step: 6, callId: "read-invitations", actionId: "web.output.dom-extract_list", disposition: "kept" }, { step: 7, callId: "accept-first", actionId: "web.output.dom-click", disposition: "kept" }];
   const hand = [DETECTED, made("read-invitations"), made("accept-first")];
   const amended = decide("plain", [...hand, made("draft", "core.flow_draft", { steps })]);
   assert.deepEqual(amended.amendments, [{ step: 7, change: "repeat", over: 6 }]);
@@ -89,6 +89,36 @@ test("it repeats over the read, runs forward from it, and says so when the forwa
   assert.equal(forward.toolId, "core.run_flow");
   assert.equal(forward.input?.from, 6);
   assert.throws(() => decide("plain", [...hand, made("draft", "core.flow_draft", { steps: repeating }), made("forward", "core.run_flow", { passed: false })]), /did not pass/u);
+});
+
+test("the repeat goes on the press by hand even when a conversation closed after it is the last press in the draft", () => {
+  // run-mwm2glmb-f6c5aed3: a conversation opened over the page right after the accept by hand, its Close was step 8,
+  // and a repeat on the last press of its kind looked for that Close in every row.
+  const steps = [
+    { step: 6, callId: "read-invitations", actionId: "web.output.dom-extract_list", disposition: "kept" },
+    { step: 7, callId: "accept-first", actionId: "web.output.dom-click", disposition: "kept" },
+    { step: 8, callId: "close-7", actionId: "web.output.dom-click", disposition: "kept" },
+  ];
+  const hand = [DETECTED, made("read-invitations"), made("accept-first"), made("close-7")];
+  assert.deepEqual(decide("notes-back", [...hand, made("draft", "core.flow_draft", { steps })]).amendments, [{ step: 7, change: "repeat", over: 6 }]);
+  const repeating = [steps[0], { ...steps[1], runs: "repeats through step 7, over step 6" }, steps[2]];
+  assert.equal(decide("notes-back", [...hand, made("draft", "core.flow_draft", { steps: repeating })]).input?.from, 6);
+});
+
+test("the reshaping form repeats the press it wrote over the read it wrote, not the steps by hand", () => {
+  const steps = [
+    { step: 6, callId: "read-invitations", actionId: "web.output.dom-extract_list", disposition: "taken" },
+    { step: 7, callId: "accept-first", actionId: "web.output.dom-click", disposition: "taken" },
+    { step: 8, callId: "write-read", actionId: "web.output.dom-extract_list", written: true },
+    { step: 9, callId: "write-accept", actionId: "web.output.dom-click", written: true },
+  ];
+  const hand = [DETECTED, made("read-invitations"), made("accept-first"), made("write-read"), made("write-accept")];
+  assert.deepEqual(decide("reshape", [...hand, made("draft", "core.flow_draft", { steps })]).amendments, [{ step: 9, change: "repeat", over: 8 }]);
+});
+
+test("a repeat is never put on a step the draft does not name by the script's own call", () => {
+  const steps = [{ step: 6, actionId: "web.output.dom-extract_list", disposition: "kept" }, { step: 7, actionId: "web.output.dom-click", disposition: "kept" }];
+  assert.throws(() => decide("plain", [DETECTED, made("read-invitations"), made("accept-first"), made("draft", "core.flow_draft", { steps })]), /no unique step for accept-first/u);
 });
 
 test("a form the script does not have is refused, and the default is the plain one", () => {
@@ -128,7 +158,7 @@ test("the notes-back form reads the tagged conversations' name and own message l
 
 test("every form takes its deliberately selected accepted read before completing", () => {
   for (const form of ["plain", "reshape", "thin", "notes-back"]) {
-    assert.deepEqual(decide(form, [...accepted, draft(resultStep("read-accepted", "taken"))]), { kind: "amend_draft", amendments: [{ change: "take", call: "read-accepted" }] });
+    assert.deepEqual(decide(form, [...accepted, draft(resultStep("read-accepted", "taken"))]), { kind: "amend_draft", amendments: [{ step: 14, change: "add" }] });
     assert.equal(decide(form, [...accepted, draft(resultStep("read-accepted", "kept"))]).kind, "complete");
   }
 });
@@ -141,7 +171,7 @@ test("a completed result read is authored before any unrelated page action or tr
       const decision = decide(form, extra, moved);
       assert.equal(decision.kind, disposition === "taken" ? "amend_draft" : "complete");
       assert.equal(decision.toolId, undefined);
-      if (disposition === "taken") assert.deepEqual(decision.amendments, [{ change: "take", call }]);
+      if (disposition === "taken") assert.deepEqual(decision.amendments, [{ step: 14, change: "add" }]);
     }
   }
 });
@@ -156,7 +186,7 @@ test("a later Messaging look is taken by actual call identity while earlier rows
   const extra = [...notesRead, made("probe"), made("result", "core.result", { result: "step 6, 3 rows" })];
   const before = draft(resultStep("back-read", "taken"), ...otherSteps);
   const unchanged = JSON.stringify(before);
-  assert.deepEqual(decide("notes-back", [...extra, before], MESSAGING), { kind: "amend_draft", amendments: [{ change: "take", call: "back-read" }] });
+  assert.deepEqual(decide("notes-back", [...extra, before], MESSAGING), { kind: "amend_draft", amendments: [{ step: 14, change: "add" }] });
   assert.equal(JSON.stringify(before), unchanged);
   assert.deepEqual(otherSteps.map((step) => step.disposition), ["kept", "taken", "kept", "dropped"]);
   assert.equal(decide("notes-back", [...extra, draft(resultStep("back-read", "kept"), ...otherSteps)], MESSAGING).kind, "complete");
@@ -204,7 +234,7 @@ test("the script keeps its decision and judge allowances, and every notes-back j
   for (const form of ["plain", "reshape", "thin", "notes-back"]) {
     const replies = scriptedModelScriptFor(TASK, form).replies;
     assert.equal(replies.evidence_tool_decision?.length, 24);
-    assert.equal(replies.loop_verification?.length, form === "notes-back" ? 3 : 1);
+    assert.equal(replies.loop_verification?.length, form === "notes-back" ? 4 : 1);
     assert.equal(replies.panel_command?.length, form === "notes-back" ? 2 : 1);
   }
   for (const reply of scriptedModelScriptFor(TASK, "notes-back").replies.loop_verification!) {
