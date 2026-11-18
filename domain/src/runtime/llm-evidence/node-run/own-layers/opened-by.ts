@@ -8,7 +8,15 @@
 // and a later run on a page that remembered "later" stopped on it
 // (`executor.target.gone`). Timing says when a layer came, not what brought it.
 //
-// **What the page shows first.** A layer tied to the acted control
+// **An interruption answer owns no fresh layer.** It runs only when that
+// interruption is there, so a card seen after it cannot make its own answer a
+// required step. This holds whether the card came from that answer or from a
+// timer in the same instant, and whether the page ties it to the control or
+// not. The runtime already knows what the press answered; timing and the
+// model's words cannot overrule that fact. A required opener keeps its layers.
+// Core still requires every step that does one of the person's acts.
+//
+// **What the page shows next.** A layer tied to the acted control
 // (`./tied.ts`: the control names it, or it hangs from the control's edge) is
 // the act's, whatever the act was. Where some new layers are tied, those alone
 // are the act's.
@@ -49,6 +57,7 @@ import { webLayerTiedToControl } from "./tied";
 /** Of `fresh` -- layers on `after` that were not on `before`, the same page -- those `act` opened. */
 export function webLayersOpenedBy(act: WebNodeLayerAct, before: WebLlmPageEvidence, after: WebLlmPageEvidence, fresh: readonly string[]): readonly string[] {
   if (fresh.length === 0) return fresh;
+  if (act.answered) return [];
   const handle = canonicalWebLlmTargetHandle(act.handle);
   const was = handle === undefined ? undefined : before.elements.find((element) => element.target === handle);
   const now = handle === undefined ? undefined : after.elements.find((element) => element.target === handle);
