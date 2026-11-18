@@ -125,6 +125,29 @@ test("malformed explicit availability remains unknown through the relay", async 
   }
 });
 
+test("readiness forwards Core's model-access state without the key id", async () => {
+  const modelAccess = {
+    status: "provider_refused",
+    message: "Anthropic (Claude) refused the saved model key.",
+    key: { id: "secret:private-id", name: "admin", provider: "anthropic", model: "claude-sonnet-4-5" },
+    lastCall: { outcome: "provider_refused", atMs: 1_700_000_000_000 }
+  };
+  const h = harness({ snapshot: { ok: true, payload: { keys: [{ kind: "llm", enabled: true }], modelAccess } } });
+  const reply = await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness });
+  assert.deepEqual(reply, { ok: true, payload: {
+    keys: [{ kind: "llm", enabled: true }],
+    modelAccess: { ...modelAccess, key: { name: "admin", provider: "anthropic", model: "claude-sonnet-4-5" } }
+  } });
+  assert.doesNotMatch(JSON.stringify(reply), /private-id/u);
+});
+
+test("a malformed model-access state is dropped by the relay", async () => {
+  for (const modelAccess of [null, "ready", {}, { status: "future_status", message: "x", key: null, lastCall: null }]) {
+    const h = harness({ snapshot: { ok: true, payload: { keys: [{ kind: "llm", enabled: true }], modelAccess } } });
+    assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness }), { ok: true, payload: { keys: [{ kind: "llm", enabled: true }] } }, JSON.stringify(modelAccess));
+  }
+});
+
 test("an explicitly invalid provider cannot become the legacy default provider", async () => {
   for (const provider of [null, "", " ", 42, {}]) {
     const h = harness({ snapshot: { ok: true, payload: { keys: [{ kind: "llm", enabled: true, provider }] } } });

@@ -14,6 +14,7 @@
 // well as in Core, so an older Core that answered whole summaries still puts
 // no key name or metadata in the panel.
 
+import { pairedClientModelAccessState, readModelAccessState } from "@fluxiq/contracts/platform";
 import { readModelKeyAvailability } from "fluxiq/ui";
 import { AUTOMATION_PANEL_MESSAGES, type PanelRelayResponse, type AutomationPanelRequest, type PanelModelKeySummary } from "../../shared/protocol";
 import { relayPartsRequest } from "./parts-relay";
@@ -181,7 +182,12 @@ async function modelReadiness(deps: AutomationRelayDeps): Promise<PanelRelayResp
       ...(availability !== undefined ? { availability: readModelKeyAvailability(availability) } : field(key, "unlocked") === false ? { unlocked: false as const } : {})
     };
   });
-  return { ok: true, payload: { keys } };
+  // Core's model-access state (t924) says whether the key in use works and,
+  // when not, why, in the words the chat replies with. Read through the
+  // contract, so a malformed one is dropped, and with no key id, as Core sends
+  // it to paired clients.
+  const modelAccess = readModelAccessState(field(snapshot.payload, "modelAccess"));
+  return { ok: true, payload: { keys, ...(modelAccess ? { modelAccess: pairedClientModelAccessState(modelAccess) } : {}) } };
 }
 
 function field(value: unknown, key: string): unknown {

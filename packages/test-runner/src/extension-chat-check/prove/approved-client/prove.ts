@@ -3,6 +3,8 @@ import type { ChatCheckContext } from "../../types.js";
 import { connectWithCredentialCopy } from "./credential-copy.js";
 import { probeApprovedClientModel } from "./model-probe.js";
 import type { ApprovedClientAccessObservation } from "./observation.js";
+import { holdPanelChatPage } from "./panel-stream-reconnect.js";
+import { PUSH_PROOF_OPENING_TURN, provePanelTurnPush } from "./panel-turn-push.js";
 import { approvedClientModelReadiness } from "./readiness.js";
 import { revokeAndProbeCredential } from "./revoke-probe.js";
 import { KEYS_PAGE_PATH, isBareKeysPageAddress } from "./keys-page.js";
@@ -14,6 +16,8 @@ export type ApprovedClientAccessInput = {
   configureKey(): Promise<void>;
   selectProject(): Promise<void>;
   gatewaySnapshot(): Promise<unknown>;
+  /** Writes a turn into a chat as the signed-in person the web panel acts for, the request the panel's own chat makes. */
+  writePanelTurn(conversationId: string, text: string): Promise<void>;
   model: { calls(): readonly { answered: boolean }[]; receipts(): readonly string[] };
   fluxiqOrigin: string;
   gatewayUrl: string;
@@ -47,6 +51,10 @@ export async function proveApprovedClientAccess(context: ChatCheckContext, input
   result.checks.approvedWithoutAKey = await connection() === "connected" && initial === "missing";
   const library = await runtimeMessage(control, { type: "fluxiq.panel.listParts" }) as { payload?: { parts?: unknown[] } };
   result.checks.keylessLibraryUsesPairedAuthority = Array.isArray(library.payload?.parts);
+  // With no key set, a turn calls no model, so the loopback fixture is not asked about it.
+  const pushed = await provePanelTurnPush(context, input);
+  result.panelTurnPush = pushed.observation;
+  Object.assign(result.checks, pushed.checks);
   await input.configureKey();
   await waitFor(readiness, (state) => state === "available");
   await probe("configured-later");
@@ -61,10 +69,22 @@ export async function proveApprovedClientAccess(context: ChatCheckContext, input
   result.checks.reconnectedWithoutReapproval = reconnected === "connected";
   await probe("after-reconnect");
 
-  await input.restartCore();
-  const restarted = await waitFor(connection, (state) => state === "connected");
-  result.checks.restartedWithoutReapproval = restarted === "connected";
-  await probe("after-core-restart");
+  // A panel page signed in and held open across the restart: it must reopen its own change stream.
+  const heldPanel = await holdPanelChatPage(context, { fluxiqOrigin: input.fluxiqOrigin, cookie: await input.signIn(), conversationId: result.panelTurnPush!.conversationId });
+  try {
+    await heldPanel.settled(PUSH_PROOF_OPENING_TURN);
+    const restartBegan = Date.now();
+    await input.restartCore();
+    const restarted = await waitFor(connection, (state) => state === "connected");
+    result.checks.restartedWithoutReapproval = restarted === "connected";
+    await probe("after-core-restart");
+    const changeText = `Written from the web panel after the Core restart ${Date.now().toString(36)}`;
+    const reconnect = await heldPanel.proveReconnect(restartBegan, { caughtUpText: "Approved client access confirmed: after-core-restart", changeText, change: () => input.writePanelTurn(result.panelTurnPush!.conversationId, changeText) });
+    result.panelStream = reconnect.observation;
+    Object.assign(result.checks, reconnect.checks);
+  } finally {
+    await heldPanel.close().catch(/* best-effort: the page is only a witness */ () => undefined);
+  }
 
   await input.signIn();
   const copy = await connectWithCredentialCopy(control, input.gatewayUrl);
