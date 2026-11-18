@@ -16,7 +16,7 @@ import type { OwnDocumentCheck } from "./check";
 /** The answer a frame gives a command: called with the reply channel, it replies once, now or later. */
 export type ContentAnswer = (sendResponse: (response: unknown) => void) => void;
 
-/** A routed command: the answer, and whether it is the liveness ping no document withholds. */
+/** A routed command: the answer, and whether it is one no document withholds (the liveness ping, the revocation). */
 export type ContentRoute = { readonly answer: ContentAnswer; readonly liveness?: true };
 
 /** A `chrome.runtime.onMessage` listener over `route`, refusing every command in FluxIQ's own page. */

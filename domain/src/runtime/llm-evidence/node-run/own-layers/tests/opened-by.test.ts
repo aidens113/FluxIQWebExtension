@@ -86,6 +86,21 @@ test("a press still owns the lone layer that rose after it, tied or not (t193)",
   assert.equal(owned(PRESS, PAGE, [...PAGE, ...CARD], "t30"), true);
 });
 
+test("an interruption answer does not own a fresh untied layer, while the same required press does", () => {
+  const answering = { ...PRESS, answered: true as const };
+  assert.equal(owned(answering, PAGE, [...PAGE, ...CARD], "t30"), false);
+  assert.equal(owned(PRESS, PAGE, [...PAGE, ...CARD], "t30"), true);
+});
+
+test("an interruption answer does not make a fresh tied layer required either", () => {
+  const opener = { ...PAGE[1]!, attributes: [["aria-controls", "next-card"]] as Array<[string, string]> };
+  const before = [FIELD, opener];
+  const after = [...before, { ...CARD[0]!, attributes: [["id", "next-card"]] as Array<[string, string]> }, ...CARD.slice(1)];
+  const answering = { ...PRESS, answered: true as const };
+  assert.equal(owned(answering, before, after, "t30"), false);
+  assert.equal(owned(PRESS, before, after, "t30"), true);
+});
+
 test("of two layers that rose as a field was typed in, only the one tied to the field is the typing's own", () => {
   const layers = createWebNodeOwnLayers();
   layers.acted(BUILD, page(PAGE), page([...PAGE, ...HANGING, ...CARD]), typed());

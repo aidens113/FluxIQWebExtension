@@ -78,6 +78,7 @@ import {
   type TabSnapshotTransport
 } from "./connection/index";
 import { inFlightRecordArea } from "./connection/in-flight/index";
+import { chromePairingEndedStorage } from "./connection/pairing-ended/index";
 import { TracePageCapturer } from "./trace-capture/index";
 
 type StatusListener = (status: ExtensionStatus) => void;
@@ -164,6 +165,16 @@ export class FluxIQConnection {
       clearError: () => { this.lastError = undefined; },
       beforeConnect: () => this.page.refresh(),
       onHostLease: () => this.projects.invalidate(),
+      // How this browser's approval ended outlives the worker, so the panel still says it after a restart.
+      pairingEndedStorage: chromePairingEndedStorage(),
+      onPairingEnded: (ended) => {
+        if (ended.state === "revoked") {
+          this.lastError = "FluxIQ revoked this browser's approval. Connect to pair it again.";
+          this.addActivity("pairing", "Approval revoked", "FluxIQ revoked this browser's approval, so it disconnected.", "danger");
+        } else {
+          this.addActivity("pairing", ended.state === "expired" ? "Approval expired" : "Approval not accepted", "FluxIQ asked to approve this browser again.", "warning");
+        }
+      },
       // Session storage (worker memory without it): queued page data never
       // outlives the browser session that recorded it.
       outbox: new ClientGatewayOutbox(
@@ -199,6 +210,8 @@ export class FluxIQConnection {
         keepAlive: () => chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError)
       }
     });
+    // How an approval ended in an earlier worker: a revoked browser still reads as revoked.
+    void this.gateway.loadPairingEnded().then((changed) => (changed ? this.emitStatus() : undefined)).catch(/* best-effort: an unreadable record leaves the status without it */ () => undefined);
     this.projects = new ProjectContext({
       settings: () => this.settings,
       session: () => this.session,
@@ -429,6 +442,8 @@ export class FluxIQConnection {
     if (activeTabId !== undefined) status.activeTabId = activeTabId;
     if (activeTabUrl) status.activeTabUrl = activeTabUrl;
     if (gateway.pairingReferenceCode) status.pairingReferenceCode = gateway.pairingReferenceCode;
+    const pairingEnded = this.gateway.pairingEnded();
+    if (pairingEnded) status.pairingEnded = { ...pairingEnded };
     if (recordingStartedAt !== undefined) status.recordingStartedAt = recordingStartedAt;
     if (lastActivityAt !== undefined) status.lastActivityAt = lastActivityAt;
     if (unsupportedPage) status.unsupportedPage = unsupportedPage;
@@ -498,6 +513,8 @@ export class FluxIQConnection {
    * dropped here either way, and with it nothing can open what Core still holds.
    */
   async forgetPairing(): Promise<boolean> {
+    // Forgetting starts over: a revoked or refused approval is no longer this browser's to report.
+    await this.gateway.forgetPairingEnded().catch(/* best-effort: the next connect clears it as well */ () => undefined);
     // Only over a live socket: `send` would otherwise queue it for a later connection, whose credential is about to be gone.
     if (this.gateway.state() !== "connected") return false;
     try {

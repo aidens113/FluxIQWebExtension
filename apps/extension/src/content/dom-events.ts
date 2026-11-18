@@ -95,8 +95,14 @@ function recordSubmit(event: Event): void {
 /** What an open shadow root is given once an interaction enters it: the events it does not let out. */
 const SHADOW_ROOT_LISTENERS = { change: recordChange, submit: recordSubmit };
 
-export function installRecordingEventListeners(): void {
-  document.addEventListener("pointerdown", (event) => {
+/** Registers the recording listeners; returns what removes them. */
+export function installRecordingEventListeners(): () => void {
+  const stops: Array<() => void> = [];
+  const listen = <K extends keyof DocumentEventMap>(target: Document | Window, type: K, listener: (event: DocumentEventMap[K]) => void, capture: boolean): void => {
+    target.addEventListener(type, listener as EventListener, capture);
+    stops.push(() => target.removeEventListener(type, listener as EventListener, capture));
+  };
+  listen(document, "pointerdown", (event) => {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     if (event.button !== 0 || event.isPrimary === false) return;
@@ -118,7 +124,7 @@ export function installRecordingEventListeners(): void {
     }));
   }, true);
 
-  document.addEventListener("click", (event) => {
+  listen(document, "click", (event) => {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
@@ -133,7 +139,7 @@ export function installRecordingEventListeners(): void {
     }));
   }, true);
 
-  document.addEventListener("input", (event) => {
+  listen(document, "input", (event) => {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
@@ -147,18 +153,18 @@ export function installRecordingEventListeners(): void {
     emitInputEvent(target);
   }, true);
 
-  document.addEventListener("change", recordChange, true);
+  listen(document, "change", recordChange, true);
 
-  document.addEventListener("submit", recordSubmit, true);
+  listen(document, "submit", recordSubmit, true);
 
   // A focus moved into a widget arrives before any key that changes it, and
   // records nothing of its own.
-  document.addEventListener("focusin", (event) => {
+  listen(document, "focusin", (event) => {
     if (!isRecording()) return;
     listenInOpenShadowRoots(event, SHADOW_ROOT_LISTENERS);
   }, true);
 
-  document.addEventListener("keydown", (event) => {
+  listen(document, "keydown", (event) => {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
@@ -177,7 +183,7 @@ export function installRecordingEventListeners(): void {
     }));
   }, true);
 
-  document.addEventListener("wheel", (event) => {
+  listen(document, "wheel", (event) => {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     if (scrollTimer) clearTimeout(scrollTimer);
@@ -199,13 +205,18 @@ export function installRecordingEventListeners(): void {
     }, 400);
   }, true);
 
-  window.addEventListener("scroll", () => {
+  listen(window, "scroll", () => {
     if (!isRecording()) return;
     if (scrollTimer) clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
       emit("dom.scroll", { scroll: { x: window.scrollX, y: window.scrollY } });
     }, 400);
   }, true);
+  return () => {
+    for (const remove of stops.splice(0)) remove();
+    if (scrollTimer) clearTimeout(scrollTimer);
+    scrollTimer = undefined;
+  };
 }
 
 /**

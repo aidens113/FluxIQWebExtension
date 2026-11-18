@@ -48,6 +48,13 @@ export function showActivityOverlay(message: ActivityContentMessage): void {
   pill.update(activityOverlayView(shown, message.overlay));
 }
 
+/** Takes the overlay out of the page and forgets what it showed, for a revoked document. */
+export function suspendActivityOverlay(): void {
+  received = undefined;
+  action = undefined;
+  pill.update(null);
+}
+
 /** `display`, with the action line already up in place of a detail that is the model's prose. */
 function actionOnly(display: ActivityDisplay): ActivityDisplay {
   if (!isModelProse(display)) return display;
