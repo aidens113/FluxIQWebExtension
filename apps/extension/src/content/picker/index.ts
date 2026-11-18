@@ -8,3 +8,4 @@
 
 export { extractionContentMessage, handleExtractionMessage } from "./messages";
 export type { ExtractionHandling } from "./messages";
+export { suspendPick } from "./session";

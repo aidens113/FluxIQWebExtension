@@ -41,10 +41,21 @@ export class AuthenticationTabs {
     return this.phase === "ready" ? this.browserSessionId : null;
   }
 
+  /** Whether the registry holds the tab, by number alone: "unavailable" until the saved ownership is read. */
+  ownership(tabId: number): "unowned" | "excluded" | "unavailable" {
+    if (this.phase !== "ready" || !Number.isSafeInteger(tabId) || tabId < 0) return "unavailable";
+    return this.owners.has(tabId) || this.reservations.has(tabId) ? "excluded" : "unowned";
+  }
+
+  /** Whether the screen must not be captured: any owned or reserved tab, or ownership not yet read. */
+  captureBlocked(): boolean {
+    return this.phase !== "ready" || this.owners.size > 0 || this.reservations.size > 0;
+  }
+
   eligible(tab: AuthenticationTabSnapshot): boolean {
     if (this.phase !== "ready" || !Number.isSafeInteger(tab.tabId) || tab.tabId < 0
       || this.owners.has(tab.tabId) || this.reservations.has(tab.tabId)) return false;
-    return this.routes.allows(tab.url);
+    return this.routes.allows(tab.url) && (tab.pendingUrl === undefined || this.routes.allows(tab.pendingUrl));
   }
 
   own(tabId: number, attemptId: string): Promise<void> {
@@ -73,6 +84,14 @@ export class AuthenticationTabs {
       await this.persist(next);
       return true;
     });
+  }
+
+  /** A tab opened by an owned tab becomes owned by the same attempt; false when the opener is not owned. */
+  inherit(tabId: number, openerTabId: number): Promise<boolean> {
+    if (this.phase !== "ready") return Promise.reject(new AuthenticationTabsError("storage_unavailable"));
+    if (!Number.isSafeInteger(openerTabId) || openerTabId < 0) return Promise.reject(new AuthenticationTabsError("invalid_owner"));
+    const attemptId = this.owners.get(openerTabId);
+    return attemptId === undefined ? Promise.resolve(false) : this.own(tabId, attemptId).then(() => true);
   }
 
   private async hydrate(): Promise<void> {

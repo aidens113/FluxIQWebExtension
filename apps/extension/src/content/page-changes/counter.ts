@@ -36,7 +36,7 @@ const DOCUMENT_EVENTS = ["input", "change", "scroll", "focusin", "focusout", "to
 
 let changes = 0;
 let observer: MutationObserver | undefined;
-const observedRoots = new WeakSet<Node>();
+let observedRoots = new WeakSet<Node>();
 
 /** Whether every node a record names is FluxIQ's own closed UI host. */
 function ownUiOnly(record: MutationRecord): boolean {
@@ -65,16 +65,28 @@ function observeShadowRoots(node: Node): void {
   }
 }
 
-/** Starts counting in this frame, once. */
-function install(): void {
-  if (observer) return;
-  observer = new MutationObserver(counted);
-  observer.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+/** Starts counting in this frame, once; returns what stops it (a second call returns a no-op). */
+function install(): () => void {
+  if (observer) return () => undefined;
+  const watched = new MutationObserver(counted);
+  observer = watched;
+  watched.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
   if (document.documentElement) observeShadowRoots(document.documentElement);
   const bump = () => { changes += 1; };
   for (const type of WINDOW_EVENTS) window.addEventListener(type, bump, { capture: true, passive: true });
   for (const type of DOCUMENT_EVENTS) document.addEventListener(type, bump, { capture: true, passive: true });
-  document.fonts?.addEventListener?.("loadingdone", bump);
+  const fonts = document.fonts;
+  fonts?.addEventListener?.("loadingdone", bump);
+  return () => {
+    watched.disconnect();
+    if (observer === watched) observer = undefined;
+    observedRoots = new WeakSet();
+    for (const type of WINDOW_EVENTS) window.removeEventListener(type, bump, true);
+    for (const type of DOCUMENT_EVENTS) document.removeEventListener(type, bump, true);
+    fonts?.removeEventListener?.("loadingdone", bump);
+    // A look taken before this stopped no longer stands: nothing counted what followed.
+    changes += 1;
+  };
 }
 
 /** This frame's mark now, with every change already made counted in it. */

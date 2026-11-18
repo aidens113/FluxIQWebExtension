@@ -8,6 +8,7 @@ export { challengeIn, robotCheckIn } from "./challenge-evidence";
 export { dispatchClickGesture } from "./click-gesture";
 export { actedClock } from "./acted-at";
 export { executeAction } from "./execute-action";
+export { waitUntil } from "./waits";
 export { opensElsewhere, watchActionNavigation } from "./navigation-watch";
 export { extraPressesMade, noteExtraPress, pressAgain, watchPressAnswered } from "./ignored-press";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";
