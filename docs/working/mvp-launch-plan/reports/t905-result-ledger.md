@@ -3,7 +3,7 @@
 ## Checkpoint 2, 2026-11-11: phase 1 (domain parts) and the phase 2 ledger core
 
 **Outcome:** Partial.
-- **Done and checked:** `listKey` from site structure on live and saved reads, through the Core record batch (`listKey` and `place` fields); exploring reads send `answer: "kept"` (D3) with truthful I4 wording; the I7 vocabulary table test is written; the phase 2 ledger `answer-first/result/` is built with its tests and is not wired.
+- **Done and checked:** `listKey` from site structure on live and saved reads, through the Core record batch (`listKey` and `place` fields); exploring reads sent `answer: "kept"` (D3; dropped 2026-11-18 in favour of dev's behaviour: exploring reads send nothing extra, the model is told which rows are rejected, Core counts them as no rows found, and Flow and replay reads return kept rows only; see `docs/working/usable-client-plan/reports/finish-branches/t905-domain-regressions.md` on dev) (D3) with truthful I4 wording; the I7 vocabulary table test is written; the phase 2 ledger `answer-first/result/` is built with its tests and is not wired.
 - **Blocked on t885's files:** where the page reports `place`, the five read-vocabulary gaps (all in `apps/extension/src/content/extraction/**`), and the wiring.
 - **Not done:** the hubs scripted-attempt fix (1d). Its reproduction run never ran to completion, for the reasons below. It will run on the tree after your dev merge.
 
