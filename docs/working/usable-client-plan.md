@@ -372,6 +372,36 @@ Workers build against these at the same time; a change needs the lead.
   - t931: checks and Core tests passed; web 2 failed, 265 passed (timeouts with EBUSY in `web-workspaces.test.ts`).
 - Outcome: the hosted sign-up page and commerce config are on `dev`, and t893 is finished. Open: t928 fix round, t931 claim release, t943 expiry test, t945, t905 guard, t925, t946, t947, checkout.
 
+### 2026-11-18 — t943, t947, t945, t949 and t931 merged; new installs start with no login
+
+- Agent: Senior supervisor; hosted-cloud supervisor; workers serving-lease-claim-release (Opus, t931), empty-repeat-zero-calls (Sonnet, t945), gateway-lifecycle-revoked (Sonnet, t949).
+- Changed:
+  - **t943 merged** (Core `fcd72a591`). A dedicated browser enrols only into its own tenant. The failing expired-ticket test came from the test world mixing two clocks (the route table captured the real `Date.now` before fake timers), so the world now runs on one injected clock.
+  - **t947 merged** (Core `068874e9f`). Membership suspend, reinstate and remove, plus an account deletion cascade through browser trust, billing and the workspace's storage. Scheduled deletions are swept on every profile.
+  - **t945 merged** (Core `4436453ab`, extension `8252ac08d`). A repeat whose For Each answered done with a recorded count of 0 and took no pass now counts as run, so a later deterministic attempt makes no model call. A skipped loop, a loop with rows left, a failed list read and a run that stopped short stay `not_reached`. `NOTES_BACK_JUDGES` stays 4: attempts 2 and 3 are judged legitimately, and an attempt-4 regression would be a refused fifth judge.
+  - **t949 merged** (Core `b86b9cd58`). The gateway lifecycle test asserts t929's revoked-client behaviour: `server.revoked` and `server.disconnect`, no pairing offered, across a restart. The product was right and the test was stale.
+  - **t931 merged** (Core `b01953e5f`, extension `b88ebe891`).
+    - The panel gives its data-root claim back when close returns.
+    - A claim whose root is gone or taken leaves the process registry.
+    - `opened()` starts every identity store empty on every profile, tenant workspaces included. A hosted or self-hosted panel never holds a well-known `admin`/`admin` login before its owner is claimed, and the ~1 s of hashing that public password per new workspace is gone. Older roots still have it retired on claim, and the self-hosting and data-and-state docs say so.
+    - The slow workspace tests' cause was that hashing, not machine load: the slowest default-timeout test went from 5.1-5.3 s (timing out) to 2.2-3.6 s.
+    - Dev's seven `prepareLocalFirstRun` mock failures are fixed with it.
+  - **t946 (HC2b A)** had its work committed (`4ff6cbf1b`) and dev merged in for t942's image-build heap fix. Its service and self-hosted runs are in progress.
+  - **Checkout (t948)** has t943 and t947 and is dispatched.
+  - **Version policy:** fluxiq and contracts get one minor bump at the next Core promotion to `main`, as Core's history does. Parallel units do not bump, since they would conflict on the version line.
+  - **Machine:** Windows' drive optimisation (`defragsvc`) held about 2.5 GB, so only one heavy slot could open. Stopping it needs the user's action.
+  - **Follow-ups recorded:**
+    - **Connection pool.** Each account creation opens and closes `global.sqlite` 22-26 times (about 0.3 s of SQLite); it becomes its own task after checkout.
+    - **Answer-first ending error.** An error thrown at a task's ending after model calls is labelled `pre_provider_validation_failed` and shown as "before anything was done or spent" (`service.ts` → `generation-catch.ts` → `setup-needed.ts`); it becomes its own task after t905's service wiring.
+    - **t947's remaining follow-ups:** suspended members hidden in the multi-tenant list go to HC2b C; `closeAccount` expiring checkouts and the environments purge are in checkout; t931's command line passing a workspace id is open.
+- Validation:
+  - t943 (lead's `verify-t943-t947.sh` on dev merged in): fluxiq and web checks exit 0; Core environments and enrolment 44 passed; web environments and browser-trust 78/78 three runs in a row; audit passed; finishes exit 0.
+  - t947: contracts, fluxiq and web checks exit 0; contracts 49 passed; Core 309 passed, 1 failed (gateway-lifecycle, dev's own); web 410 passed, 7 failed (dev's own mock), 4 skipped; audit passed; finishes exit 0.
+  - t945: Core answer-first 970 passed; fluxiq check exit 0; script test "# pass 21 # fail 0"; both audits passed. The proof's own `attempt.json` (`run-mwmex6vu-17db361e`, provider scripted) shows four attempts achieved with verdict right on one Flow, calls 15, 7, 1, 0, and continuation held.
+  - t949: fluxiq check exit 0; browser-trust and client-gateway service 395 passed; both audits passed.
+  - t931: fluxiq and web checks exit 0; Core 588 passed, 4 skipped; web workspaces, instrumentation, sync, owner-claim, auth, setup and fluxiq tests 369/369 twice; both audits passed. The finish first refused because t949 had moved Core dev; dev was merged in (one test file) and both finishes exited 0.
+- Outcome: five more units are on `dev`, dev's known test failures are gone, and new installs have no default login. Open: t928 fix round (critical path), then t925's live round; t905; t946; checkout; HC-keys, HC6a and HC2b C after t928 and t925.
+
 ## Open Questions
 
 None blocking.
