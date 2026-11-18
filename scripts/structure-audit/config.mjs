@@ -49,6 +49,11 @@ export const CONFIG = {
       from: "domain/src",
       to: "apps/extension/src",
       reason: "domain code must not depend on extension UI or browser implementation modules."
+    },
+    {
+      from: "packages/browser-host",
+      to: "packages/test-runner",
+      reason: "browser-host is product code that launches the customer's browsers; it must never depend on the test harness. The harness imports from it, not the reverse."
     }
   ],
 
@@ -261,6 +266,51 @@ export const CONFIG = {
       ],
       reason: "This repository never calls a model provider: every LLM call goes through FluxIQ Core with a key held in Core's Secret Keys, and naming a provider host, SDK or key here is how a direct call starts.",
       remedy: "Ask Core for the model call through the gateway instead; a Lab file that installs a key into Core's Secret Keys belongs in the allow list."
+    },
+    // The browser's tab API reaches pages only through the tab gate
+    // (apps/extension/src/background/tab-gate/), which refuses FluxIQ's own
+    // pages -- its web panel and the sign-in routes it serves -- before any
+    // message, injected script, screenshot or tab act reaches them. A raw
+    // `chrome.tabs.sendMessage`, `chrome.scripting.executeScript`,
+    // `chrome.tabs.captureVisibleTab` or tab act anywhere else in the
+    // extension would go around it and type-check, test and build clean.
+    //
+    // The rule reads property names, so it restricts the namespaces themselves:
+    // every `.tabs` and `.scripting` access (and `{ tabs }` destructured) in the
+    // extension's source outside the gate fails. Reads go through the gate's
+    // `tabReads()`, which exposes only get, query and the change events. Type
+    // positions (`chrome.tabs.Tab`) are qualified names, not accesses, and are
+    // not read. The mirrored engine has no per-directory scope for an entry, so
+    // everything outside apps/extension/src is allowed by prefix below.
+    {
+      name: "browser tab API",
+      names: [/^tabs$/, /^scripting$/],
+      allow: [
+        // The gate itself: the one place the raw calls are made.
+        "apps/extension/src/background/tab-gate",
+        // Not the browser's API: an injected collaborator named `tabs` (the
+        // authentication-tab registry), in sign-in files another task owns.
+        "apps/extension/src/background/authentication-attempts/session.ts",
+        "apps/extension/src/background/connect/pkce/start.ts",
+        // Tests that replace one method of a stubbed `chrome.tabs` to steer a
+        // browser answer; nothing in a unit test reaches a real page.
+        "apps/extension/src/runtime/tests/navigate-action.test.ts",
+        "apps/extension/src/runtime/tests/next-page-continuation.test.ts",
+        // A destructured `tabs` that is the panel's own tab strip, not the browser's.
+        "apps/extension/src/panel/shell/tests/top-bar.test.ts",
+        // Outside the extension's shipped source: the Playwright harness and
+        // its scripts drive a real browser on purpose, and the other trees
+        // never run in the extension.
+        "apps/extension/e2e",
+        "apps/extension/scripts",
+        "apps/product",
+        "apps/scenario-lab",
+        "domain",
+        "packages",
+        "scripts"
+      ],
+      reason: "Every call that reaches a browser tab must pass the tab gate, which refuses FluxIQ's own pages before anything is sent, injected, captured or done there.",
+      remedy: "Use the gated call from apps/extension/src/background/tab-gate (sendTabMessage, executeInTab, captureWindow, activateTab, navigateTab, reloadTab, goBackInTab, closeTab, openTab), or tabReads() for get, query and tab events."
     }
   ],
 

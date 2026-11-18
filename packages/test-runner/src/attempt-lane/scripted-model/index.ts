@@ -9,3 +9,4 @@ export { routedFetch, routeModelCall, SCRIPTED_MODEL_ORIGIN_ENV, type ModelCallR
 export type { ScriptedModelScript, ScriptedReply } from "./script.js";
 export * from "./scripts/index.js";
 export { readScriptedModelRequest, type ScriptedModelKind, type ScriptedModelRequest } from "./wire-request.js";
+export { SCRIPTED_MODEL_CORRELATION_HEADER } from "./correlation-header.js";

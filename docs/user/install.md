@@ -38,7 +38,9 @@ pnpm dev
 ```
 
 The first `pnpm dev` also sets FluxIQ up. It creates a `.fluxiq/` folder inside
-this repository to hold your configuration, automations and recordings. When
+this repository to hold your configuration, automations and recordings, and
+builds the panel, which takes a few minutes the first time and is skipped
+afterwards until the code changes. When
 the terminal shows the web app is ready, open `http://127.0.0.1:3000`. Leave the
 terminal running while you use FluxIQ, and press `Ctrl+C` in it to stop.
 

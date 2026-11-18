@@ -8,27 +8,24 @@ import type { FluxIQConnection } from "../connection";
 import { callCoreProgram } from "../connection/index";
 import { readSettings, writeSettings } from "../storage";
 import { chatPageLocation } from "./chat-page";
+import { openTabForPerson, tabReads } from "../tab-gate";
 import type { PanelControlDeps } from "./panel-control";
 
 export function panelControlDeps(connection: FluxIQConnection, status: () => Promise<ExtensionStatus>): PanelControlDeps {
   return {
-    unlockTicket: async () => {
-      const snapshot = await callCoreProgram(connection.coreApiCredentials(), "snapshot", {}, "secret-keys");
-      const ticket = snapshot.ok ? (snapshot.payload as { unlockTicket?: unknown } | undefined)?.unlockTicket : undefined;
-      return typeof ticket === "string" ? ticket : undefined;
-    },
     relay: {
       // Credentials are read per call, so a token FluxIQ rotated on reconnect is the one sent.
       call: (endpoint, payload) => callCoreProgram(connection.coreApiCredentials(), endpoint, payload),
-      projectId: () => connection.resolveProjectId("panel"),
+      // The held project, not a snapshot fetch per call (`ProjectContext.forPanel`).
+      projectId: () => connection.panelProjects.projectId(),
       humanness: () => connection.currentSettings().humanness,
       // The page beside the panel (`chat-page.ts`). A failed query rejects, and
       // the relay says so instead of sending as if there were no page.
       pageLocation: () => chatPageLocation({
         activeTabs: async () => {
           const [focused, all] = await Promise.all([
-            chrome.tabs.query({ active: true, lastFocusedWindow: true }),
-            chrome.tabs.query({ active: true })
+            tabReads().query({ active: true, lastFocusedWindow: true }),
+            tabReads().query({ active: true })
           ]);
           return [...focused, ...all];
         },
@@ -38,6 +35,10 @@ export function panelControlDeps(connection: FluxIQConnection, status: () => Pro
         }
       })
     },
+    projects: {
+      call: (endpoint, payload) => callCoreProgram(connection.coreApiCredentials(), endpoint, payload),
+      ...connection.panelProjects.choice()
+    },
     readSettings,
     writeSettings,
     // What a save may change is decided by the policy Core gave this
@@ -45,9 +46,8 @@ export function panelControlDeps(connection: FluxIQConnection, status: () => Pro
     capturePolicy: () => connection.currentCapturePolicy(),
     applySettings: (settings) => connection.updateSettings(settings),
     status,
-    openTab: async (url) => {
-      await chrome.tabs.create({ url, active: true });
-    },
+    // The person's own request from the extension's panel, so a FluxIQ page may open (`../tab-gate/`).
+    openTab: (url) => openTabForPerson(url),
     activity: {
       read: () => connection.activityState(),
       setOverlay: (overlay) => connection.setActivityOverlay(overlay),

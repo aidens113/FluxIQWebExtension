@@ -3,3 +3,5 @@ export * from "./forget-cached-service-workers.js";
 export * from "./lane-network-policies.js";
 export * from "./launch-guarded-context.js";
 export * from "./panel-network-policy.js";
+export { installDeterministicNetworkGuard } from "../network-guard.js";
+export type { DeterministicNetworkPolicy } from "../network-guard.js";

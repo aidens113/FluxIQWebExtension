@@ -1,3 +1,4 @@
+import type { ModelKeyAvailability } from "fluxiq/ui";
 import {
   CLIENT_GATEWAY_PROTOCOL_VERSION,
   type ClientGatewayActionCommand,
@@ -186,6 +187,8 @@ export type ExtensionStatus = {
   projectId?: string | null | undefined;
   /** What Core calls that project, once it has said; absent until then. */
   projectName?: string | undefined;
+  /** Who decided the project: the person's choice in the panel, or Core's current project. */
+  projectChosenBy?: "person" | "core" | undefined;
   activeTabId?: number | undefined;
   activeTabUrl?: string | undefined;
   queueSize: number;
@@ -198,30 +201,67 @@ export type ExtensionStatus = {
   unsupportedPage?: UnsupportedPageState | undefined;
   recordingBlock?: RecordingBlockState | undefined;
   lastError?: string | undefined;
+  /**
+   * The code FluxIQ refused this browser's enrolment with (`enrolment.unknown`,
+   * `.expired`, `.used`, `.revoked`, `.domain_mismatch`), while
+   * `connectionState` is `error` for it; absent otherwise. Never the ticket.
+   */
+  enrolmentRefusalCode?: string | undefined;
+  /** Why this browser's approval ended, while it waits for the person to pair it again; absent otherwise (`ExtensionPairingEnded`). */
+  pairingEnded?: ExtensionPairingEnded | undefined;
   lastMessageAt?: number | undefined;
   /** How long the pairing lasts: "browser_session" when this browser cannot keep it between sessions. Absent or "lasting": nothing to say. */
   credentialDurability?: "lasting" | "browser_session" | undefined;
 };
 
-/** The panel's conversation requests (`panel-conversation.ts`). */
+/**
+ * How this browser's approval ended (`background/connection/pairing-ended/`),
+ * kept across worker restarts until the person connects again or forgets the
+ * pairing, or a session is ready.
+ *
+ * - `revoked`: FluxIQ revoked it (`server.revoked`). The credential is gone,
+ *   the socket is closed, `connectionState` is `disconnected` and `paired` is
+ *   false; nothing reconnects or asks to pair until the person presses Connect.
+ * - `expired`, `refused`: the saved approval was not accepted (it ran out, or
+ *   FluxIQ no longer knew it), so FluxIQ asked for a new one at once:
+ *   `connectionState` is `pairing` with a reference code while that socket stays.
+ */
+export type ExtensionPairingEnded = {
+  state: "revoked" | "expired" | "refused";
+  /**
+   * For `revoked`, FluxIQ's reason (`ClientGatewayRevocationReason`:
+   * `revoked_by_user`, `revoked_by_admin`, `password_changed`,
+   * `account_disabled`, `account_deleted`, `credentials_rotated`,
+   * `revoked_by_operator`, `credential_reused`). A reason this build does not
+   * know reads as revoked all the same.
+   */
+  reason?: string | undefined;
+  /** When this browser learned it, in epoch milliseconds. */
+  at: number;
+};
+
+/** The panel's conversation requests (`panel/conversation.ts`). */
 export type {
   PanelConversationAnswerRequest,
   PanelConversationDeleteRequest,
   PanelConversationReadRequest,
   PanelConversationRenameRequest,
   PanelConversationSendRequest
-} from "./panel-conversation";
-/** The panel's humanness requests for one Flow or one task (`panel-humanness.ts`). */
-export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelFlowHumannessReadRequest, PanelFlowHumannessSetRequest, PanelHumannessReply, PanelTaskHumannessSetRequest } from "./panel-humanness";
+} from "./panel/index";
+/** The panel's project requests and the worker's change push (`panel/projects.ts`). */
+export type { PanelChangesMessage, PanelCreateProjectReply, PanelCreateProjectRequest, PanelListProjectsReply, PanelProjectSummary, PanelSelectProjectRequest } from "./panel/index";
+/** The panel's humanness requests for one Flow or one task (`panel/humanness.ts`). */
+export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelFlowHumannessReadRequest, PanelFlowHumannessSetRequest, PanelHumannessReply, PanelTaskHumannessSetRequest } from "./panel/index";
 
 /**
  * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
- * `purpose: "model-key"`, the keys page, where a model key is added. The three are mutually exclusive.
+ * `purpose: "model-key"`, the ordinary keys configuration page; with `purpose: "projects"`, the projects page.
+ * A purpose excludes `flowId` and `runId`, and `flowId` and `runId` exclude each other.
  */
 export type PanelOpenFluxIQRequest = {
   flowId?: string | undefined;
   runId?: string | undefined;
-  purpose?: "model-key" | undefined;
+  purpose?: "model-key" | "projects" | undefined;
 };
 
 /**
@@ -252,6 +292,18 @@ export type PanelTakeOverRunRequest = {
 export type PanelHandBackRunRequest = {
   projectId?: string | undefined;
   runId: string;
+};
+
+/**
+ * `fluxiq.connect`, taken only from the side panel or the popup
+ * (`background/control-page.ts`). `settings` are saved before connecting.
+ * `enrolment` comes from a managed-host launcher: its one-time `ticket` enrols
+ * this browser instead of pairing it, and is never written to settings or
+ * storage, nor put in a status or a reply.
+ */
+export type ConnectRequest = {
+  settings?: Partial<FluxIQSettings> | undefined;
+  enrolment?: { ticket: string } | undefined;
 };
 
 /** `panelSaveSettings`: settings to store without connecting. */
@@ -330,7 +382,7 @@ export const AUTOMATION_PANEL_MESSAGES = {
   renameTask: RUNTIME_MESSAGES.panelRenameTask,
   /** `remove-task` with `{ projectId, taskId }`: forgets the task's own memory entry and no Flow, saved part, result or attempt. Answers `{ taskId, removed }`. */
   removeTask: RUNTIME_MESSAGES.panelRemoveTask,
-  /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider`, `enabled` and, when Core says, `unlocked` and `lockedBecause` only. */
+  /** `secret-keys` `snapshot`. Answers `{ keys: PanelModelKeySummary[] }`; metadata only, never key values. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,
@@ -362,6 +414,17 @@ export const AUTOMATION_PANEL_MESSAGES = {
 } as const;
 
 export type AutomationPanelMessageType = (typeof AUTOMATION_PANEL_MESSAGES)[keyof typeof AUTOMATION_PANEL_MESSAGES];
+
+/** Safe model metadata. Null availability means malformed status; absence permits legacy compatibility. */
+export type PanelModelKeySummary = {
+  readonly kind?: string;
+  readonly provider?: string;
+  readonly enabled: boolean;
+  readonly heldByYou?: boolean;
+  readonly availability?: ModelKeyAvailability | null;
+  /** Only an old explicit refusal is retained, so an incompatible server never looks ready. */
+  readonly unlocked?: false;
+};
 
 /** The fields automation panel requests carry beside `type`. Every field is optional on the wire and checked by the relay. */
 export type AutomationPanelRequest = {

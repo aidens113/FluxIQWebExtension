@@ -100,9 +100,18 @@ test("listing recordings sends the list message and answers the items of the rel
   assert.deepEqual(result, { ok: true, value: { items: [{ id: "rec-1" }] } });
 });
 
-test("reading model keys sends the readiness message and answers the keys", async () => {
-  const recorder = sendRecorder({ ok: true, value: { ok: true, payload: { keys: [{ enabled: true }] } } });
+test("reading model keys preserves per-key availability for shared chat", async () => {
+  const keys = [
+    { kind: "llm", enabled: true, availability: { state: "available" } },
+    { kind: "llm", enabled: true, heldByYou: false, availability: { state: "available" } },
+    { kind: "llm", enabled: true, availability: { state: "unavailable", code: "legacy_recovery_required" } },
+    { kind: "llm", enabled: true, availability: { state: "unavailable", code: "host_protection_unavailable" } },
+    { kind: "llm", enabled: true, availability: { state: "unavailable", code: "ciphertext_invalid" } },
+    { kind: "llm", enabled: true, availability: null },
+    { kind: "llm", enabled: true, unlocked: false }
+  ];
+  const recorder = sendRecorder({ ok: true, value: { ok: true, payload: { keys } } });
   const result = await createExtensionChatTransport(recorder.request, NO_PUSHES).models?.readKeys();
   assert.deepEqual(recorder.sent, [{ type: RUNTIME_MESSAGES.panelModelReadiness }]);
-  assert.deepEqual(result, { ok: true, value: { keys: [{ enabled: true }] } });
+  assert.deepEqual(result, { ok: true, value: { keys } });
 });

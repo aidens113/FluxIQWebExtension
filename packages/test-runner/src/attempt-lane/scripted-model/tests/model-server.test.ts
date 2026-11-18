@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { routedFetch, routeModelCall, scriptedModelKey, startScriptedModelServer, type ScriptedModelScript } from "../index.js";
+import { routedFetch, routeModelCall, scriptedModelKey, SCRIPTED_MODEL_CORRELATION_HEADER, startScriptedModelServer, type ScriptedModelScript } from "../index.js";
 
 const KEY = scriptedModelKey();
 const SCRIPT: ScriptedModelScript = {
@@ -17,8 +17,8 @@ function body(fields: Record<string, unknown>): string {
   return JSON.stringify({ model: "claude-sonnet-5-5", stream: true, messages: [{ role: "user", content: "List the apprentices" }], ...fields });
 }
 
-function post(origin: string, text: string, key = KEY): Promise<Response> {
-  return fetch(`${origin}/v1/messages`, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: text });
+function post(origin: string, text: string, key = KEY, correlationId?: string): Promise<Response> {
+  return fetch(`${origin}/v1/messages`, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json", ...(correlationId === undefined ? {} : { [SCRIPTED_MODEL_CORRELATION_HEADER]: correlationId }) }, body: text });
 }
 
 /** The text a stream's deltas spell, and the frames it is made of. */
@@ -114,4 +114,47 @@ test("a routed reply carries no URL, because Core refuses one from anywhere but 
   assert.equal(reply.url, "");
   assert.equal(reply.headers.get("content-type"), "text/event-stream");
   await assert.rejects(() => routed("https://other-provider.example.test/chat/completions", { method: "POST" }), /refuses a call leaving this machine, to other-provider\.example\.test/u);
+});
+
+const RUN_A = "fnr-11111111-1111-4111-8111-111111111111";
+const RUN_B = "fnr-22222222-2222-4222-8222-222222222222";
+
+test("interleaved explorations keep independent reply cursors and accurate aggregate counts", async (t) => {
+  const script: ScriptedModelScript = { taskId: "two-explorations", replies: { evidence_tool_decision: [
+    (request) => ({ part: "first", ordinal: request.ordinal }),
+    (request) => ({ part: "second", ordinal: request.ordinal })
+  ] } };
+  const server = await startScriptedModelServer({ script, key: KEY });
+  t.after(() => server.close());
+  const text = body({ messages: [{ role: "user", content: JSON.stringify({ taskKind: "evidence_tool_decision" }) }] });
+  for (const [ordinal, part] of [[1, "first"], [2, "second"]] as const) {
+    const replies = await Promise.all([RUN_A, RUN_B].map(async (run) => JSON.parse((await streamed(await post(server.origin, text, KEY, run))).text)));
+    assert.deepEqual(replies, [{ part, ordinal }, { part, ordinal }]);
+  }
+  assert.deepEqual(server.counts(), { evidence_tool_decision: 4 });
+  for (const run of [RUN_A, RUN_B]) assert.deepEqual(server.calls().filter((call) => call.correlationId === run).map((call) => call.ordinal), [1, 2]);
+  assert.equal(server.calls().length, 4);
+  assert.equal(server.refusals().length, 0);
+});
+
+test("a chat fallback belongs to its own correlated exploration", async (t) => {
+  const server = await startScriptedModelServer({ script: SCRIPT, key: KEY });
+  t.after(() => server.close());
+  const words = (text: string) => body({ messages: [{ role: "user", content: text }] });
+  assert.equal((await post(server.origin, words("first words"), KEY, RUN_A)).status, 200);
+  assert.equal((await post(server.origin, words("other words"), KEY, RUN_B)).status, 200);
+  assert.equal((await post(server.origin, words("first words"), KEY, RUN_B)).status, 400);
+  assert.equal((await post(server.origin, words("first words"), KEY, RUN_A)).status, 200);
+  assert.deepEqual(server.counts(), { panel_command: 4 });
+});
+
+test("missing or invalid attribution remains counted without recording the invalid value", async (t) => {
+  const server = await startScriptedModelServer({ script: SCRIPT, key: KEY });
+  t.after(() => server.close());
+  assert.equal((await post(server.origin, body(JSON_TEXT))).status, 200);
+  assert.equal((await post(server.origin, body(JSON_TEXT), KEY, "private-value-must-not-be-recorded")).status, 400);
+  assert.equal(server.calls().length, 2);
+  assert.ok(server.calls().every((call) => call.correlationId === undefined));
+  assert.equal(server.refusals()[0]?.kind, "invalid_correlation");
+  assert.doesNotMatch(JSON.stringify(server.calls()), /private-value-must-not-be-recorded/u);
 });

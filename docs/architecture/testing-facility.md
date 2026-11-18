@@ -526,6 +526,14 @@ actions. `FLUXIQ_TEST_USERNAME`, `FLUXIQ_TEST_PASSWORD`, optional
 `FLUXIQ_TEST_TOTP`, and optional `FLUXIQ_TEST_PIN` may instead provide an
 explicit test identity.
 
+Approval sends the reference code through the already authenticated panel
+session. It does not resend a password or TOTP to unlock model access.
+Configured available keys are usable by the authorized approved client,
+including keys configured after approval. Ordinary panel logout does not
+revoke that client's independent authority; explicit client revocation and
+current user, tenant and project permissions do. Missing model configuration
+does not prevent connection or deterministic execution that needs no model.
+
 The control client's bounded transport failures retain a fixed operation stage
 (`auth.login`, `auth.session.validate`, `project.create`, `project.select`, or
 `control.request`) and the fixed `network` transport class. They may retain only
@@ -554,6 +562,45 @@ Its finalized bundle passed `lab inspect`; Chromium and all three child ports
 were closed, and the disposable browser/Core workspace was removed. Exit codes
 recorded after supervised termination are lifecycle diagnostics, not a claim
 that killed long-running servers exited naturally.
+
+### Approved-client model access proof
+
+The extension chat check's `--model-key` claim uses the production extension,
+isolated Core stores and its ordinary paired credential. Its implementation is
+`extension-chat-check/prove/approved-client/`, with the transport fixture in
+`extension-chat-check/model-fixture/`. It replaces the obsolete password,
+unlock-ticket and sign-out-lock expectations.
+
+```text
+node packages/test-runner/dist/extension-chat-check/cli.js --browser chrome --scenario everything-store --page ./ --no-ask --model-key
+```
+
+Use `--browser firefox` for the corresponding Firefox check. Browser launch
+still requires the session's authorization; documenting the command does not
+record a passing run.
+
+The check approves a keyless browser, verifies its authenticated library
+request, then installs a synthetic model key through normal authorized key
+management. Each access probe must make an actual bearer-authenticated
+conversation request, reach the loopback model fixture with that installed
+key, and read the fixture's exact reply through paired authority. Metadata,
+an enabled key or an absent warning cannot satisfy the model-access claim.
+It repeats the probe after panel logout, reconnect without approval, Core
+restart before operator re-login and password-free dialog reapproval.
+Copied-token reuse must still revoke trust. Explicit Forget/reset must reach
+Core, and replaying the request with its revoked proof must return 401/403
+without another model-fixture call.
+
+Only the model HTTP transport is replaced: Core's normal model binding,
+authorization and key retrieval remain active. The existing scripted-model
+preload routes model requests to loopback and refuses other external egress;
+the child receives no provider secret or provider-key environment file. This
+mode selects its compatible Anthropic adapter explicitly and needs no real
+provider key. It records synthetic model-call counts and safe probe receipts,
+with no billed provider call. A resolver override would invalidate this proof.
+Its observation excludes credentials, key values and stored browser state.
+These lifecycle checks do not replace the separate four-attempt saved-Flow
+continuation and oracle requirements.
 
 ### Existing FluxIQ target
 
@@ -1754,9 +1801,10 @@ Independent creation first creates and selects a new run-owned project through p
    (`flowStartPage({ startedFromChat })`). The chat tells Core the page the
    person has open, and that page is where the Flow starts.
 2. **Install the key.** `LiveLlmRun.chatBuildAuthorizer` puts the run's key
-   in the person's Secret Keys and re-signs the session. The paired
-   extension's chat runs on that unlocked session. Nothing is pinned to a
-   Flow, because there is no Flow yet.
+   in the person's Secret Keys and refreshes the operator's authentication.
+   The approved extension uses its independent authorized client authority;
+   there is no second model-key unlock. Nothing is pinned to a Flow, because
+   there is no Flow yet.
 3. **Type and send.** The run selects its project for the paired client, opens that project in the mounted chat and waits for actual rendered readiness.
    Then the panel's own composer, controller and background relay carry the
    message to Core's `append-turn`. The panel is driven through
@@ -1884,8 +1932,12 @@ The claim holds when:
 - Core reads the message without the model as `flow.createHere`, with the
   message as its instruction;
 - Core creates the Flow and saves that instruction;
-- the build stops on the locked key, and the thread says so;
+- model work reports missing configuration without inventing a locked browser;
 - the stage records a failed build of that Flow.
+
+This missing-configuration diagnostic does not prove successful model access;
+the [approved-client proof](#approved-client-model-access-proof) requires a real
+authenticated request to the loopback model fixture.
 
 `authoredNodes` makes the created Flow diagnosable without persisting its raw
 document. There is one entry per action node, carrying `nodeId`, `definitionId`,
@@ -2161,7 +2213,9 @@ turn sits under the first. The second attempt's baseline is read when it starts 
   Only a chat that cannot take one is opened again, as a person would, and the run says which. The
   Lab's control client signs in again, since its session belonged to the Core that stopped.
   `attempt.json` keeps it as `restartedBetween` (seconds to reconnect, the model key's reading, the
-  chat's state), and the report's first line says it. It needs `--attempts 2` or more. This is the proof that
+  chat's state), and the report's first line says it. The key reading is configuration metadata,
+  not proof of a model request, and missing or unavailable configuration does not delay
+  a ready deterministic chat. It needs `--attempts 2` or more. This is the proof that
   a saved Flow, its saved reads and its checked states are all on disk and need nothing a process held.
 - **A person's Run again, with the script form `run-again`.** Attempt 2 is a press of Run again on
   attempt 1's answer in the panel (`attempt-lane/live/press-run-again.ts`), not words typed. Core starts
@@ -2209,9 +2263,9 @@ product's except the model's choices:
   leaves loopback alone, and refuses every other call leaving the machine. It tells a
   Messages call by its shape, because the structure audit refuses a provider's host written
   in this repository, and a call of that shape can only reach the loopback server.
-- A fake key goes in through Secret Keys as a live run's does, so the chat's model, the
-  session's unlock and the provider's whole transport all run. The server refuses any other
-  key.
+- A fake key goes in through Secret Keys as a live run's does, so the chat's model,
+  authorized key retrieval and the provider's whole transport all run. The
+  server refuses any other key; no additional client-unlock step is involved.
 - `scripted-model/scripts/` holds a script per task: ordered replies per request kind
   (`panel_command`, `evidence_tool_decision`, `loop_verification`), reading handles and
   field keys from the real evidence in the request. A request the script does not expect
@@ -3907,7 +3961,7 @@ profiles, credentials, cookies, authorization headers, pairing tokens, and
 recorded page data out of source control and user-facing logs.
 ## Live LLM Safety Envelope
 
-Since the user's 2026-10-30 switch, live tests default to provider `anthropic` and model `claude-sonnet-5-5`, with the user-approved $5 whole-build allowance across all calls. Explicit lower limits still hold, and ordinary product defaults are separate. The Lab never substitutes a DeepSeek key when Claude is unavailable. Explicit legacy DeepSeek configurations remain supported. Core owns both providers' HTTP adapters, encrypted session-key release, schema validation and usage-aware billing; the Lab owns only credential injection, provider/model selection and acceptance reporting. Keep realistic instructions and oracles unchanged, and record the exact model, verdict, calls, billed usage/cost and elapsed time for comparison. Provider-free checks continue to make no model calls.
+Since the user's 2026-10-30 switch, live tests default to provider `anthropic` and model `claude-sonnet-5-5`, with the user-approved $5 whole-build allowance across all calls. Explicit lower limits still hold, and ordinary product defaults are separate. The Lab never substitutes a DeepSeek key when Claude is unavailable. Explicit legacy DeepSeek configurations remain supported. Core owns both providers' HTTP adapters, authorized encrypted key custody, schema validation and usage-aware billing; the Lab owns only credential injection, provider/model selection and acceptance reporting. Keep realistic instructions and oracles unchanged, and record the exact model, verdict, calls, billed usage/cost and elapsed time for comparison. Provider-free checks make no live provider calls; scripted fixtures report their synthetic model calls separately from zero-model deterministic replay.
 
 Live-provider testing is an explicit opt-in lane and is not part of ordinary deterministic runs or CI. The Testing Lab driver is the sole process allowed to read provider credential environment variables. A case-insensitive explicit provider-secret denylist is removed at the final managed-process boundary and from both direct Chromium launch paths, so Core, Scenario Lab, setup/build commands, the browser, and the loaded extension cannot inherit the source key. Repository-local schema 0.1 contracts describe the LLM task, a non-secret execution profile, sanitized invocation provenance, and review/replay evaluation.
 
@@ -3915,7 +3969,7 @@ The default Lab allowance is the model's whole context window: 992,000 input tok
 
 Calls per run follow Core's model, not a fixed count. A diagnosis (Core run intent `diagnosis_only`) makes exactly one call. An adaptation (Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 250, Core's own runaway backstop (`AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP`; it was 64 until t576, which ended project builds on calls with most of their dollars left). The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its Flow's spend ceiling, its call count and Core's stall guard. The spend ceiling is one purse per Flow, whatever the call count -- the user's words (2026-10-01): "bring the ceiling down to $0.1 per flow max" -- and it has one definition: Core's scoped ceiling resolver, activated by `FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` and resolved from the Lab's `FLUXIQ_LLM_RUN_COST_CEILING_USD` (Lab default $0.10; ordinary user UI remains $0.25 and ignores the test variable), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a Flow to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings. Because the Lab's Core runs with the ceiling Lab-scoped, Core holds the whole Flow to it as one purse (t438): the build and its judge, the chat's reading of the message that asked for the build or the run, the run's in-run repairs, its recovery after the run, its result check, its re-authors and their re-runs all draw on the Flow's one record (`creation-spend.json`), each call held against what the Flow has left and added to the record as it settles, whether the run succeeds or fails (Core `docs/architecture/automation-studio/llm-flow-bootstrap.md`, "One purse per Flow creation"). The record outlives the creation, so a later build of the same Flow in the Lab -- an extend after it was proposed -- carries everything the Flow has spent and may be refused on cost at once. The Lab's post-run check holds each settled phase to the ceiling again, and every live run reports its Flow's whole spend against it, every phase and every call its step log saw: `snapshots/live-llm.json` `observed.perBuild` (one `flow` entry, with its `parts` beside it), the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling` (Flows over the ceiling), and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` (the Flow's spend) and `buildsOverCeiling` (1 when the Flow passed the ceiling). The field names are kept for the ledger's readers. There is no spend budget across runs. The model is the Flow's `llmModel` setting. `snapshots/live-llm.json` `findings` (also on the settle event) lists budget observations that are not failures: `reservation_undercounted` when Core's per-call input reservation (its bytes/3 estimate) was smaller than a call's supplied input while every declared cap held (t787). A real cap breach is still a failure, and it never hides the run's own failure or the oracle verdict: the run is judged and published first, and the breach carries the run's failure as its cause.
 
-**Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). A created-Flow build started from the extension's chat carries no permit at all, so `--llm-permit` is refused for it, and the Lab's person answers the question in the chat instead ("The build is started from the extension's chat window" above). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
+**Model calls need no extra unlock grant.** Core resolves the provider through the caller's current authorized key custody. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). A created-Flow build started from the extension's chat carries no permit at all, so `--llm-permit` is refused for it, and the Lab's person answers the question in the chat instead ("The build is started from the extension's chat window" above). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
 
 The panel-driven adaptation demos type no call count: the panel sends Core none for an adapting run, so Core applies its default. Those demos accept a source run that made at least one call per recorded intervention and no more than that default. `pnpm demo:llm:adapt` is narrower for now. Its certificate records exactly one diagnosis invocation and one patch invocation, so it refuses, with a message that says why, a run that spent calls between them.
 
@@ -3929,7 +3983,7 @@ diagnosis-only mode. If the prepared Flow has no active instruction, it records
 only bounded boolean readiness facts and exits before opening authorization,
 creating a runtime run, or contacting the provider.
 
-The setup helper navigates the real Secret Keys Program, reads only its metadata-only snapshot response, reuses one exact compatible global DeepSeek key, or drives Add Key and authorization through accessible UI labels. It never invokes Reveal. The diagnosis command never reads the provider environment variable or secret value. After login, model calls use the authenticated session's in-memory secret unlock and do not ask for the account password or PIN again. Secret-key setup and other genuinely privileged credential actions remain screenshot-suppressed.
+The setup helper navigates the real Secret Keys Program, reads only its metadata-only snapshot response, reuses one exact compatible global DeepSeek key, or drives Add Key and authorization through accessible UI labels. It never invokes Reveal. The diagnosis command never reads the provider environment variable or secret value. After login or client approval, model calls use current authorized key custody and require no second model-key password or PIN. Historical key recovery and host-protection failures remain separate from authentication. Secret-key setup and other genuinely privileged credential actions remain screenshot-suppressed.
 
 Runtime target adaptations remain opaque in Core. When Core applies an `edit_action_target`, the web domain consumes the resulting `parameters.target` object as an override and maps its selector, element, or visual target through the existing client-gateway boundary; the generated top-level parameters remain the fallback.
 
@@ -4129,7 +4183,7 @@ The Lab passes the run's `--llm-model` to every Core it starts as that variable
 `buildFluxIQEnvironment`), and from nothing else: not the Lab's environment, not
 `.env`, and a value inherited from whoever launched the Lab is dropped. Without
 `--llm-model`, a live run passes the selected provider's Lab default (Claude
-Sonnet by default); a provider-free run passes no model override. An `--llm-model` Core would refuse is refused by the
+Sonnet by default); ordinary zero-model replay passes no override. Scripted transport fixtures select their compatible adapter explicitly. An `--llm-model` Core would refuse is refused by the
 Lab, through Core's own `resolveAutomationStudioLlmDefaultModel`, before a Core
 starts or a key is read. The run's plan records what Core was given as
 `plan.coreDefaultModel` (`liveLlmCoreDefaultModel`), as `plan.buildCostCeilingUsd`

@@ -134,3 +134,14 @@ test("pageHostname returns a hostname or nothing, never a URL", () => {
   assert.equal(pageHostname("not a url"), undefined);
   assert.equal(pageHostname(undefined), undefined);
 });
+
+test("a relay failure code says what failed and what to do, never the bare sentence", async () => {
+  const { relayFailureSentence } = await import("../relay-failure-sentence");
+  for (const code of ["not_paired", "no_project", "unreachable", "refused", "failed"]) {
+    const sentence = relayFailureSentence(code, "raw relay text") ?? "";
+    assert.notEqual(sentence, "", code);
+    assert.doesNotMatch(sentence, /Something went wrong/u, code);
+  }
+  assert.equal(relayFailureSentence("timed_out", "It may still be working."), "It may still be working.");
+  assert.equal(relayFailureSentence(undefined, "x"), undefined);
+});

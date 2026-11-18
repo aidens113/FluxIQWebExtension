@@ -125,7 +125,7 @@ async function fixture(root: string) {
   const resolve = createAutomationStudioSessionKeyProviderResolver({
     ports: {
       snapshot: async () => ({ keys: [{ id: "fixture.key", name: "Script", kind: "llm", provider: "deepseek", scope: "global", enabled: true, createdAtMs: 1, updatedAtMs: 1, lastRotatedAtMs: 1, metadata: { model: "deepseek-flash" } }] }),
-      createSessionRevealAuthorization: async () => ({ authorizationId: "fixture.reveal", keyId: "fixture.key", keyUpdatedAtMs: 1 }),
+      createUseAuthorization: async () => ({ authorizationId: "fixture.reveal", keyId: "fixture.key", keyUpdatedAtMs: 1 }),
       revealKeyWithAuthorization: async () => ({ value: "fixture-only-not-a-provider-key" }),
       revokeRevealAuthorization: () => undefined
     },

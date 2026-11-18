@@ -1,6 +1,7 @@
 export { ActivePage, type ActivePageDeps } from "./active-page";
-export { ActiveRecording, type ActiveRecordingDeps } from "./active-recording";
+export { ActiveRecording, type ActiveRecordingDeps } from "./active-recording/index";
 export { ActivityLog } from "./activity-log";
+export { SessionWrites } from "./session";
 export {
   actionTypesFromCapabilities,
   browserStateFromTabs,
@@ -40,6 +41,7 @@ export {
   type GatewayStatusFields
 } from "./gateway-session";
 export { NavigationRecorder } from "./navigation-recorder";
+export { PanelProjectAccess, type PanelProjectAccessDeps, type PanelProjectChoice } from "./project/index";
 export { extensionOutboxByteBudget, extensionOutboxStore } from "./outbox/index";
 export { ScriptedNavigationIntent } from "./scripted-navigation/index";
 export { PointerClickFilter } from "./pointer-click-filter";

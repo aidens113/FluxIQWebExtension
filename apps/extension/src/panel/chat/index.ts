@@ -38,6 +38,6 @@ export {
   type TextBlock,
   type TextRun
 } from "@fluxiq/ui-components";
-export { createActivityFeed, listenToRuntime, type ExtensionActivityFeedDeps } from "./feed";
+export { createActivityFeed, createSharedActivityFeed, listenToRuntime, type ExtensionActivityFeedDeps, type SharedActivityFeed } from "./feed";
 export { createOnPageStatusSetting, onPageStatusModel, type OnPageStatusModel, type OnPageStatusSetting } from "./settings";
 export { createChatOwnerContext, type ChatOwner } from "./owner-context";

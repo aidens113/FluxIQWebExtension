@@ -21,7 +21,11 @@ import { browserClientLabel } from "../../../shared/browser";
 import { HEARTBEAT_INTERVAL_MS } from "../../../shared/constants";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings, ServerCommandPayload } from "../../../shared/protocol";
 import { effectiveSettings } from "../../capture-policy/index";
+import { ProjectFocus } from "../../projects/index";
+import { shouldAutoConnect } from "../../panel/index";
 import { GatewaySession, type GatewaySessionDeps } from "../gateway-session";
+import type { PairingEndedStorage } from "../pairing-ended/index";
+import type { ExtensionPairingEnded } from "../../../shared/protocol";
 
 const SYNTHETIC_TOKEN = "synthetic-token.0";
 const NEXT_SYNTHETIC_TOKEN = "synthetic-token.1";
@@ -69,6 +73,10 @@ type HarnessInput = {
   keepAlive?: () => void;
   // Core's recording-capture policy the hello's effective settings are clamped by.
   policy?: AutomationStudioRecordingCapturePolicy;
+  onHostLease?: () => void;
+  // The person's "Reconnect automatically", on in the product by default.
+  autoReconnect?: boolean;
+  pairingEndedStorage?: PairingEndedStorage;
 };
 
 const PERSON_SETTINGS = { gatewayUrl: "ws://gateway.test", autoReconnect: false, captureMutations: true, captureInputValues: false, captureSnapshots: true, requestsEnabled: true } as FluxIQSettings;
@@ -81,15 +89,20 @@ function harness(input: HarnessInput = {}) {
     context: input.context ?? { projectId: "project-1", recordingId: null },
     persisted: [] as FluxIQSession[],
     commands: [] as Array<{ payload: ServerCommandPayload; messageId: string }>,
-    errors: [] as string[]
+    errors: [] as string[],
+    ended: [] as ExtensionPairingEnded[],
+    pairingRequests: 0,
+    // What reached the server command channel (`server-command-channel.ts`), by type.
+    serverMessages: [] as string[]
   };
+  const settings = input.autoReconnect ? { ...PERSON_SETTINGS, autoReconnect: true } : PERSON_SETTINGS;
   let markReady: () => void = () => undefined;
   const ready = new Promise<void>((resolve) => {
     markReady = resolve;
   });
   const deps: GatewaySessionDeps = {
-    settings: () => PERSON_SETTINGS,
-    effectiveSettings: () => effectiveSettings(PERSON_SETTINGS, input.policy ?? AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY),
+    settings: () => settings,
+    effectiveSettings: () => effectiveSettings(settings, input.policy ?? AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY),
     session: () => state.session,
     persistSession: async (session) => {
       state.persisted.push(session);
@@ -99,12 +112,15 @@ function harness(input: HarnessInput = {}) {
     reportError: (message) => void state.errors.push(message),
     clearError: () => undefined,
     beforeConnect: async () => undefined,
+    ...(input.onHostLease ? { onHostLease: input.onHostLease } : {}),
+    ...(input.pairingEndedStorage ? { pairingEndedStorage: input.pairingEndedStorage } : {}),
+    onPairingEnded: (ended) => void state.ended.push(ended),
     outbox,
     queueContext: () => state.context,
     mintLineage: () => "lineage-minted",
     handlers: {
-      onServerMessage: () => undefined,
-      onPairingRequired: () => undefined,
+      onServerMessage: (message) => void state.serverMessages.push(message.type),
+      onPairingRequired: () => { state.pairingRequests += 1; },
       onSessionReady: () => markReady(),
       onCommand: (payload, messageId) => void state.commands.push({ payload, messageId }),
       onHeartbeat: () => undefined,
@@ -260,6 +276,21 @@ test("an action of an unknown type is answered as rejected and never reaches the
   assert.notEqual(sent[0]!.payload.status, "succeeded");
 });
 
+test("a changed Core host lease invalidates context before mapped actions, once for each epoch", async () => {
+  let changed = 0;
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, onHostLease: () => { changed++; } });
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+    const lease = { resourceKey: "fluxnode.host:one", epoch: 1, holder: { role: "fluxnode-run", briefId: "run" } };
+    socket.deliver("server.execute_action", { commandId: "one", actionType: "web.dom.capture_snapshot", parameters: {}, lease }, "lease-one");
+    socket.deliver("server.execute_action", { commandId: "two", actionType: "web.dom.capture_snapshot", parameters: {}, lease }, "lease-same");
+    socket.deliver("server.execute_action", { commandId: "three", actionType: "web.dom.capture_snapshot", parameters: {}, lease: { ...lease, epoch: 2 } }, "lease-two");
+    await nextTurn();
+  });
+  assert.equal(changed, 2);
+  assert.equal(h.state.commands.length, 3);
+});
+
 // Core writes nothing to a socket before `server.session_ready` (the old
 // extension session sent over any open socket): a rejection answered while the
 // gateway is still checking the token waits in the queue and goes out with the
@@ -282,6 +313,21 @@ test("a rejection answered before the session is ready is queued, not written to
 });
 
 // --- What the extension hands Core ---------------------------------------------
+
+test("a project focus is never queued while offline, and goes out on the socket once the session is ready", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN } });
+  await h.outbox.setLineage("lineage-1");
+  const focus = new ProjectFocus({ send: h.session.send, connected: () => h.session.state() === "connected", chosenProject: () => "project-2" });
+  await focus.chosen("project-2");
+  assert.equal((await h.store.read()).entries.length, 0, "a focus queued offline would reach a later session than the one it was for");
+  let sent: ReturnType<OpeningSocket["messages"]> = [];
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+    await focus.announceHeld();
+    sent = socket.messages().slice(1);
+  });
+  assert.deepEqual(sent.map(({ type, payload }) => ({ type, payload })), [{ type: "client.focus_project", payload: { projectId: "project-2" } }]);
+});
 
 test("a message sent while offline is queued under the extension's project, recording and client id, and flushed after a token resume", async () => {
   const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, context: { projectId: "project-1", recordingId: "rec-1" } });
@@ -339,4 +385,295 @@ test("while a person approves pairing, the extension's keep-alive runs on every 
     mock.timers.reset();
   }
   assert.deepEqual(ticks, Array(15).fill("keepAlive"));
+});
+
+// --- Managed-host enrolment ----------------------------------------------------
+// A launcher's connect carries a one-time ticket: the first hello without a token
+// takes it, the session's token is stored as a pairing's is, and until the session
+// is ready nothing falls back to pairing. The ticket here is a synthetic placeholder.
+
+const SYNTHETIC_TICKET = "fxet_synthetic-ticket";
+
+/** Connects with an enrolment ticket over an `OpeningSocket` and runs `body` with it. */
+async function withEnrolment(h: ReturnType<typeof harness>, body: (socket: OpeningSocket) => Promise<void>): Promise<void> {
+  await withSocket(async () => {
+    await h.session.prepareConnect(SYNTHETIC_TICKET);
+    await h.session.connect();
+    try {
+      await body(OpeningSocket.latest!);
+    } finally {
+      h.session.closeClient();
+    }
+  });
+}
+
+/** A socket closing from the server's side, as the browser reports it. */
+function closeFromServer(socket: OpeningSocket): void {
+  socket.readyState = 3;
+  for (const listener of (socket as unknown as { listeners: Map<string, Set<(event: unknown) => void>> }).listeners.get("close") ?? []) listener({ code: 1000 });
+}
+
+test("an enrolment connect sends its ticket in a hello without a token, once, and stores the token the session brings", async () => {
+  const h = harness();
+  let hello: ReturnType<OpeningSocket["messages"]>[number] | undefined;
+  await withEnrolment(h, async (socket) => {
+    hello = socket.messages()[0];
+    await acceptSession(h, socket);
+  });
+  assert.equal(hello?.payload.enrolmentTicket, SYNTHETIC_TICKET);
+  assert.equal(Object.hasOwn(hello!.payload, "token"), false);
+  assert.equal(hello?.payload.clientType, "extension", "a managed host says hello as the extension; Core records its role");
+  assert.equal(h.state.persisted.at(-1)?.token, NEXT_SYNTHETIC_TOKEN);
+  assert.equal(h.session.enrolmentFailure(), undefined);
+  assert.ok(!JSON.stringify(h.state.persisted).includes(SYNTHETIC_TICKET), "the ticket is never stored");
+  await withOpenSession(h, async (socket) => {
+    assert.equal(Object.hasOwn(socket.messages()[0]!.payload, "enrolmentTicket"), false, "a later connect resumes on its token, with no ticket");
+    assert.equal(socket.messages()[0]!.payload.token, NEXT_SYNTHETIC_TOKEN);
+  });
+});
+
+test("an enrolment connect drops a stored token first, so its hello spends the ticket", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN, projectId: "project-1" } });
+  let hello: ReturnType<OpeningSocket["messages"]>[number] | undefined;
+  await withEnrolment(h, async (socket) => {
+    hello = socket.messages()[0];
+  });
+  assert.equal(hello?.payload.enrolmentTicket, SYNTHETIC_TICKET);
+  assert.equal(Object.hasOwn(hello!.payload, "token"), false);
+  assert.equal(h.state.session.token, undefined);
+  assert.equal(h.state.session.clientId, "client-1");
+});
+
+test("a refused ticket ends the attempt in an error with Core's code, and never reconnects into pairing", async () => {
+  const h = harness();
+  let sentAfter: string[] = [];
+  await withEnrolment(h, async (socket) => {
+    socket.deliver("server.error", { code: "enrolment.expired", message: "This enrolment ticket expired before it was presented." });
+    await nextTurn();
+    sentAfter = socket.messages().map(({ type }) => type);
+  });
+  assert.deepEqual(h.session.enrolmentFailure(), { code: "enrolment.expired", message: "This enrolment ticket expired before it was presented." });
+  assert.equal(h.session.state(), "error");
+  assert.equal(h.session.wantsConnection(), false, "no reconnect: its hello would carry no ticket and pair");
+  assert.deepEqual(sentAfter, ["client.hello"]);
+});
+
+test("a socket lost before the session is ready ends the attempt in an error without a code, for the launcher to retry", async () => {
+  const h = harness();
+  await withEnrolment(h, async (socket) => {
+    closeFromServer(socket);
+    await nextTurn();
+  });
+  const failure = h.session.enrolmentFailure();
+  assert.equal(failure?.code, undefined);
+  assert.match(failure?.message ?? "", /closed before this browser was enrolled/u);
+  assert.equal(h.session.state(), "error");
+  assert.equal(h.session.wantsConnection(), false);
+});
+
+test("a pairing request during an enrolment ends it and closes the socket instead of waiting for a person", async () => {
+  const h = harness();
+  let closed = false;
+  await withEnrolment(h, async (socket) => {
+    socket.deliver("server.pairing_required", { referenceCode: "REF-1", reason: "approve" });
+    await nextTurn();
+    closed = socket.readyState === 3;
+  });
+  assert.equal(closed, true);
+  assert.match(h.session.enrolmentFailure()?.message ?? "", /asked this browser to pair/u);
+  assert.equal(h.session.wantsConnection(), false);
+});
+
+test("an ordinary connect forgets how the last enrolment ended, and an error that is not an enrolment's is left to the channel", async () => {
+  const h = harness();
+  await withEnrolment(h, async (socket) => {
+    socket.deliver("server.error", { code: "recording.refused", message: "not an enrolment refusal" });
+    await nextTurn();
+    assert.equal(h.session.enrolmentFailure(), undefined);
+    socket.deliver("server.error", { code: "enrolment.used", message: "used" });
+    await nextTurn();
+  });
+  assert.equal(h.session.enrolmentFailure()?.code, "enrolment.used");
+  await h.session.prepareConnect();
+  assert.equal(h.session.enrolmentFailure(), undefined);
+});
+
+test("the close of a socket an enrolment connect replaced does not end the enrolment", async () => {
+  const h = harness();
+  await withSocket(async () => {
+    await h.session.connect();
+    const earlier = OpeningSocket.latest!;
+    await h.session.prepareConnect(SYNTHETIC_TICKET);
+    await h.session.connect();
+    const current = OpeningSocket.latest!;
+    try {
+      closeFromServer(earlier);
+      await nextTurn();
+      assert.equal(h.session.enrolmentFailure(), undefined);
+      assert.notEqual(current.readyState, 3, "the enrolling socket stays open");
+      assert.equal(current.messages()[0]?.payload.enrolmentTicket, SYNTHETIC_TICKET);
+    } finally {
+      h.session.closeClient();
+    }
+  });
+});
+
+// --- Revoked and refused approvals ---------------------------------------------
+// FluxIQ revoking this browser (`server.revoked`) stops it: no reconnect, no
+// credential left to present, and so no pairing request raised by itself
+// until the person connects again. A credential the gateway refused instead
+// (expired, unknown) is dropped too, and the request raised for it stands.
+
+/** Storage that records every write, standing in for `chrome.storage.local`. */
+function recordingPairingEndedStorage(initial?: ExtensionPairingEnded) {
+  const writes: Array<ExtensionPairingEnded | undefined> = [];
+  let kept = initial;
+  const storage: PairingEndedStorage = {
+    read: async () => kept,
+    write: async (ended) => {
+      writes.push(ended);
+      kept = ended;
+    }
+  };
+  return { storage, writes, kept: () => kept };
+}
+
+// Longer than the first reconnect delay (`RECONNECT_BASE_DELAY_MS`): a reconnect would have opened a socket by then.
+const RECONNECT_WAIT_MS = 1_300;
+
+test("a revoked browser stops: the credential is dropped, the socket closed, nothing reconnects, and it reads revoked", async () => {
+  const kept = recordingPairingEndedStorage();
+  const h = harness({ autoReconnect: true, session: { clientId: "client-1", token: SYNTHETIC_TOKEN, projectId: "project-1" }, pairingEndedStorage: kept.storage });
+  await withSocket(async () => {
+    await h.session.connect();
+    const socket = OpeningSocket.latest!;
+    try {
+      await acceptSession(h, socket);
+      // What the gateway sends: the notice, then `server.disconnect` for a client that predates it, then the close.
+      socket.deliver("server.revoked", { reason: "revoked_by_user", message: "This client's approval was revoked in FluxIQ." });
+      socket.deliver("server.disconnect", { reason: "Client trust was revoked." });
+      // A browser dispatches the message events before the close.
+      await nextTurn();
+      closeFromServer(socket);
+      assert.equal(h.state.serverMessages.includes("server.disconnect"), false, "the socket was already closed, so the trailing disconnect never reaches the channel");
+      await new Promise((resolve) => setTimeout(resolve, RECONNECT_WAIT_MS));
+      assert.equal(OpeningSocket.latest, socket, "no new socket was opened");
+    } finally {
+      h.session.closeClient();
+    }
+  });
+  assert.equal(h.session.state(), "disconnected");
+  assert.equal(h.session.wantsConnection(), false);
+  assert.equal(h.state.session.token, undefined, "the revoked credential is gone");
+  assert.equal(h.state.session.clientId, "client-1", "the client keeps its identity");
+  assert.deepEqual({ ...h.session.pairingEnded(), at: 0 }, { state: "revoked", reason: "revoked_by_user", at: 0 });
+  assert.equal(kept.kept()?.state, "revoked", "a restarted worker still reads revoked");
+  assert.deepEqual(h.state.ended.map(({ state }) => state), ["revoked"]);
+  assert.equal(h.state.pairingRequests, 0);
+  // Without a credential the browser is not paired, so the background's automatic connect leaves it alone.
+  assert.equal(shouldAutoConnect({ paired: Boolean(h.state.session.token), autoReconnect: true, connectionState: h.session.state() }, false), false);
+});
+
+test("a notice lost to the close still ends it: the reconnect's hello is told again, and the browser stops there", async () => {
+  const h = harness({ autoReconnect: true, session: { clientId: "client-1", token: SYNTHETIC_TOKEN } });
+  await withSocket(async () => {
+    await h.session.connect();
+    const first = OpeningSocket.latest!;
+    try {
+      await acceptSession(h, first);
+      // The close wins the race: a message still queued when its socket closes is dropped.
+      first.deliver("server.revoked", { reason: "revoked_by_user" });
+      closeFromServer(first);
+      await new Promise((resolve) => setTimeout(resolve, RECONNECT_WAIT_MS));
+      const second = OpeningSocket.latest!;
+      assert.notEqual(second, first, "the drop reconnected, as any lost socket does");
+      // Core answers the revoked credential on the hello with the notice again (Core `revoked-credential.test.ts`).
+      second.deliver("server.revoked", { reason: "revoked_by_user" });
+      await nextTurn();
+      closeFromServer(second);
+      await new Promise((resolve) => setTimeout(resolve, RECONNECT_WAIT_MS));
+      assert.equal(OpeningSocket.latest, second, "no third socket");
+    } finally {
+      h.session.closeClient();
+    }
+  });
+  assert.equal(h.session.state(), "disconnected");
+  assert.equal(h.session.pairingEnded()?.state, "revoked");
+  assert.equal(h.state.session.token, undefined);
+  assert.equal(h.state.pairingRequests, 0);
+});
+
+test("a revoked browser asks to pair only when the person connects again, which clears the revoked state", async () => {
+  const kept = recordingPairingEndedStorage();
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, pairingEndedStorage: kept.storage });
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+    socket.deliver("server.revoked", { reason: "revoked_by_user" });
+    await nextTurn();
+  });
+  assert.equal(h.session.pairingEnded()?.state, "revoked");
+  assert.equal(h.state.pairingRequests, 0);
+  // The person presses Connect: the hello carries no credential, so the gateway asks a person to approve it.
+  await withSocket(async () => {
+    await h.session.prepareConnect();
+    assert.equal(h.session.pairingEnded(), undefined, "connecting is the person asking to pair again");
+    await h.session.connect();
+    const socket = OpeningSocket.latest!;
+    try {
+      assert.equal(Object.hasOwn(socket.messages()[0]!.payload, "token"), false);
+      socket.deliver("server.pairing_required", { referenceCode: "REF-2", reason: "Approve this client in FluxIQ before sending data." });
+      await nextTurn();
+      assert.equal(h.session.state(), "pairing");
+      assert.equal(h.state.pairingRequests, 1);
+    } finally {
+      h.session.closeClient();
+    }
+  });
+  assert.equal(kept.kept(), undefined);
+});
+
+test("an expired credential is dropped and reads expired, while the pairing request the gateway raised stands", async () => {
+  const kept = recordingPairingEndedStorage();
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, pairingEndedStorage: kept.storage });
+  await withOpenSession(h, async (socket) => {
+    socket.deliver("server.pairing_required", { referenceCode: "REF-3", reason: "This client's approval expired. Approve it again in FluxIQ.", credential: "expired" });
+    await nextTurn();
+    assert.equal(h.session.state(), "pairing", "the request on this socket waits for a person");
+    assert.equal(socket.readyState, 1);
+    assert.equal(h.session.statusFields().pairingReferenceCode, "REF-3");
+    await acceptSession(h, socket);
+    await nextTurn();
+  });
+  assert.deepEqual(h.state.ended.map(({ state }) => state), ["expired"]);
+  assert.equal(h.state.persisted.some((session) => session.token === undefined), true, "the expired credential was dropped");
+  assert.equal(h.state.session.token, NEXT_SYNTHETIC_TOKEN, "the approval's new credential is kept");
+  assert.equal(h.session.pairingEnded(), undefined, "a ready session ends the expired state");
+  assert.deepEqual(kept.writes.map((ended) => ended?.state), ["expired", undefined]);
+});
+
+test("a credential the gateway does not know reads refused; a pairing request for a hello without one changes nothing", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN } });
+  await withOpenSession(h, async (socket) => {
+    socket.deliver("server.pairing_required", { referenceCode: "REF-4", reason: "FluxIQ did not accept this client's saved approval.", credential: "refused" });
+    await nextTurn();
+  });
+  assert.equal(h.session.pairingEnded()?.state, "refused");
+  assert.equal(h.state.session.token, undefined);
+  const fresh = harness();
+  await withOpenSession(fresh, async (socket) => {
+    socket.deliver("server.pairing_required", { referenceCode: "REF-5", reason: "Approve this client in FluxIQ before sending data." });
+    await nextTurn();
+  });
+  assert.equal(fresh.session.pairingEnded(), undefined);
+  assert.deepEqual(fresh.state.ended, []);
+});
+
+test("a worker that starts after a revoke reads it from storage, and forgetting the pairing clears it", async () => {
+  const kept = recordingPairingEndedStorage({ state: "revoked", reason: "revoked_by_user", at: 5 });
+  const h = harness({ pairingEndedStorage: kept.storage });
+  assert.equal(h.session.pairingEnded(), undefined);
+  assert.equal(await h.session.loadPairingEnded(), true);
+  assert.deepEqual(h.session.pairingEnded(), { state: "revoked", reason: "revoked_by_user", at: 5 });
+  await h.session.forgetPairingEnded();
+  assert.equal(kept.kept(), undefined);
 });

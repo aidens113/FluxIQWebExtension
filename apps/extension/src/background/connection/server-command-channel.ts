@@ -32,11 +32,13 @@ import type {
 } from "../../shared/protocol";
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
 import { observedTabFrames, sendToTab } from "../tabs";
+import { activateTab, refuseOwnPageTab } from "../tab-gate";
 import type { SnapshotCaptureOptions } from "../../shared/snapshot-capture-options";
 import { currentAutomationTabId, ExtensionRuntimeCommandRouter } from "../../runtime";
 import { TracedCommands, withTraceMetadata, type TraceCapture } from "../trace-capture/index";
+import { projectAccessEnded, projectFocusRefusal, type ProjectAccessEnded, type ProjectFocusRefusal } from "../projects/index";
 import type { ActivePage } from "./active-page";
-import type { ActiveRecording } from "./active-recording";
+import type { ActiveRecording } from "./active-recording/index";
 import type { ContentAttachment } from "./content-attachment";
 import { captureMergedTabSnapshot, prepareMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
@@ -76,6 +78,10 @@ export type ServerCommandChannelDeps = {
   readonly emitStatus: () => void;
   /** Takes a `server.activity` payload: what FluxIQ is doing now, for the panel and the overlay. */
   readonly acceptActivity: (activity: unknown) => void;
+  /** Takes a `server.conversation_changed` payload: a chat changed, so the panel reads it again. */
+  readonly acceptConversationChanged?: (payload: unknown) => void;
+  /** The session is ready (again): Core replays nothing, so the panel reads everything again. */
+  readonly onSessionResync?: () => void;
   // Re-entry through the facade for the three public paths a command can take.
   readonly recordEvent: (payload: RecordingEventPayload, tabId?: number, frameId?: number) => Promise<void>;
   readonly stopRecording: (notifyServer: boolean) => Promise<void>;
@@ -97,6 +103,16 @@ export type ServerCommandChannelDeps = {
    * as an untraced one.
    */
   readonly traceCapture?: TraceCapture;
+  /**
+   * Tells Core, once a session is ready, the project the person chose
+   * (`projects/project-focus.ts`): a new session starts at its pairing's project.
+   * Absent, nothing is sent.
+   */
+  readonly announceProjectFocus?: () => Promise<void>;
+  /** Hears Core refuse a project focus. It is about the project, not the connection, which stays up. */
+  readonly onProjectFocusRefused?: (refusal: ProjectFocusRefusal) => void;
+  /** Hears Core say the person lost the session's project (`projects/access-ended.ts`); the connection stays up. */
+  readonly onProjectAccessEnded?: (notice: ProjectAccessEnded) => Promise<void> | void;
 };
 
 export class ServerCommandChannel {
@@ -123,6 +139,13 @@ export class ServerCommandChannel {
     }
 
     if (message.type === "server.error") {
+      // A refused project focus leaves the session ready on its earlier project:
+      // neither the connection's error nor a failure.
+      const focusRefusal = projectFocusRefusal(message.payload);
+      if (focusRefusal) {
+        this.deps.onProjectFocusRefused?.(focusRefusal);
+        return;
+      }
       this.deps.setLastError(message.payload.message);
       // A refused recording start is scoped to the recording, not to the
       // connection: the socket is healthy and marking it failed would tear
@@ -136,10 +159,24 @@ export class ServerCommandChannel {
       return;
     }
 
+    // The person lost the session's project: its activity stopped and Core
+    // moved the session. About the project, never the connection.
+    if (message.type === "server.project_access_ended") {
+      const notice = projectAccessEnded(message.payload);
+      if (notice) await this.deps.onProjectAccessEnded?.(notice);
+      return;
+    }
+
     // Activity is a status display, not a command: it opens no runtime status
     // and is never answered.
     if (message.type === "server.activity") {
       this.deps.acceptActivity(message.payload);
+      return;
+    }
+
+    // A chat changed, wherever it was changed: a signal for the panel, no command, never answered.
+    if (message.type === "server.conversation_changed") {
+      this.deps.acceptConversationChanged?.(message.payload);
       return;
     }
 
@@ -172,7 +209,11 @@ export class ServerCommandChannel {
     // FluxIQ" a pairing left behind included.
     this.deps.setLastError(undefined);
     this.deps.gateway.markSessionReady();
+    // Nothing is replayed after a reconnect: the chat reads everything again.
+    this.deps.onSessionResync?.();
     this.deps.onActivity("connection", "Connected to FluxIQ", "Client session ready", "success");
+    // Before anything else is sent, so Core's activity for the chosen project reaches this session from the start.
+    await this.deps.announceProjectFocus?.();
     await this.deps.page.sendBrowserState();
     await this.deps.gateway.flushQueue();
     // A command an earlier worker lost while it was in flight is reported now,
@@ -200,8 +241,11 @@ export class ServerCommandChannel {
     }
     if (payload.command === "set_active_tab") {
       const tabId = Number(payload.tabId);
+      // FluxIQ's own page is refused before the page names it, so it never
+      // becomes the tab later commands run on (`../tab-gate/`).
+      await refuseOwnPageTab(tabId);
       this.deps.page.setTabId(tabId);
-      await chrome.tabs.update(tabId, { active: true });
+      await activateTab(tabId);
       this.deps.emitStatus();
       return;
     }

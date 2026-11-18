@@ -3,7 +3,7 @@ import { RUNTIME_MESSAGES } from "../../../../shared/constants";
 import type { PanelStore } from "../../../state";
 import { payloadOf } from "../reply";
 
-/** Whether FluxIQ has a model key, from the background's readiness relay. */
+/** Safe per-key availability and configuration from the background's readiness relay. */
 export function modelsPort(request: PanelStore["request"]): ChatModelsPort {
   return {
     readKeys: async () => {

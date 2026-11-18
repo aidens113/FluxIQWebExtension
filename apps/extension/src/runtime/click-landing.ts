@@ -118,6 +118,7 @@
 
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import type { OriginPace } from "../background/page-pace";
+import { closeTab, goBackInTab } from "../background/tab-gate";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import type { WorkerActionOutcome } from "./action-results";
 import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionFailedFailure, workerActionResult } from "./action-results";
@@ -405,7 +406,7 @@ async function closeOpenedTab(tabs: OpenedTab, pressedUrl: string | undefined): 
   forgetAutomationTab(tabs.openedTabId);
   setAutomationTab(tabs.sourceTabId);
   try {
-    await chrome.tabs.remove(tabs.openedTabId);
+    await closeTab(tabs.openedTabId);
     // Still recorded when it would not close, so a reset tries it again.
     fluxiqOpenedTabs.forget(tabs.openedTabId);
   } catch (error) {
@@ -557,7 +558,7 @@ async function returnToPressedPage(tabId: number, pressedUrl: string | undefined
   const watch = watchTopFrameNavigation(tabId);
   try {
     try {
-      await chrome.tabs.goBack(tabId);
+      await goBackInTab(tabId);
     } catch (error) {
       const detail = error instanceof Error ? error.message.trim() : "";
       return { kind: "not_returned", why: detail ? `the browser would not go back (${detail})` : "the browser would not go back", stayed: true };

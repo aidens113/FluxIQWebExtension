@@ -79,6 +79,12 @@ function harness(settings: FluxIQSettings = baseSettings, policy: AutomationStud
         return undefined;
       }
     },
+    projects: {
+      call: async () => ({ ok: true, payload: {} }) as PanelRelayResponse,
+      chosenProject: () => undefined,
+      choose: async () => undefined,
+      noteName: () => undefined
+    },
     readSettings: async () => {
       touched.push("readSettings");
       return { ...stored };
@@ -100,7 +106,6 @@ function harness(settings: FluxIQSettings = baseSettings, policy: AutomationStud
       touched.push("openTab");
       opened.push(url);
     },
-    unlockTicket: async () => undefined,
     activity: {
       read: async () => {
         touched.push("activity.read");
@@ -196,8 +201,8 @@ test("opening an automation uses the paired project's Core deep link and encodes
   assert.equal(h.opened.length, 1);
   const url = new URL(h.opened[0]!);
   assert.equal(url.origin, "https://core.test");
-  assert.equal(url.pathname, "/programs/automation-studio");
-  assert.deepEqual([...url.searchParams], [["project", "project-1"], ["flow", "flow/one?&project=other"]]);
+  assert.equal(url.pathname, "/flows/flow%2Fone%3F%26project%3Dother");
+  assert.deepEqual([...url.searchParams], [["project", "project-1"]]);
   assert.equal(url.hash, "");
   assert.deepEqual(h.calls, [], "opening the panel makes no authenticated program call");
 });

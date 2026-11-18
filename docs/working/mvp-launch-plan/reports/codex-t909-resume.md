@@ -394,7 +394,7 @@ index a84e2ab85..c3cfb86c7 100644
 +++ b/packages/fluxiq/src/framework/automation-service/service/fluxnode/create-fluxnode-service.ts
 @@ -21,11 +21,12 @@
  // and request, or its own id; a resume keeps the first run's scope, and a pipeline's child runs are runs.
- 
+
  import { createHash, randomUUID } from "node:crypto";
 -import { checkFluxNodeRunInputs, fillFluxNodeGoal, FLUXNODE_PIPELINE_OVERRIDES_MESSAGE, fluxNodeApiPath, fluxNodeSecretInputs, type FluxNodeIssue, type FluxNodeRunRequest, type FluxNodeRunResult, type FluxNodeSpec } from "@fluxiq/contracts/fluxnode";
 +import { checkFluxNodeRunInputs, fillFluxNodeGoal, FLUXNODE_PIPELINE_OVERRIDES_MESSAGE, fluxNodeApiPath, fluxNodeSecretInputs, resolveFluxNodeOptions, type FluxNodeIssue, type FluxNodeRunRequest, type FluxNodeRunResult, type FluxNodeSpec } from "@fluxiq/contracts/fluxnode";
@@ -418,7 +418,7 @@ index a84e2ab85..c3cfb86c7 100644
        return { run, ended: runs.get(run.runId)!.finished };
      }
    };
- 
+
 -  const launch = async (registered: FluxNodeRegistered, carried: FluxNodeRunCarried, key: { key: string; request: unknown; scope: string } | undefined): Promise<FluxNodeRun | undefined> => {
 +  const launch = async (registered: FluxNodeRegistered, carried: FluxNodeRunCarried, key: { key: string; request: unknown; scope: string } | undefined, admittedTargets?: Readonly<Record<string, string>>): Promise<FluxNodeRun | { unreadable: Error } | undefined> => {
      const runId = `fnr-${randomUUID()}`;

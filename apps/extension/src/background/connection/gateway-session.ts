@@ -10,6 +10,20 @@
 // timing, and how a gateway command becomes a command the server command
 // channel runs (`server-command-channel.ts`).
 //
+// A revoked browser stops (`server.revoked`): it drops its credential, closes
+// the socket, reconnects no more, and keeps how its approval ended
+// (`pairing-ended/`) until the person connects again. With no credential it is
+// not paired, so nothing reconnects it into a pairing request by itself. A
+// credential the gateway refused instead (expired, or not one it knows) is
+// dropped too, and the pairing request the gateway raised for it stands.
+//
+// A managed host the engine launched is enrolled instead of paired: its connect
+// carries a one-time enrolment ticket, held here in memory only and handed to
+// the first hello that has no token. Until that session is ready, nothing falls
+// back to pairing: a refusal (`server.error` with an `enrolment.*` code) or a
+// socket lost before `server.session_ready` ends the attempt in an error, and
+// the launcher that holds the next ticket tries again.
+//
 // It is a subclass rather than a wrapper so the connection's whole public
 // surface -- `send`, `connect`, `flushQueue`, `statusFields` and the rest -- is
 // the session's without a delegating method for each.
@@ -31,6 +45,7 @@ import {
   browserExtensionCapabilities,
   type ClientGatewayActionResult,
   type ClientGatewayServerMessage,
+  type ExtensionPairingEnded,
   type FluxIQSession,
   type FluxIQSettings,
   type JsonObject,
@@ -38,6 +53,7 @@ import {
 } from "../../shared/protocol";
 import { browserActionFromGatewayCommand, gatewayActionResultFromRejection, isWebAutomationActionRejection } from "../../runtime";
 import { compactObject } from "./value-readers";
+import { PairingEndedMemory, type PairingEndedStorage } from "./pairing-ended/index";
 
 // Sends one client message to the gateway, or queues it while the session is
 // not ready. Named so collaborators that only need to send share this exact
@@ -46,6 +62,11 @@ export type GatewayMessageSender = ClientGatewayConnectionSender;
 
 // The connection-health fields the extension status carries.
 export type GatewayStatusFields = ClientGatewayConnectionStatus;
+
+// Why the last enrolment ended without a session: Core's refusal code and
+// words, or only words when the connection was lost before Core answered.
+// Never the ticket.
+export type GatewayEnrolmentFailure = { readonly code?: string; readonly message: string };
 
 export type GatewaySessionDeps = {
   readonly settings: () => FluxIQSettings;
@@ -75,9 +96,15 @@ export type GatewaySessionDeps = {
   // A new trust lineage id, for a socket that had to pair. Tests fix it.
   readonly mintLineage?: () => string;
   readonly handlers: GatewaySessionHandlers;
+  readonly onHostLease?: () => void;
   // How long a socket is given to open. Omitted in the extension, which takes
   // Core's `CLIENT_GATEWAY_OPEN_TIMEOUT_MS`; tests shorten it.
   readonly openTimeoutMs?: number;
+  // Where how this browser's approval ended is kept across worker restarts
+  // (`pairing-ended/storage.ts`); the worker's memory alone when omitted.
+  readonly pairingEndedStorage?: PairingEndedStorage;
+  // This browser's approval ended: revoked, or a saved credential refused.
+  readonly onPairingEnded?: (ended: ExtensionPairingEnded) => void;
 };
 
 // Core's connection handlers (server messages, pairing, session ready, the
@@ -88,17 +115,26 @@ export type GatewaySessionHandlers = ClientGatewayConnectionHandlers & {
 };
 
 type ExecuteActionMessage = Extract<ClientGatewayServerMessage, { type: "server.execute_action" }>;
+type RevokedNotice = Extract<ClientGatewayServerMessage, { type: "server.revoked" }>["payload"];
+type PairingRequiredNotice = Extract<ClientGatewayServerMessage, { type: "server.pairing_required" }>["payload"];
 
 export class GatewaySession extends FluxIQClientGatewayConnection {
   private readonly deps: GatewaySessionDeps;
+  private readonly enrolment: EnrolmentAttempt;
+  private readonly ended: PairingEndedMemory;
+  private leaseKey: string | undefined;
 
   constructor(deps: GatewaySessionDeps) {
+    const enrolment = new EnrolmentAttempt();
     super({
       url: () => deps.settings().gatewayUrl,
       hello: () => extensionHello(deps.session(), deps.effectiveSettings()),
       tokenStorage: sessionTokenStorage(deps),
+      // Core's transport asks only for a hello with no token, once.
+      enrolment: { take: () => enrolment.take() },
       ...(deps.openTimeoutMs !== undefined ? { openTimeoutMs: deps.openTimeoutMs } : {}),
-      autoReconnect: () => deps.settings().autoReconnect,
+      // A reconnect during an enrolment would have no ticket and so would pair: the launcher retries instead.
+      autoReconnect: () => !enrolment.pending() && deps.settings().autoReconnect,
       reconnectBaseDelayMs: RECONNECT_BASE_DELAY_MS,
       reconnectMaxDelayMs: RECONNECT_MAX_DELAY_MS,
       heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
@@ -113,6 +149,25 @@ export class GatewaySession extends FluxIQClientGatewayConnection {
       handlers: deps.handlers
     });
     this.deps = deps;
+    this.enrolment = enrolment;
+    this.ended = new PairingEndedMemory(deps.pairingEndedStorage ?? workerPairingEndedStorage());
+    this.on("message", ({ message }) => {
+      this.noteEnrolmentRefusal(message);
+      if (message.type === "server.revoked") void this.endRevoked(message.payload);
+    });
+    this.on("pairing_required", ({ message }) => {
+      this.endEnrolment({ message: "FluxIQ asked this browser to pair while it was enrolling, so the attempt was ended." });
+      void this.noteRefusedCredential(message.payload);
+    });
+    // Only the current socket's close: Core's handler, which runs first, leaves the connection disconnected
+    // (no reconnect while enrolling). A socket this connect replaced closes later and leaves it connecting.
+    this.on("close", () => {
+      if (this.state() === "disconnected") this.endEnrolment({ message: "The connection to FluxIQ closed before this browser was enrolled." });
+    });
+    this.on("session_ready", () => {
+      this.enrolment.settle();
+      if (this.ended.current() !== undefined) void this.ended.clear().catch(noteStorageFailure);
+    });
     const { onCommand } = deps.handlers;
     this.on("start_recording", ({ message }) => onCommand({ ...message.payload, command: "start_recording" }, message.id));
     this.on("stop_recording", ({ message }) => onCommand({ ...message.payload, command: "stop_recording" }, message.id));
@@ -120,9 +175,94 @@ export class GatewaySession extends FluxIQClientGatewayConnection {
     this.on("execute_action", ({ message }) => this.mapExecuteAction(message));
   }
 
+  /**
+   * The next connect enrols with `ticket` instead of pairing, or, with none, is
+   * an ordinary connect that forgets how the last enrolment ended. A stored
+   * token is dropped first: a launcher enrols only when it did not resume, and a
+   * hello carrying a token never spends its ticket.
+   */
+  async prepareConnect(ticket?: string): Promise<void> {
+    // Connecting is the person (or a launcher) asking to pair again: whatever ended before is over.
+    await this.ended.clear().catch(noteStorageFailure);
+    if (ticket === undefined) {
+      this.enrolment.forget();
+      return;
+    }
+    this.enrolment.hold(ticket);
+    if (this.deps.session().token !== undefined) await sessionTokenStorage(this.deps).clear?.();
+  }
+
+  /** How this browser's approval ended, while it waits for the person to pair it again (`ExtensionPairingEnded`). */
+  pairingEnded(): ExtensionPairingEnded | undefined {
+    return this.ended.current();
+  }
+
+  /** Reads how an approval ended in an earlier worker; true when the status changed. */
+  loadPairingEnded(): Promise<boolean> {
+    return this.ended.load();
+  }
+
+  /** Forgets how the approval ended: the person forgot the pairing, which starts over. */
+  forgetPairingEnded(): Promise<void> {
+    return this.ended.clear();
+  }
+
+  /** Why the last enrolment ended without a session, until the next connect or a ready session. */
+  enrolmentFailure(): GatewayEnrolmentFailure | undefined {
+    return this.enrolment.failure();
+  }
+
+  // FluxIQ revoked this browser. The gateway closes the socket after the
+  // notice; this side stops first, so no reconnect presents the dead
+  // credential or raises a pairing request. The credential is dropped, which
+  // is what `paired` reads, so a restarted worker does not reconnect either.
+  private async endRevoked(notice: RevokedNotice): Promise<void> {
+    this.stopReconnecting();
+    this.closeClient();
+    const ended: ExtensionPairingEnded = { state: "revoked", reason: notice.reason, at: Date.now() };
+    const kept = this.ended.note(ended);
+    const dropped = sessionTokenStorage(this.deps).clear?.();
+    this.deps.onPairingEnded?.(ended);
+    this.markDisconnected();
+    await Promise.all([kept, dropped]).catch(noteStorageFailure);
+  }
+
+  // The hello's credential was refused and the gateway asked for a new
+  // approval instead. The credential is dead either way, so it is dropped, and
+  // the request on this socket stands for the person to approve.
+  private async noteRefusedCredential(pairing: PairingRequiredNotice): Promise<void> {
+    if (pairing.credential === undefined) return;
+    const ended: ExtensionPairingEnded = { state: pairing.credential === "expired" ? "expired" : "refused", at: Date.now() };
+    const kept = this.ended.note(ended);
+    const dropped = this.deps.session().token !== undefined ? sessionTokenStorage(this.deps).clear?.() : undefined;
+    this.deps.onPairingEnded?.(ended);
+    this.deps.emitStatus();
+    await Promise.all([kept, dropped]).catch(noteStorageFailure);
+  }
+
+  private noteEnrolmentRefusal(message: ClientGatewayServerMessage): void {
+    if (message.type !== "server.error" || !message.payload.code?.startsWith(ENROLMENT_REFUSAL_PREFIX)) return;
+    this.endEnrolment({ code: message.payload.code, message: message.payload.message });
+  }
+
+  // Ends an enrolment still waiting for its session, and with it any reconnect:
+  // the next hello would carry no ticket and pair. Nothing to do otherwise.
+  private endEnrolment(failure: GatewayEnrolmentFailure): void {
+    if (!this.enrolment.fail(failure)) return;
+    this.stopReconnecting();
+    this.closeClient();
+    this.markFailed();
+  }
+
   // A gateway action becomes a fact check or a browser action for the channel,
   // or is answered here when it cannot be read: nothing is dispatched to the page.
   private mapExecuteAction(message: ExecuteActionMessage): void {
+    const lease = message.payload.lease;
+    const leaseKey = lease === undefined ? undefined : `${lease.resourceKey}:${lease.epoch}`;
+    if (leaseKey !== undefined && leaseKey !== this.leaseKey) {
+      this.leaseKey = leaseKey;
+      this.deps.onHostLease?.();
+    }
     const { onCommand } = this.deps.handlers;
     // A fact check is not a web action: it is answered by its own route
     // (`runtime/fact-check-runner.ts`), or refused here when unreadable.
@@ -204,4 +344,76 @@ function sessionTokenStorage(deps: GatewaySessionDeps): ClientGatewayConnectionT
 /** The command with the host lease it came under, when it came under one; the channel checks it (`server-command-channel.ts`). */
 function withLease<TCommand extends Extract<ServerCommandPayload, { command: "execute_action" | "evaluate_facts" }>>(command: TCommand, lease: TCommand["lease"]): TCommand {
   return lease === undefined ? command : { ...command, lease };
+}
+
+/** A worker without storage keeps how its approval ended for as long as it runs. */
+function workerPairingEndedStorage(): PairingEndedStorage {
+  let kept: ExtensionPairingEnded | undefined;
+  return {
+    read: async () => kept,
+    write: async (ended) => { kept = ended; }
+  };
+}
+
+// The status already says it in memory; storage only carries it past a restart.
+function noteStorageFailure(error: unknown): void {
+  console.warn("FluxIQ could not keep how this browser's approval ended.", error instanceof Error ? error.name : "non_error");
+}
+
+/** The `server.error` codes Core refuses an enrolment ticket with (`enrolment.unknown`, `.expired`, `.used`, `.revoked`, `.domain_mismatch`). */
+const ENROLMENT_REFUSAL_PREFIX = "enrolment.";
+
+/**
+ * One enrolment: the ticket, held until the first hello without a token takes
+ * it, and whether the attempt still waits for its session or how it failed.
+ * The ticket lives only here, in the worker's memory: never in settings,
+ * storage, a status or a log.
+ */
+class EnrolmentAttempt {
+  private ticket: string | undefined;
+  private waiting = false;
+  private ended: GatewayEnrolmentFailure | undefined;
+
+  hold(ticket: string): void {
+    this.ticket = ticket;
+    this.waiting = true;
+    this.ended = undefined;
+  }
+
+  /** The held ticket, once: a reconnect never resends it. */
+  take(): string | undefined {
+    const ticket = this.ticket;
+    this.ticket = undefined;
+    return ticket;
+  }
+
+  pending(): boolean {
+    return this.waiting;
+  }
+
+  /** The session is ready: the enrolment is over, and the token it brought is stored as a pairing's is. */
+  settle(): void {
+    this.ticket = undefined;
+    this.waiting = false;
+    this.ended = undefined;
+  }
+
+  /** Records how a waiting enrolment failed; false when none was waiting. The first failure stands. */
+  fail(failure: GatewayEnrolmentFailure): boolean {
+    if (!this.waiting) return false;
+    this.ticket = undefined;
+    this.waiting = false;
+    this.ended = failure;
+    return true;
+  }
+
+  forget(): void {
+    this.ticket = undefined;
+    this.waiting = false;
+    this.ended = undefined;
+  }
+
+  failure(): GatewayEnrolmentFailure | undefined {
+    return this.ended;
+  }
 }

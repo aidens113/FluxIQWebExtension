@@ -12,6 +12,7 @@
 
 import { CONTENT_EVENT, CONTENT_READY } from "./messages";
 import { isActiveContentInstance } from "./instance";
+import { ownDocument } from "./own-document";
 import { captureSettings } from "./capture-settings";
 import { compactObject } from "./compact-object";
 import { captureSnapshot } from "./dom-snapshot";
@@ -49,16 +50,27 @@ export function isRecording(): boolean {
 }
 
 /** Tells the background worker this frame has a live content script. */
+// FluxIQ's own page announces nothing: the frame's address, title and
+// snapshot never leave it (`./own-document/`), so the ready message waits for
+// the document's decision before anything is read for it.
 export function sendReady(): void {
   if (!isActiveContentInstance()) return;
-  const payload = basePayload("content.ready", {
-    metadata: { readyState: document.readyState }
+  void ownDocument.verdict().then((verdict) => {
+    if (verdict !== "ordinary" || !isActiveContentInstance()) return;
+    const payload = basePayload("content.ready", {
+      metadata: { readyState: document.readyState }
+    });
+    void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
   });
-  void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
 }
 
+// Recording starts only by a command, which this document answered only once
+// it was known to be ordinary; a document last decided to be anything else
+// sends nothing, and builds nothing to send.
 export function emit(kind: RecordingEventKind, details: Partial<RecordingEventPayload>): void {
   if (!isActiveContentInstance()) return;
+  const decided = ownDocument.last();
+  if (decided !== undefined && decided !== "ordinary") return;
   if (!recording && kind !== "content.ready") return;
   if (EXECUTABLE_KINDS.has(kind)) flushPendingMutation();
   const payload = basePayload(kind, details);

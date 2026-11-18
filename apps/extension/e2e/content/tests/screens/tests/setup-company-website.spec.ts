@@ -1,5 +1,5 @@
 // Headed, provider-free look at setup on the company-website scenario: disconnected, waiting for approval,
-// connected with the model key missing, locked and ready, and a failed connection, in a 360 px panel, by mouse
+// connected with the model key missing, unavailable and ready, and a failed connection, in a 360 px panel, by mouse
 // and by keyboard. The panel is the real one (`mountPanel`) over a scripted background; its model key comes from
 // a scripted setup port, so nothing reaches FluxIQ, a provider or a key. Pictures go to the run's output folder.
 import { expect, test } from "../../../index.js";
@@ -16,7 +16,7 @@ const ENTRY = (surface: string, start: string) => `
   scope.__sent = [];
   const settings = { ...defaultSettings(), coreApiUrl: "http://127.0.0.1:3000" };
   const base = { recordingState: "idle", gatewayUrl: "ws://127.0.0.1:4777/client", clientId: "client-1", queueSize: 0, eventCount: 0, recentActivities: [], settings };
-  const keys = () => scope.__key === "missing" ? [] : [{ kind: "llm", provider: "scripted", enabled: true, ...(scope.__key === "locked" ? { unlocked: false, lockedBecause: "signed_out" } : {}) }];
+  const keys = () => scope.__key === "missing" ? [] : [{ kind: "llm", provider: "openai", enabled: true, availability: scope.__key === "unavailable" ? { state: "unavailable", code: "host_protection_unavailable" } : { state: "available" } }];
   startScriptedPanel({
     surface: "${surface}",
     start: "${start}",
@@ -32,7 +32,7 @@ const ENTRY = (surface: string, start: string) => `
       }
       return undefined;
     },
-    ports: { setup: { readModelKey: async () => scope.__key === "missing" ? "missing" : scope.__key === "locked" ? "locked" : "ready" } }
+    ports: { setup: { readModelKey: async () => scope.__key === "missing" ? "missing" : scope.__key === "unavailable" ? { state: "unavailable", code: "host_protection_unavailable" } : "ready" } }
   });
 `;
 
@@ -92,12 +92,13 @@ test("company-website: setup by mouse, every state, drawn and looked at at 360 p
   await card.getByRole("button", { name: "Open FluxIQ" }).click();
   expect((await child.evaluate(() => (window as unknown as Win).__sent)).at(-1)).toEqual({ type: "fluxiq.panel.openFluxIQ", purpose: "model-key" });
 
-  // Locked: the key is ticked, unlocking this browser once is the step.
-  await moveTo(child, "connected", "locked");
+  // Host protection failure is a configuration problem; the approved browser remains usable.
+  await moveTo(child, "connected", "unavailable");
   await child.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(card).toContainText("Unlock this browser once");
-  await expect(card).toContainText("password once");
-  await shot("5-connected-key-locked");
+  await expect(card).toContainText("host operator");
+  await expect(card).not.toContainText(/unlock|password/iu);
+  await expect(frame.locator("#conversationInput")).toBeEnabled();
+  await shot("5-connected-key-unavailable");
 
   // Ready: it moves to the chat by itself on the next read, nobody presses anything.
   await moveTo(child, "connected", "ready");

@@ -1,18 +1,10 @@
 // The background's `fluxiq.panel.modelReadiness` reply, read as a ModelKeyReading.
-// The reply is `{ ok: true, payload: { keys: [{ enabled, unlocked?, lockedBecause? }] } }`; a reply
-// with no list says nothing about the keys. Same rules as the chat's own reading in
-// `@fluxiq/ui-components` (`onboarding/model-readiness.ts`), so the two never disagree.
+// The safe per-key availability is metadata, not a second client-authentication state.
+// These supported-provider and compatibility rules match shared chat readiness.
 
-import { modelKeyLockedWords, readModelKeyLockReason } from "fluxiq/ui";
+import { readModelKeyAvailability } from "fluxiq/ui";
 import type { PanelResult } from "../../../state";
 import type { ModelKeyReading } from "./reading";
-
-/** Why the first enabled key of a locked reply is locked, from the one place those words live. */
-export function modelKeyLockWordsFromReply(result: PanelResult<unknown>): string | undefined {
-  if (modelKeyFromReply(result) !== "locked" || !result.ok) return undefined;
-  const keys = record(record(result.value)?.payload)?.keys as unknown[];
-  return modelKeyLockedWords(readModelKeyLockReason(keys.map(record).find((key) => key?.enabled === true)?.lockedBecause));
-}
 
 /** Never throws; anything that is not a clear answer is `unknown`. */
 export function modelKeyFromReply(result: PanelResult<unknown>): ModelKeyReading {
@@ -20,10 +12,28 @@ export function modelKeyFromReply(result: PanelResult<unknown>): ModelKeyReading
   const payload = record(record(result.value)?.payload);
   const keys = payload?.keys;
   if (!Array.isArray(keys)) return "unknown";
-  const enabled = keys.map(record).filter((key) => key?.enabled === true);
+  const enabled = keys.map(record).filter((key) => key?.enabled === true && key.heldByYou !== false && supportedModelKey(key));
   if (enabled.length === 0) return "missing";
-  // A key that says nothing about being unlocked (an older Core, or someone else's) is ready as it always was.
-  return enabled.every((key) => key?.unlocked === false) ? "locked" : "ready";
+  const readings = enabled.map(keyReading);
+  if (readings.includes("ready")) return "ready";
+  if (readings.includes("unknown")) return "unknown";
+  return readings[0]!;
+}
+
+function supportedModelKey(key: Record<string, unknown>): boolean {
+  if (key.kind !== "llm") return false;
+  const provider = key.provider === undefined ? "deepseek" : typeof key.provider === "string" ? key.provider.toLowerCase().replace(/[^a-z0-9]/gu, "") : "";
+  return provider === "deepseek" || provider === "anthropic" || provider === "anthropicclaude";
+}
+
+function keyReading(key: Record<string, unknown> | undefined): ModelKeyReading {
+  if (key?.availability !== undefined) {
+    const availability = readModelKeyAvailability(key.availability);
+    if (availability === null) return "unknown";
+    return availability.state === "available" ? "ready" : availability;
+  }
+  // An old lock flag proves incompatibility, not a particular recovery cause.
+  return key?.unlocked === false ? "upgrade_required" : "ready";
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {

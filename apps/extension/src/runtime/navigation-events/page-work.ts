@@ -8,11 +8,12 @@
 
 import { PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT, PAGE_WORK_WATCHED_EVENT } from "../../shared/scheduled-work-event";
 import { pageSettledInPage } from "../../shared/scheduled-work-settled";
+import { executeInTab } from "../../background/tab-gate";
 
 /** Whether the tab's top document has finished its own work; false when no page world can say, or the page cannot be reached. */
 export async function pageWorkSettled(tabId: number): Promise<boolean> {
   try {
-    const [answer] = await chrome.scripting.executeScript({
+    const [answer] = await executeInTab({
       target: { tabId, frameIds: [0] },
       args: [PAGE_WORK_WATCHED_EVENT, PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT],
       func: pageSettledInPage

@@ -185,7 +185,7 @@ const buildEnvironment = {
 // spawning anything, and the rest are rebuilt (`prelude/build-phase.mjs`).
 try {
   await timer.time("build-lock", () => withBuildLock(paths.buildLockPath, () => runBuildPhase({
-    interactive, instanced, env: buildEnvironment, runStep, buildOrder, timer, note,
+    interactive, instanced, managedHosts: args[0] === "fluxnode-host", env: buildEnvironment, runStep, buildOrder, timer, note,
     copyHostModule: async () => {
       await mkdir(path.dirname(paths.hostModule), { recursive: true });
       await copyFile(paths.sharedHostModule, paths.hostModule);

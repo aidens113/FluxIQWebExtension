@@ -20,6 +20,7 @@
 // the page it was already on was reported as a success. `navigation/outcome.ts`
 // judges the record.
 
+import { activateTab, navigateTab, openTab, reloadTab, tabReads } from "../background/tab-gate";
 import { pageWorkSettled, refreshDeclaredSoon, tabNavigationEpochs } from "./navigation-events";
 
 const DEFAULT_AUTOMATION_URL = "about:blank";
@@ -119,7 +120,7 @@ export async function resolveAutomationTab(input: AutomationTabRequest = {}): Pr
     const drive = initialUrl ? await updateTabUrl(existing, initialUrl, input.holdsRobotCheck) : undefined;
     return { tabId: existing, drive };
   }
-  const tab = await chrome.tabs.create({
+  const tab = await openTab({
     url: input.initialUrl ?? DEFAULT_AUTOMATION_URL,
     active: input.active ?? true
   });
@@ -181,7 +182,7 @@ export async function tabIsOpen(tabId: number): Promise<boolean> {
 /** The tab as the browser reports it, or undefined when it is gone or unreadable. */
 async function readTab(tabId: number): Promise<chrome.tabs.Tab | undefined> {
   try {
-    return await chrome.tabs.get(tabId);
+    return await tabReads().get(tabId);
   } catch {
     return undefined;
   }
@@ -191,7 +192,7 @@ async function existingAutomationTab(): Promise<number | undefined> {
   const automationTabId = currentAutomationTabId();
   if (automationTabId === undefined) return undefined;
   try {
-    const tab = await chrome.tabs.get(automationTabId);
+    const tab = await tabReads().get(automationTabId);
     return tab.id;
   } catch {
     forgetAutomationTab(automationTabId);
@@ -236,14 +237,14 @@ async function updateTabUrl(tabId: number, url: string, holdsRobotCheck?: (tabId
   // Read before the drive, so the wait knows the browser has begun this navigation and not an earlier one.
   const epochBefore = tabNavigationEpochs.of(tabId);
   if (reloaded && holdsRobotCheck !== undefined && await holdsRobotCheck(tabId)) {
-    await chrome.tabs.update(tabId, { active: true });
+    await activateTab(tabId);
     return { urlBefore, documentBefore, urlAfter: urlBefore, documentAfter: documentBefore, opened: false, reloaded: false, heldForCheck: true };
   }
   if (reloaded) {
-    await chrome.tabs.update(tabId, { active: true });
-    await chrome.tabs.reload(tabId);
+    await activateTab(tabId);
+    await reloadTab(tabId);
   } else {
-    await chrome.tabs.update(tabId, { url, active: true });
+    await navigateTab(tabId, url);
   }
   await waitForTabReady(tabId, { epochBefore });
   return {
@@ -297,7 +298,7 @@ export async function readyFromSnapshot(tabId: number): Promise<boolean> {
   if (!proof || proof.tabId !== tabId) return false;
   if (counted ? tabNavigationEpochs.documentOf(tabId) !== proof.documentEpoch : Date.now() - proof.capturedAt > SNAPSHOT_READINESS_MAX_AGE_MS) return await notReady(counted);
   try {
-    const tab = await chrome.tabs.get(tabId);
+    const tab = await tabReads().get(tabId);
     // A proof this worker counted follows its document across an address the page rewrote in place: the document is the one it proved.
     const followsDocument = counted && tab.url !== proof.url;
     if (tab.status !== "complete" || (!counted && tab.url !== proof.url) || isTransientNavigationUrl(tab.url)) return await notReady(counted);
@@ -386,7 +387,7 @@ export function waitForTabReady(tabId: number, drive?: { epochBefore: number }):
     function done(): void {
       clearTimeout(timeout);
       clearInterval(interval);
-      chrome.tabs.onUpdated.removeListener(listener);
+      tabReads().onUpdated.removeListener(listener);
       chrome.webNavigation?.onCompleted?.removeListener(ended);
       chrome.webNavigation?.onErrorOccurred?.removeListener(ended);
       resolve();
@@ -403,14 +404,14 @@ export function waitForTabReady(tabId: number, drive?: { epochBefore: number }):
     function ended(details: { tabId: number; frameId: number }): void {
       if (details.tabId === tabId && details.frameId === 0) void checkSettled();
     }
-    chrome.tabs.onUpdated.addListener(listener);
+    tabReads().onUpdated.addListener(listener);
     chrome.webNavigation?.onCompleted?.addListener(ended);
     chrome.webNavigation?.onErrorOccurred?.addListener(ended);
     void checkSettled();
 
     async function checkSettled(): Promise<void> {
       try {
-        const tab = await chrome.tabs.get(tabId);
+        const tab = await tabReads().get(tabId);
         const url = tab.url;
         const now = Date.now();
         if (url !== lastUrl) {

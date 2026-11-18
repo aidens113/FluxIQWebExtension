@@ -50,6 +50,7 @@ domain/
   src/web-panel-host.ts  Entry point of the web panel host (see below)
   scripts/          Web panel host build, FluxIQ setup, and domain test runner
 packages/          Repository-local testing facility and tooling packages
+packages/browser-host/  Product package: launches Chromium with the built extension for `fluxiq dev --browsers N`
 docs/architecture/  Authored current-state architecture
 docs/working/       Investigation and implementation working documents
 scripts/            Repository-level FluxIQ panel launcher and Lab launcher
@@ -60,6 +61,66 @@ the package rather than under `recording/` or `runtime/` because both of those
 read them, and putting either under one would make the other depend on it.
 The testing packages are described in
 [the automated testing facility](testing-facility.md).
+
+### The Browser Host Package
+
+`packages/browser-host` is product code, not testing infrastructure: it is the
+launcher `fluxiq dev --browsers N` loads (`--browser-host
+@fluxiq-web-extension/browser-host/launcher`). It implements Core's
+`FluxIQHostLauncher` (type-only import from `fluxiq/server`; the interface is
+Core's) and never depends on `packages/test-runner`; the structure audit
+enforces that, and the test-runner imports from it instead (its
+`find-browser-process.ts` re-exports the one `--user-data-dir` matcher).
+
+- Each host gets a fresh temp profile (`mkdtemp`, removed on close) or a named
+  one under `<dataDir>/browser-hosts/<name>/<hostId>` that is kept. Hosts launch
+  in parallel; if one fails the others close and the error names it.
+- Enrolment: after the extension's worker is up, the launcher opens the
+  extension's own side-panel page and sends `fluxiq.connect` with the one-time
+  ticket as an in-memory `evaluate` argument over Playwright's debugging pipe.
+  The ticket is never in argv, env, a URL, a file or a log, and the package
+  refuses to enrol while `DEBUG` enables Playwright protocol logging
+  (`browser_host.protocol_logging_on`). A connect that fails before redemption is
+  retried with a new ticket (first attempt plus 3 retries); an `enrolment.*`
+  refusal is final.
+- No leftovers: `close()` closes the context, kills any process still holding the
+  profile (`taskkill /T /F` on Windows, signals elsewhere) and removes a fresh
+  profile. A detached reaper process, spawned once per engine with an IPC
+  channel, does the same for every registered profile when the engine dies
+  without closing.
+
+Core grants each FluxNode leaf one host lease. The web domain selects that
+lease's exact session for both actions and evidence and refuses stale leases;
+unleased personal execution excludes managed sessions. A new lease invalidates
+the extension's project lookup cache, including an older lookup still in flight.
+Core owns the current run/project binding and checks managed HTTP calls through
+restricted service IAM policies. The headless API serves that client's context
+and shares trace/state upload intake with the web panel; it creates no person's
+project for a managed host. Production headless model-key custody remains Core's
+P3b seam.
+
+The product package is registered with the imported build cache, so its build
+precedes test-runner's reaper import. The provider-free acceptance command is:
+
+```powershell
+pnpm.cmd lab fluxnode-host --scenario company-website --task company-website-apprentices --hosts 2 --scripted-model --attempts 4
+```
+
+The proof uses the actual SDK and engine CLI, the realistic fixture and the
+product launcher. It records each predecessor's Flow/version/steps digest,
+actual engine model decisions, scripted requests and runtime; a replay requires
+zero decisions and zero scripted requests. It also checks independent sessions,
+fresh-host recovery, graceful shutdown, hard engine death and named retention
+and resume. Its artifacts remain in ignored, run-owned directories.
+
+Two FluxNodes each run an exploring attempt and three continuations concurrently,
+then one additional parallel replay each. Every result must match the fixture's
+four literal apprentice rows and name one actual leased host/session. A
+credential-free IPC acknowledgment drains observations after each SDK result.
+Scripted requests carry the owning run's validated correlation ID through the
+loopback transport; reply cursors are independent per run. Unknown requests stay
+in aggregate accounting and fail the proof. Scripted responses do not imply zero
+engine model decisions, and repeated run IDs cannot count as new attempts.
 
 ## Responsibility Boundaries
 
@@ -134,7 +195,7 @@ owning scripts.
 | `apps/extension/.test-build-scratch/<label>/`, `domain/.test-build-scratch/<label>/` | No | One labelled unit-test run's bundles ([Test Build Labels](#test-build-labels)). Cleared when that label runs again, and otherwise by `pnpm task prune` ([Reclaiming Disposable Build Output](#reclaiming-disposable-build-output)). |
 | `apps/extension/e2e/content/.harness-build/` | No | One content-harness run's own bundles, removed when that run ends ([Content Harness](#content-harness)). |
 | `test-results/` | No | Playwright reports and failure artifacts, such as `apps/extension/e2e/test-results/content/`. |
-| `domain/.script-build/` | No | esbuild bundle of the FluxIQ setup CLI, regenerated by `pnpm fluxiq:setup` and `pnpm dev`. Never commit it: it is rebuilt on every setup at tens of megabytes, so each committed rebuild bloats history and breaks pushes. |
+| `domain/.script-build/` | No | esbuild bundle of the FluxIQ setup CLI, `setup-fluxiq.mjs` and the chunks beside it, regenerated by `pnpm fluxiq:setup` and `pnpm dev`, which empty the directory first. It is split into chunks so each dynamic `import()` in Core stays a real import: as one file, esbuild started modules lazily and dropped a start call, and setup crashed as it loaded (2026-11-17, see [Bundles Start Every Module In Order](#bundles-start-every-module-in-order)). Never commit it: it is rebuilt on every setup at tens of megabytes, so each committed rebuild bloats history and breaks pushes. |
 | `<package>/.lab-instances/<instance>/` | No | One concurrent Lab instance's own build output, under the package that produced it. Written only by `scripts/lab/run-lab.mjs`; removable at any time, and reclaimed by `pnpm task prune` ([Reclaiming Disposable Build Output](#reclaiming-disposable-build-output)). |
 | `.lab-locks/` | No | The file lock that serializes the Lab build phase across instances. |
 | `test-runs/`, `test-runs/instances/<instance>/` | No | Lab run evidence and durable bench campaigns. An instance writes under its own subdirectory; serial and sharded campaign state under `bench/` remains runtime data. |
@@ -170,6 +231,28 @@ a change — and esbuild copies the bytes it reads verbatim into a sourcemap's
 `sourcesContent`. The same commit therefore built different bytes in different
 checkouts. A build's output is now a function of the commit rather than of who
 checked it out.
+
+### Bundles Start Every Module In Order
+
+When a dynamic `import()` or a `require()` inside a bundle reaches a module,
+esbuild wraps that module and everything it imports in `__esm`, so they start
+only when something calls their start function. esbuild (0.24 and 0.25) drops
+that call where a module imports through a side-effect-free `export *` file,
+such as Core's `@fluxiq/contracts` barrels, so the bundle reads exports before
+they exist. Whether a given import is hit depends on which other module
+happened to start the wrapped one first, so a change anywhere in Core can turn
+a working bundle into one that crashes as it loads. On 2026-11-17 the
+one-file setup bundle, which inlines all of Core and wrapped about 4,000
+modules, crashed with `IAM_PREDEFINED_POLICIES` undefined against a Core
+branch that reshuffled the client gateway.
+
+No bundle here may start a module lazily. `scripts/check/lazy-modules` fails
+the build of the setup bundle, the web panel host, the product host and every
+extension entry when esbuild wrapped any module. The setup bundle is split into
+chunks (`splitting: true`), which keeps each dynamic import a real import; the
+hosts keep Core external; and the extension entries must not reach a module
+through a dynamic import at all, because the content script is an IIFE and
+cannot be split.
 
 ## The Adversarial Lane
 
@@ -463,7 +546,9 @@ sentence is screened with it, and dropped when it is missing or stale -- on
 three of them), then one
 combined `node --test` over the structure-audit, Lab, task, worktree,
 build-cache and check tests, then `node scripts/structure-audit.mjs`, then
-`pnpm -r check`.
+`pnpm -r --no-bail check`. `--no-bail`, as `pnpm test` has, runs every
+package's check even after one fails, so a sweep reports them all; without it
+the first failing package hid the checks after it (2026-11-17).
 Tests are never cached; only the package builds and checks behind them are.
 
 `scripts/check/core-build.mjs` refuses a FluxIQ Core that is unbuilt or whose
@@ -836,9 +921,14 @@ shared rule fails with a message saying to merge Core's `dev` into it.
 
 ## Panel Commands
 
-`pnpm dev` builds the web panel host, runs repository-local FluxIQ setup, and
-starts the panel with this repository as `FLUXIQ_ROOT` and
-`FLUXIQ_HOST_MODULE` pointing at the host. `pnpm fluxiq:setup` prepares local
+`pnpm dev` builds the web panel host, runs repository-local FluxIQ setup,
+builds the Core web app for production (the build cache skips this when
+nothing changed) and starts it with `next start`, with this repository as
+`FLUXIQ_ROOT` and `FLUXIQ_HOST_MODULE` pointing at the host. The production
+build is the default because `next dev` compiles each page on its first visit
+and compiles Core from source, which made every newly opened page wait.
+`pnpm dev -- --dev` starts the hot-reloading development server instead, for
+work on the panel itself. `pnpm fluxiq:setup` prepares local
 FluxIQ state without starting the panel. Per `AGENTS.md`, do not start the
 panel unless the user has authorized panel management for the session.
 
