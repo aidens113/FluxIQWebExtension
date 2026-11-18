@@ -31,7 +31,13 @@ async function withCore(shape, body) {
         await writeFile(path.join(packageRoot, built), "export {};\n");
       }
     }
-    return await body(root);
+    // The downstream workspace: its root package names the Core packages it uses.
+    const downstream = path.join(root, "downstream-workspace");
+    await mkdir(path.join(downstream, "apps", "app"), { recursive: true });
+    const uses = shape.uses ?? Object.values(shape.packages ?? {}).map(manifest => manifest.name);
+    await writeFile(path.join(downstream, "package.json"), JSON.stringify({ name: "downstream" }));
+    await writeFile(path.join(downstream, "apps", "app", "package.json"), JSON.stringify({ name: "app", dependencies: Object.fromEntries(uses.map(name => [name, "link:../core"])) }));
+    return await body(root, downstream);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -39,8 +45,8 @@ async function withCore(shape, body) {
 
 const everyEntry = directory => Object.values(PACKAGES[directory].exports).flatMap(value => Object.values(value));
 
-test("a fresh checkout -- sources, no dist -- is refused as unbuilt, and the message names the build command", () => withCore({ installed: true, packages: PACKAGES }, async (root) => {
-  const verdict = coreBuildMissing(await scanCoreBuildEntries(root));
+test("a fresh checkout -- sources, no dist -- is refused as unbuilt, and the message names the build command", () => withCore({ installed: true, packages: PACKAGES }, async (root, downstream) => {
+  const verdict = coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream }));
   assert.equal(verdict.built, false);
   assert.equal(verdict.state, "unbuilt");
   assert.deepEqual(verdict.missing.map(item => item.package).sort(), ["@fluxiq/client-gateway-websocket", "@fluxiq/contracts", "@fluxiq/sdk", "@fluxiq/ui-components", "fluxiq"]);
@@ -50,22 +56,22 @@ test("a fresh checkout -- sources, no dist -- is refused as unbuilt, and the mes
   assert.ok(verdict.message.includes(root), "the message says which Core it looked at");
 }));
 
-test("the gap this closes: a never-built Core is refused here, before any currency question is asked", () => withCore({ installed: true, packages: PACKAGES }, async (root) => {
+test("the gap this closes: a never-built Core is refused here, before any currency question is asked", () => withCore({ installed: true, packages: PACKAGES }, async (root, downstream) => {
   // An absent dist is neither changing nor out of date, so the other guards
   // cannot be the ones to refuse a fresh checkout; this one does.
-  assert.equal(coreBuildMissing(await scanCoreBuildEntries(root)).built, false);
+  assert.equal(coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream })).built, false);
 }));
 
-test("a Core whose dependencies were never installed is told to install before it builds", () => withCore({ installed: false, packages: PACKAGES }, async (root) => {
-  const verdict = coreBuildMissing(await scanCoreBuildEntries(root));
+test("a Core whose dependencies were never installed is told to install before it builds", () => withCore({ installed: false, packages: PACKAGES }, async (root, downstream) => {
+  const verdict = coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream }));
   assert.equal(verdict.command, "pnpm install --frozen-lockfile && pnpm build");
   assert.match(verdict.message, /pnpm install --frozen-lockfile && pnpm build/u);
 }));
 
 test("one package built and the others not is incomplete, and names what is missing", () => withCore({
   installed: true, packages: PACKAGES, built: { contracts: everyEntry("contracts") }
-}, async (root) => {
-  const verdict = coreBuildMissing(await scanCoreBuildEntries(root));
+}, async (root, downstream) => {
+  const verdict = coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream }));
   assert.equal(verdict.state, "incomplete");
   assert.deepEqual(verdict.missing.map(item => item.package).sort(), ["@fluxiq/client-gateway-websocket", "@fluxiq/sdk", "@fluxiq/ui-components", "fluxiq"]);
   assert.match(verdict.message, /partly built: 10 of the 14/u);
@@ -76,8 +82,8 @@ test("a dist that exists but lacks one declared entry point is incomplete, not b
   // the directory is there, and the module a run imports is not.
   installed: true, packages: PACKAGES,
   built: { contracts: everyEntry("contracts"), fluxiq: ["dist/index.js", "dist/index.d.ts", "dist/programs/automation-studio/index.d.ts"], sdk: everyEntry("sdk"), "client-gateway-websocket": everyEntry("client-gateway-websocket"), "ui-components": everyEntry("ui-components") }
-}, async (root) => {
-  const verdict = coreBuildMissing(await scanCoreBuildEntries(root));
+}, async (root, downstream) => {
+  const verdict = coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream }));
   assert.equal(verdict.state, "incomplete");
   assert.deepEqual(verdict.missing, [{ package: "fluxiq", paths: [path.normalize("./dist/programs/automation-studio/index.js")] }]);
 }));
@@ -85,13 +91,13 @@ test("a dist that exists but lacks one declared entry point is incomplete, not b
 test("every declared entry point present is built, with no message", () => withCore({
   installed: true, packages: PACKAGES,
   built: Object.fromEntries(Object.keys(PACKAGES).map(directory => [directory, everyEntry(directory)]))
-}, async (root) => {
-  const verdict = coreBuildMissing(await scanCoreBuildEntries(root));
+}, async (root, downstream) => {
+  const verdict = coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream }));
   assert.deepEqual([verdict.built, verdict.state, verdict.message], [true, "built", null]);
 }));
 
-test("no Core at the root is refused as not found, pointing at FLUXIQ_CORE_ROOT", () => withCore({}, async (root) => {
-  const scan = await scanCoreBuildEntries(path.join(root, "nowhere"));
+test("no Core at the root is refused as not found, pointing at FLUXIQ_CORE_ROOT", () => withCore({}, async (root, downstream) => {
+  const scan = await scanCoreBuildEntries(path.join(root, "nowhere"), { downstreamRoot: downstream });
   assert.equal(scan.packagesFound, false);
   const verdict = coreBuildMissing(scan);
   assert.equal(verdict.state, "not-found");
@@ -106,16 +112,43 @@ test("entry points come from the manifest: bare main and bin count, pattern expo
     docs: { name: "docs", scripts: {} }
   },
   built: { tool: ["dist/main.js"] }
-}, async (root) => {
-  const scan = await scanCoreBuildEntries(root);
+}, async (root, downstream) => {
+  const scan = await scanCoreBuildEntries(root, { downstreamRoot: downstream });
   assert.deepEqual(scan.packages.map(item => item.name), ["tool"], "a package with no build script promises nothing");
   assert.deepEqual(scan.packages[0].expected, [path.normalize("./dist/cli.js"), path.normalize("./dist/main.js")]);
   assert.deepEqual(scan.packages[0].missing, [path.normalize("./dist/cli.js")]);
 }));
 
-test("a malformed Core manifest is an error naming the file, not a quiet pass", () => withCore({ installed: true, packages: { fluxiq: PACKAGES.fluxiq } }, async (root) => {
+const CLOUD = { name: "@fluxiq/cloud", bin: { fluxiq: "./dist/cli.js" } };
+const everyBuilt = Object.fromEntries(Object.keys(PACKAGES).map(directory => [directory, everyEntry(directory)]));
+
+test("an unbuilt Core package nothing downstream depends on is not required", () => withCore({
+  installed: true, packages: { ...PACKAGES, cloud: CLOUD }, uses: Object.values(PACKAGES).map(item => item.name), built: everyBuilt
+}, async (root, downstream) => {
+  const verdict = coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream }));
+  assert.deepEqual([verdict.built, verdict.state], [true, "built"]);
+}));
+
+test("an unbuilt Core package downstream depends on directly is refused, naming its files", () => withCore({
+  installed: true, packages: { ...PACKAGES, cloud: CLOUD }, uses: ["@fluxiq/cloud", ...Object.values(PACKAGES).map(item => item.name)], built: everyBuilt
+}, async (root, downstream) => {
+  const verdict = coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream }));
+  assert.equal(verdict.built, false);
+  assert.deepEqual(verdict.missing, [{ package: "@fluxiq/cloud", paths: [path.normalize("./dist/cli.js")] }]);
+}));
+
+test("an unbuilt Core package reached only through another Core package is refused", () => withCore({
+  installed: true,
+  packages: { ...PACKAGES, cloud: CLOUD, fluxiq: { ...PACKAGES.fluxiq, devDependencies: { "@fluxiq/cloud": "workspace:*" } } },
+  uses: ["fluxiq"], built: { fluxiq: everyEntry("fluxiq") }
+}, async (root, downstream) => {
+  const verdict = coreBuildMissing(await scanCoreBuildEntries(root, { downstreamRoot: downstream }));
+  assert.deepEqual(verdict.missing, [{ package: "@fluxiq/cloud", paths: [path.normalize("./dist/cli.js")] }]);
+}));
+
+test("a malformed Core manifest is an error naming the file, not a quiet pass", () => withCore({ installed: true, packages: { fluxiq: PACKAGES.fluxiq } }, async (root, downstream) => {
   await writeFile(path.join(root, "packages", "fluxiq", "package.json"), "{ not json");
-  await assert.rejects(scanCoreBuildEntries(root), /package\.json is not valid JSON/u);
+  await assert.rejects(scanCoreBuildEntries(root, { downstreamRoot: downstream }), /package\.json is not valid JSON/u);
 }));
 
 test("the Lab entry point refuses an unbuilt Core before it builds or runs anything, as a setup failure", { timeout: 60_000 }, () => withCore({ installed: false, packages: PACKAGES }, async (root) => {

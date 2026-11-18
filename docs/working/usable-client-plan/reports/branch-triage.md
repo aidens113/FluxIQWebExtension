@@ -1,0 +1,66 @@
+# Branch triage (read-only), 2026-11-17
+
+Method: `git for-each-ref refs/heads --no-merged dev` in Core (`!FluxIQ`) and Extension (`!FluxIQWebExtension`), skipping t911/t914/t925/t927/t928/t929/t93x. The hook denied `git branch` and `git cherry` for workers, so I used `for-each-ref --no-merged`, and `git rev-list --right-only --cherry-pick --no-merges dev...<branch>` as the cherry equivalent ("unique" below). Origin state: `git ls-remote --heads origin` compared with the local tip. No fetch, no changes.
+
+Extra branches beyond the brief's list were found and triaged: `wip/t174`, `wip/t193`, `wip/t194`, `wip/t195`, `wip/t262` (both repos) and `task/t912` (Extension only). Core has no t262/t275/t282/t342/t451/t893/t912 branches; the Extension has no t381/t707/t903 branches.
+
+Columns: ahead = commits ahead of dev (unique = those not patch-equivalent on dev, excluding merge commits). Origin: none / same (origin tip equals local) / LOCAL AHEAD (local has commits origin lacks).
+
+## Table
+
+| Branch | Repo | Last commit (date, subject) | Ahead / unique | Origin | On dev? | Docs say | Recommendation |
+|---|---|---|---|---|---|---|---|
+| t224-codex-ui-ux-review | Core | 2026-10-01 Record user-authorized paired remote checkpoints | 1 / 1 | same | Substantive t224 work merged; this tip is 2-file docs bookkeeping (+7/-2) | handoff 2026-10-03 "t224's merged checkpoints delivered"; ledger archive "Merged into Core dev: ... t224" | **delete** (origin copy keeps it) |
+| t224-codex-ui-ux-review | Ext | 2026-10-01 same | 1 / 1 | same | same, 3 docs files (+9/-2) | same | **delete** |
+| t262-mvp-live-continuation | Ext | 2026-10-13 Merge dev into ... | 30 / 14 | none | 15 files, all run debug reports under `language-driven-flow-loop-plan/debugs/`; not on dev by name | archive: "t262, t274, t275 ... merged by hand"; round-4 merges to Core dev | **delete** (low-value evidence; see flag A) |
+| t275-live-lane-d | Ext | 2026-10-13 Debug gate round 1 | 31 / 15 | none | 16 debug-report files only | same archive line (merged by hand) | **delete** (flag A) |
+| t282-read-list-s1-collection | Ext | 2026-10-06 Read-list S1 reports | 1 / 1 | none | 6 report files under `first-class-data-extraction-plan/reports/` | Core history: "Merge task/t282 into task/t283 (S1+S2 together)" | **delete** (flag A) |
+| t334-native-web-command-authority | Core | 2026-10-07 WIP (parked by Claude intake) | 1 / 1 | none | No: `native-output/` absent on dev; 16 files, +390/-18, at pre-restructure paths (`programs/automation-studio/...`) | mvp-final-month-plan: "Parked production-integrity work: t334/t335/t337"; studio-controller-plan: older parked work left alone | **keep for reference** |
+| t334-native-web-command-authority | Ext | 2026-10-07 WIP (parked) native click required-executor, e2e probe, report | 1 / 1 | none | 11 files, +555/-9; 4 differ from dev, 7 absent | same | **keep for reference** |
+| t335-closed-writer-host | Core | 2026-10-07 WIP (parked): closed-host installer (never compiled or tested) | 1 / 1 | none | No: `closed-host/` absent on dev; 8 files +411 | parked | **keep for reference** |
+| t335-closed-writer-host | Ext | 2026-10-07 closed writer host report | 1 / 1 | none | report only (+134) | parked | **keep for reference** (with Core side) |
+| t337-trusted-requirement-interpretation | Core | 2026-10-07 WIP (parked): identity test stub | 1 / 1 | none | 10-line test stub only | parked | **delete** (trivial) |
+| t337-trusted-requirement-interpretation | Ext | 2026-10-07 report | 1 / 1 | none | report only (+117) | parked | **keep for reference** only if t334/t335 are kept; otherwise delete |
+| t342-lane-a-baseline | Ext | 2026-10-13 Debug breadth rerun job-board | 2 / 2 | none | 2 debug reports only | debugs of rounds 5/6 are on dev; this branch holds two more | **delete** (flag A) |
+| t381-sqlite-connection-reuse | Core | 2026-10-09 WIP: one connection per database | 1 / 1 | none | Not as written (`sqlite-connection-pool.ts` under old path). Dev has its own `framework/persistence/repository/connection-pool.ts` (0d54eb037, 2026-11-03) | studio-controller-plan lists it as parked; handoff-history "t381 pool WIP stays unmerged" | **delete** (superseded by dev's own pool; medium confidence, see note 3) |
+| t451-live-lane-c-round4 | Ext | 2026-10-13 Debug gate round 1 | 31 / 16 | none | 17 debug-report files only | "Merge task t451: C exclusion provenance audit" on dev | **delete** (flag A) |
+| t518-recorded-recovery-state-routing | Core | 2026-10-13 Merge dev into ... | 10 / 6 | none | No: 6 real commits (recorded terminal recovery guard, canonical route signature, Windows long-path SQLite open); 51 files +930 at old paths | adaptation-and-breadth-plan: "t518 (recorded-Flow only, unmerged) kept for recording-plus-instructions work"; instruction-led plan: "unresolved social replay Flow failure preserved" | **keep for reference** |
+| t518-recorded-recovery-state-routing | Ext | 2026-10-13 same | 12 / 7 | none | 101 files +2750 (mostly docs/reports); 55 differ from dev, 46 absent | same | **keep for reference** |
+| t707-storage-held | Core | 2026-10-17 hold(storage): restore baseline | 3 / 2 | none | Net diff vs its merge-base is empty (second commit restored baseline); the first commit was a failing "one SQLite open per operation" attempt | breadth-forty-tasks-plan: "held Core t707 restored to baseline; comparison report preserved" | **delete** |
+| t843-runtime-foundations | Core | 2026-11-02 Clear the push gate on the parked t843 branch | 14 / 13 | same | No; 3222 files, +82780/-32064; mostly an execution-admission system | studio-controller-plan: "Parked as the record of t843; not deleted"; admission system "not ported; not part of these goals"; hosted-platform plan: "Keep t843 superseded" | **keep for reference** |
+| t843-runtime-foundations | Ext | 2026-11-02 Mark the paired reset plan superseded by t845 | 13 / 13 | same | No; 105 files +2871 | same | **keep for reference** |
+| t885-live-checks-r3 | Core | 2026-11-11 WIP: stopped mid-round (usage ran out); unvalidated | 4 / 1 | LOCAL AHEAD | Mostly merged (Merge task t885 5f1025ecf and many lane merges). The one unique commit 136ef4674 (script-wiring ending-joins/repeat-while, replay span; 9 files +281/-95) is not on dev | mvp-launch-plan: "t885 stopped runtime/evidence WIP" queued for resume | **finish** (small; or discard if the t885 continuation is dropped) |
+| t885-live-checks-r3 | Ext | 2026-11-12 docs: record current-dev replay and downstream acceptance gates | 12 / 9 | LOCAL AHEAD | Merged via "Merge task t885" 17c67103b, but 9 later commits are not on dev. Verified `9e49d0db4` (interruption provenance when a layer appears after its answer, 7 domain files, +217) differs from dev by exactly its own diff | mvp-launch-plan: "Bounded correction committed locally as 9e49d0db4; broader browser acceptance remains open" | **finish** (small: ~220 lines of source+tests, plus docs) |
+| t893-web-instant-actions-4 | Ext | 2026-11-12 Author the actual accepted invitation read before finishing | 7 / 5 | LOCAL AHEAD | No; 31 files +1342; instant-actions round 4 held for professional-network re-proof | mvp-launch-plan: "t893 replay-deviation proof", "held t893"; readiness lane on professional-network/accept-messaged-invitations never reached a verdict | **finish** (medium: provider-free `--attempts 4` proof still owed; code mostly written) |
+| t902-handlers-add-ons | Core | 2026-11-12 Bind credential persistence to each actual connection attempt | 15 / 13 | **none** | No; 163 files +9696/-581 (person-needed handlers, durable parks, revocation confirmation) | mvp-launch-plan W6: "local while security findings are open"; "t902 remains local pending its security work"; repos are public so these stay off GitHub | **finish** (large; do NOT delete; see flag B) |
+| t902-handlers-add-ons | Ext | 2026-11-12 Require durable Forget receipts and preserve unresolved reset obligations | 16 / 14 | **none** | No; 87 files +8470 | same | **finish** (large; flag B) |
+| t903-single-element-read | Core | 2026-11-11 Merge branch dev into ... | 1 / 0 | none | Yes: zero unique commits; only a merge commit. Downstream "Merge task t903" c8379f323 on dev | mvp-launch-plan: "Landed on dev today: ... t903" | **delete** |
+| t905-result-ledger | Core | 2026-11-12 Bind graph-entry evidence to inputs actually consumed by execution | 11 / 7 | LOCAL AHEAD | Phase 0 merged (236c05833). 7 later commits not on dev (durable normal-input binding owner, result provenance, executable identity); 233 files in range includes merged dev content | mvp-launch-plan: "t905 checkpointed locally in both repos"; "Resume remaining lanes ... especially t905 result evidence" | **finish** (large, mid-flight; flag B) |
+| t905-result-ledger | Ext | 2026-11-12 Specify captured-row identity guard before further input proof work | 18 / 14 | LOCAL AHEAD | No; 103 files +3920 (source plus acceptance reports) | same | **finish** (large; flag B) |
+| t912-runtime-lease-adapter | Ext | 2026-11-12 Specify known-unsent retry mapping for web adapter | 2 / 2 | none | No; 1 file, a 26-line brief (no source) | hosted-platform-launch-plan: "Existing t911/t912/t905 ... checkouts are preserved" | **keep for reference** (brief only; tiny) |
+| wip/t174-uncommitted | Core | 2026-10-05 WIP snapshot before tree retired | 1 / 1 | none | Ported: 7 of 104 files still differ, rest moved paths; ledger "t174 (A) merged"; "Port lane-only domain fixes" on dev | ledger archive | **delete** |
+| wip/t174-uncommitted | Ext | same | 1 / 1 | none | same | same | **delete** |
+| wip/t193-uncommitted | Core, Ext | 2026-10-05 same | 1 / 1 each | none | Same: t193 (B) merged; "Integrate the round-1003 extension UI fixes", "Preserve round-1003 lane evidence" on dev | same | **delete** |
+| wip/t194-uncommitted | Core, Ext | 2026-10-05 same | 1 / 1 each | none | Same: t194 (C) merged | same | **delete** |
+| wip/t195-uncommitted | Core, Ext | 2026-10-05 same | 1 / 1 each | none | Same: t195 (D) merged; "Port replay tab cleanup..." on dev | same | **delete** |
+| wip/t262-uncommitted | Core | 2026-10-05 WIP from Codex's t262, preserved unfinished | 1 / 1 | same | Reworked into t273 (report: "WIP's projection was reused and reworked"); 7 files +92 | mvp-final-month-plan archive/reports | **delete** (origin keeps it) |
+| wip/t262-uncommitted | Ext | same | 1 / 1 | same | A continuation doc, one report and one test (+313) | same | **delete** (origin keeps it) |
+
+## Flags: loss would lose work that exists nowhere else
+
+- **B (serious): t902 (both repos) exists only locally, origin none.** About 18k lines across the two repos (person-needed handlers, durable parks, revocation receipts, credential persistence binding). It is deliberately local because the repos are public and security findings are open. Never delete. Consider an off-GitHub backup (bundle or private remote); it has none today.
+- **B2: t905 (both) and t885 (both) have commits local-only (origin is behind), and t893 (Ext) too.** t885's 9e49d0db4 and Core 136ef4674, t905's seven Core and fourteen Ext commits, and t893's four newest commits are not on origin or dev.
+- **t334/t335 (Core and Ext)**: WIP source exists only locally (origin none); never compiled. Not MVP; keep unless the user abandons the production-integrity idea.
+- **t518 (both)**: unmerged, local only; real source with a known unresolved replay failure.
+- **A (low): t262/t275/t282/t342/t451 Ext branches** hold only run debug reports and S1 reports that are on no other ref. They are historical evidence from superseded rounds; deleting loses those files only. If any worry, copy `docs/working/language-driven-flow-loop-plan/debugs/` files from these branches before deletion (about 15 to 17 files each).
+- t912 brief (26 lines) is only on its local branch.
+- Every branch marked "same" for origin (t224, t843, wip/t262) is safe to delete locally; origin keeps it.
+
+## Notes
+
+1. Remote deletion of any unmerged branch needs the user's approval per AGENTS.md; the "delete" recommendations are for local branches. Merged-ancestor check was not possible via `git cherry`, so the "unique" counts use `--cherry-pick`; merge commits excluded.
+2. "On dev?" for old Core branches (t334/t335/t381/t518) is judged by path: dev restructured to `packages/fluxiq/src/framework/...` on 2026-11-03, so the old `programs/automation-studio/...` paths cannot match byte for byte. Absence of `native-output`, `closed-host` was confirmed by `git ls-tree dev`. Equivalent content was not searched for semantically.
+3. t381: dev's `connection-pool.ts` is a different implementation; I did not compare behaviours. t707's own history says the pooling attempt timed out storage tests, which supports deleting both.
+4. The wip/t174-t195 snapshots predate the "Port lane-only domain fixes" and "Preserve round-1003 lane evidence" commits on dev; the differing 1 to 14 files each were not diffed line by line.
+5. The Extension file-level scan for t902, t905, t912 and wip was cut short (took over three minutes); those rows rely on commit lists, diffstats and docs instead.
+6. Suggested single cleanup: delete locally the 13 branches marked delete (t224 x2, t262/t275/t282/t342/t451 Ext, t337 Core, t381, t707, t903, all wip/*), leaving 12 branches to keep or finish.

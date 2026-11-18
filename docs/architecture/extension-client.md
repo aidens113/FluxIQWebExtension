@@ -53,6 +53,9 @@ HTTP; reading current trust and then queueing an unadopted proof is not an atomi
 credential transaction. The isolated native-auth probe showed native UI alone
 does not prevent injection or capture, so integration uses a preclaimed tab.
 
+When the extension may touch a tab, and when its content script is inert or
+revoked, is described in [browser content admission](browser-content-admission.md).
+
 ## Responsibilities
 
 Cross-document action transport belongs to Next page. The focused
@@ -381,6 +384,40 @@ while it pairs, or while FluxIQ checks its token, a message is queued.
   (`runtime.getPlatformInfo`) that resets the idle timer; it is not a gateway
   message, since an unpaired session may not send client data (t706).
 - **A panel opening** still reconnects too (`getStatus` from a control page).
+- **A browser relaunch resumes.** The credential lives in `chrome.storage.local`,
+  so the worker that starts with the browser says hello with it, and Core
+  rotates it and answers `server.session_ready`, with no new approval.
+  Verified live on a relaunched profile (t929).
+
+### When the approval ends
+
+Every reconnect above needs a credential in storage (`paired`), so a browser
+whose approval ended must drop its credential, or it would present a dead one
+on every start and raise a new pairing request each time. `GatewaySession`
+(`background/connection/gateway-session.ts`) does that, and keeps how the
+approval ended in `background/connection/pairing-ended/` (`chrome.storage.local`
+key `fluxiq.pairingEnded`), so a restarted worker still knows (t929).
+
+- **Revoked.** Core sends `server.revoked { reason, message }`, then
+  `server.disconnect`, and closes the socket. The session stops reconnecting,
+  closes the socket, drops the credential and marks the connection
+  `disconnected`. The status then reads `paired: false`, `pairingEnded: {
+  state: "revoked", reason, at }` and a `lastError` saying FluxIQ revoked the
+  approval. Nothing reconnects or asks to pair until the person presses
+  Connect: auto-connect needs `paired`, and Core answers a hello that still
+  carries the revoked credential with the same notice instead of a pairing
+  request. If the close beats the notice, the next reconnect is told again
+  and stops there. The trailing `server.disconnect` is for builds that predate
+  `server.revoked`: they stop on it instead of reconnecting every second.
+- **Expired or refused.** Core asks for a new approval (`server.pairing_required`
+  with `credential: "expired" | "refused"`). The session drops the dead
+  credential and records the state. The connection is `pairing` with a
+  reference code, as for any approval.
+- **Cleared** by Connect (the person asking to pair again), Forget, or a ready
+  session.
+
+The status field is `ExtensionStatus.pairingEnded` (`shared/protocol.ts`).
+`connectionState` keeps its six values.
 
 `e2e/reconnect.spec.ts` covers a restarted worker reconnecting, a dropped socket
 reconnecting, and the alarm being set and firing.
@@ -661,6 +698,7 @@ Current server message groups:
 - `server.set_active_tab`
 - `server.execute_action`
 - `server.disconnect`
+- `server.revoked` (see [When the approval ends](#when-the-approval-ends))
 - `server.command` as a compatibility envelope
 - `server.error`
 - `server.ping`

@@ -1,9 +1,9 @@
 # Hosted Platform Launch Audit And Plan
 
 Status: Active
-Status detail: Paired task t914 isolates platform work from experiments. Default-lock removal pushed; private credential/tab foundations and metadata adapter verified, hosted sign-in composition next. Nothing deployed.
+Status detail: Hosted-cloud lane (2026-11-17): t914 reconciled, dated schedule to launch 2026-12-10, units HC1-HC5a starting; nothing deployed.
 Created: 2026-11-14
-Last updated: 2026-11-14
+Last updated: 2026-11-17
 Owner: Senior supervisor agent
 Scope: Hosted panel, coordinated releases, managed web cloud, local FluxNodes, marketplace and self-hosting.
 Paired document: ../!FluxIQ/docs/working/hosted-platform-launch-plan.md
@@ -11,39 +11,44 @@ Related: [Hosted production](./hosted-production-plan.md), [MVP seal](./mvp-seal
 
 ## Current State
 
-**Current integration state:** Core tenant dataset streaming, per-instance presentation, gateway context/status and member/audit reads are verified and pushed in c564c2b3a. Independent checks passed136 shared request/stream/IAM cases,48 account cases,31 account UI/model/factory cases,82 presentation/gateway cases and57 real-runtime cases; web types and structure pass. Downstream test-only native probe is pushed at0ed3ca01c, with16 support cases passing. Chrome native UI allowed content/MAIN injection and screenshot capture; native callback succeeded under blocked network, but one callback-host attempt failed its zero-attempt criterion. Native UI is rejected as the privacy boundary. Controlled preclaimed-tab PKCE/session-only CAS is implemented and pushed487483302:152 combined tests, package check and structure passed. Core guarded trace intake is pushedfa64038e3 after55 route/27 helper/43 corrected matrix tests. Background/content/capture privacy activation remains unfinished. No deployment, real account or paid call.
+Last updated 2026-11-17 (hosted-cloud lane). Go-live target **2026-12-10**. Nothing is deployed; hosted
+deployments are simulated on this machine until the user approves a VM, DNS or a payment provider.
 
-**Latest checkpoint:** Default-lock removal is pushed in both paired task branches. Lead verified private credentials21 tests, authentication-tab foundation60, hosted transport adapter25 and setup-card4; hosted PKCE/background/privacy composition remains unwired. Extension package checking passes against freshly rebuilt paired Core, including source/test types and in-memory browser bundles; both structure audits pass. Core app registry and transport persistence barrier/metadata callback are pushed, tenant-routing219 tests passed, and server metadata/constructor41 tests passed. Real browser restart/sign-in/privacy behavior remains unverified; nothing is deployed.
+**Landed on `dev`:** all of t914's commits (both repositories): accounts and provisioning, sessions,
+per-account workspaces, IAM on every route, SDK keys and proof sessions, the commerce ledger (eligibility
+only), email transport (not sent live), the app registry, `deploy/` (schema-valid only). The usable-client
+plan removed the unlock (a connected client has model access) and made the panel and extension usable.
 
-**User correction, highest implementation priority (2026-11-14):** remove default locking for authenticated clients from Core and extension. Approval/authentication must make the client usable without a second unlock ceremony. Earlier locked-by-default enrollment descriptions below record superseded implementation, not the intended product behavior. Fix backend model/key access, durable reconnect behavior and extension UI together; do not merely hide a lock message. Keep tenant/account permissions and actual credential revocation. A missing configured model key is a configuration issue, not an authenticated-client lock. Core's authenticated-client-access brief owns the immediate investigation and replacement plan.
+**Not built:** payments and the entitlement state machine; an environment controller and tenant-bound
+enrolment for a dedicated browser per customer; a Linux runner image; a remote viewer; hosted sign-in in the
+extension; a production home for sign-up; account export, backup and restore proof, monitoring; the store
+listing and legal texts. Tenant-isolation closure is in progress (HC2).
 
-**Execution authorized (2026-11-14).** User requests implementation while FluxNode/client/Core automation experiments continue independently and merge later. Paired task t914 under `fxwork/t914/` owns implementation; Core's paired document holds file-owned worker briefs and the experimental integration contract. Existing t911/t912/t905 and other checkouts are preserved. Work begins from committed dev, not dirty experimental source. Enterprise licensing and real non-web clients remain later phases, as explicitly directed.
+**t914's uncommitted work:** kept only for content startup inertness, a `fluxiq.revoked` message and the
+sign-in tab registry additions (HC1). The per-verb admission refactor is dropped in favour of t926's tab gate.
+The privacy and capture-authority modules are parked on the t914 branch.
 
-**Verdict:** substantial panel, IAM, SDK and managed-browser foundations exist, but FluxIQ is not yet a deploy-and-sell cloud product. Launch a safe hosted panel and authenticated dedicated web automation first, then shared compute and external marketplace publishing. Catalog work can proceed in parallel; installations wait on isolation and entitlement gates.
+**Schedule (critical path):** usable local client 11-21 -> hosted panel with accounts on one server,
+simulated locally, 11-27 -> tenant-bound browser enrolment 12-01 -> VM runner and remote viewer on staging
+12-04 -> dedicated browser per customer and billing in test mode 12-08 -> go/no-go 12-09 -> launch 12-10.
+This needs the user's answers on the VM, Linux tooling, payment provider and legal entity, and the sign-up
+home by 11-20. Otherwise 12-10 launches invite-only with free or test-mode billing. The store listing is off
+the critical path (submit about 12-02). After launch: marketplace, shared compute, OS environments, enterprise
+licensing.
 
-**User requirements (2026-11-14):** retain Hostinger landing site/Node.js CI/CD; host the Core panel independently; offer first-party apps, verified publishers and clearly labelled unverified apps/Flows through FluxIQ accounts; charge hosting markup plus a FluxIQ fee; dedicated and cheaper shared compute with customer resource control; preserve self-hosting; begin with web, later real Windows/Linux/Android. Developer FluxNodes/code can stay local while automation runs remotely. The user accepted another Core server during the audit. Nothing was purchased/deployed.
-
-**Lead recommendations:** getfluxiq.com stays on Hostinger; app.getfluxiq.com runs Core and its private platform services on persistent compute. Customer browsers use a separate worker tier, initially one isolated VM per customer. One identity/IAM system; retain existing BYOK initially. These recommendations are not additional user rules.
-
-**Ownership correction (user, 2026-11-14):** substantial authentication/accounts, billing, subscriptions and entitlements belong in FluxIQ Core and power our cloud deployment. The landing website stays independently updated in its own repo on getfluxiq.com; the Core app is on app.getfluxiq.com. The same Core supports local/self-hosted deployment and later enterprise account/license feature activation. Enterprise licensing is future work, not an initial cloud launch prerequisite. This replaces the earlier recommendation to implement commercial backend services downstream.
-
-**User clarification (2026-11-14):** fully local includes the application, FluxIQ engine AND automation environments on the developer's computers/servers. Hybrid keeps application code locally while outsourcing automation to FluxIQ Cloud through an API key. Consumer clients such as the extension are another entry point, not a requirement to write developer code. Client choice and execution location are separate axes. The detailed operating model below is now part of the implementation plan, including paid routing; all new endpoints/state models are proposed contracts, not claims of existing implementation.
-
-**Baseline:** downstream `28398c288ffbdffd150133dfb3f9355c17700ba8`; clean Core dev snapshot `04e7b1650f183868505b2e0c076e339b9bf7ccf9`. Website is an archive without Git metadata, so revision/live parity are unknown. Primary Core is dirty task t911, not dev; its pending lease changes are excluded. The IDE's t843 reset plan explicitly says Superseded and is not a prerequisite.
-
-**Implementation checkpoint:** Core now has tenant-verified panel program routing, a distinct platform identity authority, durable SDK proof/session exchange and account-owned key management, production email transport, additive instance/build discovery, and a transactional commerce/eligibility module. Lead verified authority/mail (102 tests), commerce (56), discovery (22), key sessions (58, including cross-process replay), and web integration (178, plus 30 after import correction). Package checks and structural gates pass; details and failures/fixes are in the paired Core ledger. This is foundation code, not completed hosted execution or billing-provider integration.
-
-**Second implementation checkpoint:** Core has provider-neutral release bundles and validated AWS/GCP/Azure Terraform templates (7 Node tests, 12 Python tests, all three provider schemas valid). Authoritative scoped client trust, a credential-rotation rollback fix and a durable PKCE service are implemented. Web service composition now provisions separate customer workspaces; lead verified this with two accounts and 35 focused web tests. Core constructor/trust rerun passed 20 tests; Core build and Core/web types pass. Nothing was deployed; scripts and schema checks do not prove VM boot or Linux security. Core ledger records the initial test-group and pre-push failures and corrections.
-
-**Third implementation batch:** Core now has a pre-socket credential issuer, persisted tenant key-holder enrollment, root-authoritative WebSocket routing, and authenticated consent/token/revoke endpoints. Lead verified 173 custody/transport/IAM tests after the final structural fix, 50 PKCE tests, 11 authoritative storage tests and 67 web consent/middleware/approval tests; 85 other web assertions passed with two incorrectly constructed test rows corrected and rerun. Core/web types and structure pass. First-time setup passed 26 tests, including real multi-tenant provisioning: service creates a personal workspace administrator; self-hosted retains its owner policy. The initial default-lock design from this batch is superseded by authenticated per-use access below. Extension PKCE initiation, server-bound credential storage and exclusion of consent tabs from automation reporting remain required. No live browser acceptance or deployment is claimed.
-
-**Main remaining gaps:** extension connect integration and tenant HTTP routing, process-state isolation, durable tenant credential-change coordination, durable runs/events/callback recovery, Linux/browser deployment, actual provisioning and payment/usage integration, remote takeover, catalog and release/restore proof. Website accounts/marketplace remain absent from the inspected archive. User identified separate upstream `https://github.com/aidens113/FluxIQWebsite` (remote main observed at `08e51d4980750c693e2eac5fcce38f7aca46e921`); actual Hostinger deployed revision is unverified. Provider/account/region are not selected. The cloud package covers Core only and one process per deployment; no active-active service guarantee or automatic legacy client-trust migration is claimed.
-
-**Fourth implementation batch:** buffered generic program HTTP requests now route signed ordinary-client credentials to the proved tenant and revalidate authority after awaited body/domain work, without switching cookie/bearer identity. Discovery explicitly advertises implemented connect flows. Lead verified 124 Core route tests, 36 discovery contract tests, 60 web proof/workspace/discovery tests and 114 generic-route cases (nine outdated fixture failures corrected and affected ten-test file rerun); all touched package types pass. Dedicated HTTP/streaming mounts remain. The earlier lock-based custody design is superseded by the authenticated-access replacement below.
-
-**Next:** phase 0 fixes contracts/provenance; phases 1-3 proceed in parallel by file. Do not expose local open-mode APIs through a proxy or sell shared execution before isolation acceptance. Reuse existing runtime work. This source/design audit ran no live automation, paid calls, panel server, DNS change or deployment. Task tooling automatically prepared Core dependencies/builds; that is not hosted acceptance.
-
-**Authenticated-access replacement:** approved clients now use authorized configured model keys without a second password, ticket or lock dialog. Durable host protection and fresh per-use authority preserve use across ordinary panel logout, reconnect, cold restart and keys configured later; real revoke/disable/IAM denial still applies. Lead independently verified 289 Core access/runtime tests, 133 affected route/management tests, 177 web tests, 91 shared UI tests, 8 model-key contracts, 201 extension tests and 44 final wire-decoder regressions. Core/web/extension types and both structural audits pass; the corrected final libraries are built. Browser execution is unverified; 22 provider-free harness helper tests passed independently before the paired branch checkpoint.
+**Next:** HC1 content inertness, HC2a workspace-scope routing, HC3 the cloud platform package
+(`@fluxiq/cloud`, `fluxiq-cloud up|down|status|smoke`, one config file; local Docker rehearsal of the real
+server, only config values differing), HC4 billing engine (Stripe, tested on stripe-mock), HC5a environments
+design and record; all five dispatched 2026-11-17 (tasks t934, t936-t939). The user's decisions (2026-11-17):
+all cloud testing local in Docker for now, it WILL run on a real server with a domain, payments through Stripe,
+the company is FluxIQ, port 4000 is never used (NoMachine). **Sign-up:** hosted sign-up is Core's own page at
+`app.getfluxiq.com/signup`, with the website linking to it; Core's provisioning, welcome, per-account workspaces
+and IAM exist, while the page, live email, tenant isolation (HC2) and the extension's hosted sign-in remain.
+**Enterprise sign-in (planned after HC2, same sign-in code):** a self-hosted company panel has no public sign-up;
+the first owner claims it with a setup code and admins invite employees (exists today). The unit adds OIDC
+single sign-on (Okta, Entra, Google Workspace) through Core's existing identity-provider port, membership on
+first sign-in limited to the company's domain, IdP groups mapped to roles, and the fix for invited people
+showing as enabled before they accept; directory-driven removal (SCIM) and licensing follow launch. Units, interfaces I1-I4 and the dated schedule are in the hosted-cloud lane report, held locally until the tenant-isolation units merge (both repositories are public).
 
 ## Evidence And Readiness
 
