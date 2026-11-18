@@ -29,8 +29,12 @@ export async function setupWebAutomationFluxIQ(rootDir = process.cwd()): Promise
   let fluxiq = createWebAutomationFluxIQ({ rootDir: root, loadEnv: true });
   let migration: WebAutomationSetupResult["migration"];
   if (fluxiq.inspectStorage().migrationRequired) {
-    migration = await fluxiq.migrateStorage();
-    await fluxiq.close();
+    // A failed migration leaves the root resumable by the next setup, or restorable with `rollbackStorageMigration()`; the instance is closed either way.
+    try {
+      migration = await fluxiq.migrateStorage();
+    } finally {
+      await fluxiq.close();
+    }
     fluxiq = createWebAutomationFluxIQ({ rootDir: root, loadEnv: true });
   }
   // Setup is one-shot: the instances it creates are closed before it returns,
