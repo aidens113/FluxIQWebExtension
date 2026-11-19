@@ -11,4 +11,10 @@ export type BrowserHostOptions = {
   onContext?: ((context: BrowserContext) => Promise<void>) | undefined;
   /** How long one connect attempt may take to settle. Default 30 000 ms. */
   connectTimeoutMs?: number | undefined;
+  /**
+   * Whether a named profile first tries the token it stored (default yes).
+   * False where every start revokes that trust, so the first ticket is used
+   * at once instead of after a connect that cannot succeed.
+   */
+  resumeStoredToken?: boolean | undefined;
 };
