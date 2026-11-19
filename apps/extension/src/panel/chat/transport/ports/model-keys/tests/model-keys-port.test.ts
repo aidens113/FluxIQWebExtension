@@ -54,7 +54,7 @@ test("save, replace and remove each send one relay message and answer with Core'
   const recorder = sendRecorder(reply({ modelAccess: access("ready") }));
   const port = modelKeysPort(recorder.request);
   const secret = "sk-ant-api03-PASTED-VALUE-0001";
-  const saved = await port.save({ provider: "anthropic", name: "Work key", value: secret, password: "never-sent" });
+  const saved = await port.save({ provider: "anthropic", name: "Work key", value: secret });
   const replaced = await port.replace("key-1", secret);
   const removed = await port.remove("key-1");
   assert.deepEqual(recorder.sent, [

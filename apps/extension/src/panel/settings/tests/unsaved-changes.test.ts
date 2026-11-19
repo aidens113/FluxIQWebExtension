@@ -59,7 +59,8 @@ test("the draft bar says what is unsaved after a switch and the slider change, a
     const line = () => root.descendants().find((node) => node.textContent.startsWith("Not saved yet") || (node.className.includes("field-hint") && node.className.includes("card-line")))!;
     assert.equal(line().hidden, true);
     const toggle = find("autoReconnect");
-    toggle.checked = !toggle.checked;
+    const box = toggle as unknown as { checked: boolean };
+    box.checked = !box.checked;
     toggle.dispatch("change");
     const slider = find("humanness");
     slider.value = "35";
@@ -84,4 +85,7 @@ test("Report a problem keeps room for its status line, and the stylesheet keeps 
   const css = readFileSync(path.join(directory, "src", "panel", "settings", "settings.css"), "utf8");
   assert.match(css, /\.reserved-line\[hidden\]\s*\{[^}]*display:\s*block;[^}]*visibility:\s*hidden/u);
   assert.match(css, /\.humanness-status\s*\{[^}]*display:\s*block;[^}]*min-height/u);
+  // A report's outcome (up to three lines) and its Save report button both keep their space while hidden.
+  assert.match(css, /\.problem-report \.reserved-line\s*\{[^}]*min-height:\s*4\.4em/u);
+  assert.match(css, /\.problem-report #saveProblemReport\[hidden\]\s*\{[^}]*visibility:\s*hidden/u);
 });

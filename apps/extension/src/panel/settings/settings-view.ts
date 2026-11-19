@@ -327,8 +327,9 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   };
 }
 
-function savedSettings(status: ExtensionStatus): FluxIQSettings {
+/** The settings as saved: the defaults until the background has reported a status. */
+function savedSettings(status: ExtensionStatus | undefined): FluxIQSettings {
   const defaults = defaultSettings();
-  const settings = { ...defaults, ...status.settings };
-  return { ...settings, gatewayUrl: settings.gatewayUrl || status.gatewayUrl || defaults.gatewayUrl, coreApiUrl: settings.coreApiUrl || defaults.coreApiUrl };
+  const settings = { ...defaults, ...status?.settings };
+  return { ...settings, gatewayUrl: settings.gatewayUrl || status?.gatewayUrl || defaults.gatewayUrl, coreApiUrl: settings.coreApiUrl || defaults.coreApiUrl };
 }

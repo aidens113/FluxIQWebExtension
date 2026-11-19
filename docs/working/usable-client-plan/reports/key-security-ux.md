@@ -312,3 +312,33 @@ User (via lead): "IT SHOULD BE SECURE BUT ALSO VERY EASY FOR PEOPLE TO USE! ... 
   - `pnpm --filter @fluxiq/web check` exit 0, re-run after the join removal: exit 0;
   - web vitest on panel-changes, model-keys, security, chat-widget, home and settings-page: 91 files, 820 passed;
   - Core structure audit "passed (552 warning(s), 914 baselined)", after I fixed one packed test line.
+
+## After t928: integration, live rounds and the Settings pass (2026-11-18/19)
+- **Integration after the t928 merge:**
+  - The extension uses the shared `RUNTIME_MESSAGES.panelModelKey*` constants and `PANEL_MODEL_ACCESS_CHANGED`.
+  - The server's `JoinedActivityEntry` became the one shared `ActivityEntry`.
+  - `CoreModelAccess` in ui-components gained the `no_credit` call outcome; the extension's build typecheck caught the drift.
+  - Core needed `pnpm install`: the merge added `stripe`.
+  - Two raw Windows-1252 "…" bytes (0x85) in `ProjectBrowser.tsx` broke the production web build. A UTF-8 scan now runs in my final checks.
+- **Live round 1** (report `key-security-ux/after-live.md`; 186 screenshots in `test-runs/key-security-ux/after-live/shots/`):
+  - A: Ready in both clients 1.68 s after the extension saved the real key; first reply in 3.1 s; about 5 clicks, against about 12 before.
+  - B: the panel assistant with no project replied in 2.5 s.
+  - C: a fake key read "Not accepted" in both clients in about 0.31 s.
+  - D: a removed key read "No key" in both clients in about 0.17 s.
+  - Key scan: 0 matches.
+  - The approved-client proof was refused by the permission classifier; the lead took it to the user.
+  - Settings "before" jank list: 18 items with causes.
+- **Settings pass** (reports `settings-panel.md`, `settings-extension.md`):
+  - every key form is password-free, and all adding goes through the shared card;
+  - the panel widgets were fixed (appearance choices, allowance, slider, reserved "Saved." lines, one select height, disclosure, link names, tool pages at 390);
+  - the extension got one control family, reserved status lines, one save model, and labelled header tabs.
+  - My edits:
+    - removed the dead `requiresPassword` field;
+    - fixed a type error in the extension worker's `settings-view.ts` (`savedSettings` now takes a missing status as the defaults);
+    - fixed two test type errors;
+    - fixed the two jumps round 2 found unchanged: the humanness value is a fixed 3ch wide (shared sheet), and the extension's report outcome and Save report keep their space. Each has a CSS test.
+- **Live round 2** (report `key-security-ux/after-live2.md`; 172 screenshots in `test-runs/key-security-ux/after-live2/`):
+  - Ready in both clients 3.19 s after the save (round 1: 1.68 s; probably the provider check's latency, not traced);
+  - "Not accepted" in about 0.28 s; "No key" in about 0.15 s; replies in 3.07 s (extension) and 2.56 s (panel);
+  - 2 paid messages plus one provider check on the save; key scan 0.
+  - Settings jank items 1-15 and new defects 1, 3 and 7 Fixed or Better. Items 16 and 18 were Unchanged and are fixed after the round (above); not yet re-shot live.

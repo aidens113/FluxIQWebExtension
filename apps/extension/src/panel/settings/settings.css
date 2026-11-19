@@ -38,6 +38,9 @@
 
 .problem-report { display: grid; gap: var(--space-2); }
 .problem-report .card-title { font-size: 13px; }
+/* The report's outcome is up to three lines at 360 px, and Save report keeps its place while hidden, so nothing below moves when a report is made. */
+.problem-report .reserved-line { min-height: 4.4em; }
+.problem-report #saveProblemReport[hidden] { display: inline-flex; visibility: hidden; }
 .forget-pairing { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--divider); }
 .forget-pairing > .small-button { justify-self: start; }
 .confirm { display: grid; gap: var(--space-2); border-left: 3px solid var(--danger); border-radius: 4px; background: var(--danger-soft); padding: 8px 10px; }
