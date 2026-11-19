@@ -424,6 +424,67 @@ Workers build against these at the same time; a change needs the lead.
   - both audits passed; finishes exit 0; pushed.
 - Outcome: the key problem the user reported is fixed on `dev` in both repositories. Next: t925's live proof, then the next full sweep and promotion.
 
+### 2026-11-18 — Checkout, heap and A11 merged; t925 live round 1 passed; one billed call per message
+
+- Agent: Senior supervisor; sub-supervisors key-security-ux (t925), hosted-cloud, finish-branches; workers web-build-heap (t951), subflow-a11-host-lease (t952), paired-cap-key-writes (t955), identity-no-pin (t954), billed-calls investigation (Opus, read-only).
+- Changed:
+  - **Merged:**
+    - **t948 (checkout):** plans sold by quantity; admission counts paid browsers; the paying account comes from FluxIQ's own checkout record; `/plans` is a real 404 while billing is off; the app-route paired actor narrowed to the four permissions app routes use, with a contracts test.
+    - **t951 (panel build heap):** a launcher gives Next's type-check worker `NODE_OPTIONS` 3584 MB, one value for local and image builds; the cloud package now builds and checks through the build cache. It removed the shared-Core sync failures.
+    - **t952:** the A11 subflow trial test binds the brief's lease as production does since t911, and checks the unbound refusal.
+  - **t925 live round 1** (production build, both clients):
+    - Extension first: Ready in both clients after 1.68 s and a first reply in 3.1 s; about 5 clicks, 4 fields and 3 screens to a first reply, against about 12, 6 and 5 before.
+    - The panel assistant replied with no project.
+    - A fake key read "Not accepted" in about 0.31 s, and a removed key "No key" in about 0.17 s.
+    - The real key was found 0 times in 530 files.
+    - The approved-client proof was refused by Claude Code's permission check for a worker. It is the user's to run or allow, and the lead did not run it on the worker's behalf.
+  - **Billed calls** (read-only investigation, `reports/key-security-ux/billed-calls-per-message.md`):
+    - One billed provider call per simple message in both clients. "Save and check" is free (Anthropic `GET /v1/models`; DeepSeek `GET /models` and `GET /user/balance`).
+    - Activity shows 4 "used a key" lines per call, because one key release records four permission checks.
+    - Flow settings saves write "used a key" with no model call.
+    - A key lent by someone else is recorded as "send panel message".
+    - "It last answered" uses one word for a free check and a paid reply.
+    - Fix at the cause: decide the three repeat checks unrecorded (`decideUnrecorded`) and record the call's outcome on its one row. It becomes a task after t950, which shares the key code, and it is groundwork for spending limits.
+  - **Routed:**
+    - To t950: a refused key is stored before it is checked, so the key list showed "Turned on" and Activity "replaced". The save now checks first, and a refused key never becomes active.
+    - To t925's Settings pass: the password fields left on the key forms, and the user's note that the Settings widgets look janky.
+  - **In flight:**
+    - t955: the generic paired cap is back to four permissions, and only the three key writes add `secrets.manage`. The first-sign-in timeout was the test not closing the platform services that real shutdown closes.
+    - t946: waits for t955.
+    - t954: no PIN anywhere in Core. Destructive calls are confirmed by the person's own press, the extension's Lab follows in the same unit, and the PIN UI comes after t925 merges.
+    - t950: hosted key saving proven live in three modes, round 2 running.
+    - t953: dedicated browsers in Docker.
+    - t905: stage B.
+- Validation:
+  - t948: fluxiq, web and cloud checks exit 0; Core 586 passed; cloud 62 passed; web 196 passed, 5 skipped; both audits passed; finishes exit 0.
+  - t951: `pnpm --filter @fluxiq/web build` exit 0 with "One Core graph: 320 Node server files bundle 0 Core module(s)" and the type check passing; launcher tests 4 passed; registry test 11/11 after the cloud registration; audit passed. The shared Core sync then succeeded at `d04637123`.
+  - t952: fluxiq check exit 0; subflow and candidate trials 321 passed; audits passed; finishes exit 0.
+- Outcome: the whole first-run key journey works live in both clients on the production build. Next: t955 then t946; t925's Settings pass and live round 2, then t925 merges, then t954's PIN UI; the key-use audit task after t950.
+
+### 2026-11-18 — t955, t946 and t957 merged; dev's known test failures cleared; t925 Settings pass committed
+
+- Agent: Senior supervisor; workers paired-cap-key-writes (Opus, t955), dev-stale-seal-transport-tests (Sonnet, t957), identity-no-pin (Opus, t954); sub-supervisors key-security-ux (t925) and hosted-cloud.
+- Changed:
+  - **Merged:**
+    - **t955** (Core `b33b9d334`): the generic paired-client cap is back to four permissions, from one module (`programs/_shared/paired-client`) with a test against copies; only `save-`, `replace-` and `remove-model-key` add `secrets.manage`, when the approver holds it. First-sign-in's hook hung on deleting its folder, because a key-sessions request (reached since t928's local instance id) opens the platform IAM audit database and the test closed the runtime without closing platform services as production shutdown does.
+    - **t946** (Core `2a5c00afa`, HC2b A): requests route to the signed-in person's own workspace, with the parity table covering checkout's routes.
+    - **t957** (Core `b0bd551b4`): two stale tests follow t928's v3 host seal and the conversation list's `unreadableProjects`.
+  - **t925's Settings pass**, committed on its branch (Core `6fd230cb9`, extension `beb97ce26`) and then merged with dev:
+    - Every key form is password-free, through the shared card's "Save and check".
+    - The panel Settings widgets are aligned, wrap-free at 390 px and jump-free on save.
+    - The extension Settings use one control family and one save model, with labelled tabs.
+    - Live round 2 is running.
+  - **t954 (no PIN):** work in progress committed on its branch (Core `7b7af4752`, extension `df8f14dfc`). A destructive call is confirmed only by a press grant minted from a trusted click on that call's own confirm control, sent once and never resent; the panel no longer auto-confirms. The Lab and the extension confirm without PINs. Its final round (the security pages' PIN UI and the ui-components press for chat-confirmed deletes) follows t925's merge.
+  - **Lead's decision (user rules: work from a client or the panel with no extra steps; a dangerous act asks a plain question):** a person's trusted click in the extension's own confirm control may confirm a destructive command, minted for that exact call as in the panel. This becomes its own unit after t954; until then Core refuses paired press grants.
+  - **Process:**
+    - Narrow pre-merge runs select tests by import graph as well as by folder: `vitest related` in `apps/web`, and a static import scan in `packages/fluxiq`, where `vitest related` runs out of heap.
+    - A pre-commit hook regenerates the working-docs index when a working document changes (`.githooks/pre-commit`).
+- Validation:
+  - t955: Core program-route, `_shared`, secret-keys, the paired-permission test and framework tests 819 passed. The web runs failed only on the 4 parity tests t946 fixes (413 run, 409 passed; `vitest related` on `paired-client-route-actor.ts` 1076 run, 1072 passed). Checks exit 0; audits passed.
+  - t946 on dev with t955: web 788/788; checks exit 0; audits passed.
+  - t957: both tests pass (1 and 4); audit passed. Finishes exit 0; pushed; shared Core synced.
+- Outcome: dev has no known failing Core or web tests in the areas checked. Next: t925 live round 2 and merge, then t954's final round; t950, t953 and t956 in the cloud lane; t905 stage B.
+
 ## Open Questions
 
 None blocking.
