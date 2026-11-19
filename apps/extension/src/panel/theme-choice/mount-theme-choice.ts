@@ -4,7 +4,7 @@ import { normaliseThemeChoice } from "./normalise-theme-choice";
 import { readThemeChoice } from "./read-theme-choice";
 import { THEME_CHOICE_KEY } from "./theme-choice-key";
 
-/** Applies the default at once (so the first paint is the brand dark), then the stored choice, and follows later changes (another panel, the settings screen). */
+/** Applies the default at once (so the first paint follows the device), then the stored choice, and follows later changes (another panel, the settings screen). */
 export function mountThemeChoice(): void {
   applyThemeChoice(DEFAULT_THEME_CHOICE);
   void readThemeChoice().then((choice) => applyThemeChoice(choice));

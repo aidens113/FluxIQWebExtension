@@ -69,7 +69,7 @@ test("company-website: setup by mouse, every state, drawn and looked at at 360 p
   // Waiting for approval: connected and running ticked, approval under way with its code.
   await moveTo(child, "pairing");
   await expect(frame.locator("#pairingReferenceCode")).toHaveText("482913");
-  await expect(frame.locator(".start-step[data-state=waiting]")).toContainText("Approve this browser");
+  await expect(frame.locator(".start-step[data-state=waiting]")).toContainText("Connect and approve");
   await shot("2-waiting-for-approval");
 
   // Failed connection: a problem in words, Try again, the address behind a link.

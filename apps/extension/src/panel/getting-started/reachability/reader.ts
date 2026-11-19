@@ -1,17 +1,22 @@
-// Whether FluxIQ answers at the web address, read before this browser is paired so the first
-// setup step can say "FluxIQ is running" the moment it is true instead of waiting for Connect.
-// It asks only while the browser is disconnected, again on a beat (FluxIQ may start or stop
-// meanwhile), and never blocks anything: an unanswered or failed probe is `false`.
+// Whether a FluxIQ answers at the configured web address, read before this browser is paired so the first setup
+// step can say where it found FluxIQ the moment it is true instead of waiting for Connect. A FluxIQ counts only
+// when its discovery document is a valid one that names the address it was fetched from (Core's own reader), so
+// any other page that answers 200 is not FluxIQ. It asks only while the browser is disconnected, again on a beat
+// (FluxIQ may start or stop meanwhile), and never blocks anything: an unanswered or failed probe is "not found".
+// The address asked is always the configured one; the built-in default is only the first value it holds.
 
-import { FLUXIQ_CONNECT_PATHS } from "@fluxiq/contracts/platform";
+import { FLUXIQ_CONNECT_PATHS, parseFluxIQDiscoveryDocument } from "@fluxiq/contracts/platform";
+import { DEFAULT_CORE_API_URL } from "../../../shared/constants";
 import type { ExtensionStatus } from "../../../shared/protocol";
+import type { DiscoveryAnswer } from "./answer";
+import type { ServerFinding } from "./finding";
 
 /** How often an unreachable or reachable-but-unconnected FluxIQ is asked again. */
 export const REACHABILITY_BEAT_MS = 5000;
 const PROBE_TIMEOUT_MS = 3000;
 
-/** Asks the FluxIQ at `webAddress` whether it answers; never throws. */
-export type ReachabilityProbe = (webAddress: string) => Promise<boolean>;
+/** Asks the FluxIQ at `webAddress` for its discovery document; never throws. */
+export type ReachabilityProbe = (webAddress: string) => Promise<DiscoveryAnswer>;
 
 /** The page's timers, so a test drives them without a browser. */
 export type ReachabilityHost = {
@@ -21,8 +26,8 @@ export type ReachabilityHost = {
 
 /** The running reader. */
 export type ReachabilityReader = {
-  /** `true` once FluxIQ answered; `false` when it did not; `undefined` before an answer or when not asked. */
-  current(): boolean | undefined;
+  /** What was found at the configured address; `undefined` before an answer or when not asked. */
+  current(): ServerFinding | undefined;
   /** Tells it the status; call on every status. */
   observe(status: ExtensionStatus | undefined): void;
 };
@@ -32,21 +37,29 @@ export const discoveryProbe: ReachabilityProbe = async (webAddress) => {
   let controller: AbortController | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const url = new URL(FLUXIQ_CONNECT_PATHS.discovery, webAddress).href;
+    const origin = new URL(webAddress).origin;
     controller = new AbortController();
     timer = setTimeout(() => controller?.abort(), PROBE_TIMEOUT_MS);
-    const response = await fetch(url, { method: "GET", credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer", signal: controller.signal });
-    return response.status === 200;
+    const response = await fetch(new URL(FLUXIQ_CONNECT_PATHS.discovery, origin).href, { method: "GET", credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer", signal: controller.signal });
+    if (response.status !== 200) return { found: false };
+    const parsed = parseFluxIQDiscoveryDocument(await response.json(), origin);
+    return parsed.success ? { found: true, gatewayUrl: parsed.data.gatewayUrl } : { found: false };
   } catch {
-    return false;
+    return { found: false };
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
 };
 
+/** The web address to ask for `status`: the configured one, or the built-in first guess when none is saved yet. */
+function askedAddress(status: ExtensionStatus | undefined): string | undefined {
+  if (status?.connectionState !== "disconnected" || status.settings === undefined) return undefined;
+  return status.settings.coreApiUrl.trim() || DEFAULT_CORE_API_URL;
+}
+
 /** `changed` is called after the answer changes. */
 export function createReachabilityReader(probe: ReachabilityProbe, host: ReachabilityHost, changed: () => void): ReachabilityReader {
-  let answer: boolean | undefined;
+  let answer: ServerFinding | undefined;
   let address: string | undefined;
   let timer: unknown;
   let sequence = 0;
@@ -61,10 +74,11 @@ export function createReachabilityReader(probe: ReachabilityProbe, host: Reachab
     if (address === undefined) return;
     const mine = ++sequence;
     const asked = address;
-    let next = false;
-    try { next = await probe(asked); } catch { next = false; }
+    let found: DiscoveryAnswer = { found: false };
+    try { found = await probe(asked); } catch { found = { found: false }; }
     if (mine !== sequence || asked !== address) return;
-    const moved = next !== answer;
+    const next = findingOf(asked, found);
+    const moved = answer === undefined || answer.found !== next.found || answer.origin !== next.origin || answer.gatewayUrl !== next.gatewayUrl;
     answer = next;
     host.clearTimeout(timer);
     timer = host.setTimeout(() => void read(), REACHABILITY_BEAT_MS);
@@ -74,7 +88,7 @@ export function createReachabilityReader(probe: ReachabilityProbe, host: Reachab
   return {
     current: () => answer,
     observe(status) {
-      const next = status?.connectionState === "disconnected" ? status.settings?.coreApiUrl : undefined;
+      const next = askedAddress(status);
       if (next === address) return;
       address = next;
       stop();
@@ -87,4 +101,13 @@ export function createReachabilityReader(probe: ReachabilityProbe, host: Reachab
       void read();
     }
   };
+}
+
+function findingOf(asked: string, answer: DiscoveryAnswer): ServerFinding {
+  try {
+    const url = new URL(asked);
+    return { origin: url.origin, host: url.host, ...(answer.found ? { found: true, gatewayUrl: answer.gatewayUrl } : { found: false }) };
+  } catch {
+    return { origin: asked, host: asked, found: false };
+  }
 }

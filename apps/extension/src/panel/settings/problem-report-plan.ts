@@ -11,7 +11,7 @@ export type ProblemReportOutcome =
   | { readonly ok: false; readonly sentence: string; readonly detail?: string | undefined };
 
 /** What the section says after a report is copied or saved. */
-export const PROBLEM_REPORT_COPIED = "Problem report copied. It holds versions, ids and recent failures, never page data or your pairing.";
+export const PROBLEM_REPORT_COPIED = "Problem report copied. It holds versions and recent failures, never page data or your pairing.";
 export const PROBLEM_REPORT_SAVE_ONLY = "Couldn't copy the report here. Use Save report to keep it as a file.";
 
 export function problemReportOutcome(result: PanelResult<{ report?: unknown }>): ProblemReportOutcome {

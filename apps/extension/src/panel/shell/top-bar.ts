@@ -46,7 +46,7 @@ export function createTopBar(parts: TopBarParts): TopBar {
     id: tabId(tab),
     className: "top-tab",
     text: label,
-    attrs: { type: "button", role: "tab", "aria-selected": "false", "aria-controls": screenId(tab), "data-tab": tab }
+    attrs: { type: "button", role: "tab", "aria-label": label, "aria-selected": "false", "aria-controls": screenId(tab), "data-tab": tab }
   }));
   tabs.forEach((button, index) => {
     button.addEventListener("click", () => parts.onTab(TABS[index]!.tab));
@@ -93,6 +93,7 @@ export function createTopBar(parts: TopBarParts): TopBar {
         button.tabIndex = on || (index === 0 && (screen === "settings" || screen === "getting-started")) ? 0 : -1;
       });
       gear.setAttribute("aria-pressed", String(screen === "settings"));
+      if (screen === "settings") gear.setAttribute("aria-current", "page"); else gear.removeAttribute("aria-current");
       gear.classList.toggle("active", screen === "settings");
     },
     render(status) {

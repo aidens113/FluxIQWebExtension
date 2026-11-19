@@ -916,7 +916,7 @@ The engine beneath this experience (datasets, preview, CSV/JSON export, repeatin
 
 ### Primary Entry Point
 
-**Extract Data From This Page**
+**Extract data from this page**
 
 ### Support
 
