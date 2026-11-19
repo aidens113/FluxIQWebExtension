@@ -90,3 +90,9 @@ test("Settings in use is marked as the current page, and only while it is open",
   bar.showScreen("chat");
   assert.equal(gear.getAttribute("aria-current"), null);
 }));
+
+test("the header tabs are tabs with their own names, findable by role and name", async () => setup(({ tabs }) => {
+  assert.deepEqual(tabs.map((tab) => tab.getAttribute("role")), ["tab", "tab"]);
+  assert.deepEqual(tabs.map((tab) => tab.getAttribute("aria-label")), ["Chat", "Automations"]);
+  assert.deepEqual(tabs.map((tab) => tab.textContent), ["Chat", "Automations"]);
+}));

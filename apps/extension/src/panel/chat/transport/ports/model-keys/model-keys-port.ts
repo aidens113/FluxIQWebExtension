@@ -16,7 +16,6 @@ export function modelKeysPort(request: PanelStore["request"], read: () => Promis
     save: async ({ provider, name, value }) => sendKeyWrite(request, { type: KEY_WRITE_MESSAGES.save, provider, key: value, ...(name ? { name } : {}) }),
     replace: async (_keyId, value) => sendKeyWrite(request, { type: KEY_WRITE_MESSAGES.replace, key: value }),
     remove: async () => sendKeyWrite(request, { type: KEY_WRITE_MESSAGES.remove }),
-    requiresPassword: false,
     canWrite: true
   };
 }

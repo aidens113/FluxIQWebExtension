@@ -7,7 +7,8 @@ import type { ModelAccessState } from "@fluxiq/ui-components";
 import { sendRecorder } from "../../../tests/send-recorder";
 import type { RuntimeListen } from "../../activity";
 import { modelKeysPort } from "../model-keys-port";
-import { MODEL_ACCESS_CHANGED_MESSAGE, subscribeModelAccess } from "../subscribe-model-access";
+import { PANEL_MODEL_ACCESS_CHANGED as MODEL_ACCESS_CHANGED_MESSAGE } from "../../../../../../shared/model-key-messages";
+import { subscribeModelAccess } from "../subscribe-model-access";
 
 const access = (status: string, lastCall: unknown = null) => ({ status, message: "Core's sentence.", key: { name: "Work key", provider: "anthropic", model: "claude-haiku-5-5" }, lastCall });
 

@@ -6,14 +6,15 @@
 
 import { readModelAccessState } from "@fluxiq/contracts/platform";
 import { modelAccessFromCore, type ModelAccessState, type ModelKeysResult } from "@fluxiq/ui-components";
+import { RUNTIME_MESSAGES } from "../../../../../shared/constants";
 import type { PanelStore } from "../../../../state";
 import { asRecord, namedFailureOf, refusalOf } from "../../reply";
 
-/** The relay's message types, named as key-backend adds them to `AUTOMATION_PANEL_MESSAGES` (shared/protocol.ts). */
+/** The relay's message types, from the shared `RUNTIME_MESSAGES` (one place for the strings). */
 export const KEY_WRITE_MESSAGES = {
-  save: "fluxiq.panel.modelKeySave",
-  replace: "fluxiq.panel.modelKeyReplace",
-  remove: "fluxiq.panel.modelKeyRemove"
+  save: RUNTIME_MESSAGES.panelModelKeySave,
+  replace: RUNTIME_MESSAGES.panelModelKeyReplace,
+  remove: RUNTIME_MESSAGES.panelModelKeyRemove
 } as const;
 
 /** One key write: the failure in its own words, or the state Core answered with (absent reads as old FluxIQ). */

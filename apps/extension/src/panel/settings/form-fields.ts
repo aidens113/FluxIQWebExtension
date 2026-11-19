@@ -59,7 +59,7 @@ export const SETTING_FIELDS: {
   readonly toggles: readonly SettingField<ToggleKey>[];
 } = {
   addresses: [
-    { key: "gatewayUrl", id: "gatewayUrl", label: "FluxIQ connection address", hint: "Where this browser connects to FluxIQ. Usually ws://127.0.0.1:4777/client." },
+    { key: "gatewayUrl", id: "gatewayUrl", label: "FluxIQ connection address", hint: "Where this browser connects to FluxIQ." },
     { key: "coreApiUrl", id: "coreApiUrl", label: "FluxIQ web address", hint: "The address you open FluxIQ at." }
   ],
   toggles: [

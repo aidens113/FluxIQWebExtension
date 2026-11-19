@@ -25,7 +25,7 @@ test("the port reads the readiness message, writes, and asks no password", async
   await port.readState();
   assert.deepEqual(recorder.sent, [{ type: RUNTIME_MESSAGES.panelModelReadiness }]);
   assert.equal(port.canWrite, true);
-  assert.equal(port.requiresPassword, false);
+  assert.equal("requiresPassword" in port, false);
 });
 
 test("a reply with Core's state shows each card state", async () => {

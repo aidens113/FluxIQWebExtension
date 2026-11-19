@@ -9,6 +9,7 @@ export { CONNECTION_DRAFT_KEY, parseConnectionDraft } from "./draft-store";
 export { SETTING_FIELDS, type AddressKey, type SettingField, type ToggleKey } from "./form-fields";
 export { PROBLEM_REPORT_COPIED, PROBLEM_REPORT_SAVE_ONLY, problemReportOutcome, type ProblemReportOutcome } from "./problem-report-plan";
 export { savePlan, type SavePlan } from "./save-plan";
+export { HUMANNESS_CHANGE_LABEL, unsavedLabels, unsavedSentence } from "./unsaved-changes";
 export { createAppearanceSection } from "./appearance-section";
 export { createSettingsView, type SettingsView, type SettingsViewOptions } from "./settings-view";
 export { toggleView, type ToggleView } from "./toggle-view";

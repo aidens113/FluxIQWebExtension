@@ -39,6 +39,7 @@ import { createHumannessControl, readHumanness, withHumanness } from "./humannes
 import { durabilityLine } from "./durability-line";
 import { projectLine } from "./project-line";
 import { savePlan } from "./save-plan";
+import { unsavedLabels, unsavedSentence } from "./unsaved-changes";
 import "./settings.css";
 
 /** What the save action shows; its accessible name is the same words, the name the Lab presses. */
@@ -73,6 +74,8 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const projectRow = createElement("div", { className: "settings-project", attrs: { "aria-label": "Project" } }, [project, changeProject]);
   const durability = createElement("p", { className: "card-line", hidden: true });
   const draftLine = createElement("p", { className: "card-line", text: "You have changes that aren't saved yet.", hidden: true });
+  // Names what Save would save, so the bar never says only "changes".
+  const unsavedLine = createElement("p", { className: "card-line field-hint", hidden: true });
   const form = createSettingsForm();
   const humanness = createHumannessControl();
   const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: SAVE_LABEL, attrs: { type: "button" } });
@@ -88,8 +91,11 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const advanced = createAdvancedSection([form.parts.addresses, forget.element]);
 
   // Sticks to the bottom of the scroll; shows only while something is unsaved or an outcome is on screen.
-  const saveBar = createElement("section", { className: "settings-save", hidden: true, attrs: { "aria-label": "Save" } }, [draftLine, createElement("div", { className: "card-actions" }, [saveButton]), message, notice]);
+  const saveBar = createElement("section", { className: "settings-save", hidden: true, attrs: { "aria-label": "Save" } }, [draftLine, unsavedLine, createElement("div", { className: "card-actions" }, [saveButton]), message, notice]);
   const syncSave = (): void => {
+    const sentence = dirty ? unsavedSentence(unsavedLabels(form.read(), savedSettings(store.current()), { current: humanness.read(), saved: readHumanness(store.current()?.settings) })) : "";
+    unsavedLine.textContent = sentence;
+    unsavedLine.hidden = sentence === "";
     saveButton.hidden = !dirty;
     saveBar.hidden = !dirty && message.hidden && notice.hidden;
   };

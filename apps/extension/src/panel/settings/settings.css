@@ -30,7 +30,7 @@
 .toggles { display: grid; gap: 10px; padding-top: var(--space-2); border-top: 1px solid var(--divider); font-size: 13px; }
 .toggle { display: grid; gap: 2px; }
 .toggle label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; line-height: 1.35; }
-.toggle .field-hint { padding-left: 24px; }
+.toggle .field-hint { padding-left: 32px; }
 
 .success-line { color: var(--success); font-weight: 650; }
 .notice-detail { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
@@ -47,7 +47,7 @@
 /* One save for the connection form, the switches and the slider: a bar stuck to the bottom of the scroll. */
 .settings-save { position: sticky; bottom: calc(-1 * var(--space-4)); z-index: 5; display: grid; gap: var(--space-2); margin: 0 calc(-1 * var(--space-4)); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--divider); background: var(--surface); }
 .settings-group .toggles { border-top: 0; padding-top: 0; }
-.settings-group .toggle label { min-height: 28px; }
+.settings-group .toggle label { min-height: 32px; }
 
 .humanness { display: grid; gap: var(--space-2); font-size: 13px; }
 .humanness-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
@@ -59,6 +59,29 @@
 .theme-choice:has(input:checked) { border-color: var(--accent-edge); background: var(--accent-wash); color: var(--accent-text); }
 .theme-choice:has(input:focus-visible) { outline: var(--focus-width) solid var(--focus); outline-offset: 2px; }
 .theme-choice input { margin: 0; }
+
+/* One control family. Checkboxes and radios are drawn from tokens, 18 px marks inside rows at least 32 px
+   tall (the label is the hit area), so they sit with the 28 px segmented buttons and the theme chips. */
+.settings-screen input[type="checkbox"], .settings-screen input[type="radio"] {
+  -webkit-appearance: none; appearance: none; flex: 0 0 auto; box-sizing: border-box; width: 18px; height: 18px; margin: 0;
+  border: 1.5px solid var(--edge); background: var(--surface-muted); cursor: pointer;
+}
+.settings-screen input[type="checkbox"] { border-radius: 5px; }
+.settings-screen input[type="radio"] { border-radius: 50%; }
+.settings-screen input[type="checkbox"]:checked { border-color: var(--accent); background-color: var(--accent); background-repeat: no-repeat; background-position: center; background-size: 12px 12px;
+  /* the tick, in the accent-ink dark both themes put on the accent */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 6.3l2.4 2.4 5-5.4' fill='none' stroke='%230c0d0f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.settings-screen input[type="radio"]:checked { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 38%, transparent 42%), var(--surface-muted); }
+.settings-screen input[type="checkbox"]:disabled, .settings-screen input[type="radio"]:disabled { cursor: default; opacity: .48; }
+.settings-screen input[type="checkbox"]:hover:not(:disabled), .settings-screen input[type="radio"]:hover:not(:disabled) { border-color: var(--accent-edge); }
+.settings-screen .chat-setting-option { min-height: 28px; }
+.theme-choice { min-height: 32px; }
+
+/* Status lines keep their room whether or not they say anything, so showing one never pushes the rest down.
+   Hidden ones stay out of the accessibility tree (visibility), and `hidden` still means "nothing to say". */
+.reserved-line { min-height: 2.8em; }
+.reserved-line[hidden] { display: block; visibility: hidden; }
+.settings-screen .humanness .humanness-status { display: block; min-height: 1.45em; }
 
 @media (max-width: 400px) {
   .settings-screen { padding-left: var(--space-3); padding-right: var(--space-3); }

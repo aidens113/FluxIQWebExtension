@@ -29,6 +29,6 @@ export function createAppearanceSection(): HTMLElement {
   return createElement("section", { className: "settings-group", attrs: { "aria-label": "Appearance" } }, [
     createElement("h3", { className: "settings-group-title", text: "Appearance" }),
     createElement("div", { className: "theme-choices", attrs: { role: "radiogroup", "aria-label": "Theme" } }, radios.map(({ label }) => label)),
-    createElement("p", { className: "field-hint", text: "Follows your device until you choose." })
+    createElement("p", { className: "field-hint", text: "Applies at once, no Save needed. Follows your device until you choose." })
   ]);
 }
