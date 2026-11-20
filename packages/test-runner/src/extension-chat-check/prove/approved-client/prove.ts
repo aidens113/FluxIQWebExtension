@@ -7,7 +7,7 @@ import { holdPanelChatPage } from "./panel-stream-reconnect.js";
 import { PUSH_PROOF_OPENING_TURN, provePanelTurnPush } from "./panel-turn-push.js";
 import { approvedClientModelReadiness } from "./readiness.js";
 import { revokeAndProbeCredential } from "./revoke-probe.js";
-import { KEYS_PAGE_PATH, isBareKeysPageAddress } from "./keys-page.js";
+import { KEYS_PAGE_HASH, KEYS_PAGE_PATH, isBareKeysPageAddress } from "./keys-page.js";
 
 export type ApprovedClientAccessInput = {
   restartCore(): Promise<void>;
@@ -102,9 +102,9 @@ export async function proveApprovedClientAccess(context: ChatCheckContext, input
   await context.session.context.addCookies([{ name: "fluxiq_session", value: cookie, url: input.fluxiqOrigin, httpOnly: true, sameSite: "Lax" }]);
   const panel = await context.session.context.newPage();
   try {
-    await panel.goto(`${input.fluxiqOrigin}${KEYS_PAGE_PATH}`, { waitUntil: "domcontentloaded" });
+    await panel.goto(`${input.fluxiqOrigin}${KEYS_PAGE_PATH}${KEYS_PAGE_HASH}`, { waitUntil: "domcontentloaded" });
     await runtimeMessage(control, { type: "fluxiq.connect", settings: { gatewayUrl: input.gatewayUrl, coreApiUrl: input.coreApiUrl, autoReconnect: true } });
-    const dialog = panel.getByRole("dialog", { name: "Client pairing request" });
+    const dialog = panel.getByRole("dialog", { name: "A browser or app wants to connect" });
     await panel.bringToFront();
     await dialog.waitFor({ state: "visible", timeout: 30_000 });
     result.checks.approvalNeedsNoSecondPassword = await dialog.locator('input[type="password"]').count() === 0;
@@ -115,7 +115,7 @@ export async function proveApprovedClientAccess(context: ChatCheckContext, input
     await context.session.scenario.bringToFront();
     await probe("approved-without-password");
     const configured = await runtimeMessage(control, { type: "fluxiq.panel.openFluxIQ", purpose: "model-key" }) as { url?: string };
-    result.checks.configurationHasNoUnlockFragment = isBareKeysPageAddress(configured.url, input.coreApiUrl);
+    result.checks.configurationOpensAiKeys = isBareKeysPageAddress(configured.url, input.coreApiUrl);
   } finally {
     await panel.close();
   }

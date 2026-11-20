@@ -80,6 +80,7 @@ test("with tasks and a library: a search box, both segments, tasks first, then t
   assert.equal(view.segmentButtons()[0]!.getAttribute("aria-pressed"), "true");
   assert.ok(view.root.byClass("task-row").length >= 9, "the tasks are listed");
   assert.equal(view.rows().length, 2, "the existing automations rows stay");
+  assert.equal(view.root.byClass("automations-title")[0]!.textContent, "Saved automations", "the list is named for what it holds, not by the switch word Tasks");
   assert.deepEqual(view.root.byClass("automations-pane").map((pane) => pane.hidden), [false, true]);
 }));
 

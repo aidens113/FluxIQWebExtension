@@ -485,6 +485,26 @@ Workers build against these at the same time; a change needs the lead.
   - t957: both tests pass (1 and 4); audit passed. Finishes exit 0; pushed; shared Core synced.
 - Outcome: dev has no known failing Core or web tests in the areas checked. Next: t925 live round 2 and merge, then t954's final round; t950, t953 and t956 in the cloud lane; t905 stage B.
 
+### 2026-11-19 — t956 and t925 merged; t950, t953 and t958 wait for the live campaign's first round break
+
+- Agent: Senior supervisor; sub-supervisors key-security-ux (t925) and hosted-cloud (t950, t953, t956); workers t958-provisioning-connections (Sonnet), membership-permissions design (Opus), provisioning-connections trace (Sonnet); the live-campaign supervisor.
+- Changed:
+  - **Merged:**
+    - **t956** (Core `396449cd3`, HC2b C): `fluxiq storage`; guardrail v2 denies local identity administration under `service`; a hosted member's own sign-in security acts on the platform directory, caller only; suspended members resume. The lead fixed `decision-audit.test.ts`, which still expected an admin's local `update-user` to pass under `service`.
+    - **t925** (Core `76535e793`, extension `b7a8a1843`): password-free keys, the seven-state key card, and Settings fixed. Live round 2 passed in both clients: key Ready in 3.19 s, first replies about 3 s, a fake key "Not accepted", removal "No key"; 15 of 18 Settings items fixed and the last two jumps fixed after it (CSS tests, not re-shot live).
+  - **Committed, waiting for the campaign's first round break** (merging moves dev, and the Lab refuses lanes behind dev):
+    - **t950** (hosted keys: own-key writes for members and their browsers, honest save, F1 and F4). Its one failure, `person-project.test.ts`, used a permissions list to stand for a reader under `service`; since t950 a person's own policies decide there, so the test now gives a separate reader the Read Only policy.
+    - **t953** (environments API, Docker driver, runner image, fake provider on disk).
+    - **t958** (provisioning opened the platform databases 21-27 times per account: one pool per composition, kept per run and sweep; one account now opens 2).
+  - **Designed, held off the repos:** per-workspace identity under `service` (`fxwork/.held/hosted-cloud/workers/membership-permissions-design.md`). The union role is a latent hazard with wrong UI and labels, not an escalation: IAM decides first on every path.
+  - **Shared Core:** its web build failed on t925's new exports because `pnpm task sync-core` ran from `fxwork/t353-finish-refuses-stale-core`, whose tooling was 2,640 commits old and skipped sdk and ui-components. That worktree is now detached at dev and the sync reruns from it.
+  - **Live campaign (user, 2026-11-19):** many live runs on all ten sites, the hardest tasks, Haiku, Sonnet and Opus, success/partial/failure per run; simple bugs fixed, fundamental ones recorded for review. Lanes t959 and t960; `lab-slots/OVERRIDE-loop` created on the user's instruction ("you can override the 3 runs per 30 mins to unlimited with supervision"). The lead's session ended at about 03:00 before any live run started (the lanes were still queued for builds behind the merge chain); the campaign resumed at 12:55. Results: `docs/working/mvp-launch-plan/reports/live-campaign-2026-11-19/results.md` in t959.
+- Validation:
+  - t956: fluxiq related 2,092 passed in six batches; web related 1,075 and folders 323 passed after the test fix; checks exit 0; audits passed; finishes exit 0; pushed.
+  - t925 on dev: ui-components 782, web related 2,123, extension tests 1,781 pass / 0 fail; ui, web and extension checks and the extension build exit 0; audits and the Core mirror passed; finishes exit 0; pushed.
+  - t950: fluxiq related 1,903 of 1,904 (the `person-project` case above, rerun pending); web folders 95 passed; checks exit 0. t958: provisioning-listener tests 46 passed, `tsc` 0.
+- Outcome: the usable-client goal's last screens are on dev. Next: the campaign's round 1; at its break, verify and merge t950, t953 and t958, resync the lanes, then t954's final round.
+
 ## Open Questions
 
 None blocking.

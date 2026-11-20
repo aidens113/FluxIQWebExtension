@@ -327,12 +327,13 @@ test("the thread list's rename and delete reach Core's own endpoints from the pa
     handled: true, response: { ok: true, payload: { from: "delete-conversation" } }
   });
   assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationRead, kind: "list-all", limit: 25 }, sidepanel, h.deps), {
-    handled: true, response: { ok: true, payload: { from: "list-conversations" } }
+    handled: true, response: { ok: true, payload: { from: "list-conversations", conversations: [] } }
   });
   assert.deepEqual(h.calls, [
     { endpoint: "rename-conversation", payload: { projectId: "project-1", conversationId: "conv-1", title: "Lamps" } },
     { endpoint: "delete-conversation", payload: { projectId: "project-1", conversationId: "conv-1" } },
-    { endpoint: "list-conversations", payload: { projectId: null, limit: 25 } }
+    { endpoint: "list-conversations", payload: { projectId: null, limit: 25 } },
+    { endpoint: "list-panel-threads", payload: { limit: 25 } }
   ]);
 });
 

@@ -1,15 +1,25 @@
-// What each setup step says, in one place so the screen, the card and the tests agree.
-// Plain words: no addresses, no codes, nothing a beginner has to decode.
+// What each setup step says, in one place so the screen and the tests agree.
+// Plain words: nothing a beginner has to decode. The one address shown is the FluxIQ web address.
 
 /** FluxIQ has no installer yet, so this says only what a person needs: it runs on this computer and stays running. */
 export const START_LINE = "FluxIQ needs to be running on this computer. Start it and keep it running while you use this panel. When it is running, its web page opens.";
 export const START_PROBLEM = "FluxIQ isn't answering. Check that it is still running on this computer, then press Try again.";
-export const SIGN_IN_LINE = "Open FluxIQ and sign in on its sign-in page. If it is your first time, the page tells you how to get started.";
-export const SIGN_IN_TO_APPROVE_LINE = "Sign in on FluxIQ's page to approve. Use Open FluxIQ below.";
-export const CONNECT_LINE = "Press Connect so FluxIQ can work in this browser.";
-export const CONNECT_AGAIN_LINE = "Connect to pick up where you left off.";
-export const CONNECT_FAILED_LINE = "Can't reach FluxIQ.";
-export const APPROVE_LINE = "In FluxIQ, check that its request shows this code, then press Confirm pairing.";
-export const KEY_LATER_LINE = "For work that uses AI, add a model key in FluxIQ. Saved Flows can run without one when they don't use AI.";
-export const KEY_MISSING_LINE = "To use AI, open FluxIQ and add a model key. Saved Flows that don't use AI can still run.";
+/** The request goes out by itself once FluxIQ is found, so this says only what to do when it is not found yet. */
+export const CONNECT_LINE = "Once FluxIQ is running, this browser asks it for approval by itself.";
+export const CONNECTING_LINE = "Connecting to FluxIQ...";
+export const ASKING_LINE = "Asking FluxIQ for approval...";
+export const RECONNECTING_LINE = "Lost the connection. Trying again...";
+/** Sign-in is FluxIQ's own page: the extension cannot tell whether it is open, so the step says it where it is needed. */
+export const APPROVE_LINE = "In FluxIQ, sign in if it asks, check that its request shows this code, then press Confirm.";
+/** The trust is gone: FluxIQ refused this browser, or the approval was dropped after it was connected. */
+export const ACCESS_REMOVED_LINE = "Access was removed. Connect again to ask for approval.";
+/** A connection that ended without a sign the approval is gone. */
+export const NOT_CONNECTED_LINE = "Not connected. Connect again.";
+/** The AI key is the last step; the chat shows the key card as soon as the browser is approved. */
+export const KEY_LINE = "When this browser is approved, add your AI key in the chat. Then ask FluxIQ for anything.";
 export const SETUP_LINE = "A few steps, then ask FluxIQ for anything in the chat.";
+
+/** Where FluxIQ was found, with the "Change" that follows it on screen. */
+export const foundLine = (host: string): string => `FluxIQ found at ${host}`;
+/** Where FluxIQ was looked for and did not answer. */
+export const notFoundLine = (host: string): string => `FluxIQ isn't answering at ${host}. Start it and keep it running, or change the address.`;

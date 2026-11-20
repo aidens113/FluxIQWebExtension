@@ -46,3 +46,22 @@ test("an id without a name is named from the list", async () => {
     assert.match(fake(selector.element).textContent, /Alpha/u);
   });
 });
+
+test("a later status that names only the id keeps the name already shown, never falling back to Project", async () => {
+  await withFakeDocument(async () => {
+    let reads = 0;
+    const port: ProjectsPort = {
+      async list() {
+        reads += 1;
+        return [];
+      },
+      create: noCreate
+    };
+    const selector = createProjectSelector(request, port, { openAll: () => {} });
+    selector.render(statusWith({ projectId: "p1", projectName: "Alpha" }));
+    selector.render(statusWith({ projectId: "p1" }));
+    assert.match(fake(selector.element).textContent, /Alpha/u);
+    assert.doesNotMatch(fake(selector.element).textContent, /Project\b/u);
+    assert.equal(reads, 0);
+  });
+});

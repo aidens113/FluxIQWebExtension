@@ -1,8 +1,8 @@
-// Appearance: Theme, Dark (default), Light or System. Applies at once and is stored per browser
-// (`panel/theme-choice`); it is not part of Save, which stores FluxIQ's settings.
+// Appearance: Theme, Dark, Light or System (the first-run default: it follows the device). Applies at once and is
+// stored per browser (`panel/theme-choice`); it is not part of Save, which stores FluxIQ's settings.
 
 import { createElement } from "../dom";
-import { applyThemeChoice, readThemeChoice, saveThemeChoice, type ThemeChoice } from "../theme-choice";
+import { applyThemeChoice, DEFAULT_THEME_CHOICE, readThemeChoice, saveThemeChoice, type ThemeChoice } from "../theme-choice";
 
 const CHOICES: readonly { readonly value: ThemeChoice; readonly label: string }[] = [
   { value: "dark", label: "Dark" },
@@ -24,11 +24,11 @@ export function createAppearanceSection(): HTMLElement {
   const check = (choice: ThemeChoice): void => {
     for (const { value, input } of radios) input.checked = value === choice;
   };
-  check("dark");
+  check(DEFAULT_THEME_CHOICE);
   void readThemeChoice().then(check);
   return createElement("section", { className: "settings-group", attrs: { "aria-label": "Appearance" } }, [
     createElement("h3", { className: "settings-group-title", text: "Appearance" }),
     createElement("div", { className: "theme-choices", attrs: { role: "radiogroup", "aria-label": "Theme" } }, radios.map(({ label }) => label)),
-    createElement("p", { className: "field-hint", text: "Dark is the default. System follows your device." })
+    createElement("p", { className: "field-hint", text: "Applies at once, no Save needed. Follows your device until you choose." })
   ]);
 }

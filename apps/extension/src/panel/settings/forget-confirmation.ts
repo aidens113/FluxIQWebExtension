@@ -43,6 +43,8 @@ export function createForgetConfirmation(onForget: () => Promise<boolean>): Forg
     confirm.hidden = !open;
     openButton.hidden = open;
     openButton.setAttribute("aria-expanded", String(open));
+    // Settings is taller than the panel: the question opens below the fold, so it is brought into view.
+    if (open) confirm.scrollIntoView?.({ block: "nearest" });
     if (restoreFocus) (open ? cancelButton : openButton).focus();
   }
 

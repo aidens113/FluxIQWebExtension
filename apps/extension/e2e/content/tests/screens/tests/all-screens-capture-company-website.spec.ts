@@ -172,14 +172,14 @@ for (const surface of [{ browser: "chrome", bundle: () => sidepanel, width: 400,
       await page.waitForTimeout(1200);
       await shot2("automations");
     });
-    // Extraction: while a recording runs, its bar offers "Extract Data From This Page"; the pick then comes back as a proposal.
+    // Extraction: while a recording runs, its bar offers "Extract data from this page"; the pick then comes back as a proposal.
     await attempt("extraction", async () => {
       await fresh();
       await f.getByRole("button", { name: "Start recording" }).click();
       await f.getByLabel("Recording description").fill("Read each person on the team page");
       await f.getByRole("button", { name: "Start described recording" }).click();
       await expect(f.locator("#stopRecordingButton")).toBeVisible();
-      await f.locator(".recording-bar").getByRole("button", { name: /Extract Data From This Page/i }).click();
+      await f.locator(".recording-bar").getByRole("button", { name: /Extract data from this page/i }).click();
       await page.waitForTimeout(2500);
       await shot2("extraction");
     });

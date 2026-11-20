@@ -9,7 +9,7 @@ async function flush() {
   for (let i = 0; i < 6; i++) await Promise.resolve();
 }
 
-async function pressed(style: { purpose?: "model-key" | "ask" }): Promise<Record<string, unknown>[]> {
+async function pressed(style: { purpose?: "model-key" | "ask" | "pairing" | (() => "model-key" | "ask" | "pairing") }): Promise<Record<string, unknown>[]> {
   const sent: Record<string, unknown>[] = [];
   const request = (async (message: Record<string, unknown>) => {
     sent.push(message);
@@ -30,4 +30,10 @@ test("a button made for a model key asks the background for the keys page", asyn
 test("a button for a question, or with no purpose, sends the plain open", async () => {
   assert.deepEqual(await pressed({ purpose: "ask" }), [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ }]);
   assert.deepEqual(await pressed({}), [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ }]);
+});
+
+test("a pairing button asks for the home page that says it is for approving this browser", async () => {
+  assert.deepEqual(await pressed({ purpose: "pairing" }), [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "pairing" }]);
+  assert.deepEqual(await pressed({ purpose: () => "pairing" }), [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "pairing" }]);
+  assert.deepEqual(await pressed({ purpose: () => "ask" }), [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ }]);
 });

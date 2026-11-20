@@ -13,7 +13,8 @@
 // before its first read.
 //
 // The chat's thread list reads with `kind: "list-all"`: the project it names, or
-// every project when it names none -- never the session's project in its place,
+// every project when it names none (and then the assistant's own chats too,
+// `list-panel-threads`, merged in and deduplicated) -- never the session's project in its place,
 // because a list with no project open is the list of every thread. Its New chat
 // is an open with `fresh: true`, which Core answers with a new thread rather
 // than the subject's open one. Core opens no `panel` subject: the chat with no
@@ -50,6 +51,7 @@ import type {
 import { CHAT_CAPABILITIES } from "./chat-capabilities";
 import { acceptedPageUrl } from "./page-url";
 import type { PanelRelayContext } from "./relay-context";
+import { panelThreadsAsConversations } from "./assistant-chats";
 import { relayFailure } from "./relay-failure";
 
 type ConversationMessage = { readonly type?: string; readonly [key: string]: unknown };
@@ -71,7 +73,7 @@ export async function relayConversation(message: ConversationMessage, context: P
 async function read(message: Partial<PanelConversationReadRequest> & { conversationId?: unknown }, context: PanelRelayContext): Promise<PanelRelayResponse> {
   if (message.kind === "list-all") {
     const all = message as Partial<Extract<PanelConversationReadRequest, { kind: "list-all" }>>;
-    return context.call("list-conversations", defined({ projectId: text(all.projectId) ?? null, limit: whole(all.limit) }));
+    return listAll(text(all.projectId) ?? null, whole(all.limit), context);
   }
   if (message.kind === "get" || message.conversationId !== undefined) {
     const projectId = await projectFor(message.projectId, context);
@@ -99,6 +101,27 @@ async function read(message: Partial<PanelConversationReadRequest> & { conversat
     subjectId,
     limit: whole(list.limit)
   }));
+}
+
+// The person's assistant chats belong to no project, so they join only the
+// every-project list. A read that fails is reported as it stands, whichever of
+// the two it was: the project chats are never shown as the whole list.
+async function listAll(projectId: string | null, limit: number | undefined, context: PanelRelayContext): Promise<PanelRelayResponse> {
+  const [projectChats, assistantChats] = await Promise.all([
+    context.call("list-conversations", defined({ projectId, limit })),
+    projectId === null ? context.call("list-panel-threads", defined({ limit })) : undefined
+  ]);
+  if (!projectChats.ok || !assistantChats) return projectChats;
+  if (!assistantChats.ok) return assistantChats;
+  const payload = (projectChats.payload ?? {}) as Record<string, unknown>;
+  const own = Array.isArray(payload.conversations) ? payload.conversations : [];
+  const seen = new Set<unknown>();
+  const merged = [...own, ...panelThreadsAsConversations((assistantChats.payload as { conversations?: unknown } | null)?.conversations)]
+    .filter((chat) => {
+      const id = (chat as { conversationId?: unknown } | null)?.conversationId;
+      return id === undefined || (!seen.has(id) && seen.add(id));
+    });
+  return { ok: true, payload: { ...payload, conversations: merged } };
 }
 
 async function send(message: Partial<PanelConversationSendRequest>, context: PanelRelayContext): Promise<PanelRelayResponse> {

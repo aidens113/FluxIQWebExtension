@@ -77,10 +77,11 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     createElement("p", { className: "card-line", text: "Your saved automations are in FluxIQ." }),
     fallbackOpen.element
   ]);
-  const heading = createElement("h2", { className: "automations-title", text: "Your automations", attrs: { tabindex: "-1" } });
-  empty.setAttribute("tabindex", "-1");
   const { tasks, library } = hooks;
   const segmented = tasks !== undefined || library !== undefined;
+  // Under the Tasks / Library switch this list is the saved part of Tasks, so it is named "Saved".
+  const heading = createElement("h2", { className: "automations-title", text: segmented ? "Saved automations" : "Your automations", attrs: { tabindex: "-1" } });
+  empty.setAttribute("tabindex", "-1");
   const noMatch = createElement("p", { className: "card-line", hidden: true });
   const automationParts = [heading, offline, loading, empty, readNotice, ...(segmented ? [noMatch] : []), list, fallback, hooks.newAutomation];
   const names: SegmentName[] = library === undefined ? ["tasks"] : ["tasks", "library"];

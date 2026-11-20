@@ -11,7 +11,7 @@ import { PROBLEM_REPORT_COPIED, PROBLEM_REPORT_SAVE_ONLY, problemReportOutcome }
 export function createProblemReportSection(context: PanelContext): HTMLElement {
   const button = createElement("button", { id: "reportProblemButton", className: "small-button", text: "Report a problem", attrs: { type: "button" } });
   const save = createElement("a", { id: "saveProblemReport", className: "small-button", text: "Save report", hidden: true });
-  const line = createElement("p", { className: "card-line", hidden: true, attrs: { role: "status" } });
+  const line = createElement("p", { className: "card-line reserved-line", hidden: true, attrs: { role: "status" } });
   let savedUrl: string | undefined;
   let pending = false;
 
