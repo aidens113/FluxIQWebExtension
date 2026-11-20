@@ -50,6 +50,8 @@ export type PermissionAnswerInput = {
   now: () => number;
   /** Answers an ask on the extension's chat thread in the chat itself; absent, every ask is answered through Core. */
   answerInChat?: PersonChatAnswerer | undefined;
+  /** Reports the original answer exception independently of the durable bounded record. */
+  onAnswerFailure?: (error: unknown) => void;
 };
 
 /**
@@ -85,6 +87,7 @@ export async function answerPermissionAskAsPerson(input: PermissionAnswerInput, 
     if (input.answerInChat && await input.answerInChat(ask, { kind: decided })) via = "chat";
     else await answerPermissionAsk(input.control, input.scope, ask.askId, decided);
   } catch (error) {
+    input.onAnswerFailure?.(error);
     answer = null;
     note = [note, `the answer did not reach Core: ${(error instanceof Error ? error.message : String(error)).split("\n", 1)[0]!.slice(0, 160)}`].filter((part) => part !== null).join("; ");
   }

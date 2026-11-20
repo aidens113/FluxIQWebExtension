@@ -243,14 +243,30 @@ test("t510: a helper the schema marks exclude and process.sort names is stored a
   assert.deepEqual(storedColumns(sent.recordOutput, { title: "t", owner: "o", status: "s", due: "d" }), ["title", "owner", "status", "due"]);
 });
 
-test("t510: a helper a process.dedupe or process.where names is stored; a where keeps it among the columns written", () => {
+test("t510: a helper a process.dedupe or process.where names is stored, and t970: a where no longer shows it", () => {
   const deduped = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { dedupe: { by: ["due"] } } } });
   assert.deepEqual(schemaIds(deduped.recordOutput).map(([id]) => id), ["title", "owner", "due"]);
   assert.deepEqual((deduped.recordOutput.process as JsonObject).columns, ["title", "owner"]);
   const filtered = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { where: [{ field: "status", contains: "open" }], sort: [{ field: "due", order: "asc" }] } } });
   assert.deepEqual(schemaIds(filtered.recordOutput).map(([id]) => id), ["title", "owner", "status", "due"]);
-  // Core refuses a where over a column `columns` drops, so the where's column is shown.
-  assert.deepEqual((filtered.recordOutput.process as JsonObject).columns, ["title", "owner", "status"]);
+  // Core filters the collected rows, which hold every stored column (t970), so the where's column is stored and not shown.
+  assert.deepEqual((filtered.recordOutput.process as JsonObject).columns, ["title", "owner"]);
+});
+
+test("t970: a helper Core's anyOf, compare or derive reads is stored and not shown", () => {
+  const sent = dispatched({
+    extractList: tasks,
+    recordOutput: {
+      datasetId: "tasks",
+      writeMode: "append",
+      schema: taskSchema("title", "owner"),
+      process: { anyOf: [[{ field: "status", contains: "open" }, { field: "title", contains: "urgent" }]], compare: [{ field: "due", lessThan: "owner" }] }
+    }
+  });
+  assert.deepEqual(schemaIds(sent.recordOutput).map(([id]) => id), ["title", "owner", "status", "due"]);
+  assert.deepEqual((sent.recordOutput.process as JsonObject).columns, ["title", "owner"]);
+  const derived = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { derive: [{ id: "year", from: "due", pattern: "([0-9]{4})", as: "number" }], where: [{ field: "year", atLeast: 2026 }] } } });
+  assert.deepEqual(schemaIds(derived.recordOutput).map(([id]) => id), ["title", "owner", "due"]);
 });
 
 test("t510: a helper the read's own sort names is stored and not shown", () => {

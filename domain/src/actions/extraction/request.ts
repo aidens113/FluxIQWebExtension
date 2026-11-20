@@ -20,6 +20,7 @@
 // canonical condition carries no `as`, since the text bound already says it.
 
 import type { WebAutomationElementFingerprint } from "../types";
+import type { WebAutomationExtractValueShown } from "./value-shown";
 
 /** What a structured field reads inside each item: its text, an attribute, a link's target, a control's value, or the cell under a table header. */
 export type WebAutomationExtractFieldKind = "text" | "attribute" | "link" | "value" | "column";
@@ -102,6 +103,8 @@ export type WebAutomationExtractFieldSpec = {
   identity?: "tracking-free" | undefined;
   /** The field reads a mark (`WebAutomationExtractFieldMark`); absent, it reads a value as it always did. */
   mark?: WebAutomationExtractFieldMark | undefined;
+  /** A `value` field only: what of the control it reads, as the page view shows it (`WebAutomationExtractValueShown`); absent, its live value. */
+  shown?: WebAutomationExtractValueShown | undefined;
   /** The element the field was picked from, as the one fingerprint normalizer describes it. */
   element?: WebAutomationElementFingerprint | undefined;
 };

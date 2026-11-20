@@ -71,6 +71,13 @@ test("a request the script refused ends the watch at once, by name", async () =>
   await assert.rejects(() => followAttempt({ ...scope, ...world, progress: async () => ({ marker: "{}", refused: "expects no request 9 of kind evidence_tool_decision" }) }), (error: unknown) => error instanceof AttemptScriptRefused && /kind evidence_tool_decision/u.test(error.message));
 });
 
+test("a Lab person's answer failure ends only the proof and preserves the original error", async () => {
+  const world = scripted([[outcome("waiting_for_person", { waitingFor: "person_only_check" })]]);
+  const failure = new Error("The trusted Continue press did not reach the button");
+  await assert.rejects(() => followAttempt({ ...scope, ...world, personPlaying: true, progress: async () => { throw failure; } }), (error: unknown) => error === failure);
+  assert.equal(world.reads(), 0, "the failed observer does not manufacture a Core task ending");
+});
+
 test("an attempt the thread held before this message is not this one", async () => {
   const world = scripted([[outcome("achieved")], [outcome("achieved"), outcome("achieved", { attemptId: "attempt.two", ordinal: 2 })]]);
   const ended = await followAttempt({ ...scope, known: new Set(["attempt.one"]), ...world });

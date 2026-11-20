@@ -186,6 +186,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   let exitCode = 1;
   let restarted: AttemptCoreRestart | undefined;
   let verdict = "failed";
+  let personAnswerFailure: Error | undefined;
   /** The whole attempt record is written: a later throw leaves it as it is. */
   let recorded = false;
   try {
@@ -213,6 +214,10 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       },
       send: opened.send,
       progress: async () => {
+        if (person.answerFailure) {
+          personAnswerFailure = person.answerFailure;
+          throw personAnswerFailure;
+        }
         const refused = side.server?.refusals()[0]?.refused;
         return { marker: `${await countSteps(stepsDirectory)} steps`, ...(refused ? { refused } : {}) };
       },
@@ -291,7 +296,8 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     // An attempt that ended was paid for: what it was, what it cost and the ledger's line are kept whatever ended the series, a stuck follow, a refused request or a throw.
     // A stuck or refused follow also says which attempt did not start or end; any other throw happened after its attempt ended.
     verdict = "failed";
-    const stopped = error instanceof AttemptProofStuck || error instanceof AttemptScriptRefused;
+    const personFailed = personAnswerFailure !== undefined && error === personAnswerFailure;
+    const stopped = error instanceof AttemptProofStuck || error instanceof AttemptScriptRefused || personFailed;
     const paid = side.live ? { runsDirectory: paths.runsDirectory, runId, startedAt, plan: side.live.describe().authorized, stepsDirectory } : undefined;
     // An attempt the run typed and followed has started, however it ended: a refused request is not "did not start".
     const refusal = side.server?.refusals()[0];
@@ -299,7 +305,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const said = await Promise.resolve().then(async () => {
       const slice = stopped ? await attemptSpeed(stepsDirectory, stepsSoFar) : undefined;
       const loggedSteps = stopped ? (await countSteps(stepsDirectory)) - stepsSoFar : 0;
-      const started = error instanceof AttemptScriptRefused ? { started: { loggedSteps, interpretationCalls: slice?.interpretationCalls ?? 0, ...(refusal ? { refusal: { kind: refusal.kind, ordinal: refusal.ordinal } } : {}) } } : {};
+      const started = error instanceof AttemptScriptRefused || personFailed ? { started: { loggedSteps, interpretationCalls: slice?.interpretationCalls ?? 0, ...(refusal ? { refusal: { kind: refusal.kind, ordinal: refusal.ordinal } } : {}) } } : {};
       const didNotEnd = stopped ? { ordinal: Math.max(0, ...kept.keys()) + 1, ...(error instanceof AttemptProofStuck ? { attempt: error.attempt } : {}), ...started } : undefined;
       // The attempts that ended and were scored are still a series: their rows, continuations and deterministic summary are kept, whatever stopped the rest.
       const partial = recorded ? undefined : partialSeries({ task: ranTask, scored, asked: command.attempts, cacheHitPercent: (attempt) => kept.get(attempt)?.cache.hitPercent ?? null });
@@ -310,9 +316,10 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       throw error;
     }
     process.stdout.write(`[attempt] ${command.taskId}: ${said}\n`);
-    const words = error instanceof AttemptProofStuck ? `the proof stopped waiting, and the attempt was not judged: ${error.stood}` : `the script refused a request, so the attempt was not judged: ${error.message}`;
+    const message = error instanceof Error ? error.message : String(error);
+    const words = error instanceof AttemptProofStuck ? `the proof stopped waiting, and the attempt was not judged: ${error.stood}` : personFailed ? `the Lab could not deliver the person's answer, so the attempt was not judged: ${message}` : `the script refused a request, so the attempt was not judged: ${message}`;
     process.stdout.write(`[attempt] ${command.taskId}: ${words}\n`);
-    process.stdout.write(`${JSON.stringify({ status: "not_judged", task: command.taskId, why: error.name, evidence })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: "not_judged", task: command.taskId, why: personFailed ? "LabPersonAnswerFailed" : error instanceof Error ? error.name : "Error", evidence })}\n`);
     if (session) await captureBrowserWindows(session.browser.browser, session.browser.profileDir).then((taken) => (taken.bytes ? writeFile(path.join(evidence, "stopped.jpg"), taken.bytes) : undefined)).catch(/* best-effort: a picture never decides the run */ () => undefined);
   } finally {
     await session?.close();

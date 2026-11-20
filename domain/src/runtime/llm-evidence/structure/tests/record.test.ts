@@ -25,6 +25,7 @@ import {
 } from "../..";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 import { RECORD_DETECTIONS, REPLY_CARD, REPLY_CARD_LINK, type RecordDetectionName } from "./record-detections";
+import { webLlmExtractionListKey } from "../index";
 
 const SCOPE = { projectId: "project.one", flowId: "flow.one" };
 
@@ -94,6 +95,7 @@ test("the record beside the run gets a second handle, and the packet names it wi
   assert.deepEqual(record.binding, {
     handle: "extraction.2",
     location: "http://127.0.0.1:4173/scenarios/photo-social/direct/t/saltmarsh.goods/",
+    listKey: webLlmExtractionListKey({ extractList: { item: REPLY_CARD.item, fields: {} } }),
     extractList: {
       item: REPLY_CARD.item,
       fields: {

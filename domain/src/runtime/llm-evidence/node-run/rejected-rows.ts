@@ -114,6 +114,18 @@ export type WebNodeReadWithRejectedRows = { read: JsonValue | undefined; recorde
  * The parameters the command goes out with: the node's own, and for a list
  * read that belongs in the Flow the request for rejected-row samples. Never the
  * parameters the Flow keeps.
+ *
+ * The read itself goes out exactly as it resolved: an exploring read names no
+ * `answer`, so the page keeps its floor of answering the rows the conditions
+ * rejected when they kept none (`content/extraction/filtered-answer.ts`). That
+ * answer says so (`extraction.conditions.unfiltered`), its account calls those
+ * rows rejected and no result row (`./shown-rows/account.ts`), and Core counts
+ * none of them as found (`answer-first/rows/found-rows.ts`). Only a Flow's
+ * dispatch and the draft's replay ask for the kept rows alone
+ * (`output-nodes/extract-list/dispatch.ts`). t905 phase 1 (D3) added `answer:
+ * "kept"` here, and every test that names what an exploring read sends the page
+ * (`../tests/reauthor-reruns-own-extraction.test.ts`,
+ * `../plan-resolution/extraction/tests/element-record.test.ts`) failed on it.
  */
 export function webNodeDispatchParameters(node: { actionType: string; proposes: boolean }, ran: JsonObject): JsonObject {
   if (node.actionType !== EXTRACT_LIST_ACTION || !node.proposes) return ran;
