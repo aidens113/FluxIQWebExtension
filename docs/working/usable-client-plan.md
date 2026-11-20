@@ -544,8 +544,9 @@ Workers build against these at the same time; a change needs the lead.
 - The user asked why the campaign shows zero SUCCESS. SUCCESS needs attempts 2-4 at zero model calls; 9 of 36 runs had all four attempts right, and the closest (run 31) missed only by a judge per replay. The causes between PARTIAL and SUCCESS are F24, F23 and F26, so F24 and F23 are no longer held for review: each gets a read-only root-cause diagnosis (reports `reports/f24-replay-judged-after-retry.md`, `reports/f23-replay-target-gone.md`), then a fix task.
 - Re-dispatched with last night's decisions unchanged: t976 option (c) (the chat's declaration carries the act classes; no added read), t979 items 1-3 (build-judge test, standalone continuation reason, unreadable-mock sweep), t981 (a) and (b) with the rerun ordering fix.
 - Still to check: whether the Core web build crash (0xC0000005, 3 of 3, at `a8cb2c618`) was memory alone; it is rebuilt at dev before the lanes run again.
-- Validation: none yet (dispatch only).
-- Outcome: next, verify and merge t979, t981 and t976, open fix tasks from the F24 and F23 reports, rebuild and resync the lanes, then restart the paid campaign.
+- Validation: none (dispatch only).
+- **Stopped by the user minutes later** ("STOP THE FUCKING AGENTS"; the Claude credits are spent): all five agents and the web build check were stopped before any reported; nothing is running, the gate is empty. Whatever they edited is uncommitted in the t976, t979 and t981 trees; the F24 and F23 reports were not written. Campaign spend: failures $41.61, partials $35.23 (priced rows), and the 11 runs at or near the $5 cap made $53.99 of it.
+- Outcome: nothing resumes, and no paid run starts, until the user says so.
 
 ## Open Questions
 
