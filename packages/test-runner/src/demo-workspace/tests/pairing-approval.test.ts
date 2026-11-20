@@ -20,8 +20,10 @@ test("the ordinary pairing dialog confirms the matching browser without a second
   };
   const page = {
     bringToFront: async () => undefined,
-    getByRole: (_role: string, options: { name: string }) => {
-      assert.equal(options.name, "A browser or app wants to connect");
+    getByRole: (_role: string, options: { name: RegExp }) => {
+      assert.match("Chrome on Windows wants to connect", options.name);
+      assert.match("A browser wants to connect", options.name);
+      assert.doesNotMatch("Connected browsers", options.name);
       return dialog;
     }
   } as unknown as Parameters<typeof approvePairingInPanel>[0];

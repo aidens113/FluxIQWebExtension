@@ -12,8 +12,11 @@
  * - `watch-redesign` -- the listing page was redesigned: Add to Watchlist is
  *   gone, a heart labelled Save item sits on the photo, and Save this seller
  *   stands where the watch button stood.
+ * - `browser-check-first` -- the bot check stops the very first results page
+ *   rather than the fourth, and lets the visitor on by itself after five
+ *   seconds (t968).
  */
-export const auctionModes = ["baseline", "grid-view", "feedback-survey", "watch-redesign"] as const;
+export const auctionModes = ["baseline", "grid-view", "feedback-survey", "watch-redesign", "browser-check-first"] as const;
 
 export type AuctionMode = (typeof auctionModes)[number];
 

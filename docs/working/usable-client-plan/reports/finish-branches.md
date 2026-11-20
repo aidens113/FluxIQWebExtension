@@ -98,3 +98,23 @@
   authority_unavailable until the service gains a node producer.
   - Checks (worker, ordinary slots, no typecheck by rule): 5 folders, 44 files, 463/463; related engine 636/636; related
     framework 4136 passed, 1 skipped; audit passed (559 warnings, 909 baselined).
+- Dev merge with t963, t964 and t965 (MERGE_HEAD 71d25f484). An Opus worker resolved 10 files and 16 conflict blocks
+  (`t905-merge-judge.md`): the judge summary carries both t963's trail (how the result was got, never capped) and t905's
+  resultEvidence (which pages make up the result, with coverage). The trail sits right after the question, per t965's
+  cache rule. When a request does not fit, window fitting summarises resultEvidence before the trail. The new-evidence
+  digest still leaves the trail out. Checks: folder run over result-verification and answer-first 375 files / 2783 passed;
+  related runtime 1224 passed; related framework 3026 passed, 1 skipped; markers none; audit passed. I corrected the stale
+  "latest few" comment on `looked` in flow-less/types.ts (looks are never cut).
+- Fitting-order test (Sonnet, `t905-fitting-order-test.md`): 5 cases; the observed order matches the resolved order exactly. 110/110 in flow-less.
+- Acceptance setup: Core libraries rebuilt (the Lab refused a stale Core) and `pnpm install` in the t905 Core tree (dev's new
+  `stripe` dependency was missing, so the web panel build failed). Setup only, not a t905 defect.
+- The first hubs proof (run-mwop7kt3) answered right on all 4 attempts, but every continuation was refused: attempt 1 saved
+  nothing. Opus traced it (`t905-continuation.md`): t905 commit 280c4bdad compared a list read's recorded form
+  (`ranWith`, which the web domain keeps as written) with the resolved plan node, so every handle-based list read was refused
+  at save. The fix compares written, recorded and saved reads exactly, with a structural check when the read was recorded
+  as written. The new case fails before the fix and passes after; related 1720/1720; audit passed.
+- Proofs, provider-free, `--attempts 4`, both `passed`, every continuation held by digest (I read both reports):
+  - hubs run-mwor31fc-9ada97a9: explore 12 calls, then run_flow with 1 judge call each.
+  - professional-network notes-back run-mworcm4i-076e33b1: explore 15 calls, repair 7, run_flow 1, run_flow 0.
+- Open, separate defect: hubs replays still spend one judge call each (`flow_not_proven`, then `check_cleared`). The cause is a
+  person-cleared traffic screen being read as a replay deviation in `completion/replay-stands.ts`.

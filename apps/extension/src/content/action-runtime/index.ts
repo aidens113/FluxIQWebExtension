@@ -7,6 +7,7 @@ export { captureSnapshotForResponse } from "./capture-snapshot-for-response";
 export { challengeIn, robotCheckIn } from "./challenge-evidence";
 export { dispatchClickGesture } from "./click-gesture";
 export { actedClock } from "./acted-at";
+export { actMarkSender } from "./act-mark";
 export { executeAction } from "./execute-action";
 export { waitUntil } from "./waits";
 export { opensElsewhere, watchActionNavigation } from "./navigation-watch";

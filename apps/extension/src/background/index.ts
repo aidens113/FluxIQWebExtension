@@ -2,6 +2,7 @@ import { BUILD_IDENTITY_MESSAGE } from "../shared/build-identity";
 import { RUNTIME_MESSAGES } from "../shared/constants";
 import { browserDescriptor } from "../shared/browser";
 import type { ConnectRequest, ExtensionStatus, RecordingEventPayload } from "../shared/protocol";
+import { joinsPendingConnect } from "./connect/pending";
 import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
 import { currentOwnPageAddresses, isOwnPage, isOwnPageTab, tabReads } from "./tab-gate";
@@ -203,9 +204,11 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
     // The direct-requests choice changes only where the policy Core gave this
     // connection allows it (Core's default until it has given one).
     const settings = { ...stored, ...requested, requestsEnabled: requestsChoice(stored.requestsEnabled, requested.requestsEnabled, manager.currentCapturePolicy()) };
+    // A second request for the connection already under way joins it, so the approval code it shows stands (t968, `connect/pending/`).
+    const joins = joinsPendingConnect(manager.status().connectionState, stored, requested, enrolmentTicket);
     await writeSettings(settings);
     manager.updateSettings(await readSettings());
-    await manager.connect(enrolmentTicket === undefined ? {} : { enrolmentTicket });
+    if (!joins) await manager.connect(enrolmentTicket === undefined ? {} : { enrolmentTicket });
     void syncReconnectWatchdog(manager);
     return { ok: true, status: manager.status() };
   }
