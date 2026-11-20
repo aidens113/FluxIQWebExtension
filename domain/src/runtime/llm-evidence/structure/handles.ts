@@ -49,6 +49,7 @@
 // so a later attempt, another Flow or a restarted process does not depend on it.
 
 import type { WebAutomationExtractField, WebAutomationExtractListRequest } from "../../../actions/extraction";
+import { webAutomationExtractListKey } from "../../../output-nodes";
 import { present } from "../present";
 
 /** How many handles are retained at once. A convenience for one authoring session, not a store. */
@@ -111,8 +112,25 @@ export type WebLlmExtractionBinding = {
   oneRecord?: true;
 };
 
+/**
+ * A binding as a detection retains it: the binding, and the container the
+ * detection found the list in when it named one. The container is part of the
+ * list's identity (`webLlmExtractionListKey`) with the item selector and the
+ * frame, and is kept beside the binding rather than in it, so a binding written
+ * where no container is known stays complete as it is.
+ */
+export type WebLlmExtractionBindingRetained = WebLlmExtractionBinding & { container?: string; listKey?: string };
+
+/**
+ * A binding as it resolves: with the key of the list it names, which two
+ * detections of one redrawn list share and two lists do not. Made when the
+ * binding is retained, never read from the model, a handle or a row; a read of
+ * the list carries it on its answer (invariant I3).
+ */
+export type WebLlmExtractionBindingKeyed = WebLlmExtractionBinding & { container?: string; listKey: string };
+
 export type WebLlmExtractionHandleResolution =
-  | { ok: true; binding: WebLlmExtractionBinding }
+  | { ok: true; binding: WebLlmExtractionBindingKeyed }
   | { ok: false; code: "unknown_handle" | "stale_handle" };
 
 /** The per-runtime store. `reserve` names a handle before its packet is sized; `retain` binds it once the packet is final. */
@@ -120,7 +138,7 @@ export type WebLlmExtractionHandles = {
   reserve(): string;
   /** A handle a saved step names, perhaps from before a restart: `reserve` never issues its number, so it cannot come to name another list. */
   saw(handle: string): void;
-  retain(scope: WebLlmExtractionHandleScope, binding: WebLlmExtractionBinding): void;
+  retain(scope: WebLlmExtractionHandleScope, binding: WebLlmExtractionBindingRetained): void;
   resolve(scope: WebLlmExtractionHandleScope, handle: unknown): WebLlmExtractionHandleResolution;
   /** Whether any handle this store still knows of, kept or let go, was issued for this project and Flow. */
   issuedFor(scope: WebLlmExtractionHandleScope): boolean;
@@ -150,11 +168,11 @@ const REMEMBERED_LIST_KEYS = 64;
 
 export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
   let reserved = 0;
-  const retained = new Map<string, { scope: string; binding: WebLlmExtractionBinding }>();
+  const retained = new Map<string, { scope: string; binding: WebLlmExtractionBindingKeyed }>();
   const letGo = new Map<string, string>();
   const lists = new Map<string, Map<string, WebAutomationExtractField>>();
   const records = new Map<string, string>();
-  const listKey = (scope: WebLlmExtractionHandleScope, item: string, frameId: number | undefined): string => `${scopeKey(scope)}\0${frameId ?? 0}\0${item}`;
+  const listSlot = (scope: WebLlmExtractionHandleScope, item: string, frameId: number | undefined): string => `${scopeKey(scope)}\0${frameId ?? 0}\0${item}`;
   const answersTo = (key: string, fields: Record<string, WebAutomationExtractField>): void => {
     const list = lists.get(key) ?? new Map<string, WebAutomationExtractField>();
     lists.delete(key);
@@ -192,7 +210,7 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
     retain(scope, binding) {
       if (!HANDLE_PATTERN.test(binding.handle) || retained.has(binding.handle)) throw new Error("extraction handle was not reserved for this binding");
       retained.set(binding.handle, { scope: scopeKey(scope), binding: copyBinding(binding) });
-      answersTo(listKey(scope, binding.extractList.item, binding.frameId), binding.extractList.fields);
+      answersTo(listSlot(scope, binding.extractList.item, binding.frameId), binding.extractList.fields);
       for (const [oldest, entry] of retained) {
         if (retained.size <= RETAINED_EXTRACTION_HANDLES) break;
         forget(oldest, entry.scope);
@@ -210,10 +228,10 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
       return [...retained.values()].some((entry) => entry.scope === key) || [...letGo.values()].includes(key);
     },
     wrote(scope, request, frameId) {
-      answersTo(listKey(scope, request.item, frameId), request.fields);
+      answersTo(listSlot(scope, request.item, frameId), request.fields);
     },
     ownList(scope, item, frameId) {
-      const list = lists.get(listKey(scope, item, frameId));
+      const list = lists.get(listSlot(scope, item, frameId));
       return list === undefined ? undefined : structuredClone(Object.fromEntries(list));
     },
     elementRecord(scope, named, binding) {
@@ -256,15 +274,27 @@ function scopeKey(scope: WebLlmExtractionHandleScope): string {
   return `${scope.projectId}\0${scope.flowId}`;
 }
 
-/** A copy, so neither the tool that bound it nor the resolver that reads it can change what the handle means. */
-function copyBinding(binding: WebLlmExtractionBinding): WebLlmExtractionBinding {
-  return present<WebLlmExtractionBinding>({
+/** A copy, so neither the tool that bound it nor the resolver that reads it can change what the handle means; keyed. */
+function copyBinding(binding: WebLlmExtractionBindingRetained): WebLlmExtractionBindingKeyed {
+  return present<WebLlmExtractionBindingKeyed>({
     handle: binding.handle,
     location: binding.location,
     frameId: binding.frameId,
     frameUrlPath: binding.frameUrlPath,
     extractList: structuredClone(binding.extractList),
     itemCount: binding.itemCount,
-    oneRecord: binding.oneRecord
+    oneRecord: binding.oneRecord,
+    container: binding.container,
+    listKey: binding.listKey ?? webLlmExtractionListKey(binding)
   });
+}
+
+/**
+ * The key of the list a binding names: a stable digest of its item selector,
+ * container and frame path (`output-nodes/extract-list/list-key.ts`). Two
+ * detections of one list that redrew between them give one key, two different
+ * lists give two, and a list in another frame is another list.
+ */
+export function webLlmExtractionListKey(binding: Pick<WebLlmExtractionBindingRetained, "extractList" | "container" | "frameId" | "frameUrlPath">): string {
+  return webAutomationExtractListKey({ item: binding.extractList.item, container: binding.container, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath });
 }

@@ -17,7 +17,7 @@
 import { webAutomationExtractionConditionKeptValuesValue, type WebAutomationExtractionConditionKeptValues } from "./kept-values";
 import { webAutomationExtractionConditionSeenValue, type WebAutomationExtractionConditionSeen } from "./seen-values";
 import { isWebAutomationExtractFieldKey } from "./field-key";
-import { webAutomationExtractionListContinuesValue, type WebAutomationExtractionListContinues } from "./list-continues";
+import { webAutomationExtractionListContinuesValue, webAutomationExtractionPlaceValue, type WebAutomationExtractionListContinues, type WebAutomationExtractionPlace } from "./list-continues";
 import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
 import { webAutomationExtractionRejectedMarksValue, type WebAutomationExtractionRejectedMarks } from "./rejected-marks";
 import { webAutomationExtractionRejectedSamplesAloneValue, webAutomationExtractionRejectedSamplesValue, webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectedRow, type WebAutomationExtractionRejectionObservation } from "./rejected-samples";
@@ -120,6 +120,15 @@ export type WebAutomationExtractionSummary = {
    * so a page build that predates it still sends a summary that arrives whole.
    */
   listContinues?: WebAutomationExtractionListContinues | undefined;
+  /**
+   * Where in its list this read was, as the page's pager says it: a page number
+   * (numbered or next-link paging), an offset or a cursor (load-more paging)
+   * (`./list-continues.ts`). Absent where the pager says nothing, and never
+   * counted from the rows. Optional, so a page build that predates it still sends
+   * a summary that arrives whole, and one that is malformed is dropped alone: a
+   * place is evidence beside the read, never a reason to lose the read.
+   */
+  place?: WebAutomationExtractionPlace | undefined;
   /**
    * Rows whose own text-disclosure control the read pressed before reading
    * them (every read unless `discloseText: false`, `./request.ts`): kept rows
@@ -398,6 +407,8 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // Whether the list goes on past a read of one page: two closed words, held to the rule every word here is.
   const listContinues = summary.listContinues === undefined ? undefined : webAutomationExtractionListContinuesValue(summary.listContinues);
   if (summary.listContinues !== undefined && listContinues === undefined) return undefined;
+  // Where the pager says the read was: dropped alone when unreadable, like the marks.
+  const place = webAutomationExtractionPlaceValue(summary.place);
   // The rows the read pressed open, held to the rule every count is.
   const disclosedRows = countValue(summary.disclosedRows);
   if (summary.disclosedRows !== undefined && disclosedRows === undefined) return undefined;
@@ -425,6 +436,7 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(order !== undefined ? { order } : {}),
     ...(earlierPageRepeats !== undefined ? { earlierPageRepeats } : {}),
     ...(listContinues !== undefined ? { listContinues } : {}),
+    ...(place !== undefined ? { place } : {}),
     ...(disclosedRows !== undefined ? { disclosedRows } : {})
   };
 }

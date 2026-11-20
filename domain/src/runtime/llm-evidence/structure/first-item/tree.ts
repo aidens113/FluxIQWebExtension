@@ -34,6 +34,8 @@ export type WebLlmPageTree = {
   addressed(selector: string): WebLlmTreeNode | undefined;
   /** The element's listed children, in document order. */
   children(node: WebLlmTreeNode): readonly WebLlmTreeNode[];
+  /** The element's listed parent, or `undefined` for a root. */
+  parent(node: WebLlmTreeNode): WebLlmTreeNode | undefined;
 };
 
 /** The tree of a capture's own document. */
@@ -44,6 +46,7 @@ export function webLlmPageTree(binding: WebLlmSnapshotBinding): WebLlmPageTree {
   }
   const childrenOf = new Map<string, WebLlmTreeNode[]>();
   const bySelector = new Map<string, WebLlmTreeNode[]>();
+  const nodeOf = new Map<string, WebLlmTreeNode>();
   for (const element of byHandle.values()) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
@@ -56,6 +59,7 @@ export function webLlmPageTree(binding: WebLlmSnapshotBinding): WebLlmPageTree {
       selector
     };
     listed(bySelector, selector).push(node);
+    nodeOf.set(element.target, node);
     if (element.parent !== undefined && byHandle.has(element.parent)) listed(childrenOf, element.parent).push(node);
   }
   return {
@@ -65,6 +69,9 @@ export function webLlmPageTree(binding: WebLlmSnapshotBinding): WebLlmPageTree {
     },
     children(node) {
       return childrenOf.get(node.element.target) ?? [];
+    },
+    parent(node) {
+      return node.element.parent === undefined ? undefined : nodeOf.get(node.element.parent);
     }
   };
 }

@@ -16,9 +16,10 @@ const made = (...ids: string[]) => ids.map((callId) => ({ callId, toolId: "core.
 
 const RESULTS = 'URL ~/search?q=usb+c+hub\nt30 clickable "Free shipping"\nt31 field placeholder "Max" =""\nt32 clickable "OK"\nt33 clickable "Price ↑"\nt40 link "Keelson USB C Hub 7 in 1" same href';
 
-test("a script is registered for the task, with a chat turn for each of its two attempts", () => {
+test("a script is registered for the task, with a chat turn and judge replies for each of its four attempts", () => {
   assert.equal(SCRIPT.taskId, "crossborder-marketplace-free-hubs-under-ten");
-  assert.equal(SCRIPT.replies.panel_command?.length, 2);
+  assert.equal(SCRIPT.replies.panel_command?.length, 4);
+  assert.ok((SCRIPT.replies.loop_verification?.length ?? 0) >= 8, "two judges for each attempt");
 });
 
 test("it clears what covers the page by the handle the page gives, each only while it shows", () => {
@@ -83,7 +84,7 @@ const completedOn = (callId: string) => ({ callId, toolId: "core.run_node", valu
 test("the variant row has a script too, the plain form is the read's, and a form neither has is refused", () => {
   assert.equal(scriptedModelScriptFor(TIMED).taskId, TIMED);
   assert.equal(scriptedModelScriptFor(TIMED, "timed-check").taskId, TIMED);
-  assert.equal(scriptedModelScriptFor(TIMED).replies.panel_command?.length, 2);
+  assert.equal(scriptedModelScriptFor(TIMED).replies.panel_command?.length, 4);
   assert.throws(() => scriptedModelScriptFor(TIMED, "by-hand"), /no form "by-hand"\. It has plain, timed-check and left-out/u);
   assert.throws(() => scriptedModelScriptFor("crossborder-marketplace-free-hubs-under-ten", "by-hand"), /no form "by-hand"/u);
 });
@@ -137,4 +138,20 @@ test("timed-check: once a look handed the check to the person, the round goes on
 test("timed-check: a hand-off from a press is not a look, and a check still standing after the person is refused", () => {
   assert.throws(() => timedForm()(HOME, [completedOn("dismiss-welcome")]), /from dismiss-welcome, which is not a look/u);
   assert.throws(() => timedForm()(CHECKED, [completedOn("look-at-the-page")]), /still covers the page after the person completed it/u);
+});
+
+const SORTED = 'URL ~/search?q=usb+c+hub&freeShipping=y&maxPrice=10&sort=price_asc\nt90 clickable "Free shipping"\nt99 link "Keelson USB C Hub 7 in 1" same href';
+
+test("reads the current declared view after a check and reports a failed detection with its cause", () => {
+  const done = made("free-shipping", "ceiling-typed", "ceiling-applied", "sort-by-price");
+  const detect = decision(SORTED, done);
+  assert.equal(detect.toolId, "web.detect_repeating_structure");
+  assert.equal((detect.input as { target: string }).target, "t99");
+  const failed = { callId: "detect-hubs", toolId: "web.detect_repeating_structure", value: { ok: false, code: "target_unobserved" } };
+  assert.throws(() => decision(SORTED, [...done, failed]), /detection of the hub cards failed: .*target_unobserved/u);
+});
+
+test("the end of the read does not depend on the shape of a list read's answer: rows kept, listKey and place beside extracted", () => {
+  const read = { callId: "read-hubs", toolId: "core.run_node", value: { answer: "kept", extracted: [], listKey: "k", place: "page=1" } };
+  assert.equal(decision(SORTED, [...made("free-shipping", "ceiling-typed", "ceiling-applied", "sort-by-price"), read]).kind, "complete");
 });

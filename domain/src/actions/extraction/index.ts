@@ -14,3 +14,4 @@ export * from "./retired-paging";
 export * from "./schema";
 export * from "./seen-values";
 export * from "./summary";
+export * from "./value-shown";

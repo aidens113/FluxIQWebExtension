@@ -57,6 +57,7 @@ export type LabPerson = {
    */
   finish(): Promise<void>;
   readonly writeFailure: unknown;
+  readonly answerFailure: Error | undefined;
 };
 
 /**
@@ -95,6 +96,7 @@ export async function startLabPerson(input: LabPersonInput): Promise<LabPerson> 
       }
     })(),
     get writeFailure() { return writeFailure; },
+    get answerFailure() { return simulation.answerFailure; },
   };
 }
 

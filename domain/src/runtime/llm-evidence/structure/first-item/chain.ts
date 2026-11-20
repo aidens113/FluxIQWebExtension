@@ -10,6 +10,7 @@
 // ancestors outside the item, which a walk down from the item cannot see, so
 // it is not read, nor is any compound `./compound.ts` does not read.
 
+import { webLlmDescendants } from "./descendants";
 import { webLlmCompoundMatcher, type WebLlmCompoundSubject } from "./compound";
 import type { WebLlmPageTree, WebLlmTreeNode } from "./tree";
 
@@ -23,7 +24,7 @@ export function webLlmSelectedWithin(tree: WebLlmPageTree, root: WebLlmTreeNode,
   for (const step of steps) {
     const next = new Map<string, WebLlmTreeNode>();
     for (const node of current) {
-      for (const candidate of step.child ? tree.children(node) : descendants(tree, node)) {
+      for (const candidate of step.child ? tree.children(node) : webLlmDescendants(tree, node)) {
         if (step.test(candidate)) next.set(candidate.element.target, candidate);
       }
     }
@@ -99,17 +100,4 @@ function chainTokens(selector: string): string[] | undefined {
   if (quote !== undefined || depth !== 0) return undefined;
   flush();
   return tokens;
-}
-
-/** Every element below the node, in document order. */
-function descendants(tree: WebLlmPageTree, node: WebLlmTreeNode): WebLlmTreeNode[] {
-  const found: WebLlmTreeNode[] = [];
-  const walk = (parent: WebLlmTreeNode): void => {
-    for (const child of tree.children(parent)) {
-      found.push(child);
-      walk(child);
-    }
-  };
-  walk(node);
-  return found;
 }
