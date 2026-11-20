@@ -41,6 +41,18 @@
 //   rethrows unchanged for the command router: nothing says the click landed.
 //   So does one refused before delivery ("Receiving end does not exist"): the
 //   click never reached the page, so a navigation that commits is not its.
+//   And delivery alone is not the press (t968): a command still looking for its
+//   target on a page that then navigated by itself -- auction-marketplace's
+//   "Checking your browser" lets the visitor on after five seconds -- lost its
+//   reply the same way, and until t968 read as a click that navigated, so a
+//   Flow went on from a listing it never opened (`run-mwohvt8n-a57cad8a`, s3).
+//   The command now carries a token the page sends back just before it first
+//   acts (`act-mark/`, `content/action-runtime/act-mark/`); a lost reply
+//   with no mark is a click that was never made, and fails `web.page.changed`,
+//   retryable and `unacted`, so Core makes it on the page the tab went to. A
+//   robot check the page went to by itself is still the person's, said as such
+//   and unacted. A caller with no mark channel passes none and is judged as
+//   before.
 // - The listeners go on before the click is sent, because a local page can
 //   commit within milliseconds of the click.
 // - A click that starts no navigation gets NAVIGATION_START_GRACE_MS to start
@@ -129,6 +141,7 @@ import { readLandedPage, type FrameSender, type LandedPageReading } from "./land
 import { landedPath } from "./quoted-path";
 import { checkWaitBudgetMs, clearedCheckWait, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
 import { unloadedUnderDeliveredMessage } from "./navigating-page";
+import type { ActMarkWatch } from "./act-mark";
 import { noteRateLimitedLanding, type RateLimitedLanding } from "./rate-limited-landing";
 import { readRequestedState, type RequestedStateReading } from "./requested-state";
 import { servedStatus, type ServedStatus } from "./served-status";
@@ -225,7 +238,8 @@ export async function sendClickCheckingLanding(
   send: () => Promise<BrowserActionResult>,
   access: LandedTabAccess,
   pace?: OriginPace,
-  frameId: number = TOP_FRAME_ID
+  frameId: number = TOP_FRAME_ID,
+  mark?: ActMarkWatch
 ): Promise<BrowserActionResult> {
   const kind = landingKind(action, frameId);
   if (kind === undefined) return await send();
@@ -242,6 +256,10 @@ export async function sendClickCheckingLanding(
     } catch (error) {
       const verdict = await judgeLanding(action, tabId, watch, access, pressed, "click");
       if (verdict === undefined) throw error;
+      // A delivered press the page never marked was never made: the page went by itself (t968, header).
+      if (mark !== undefined && unloadedUnderDeliveredMessage(error) && !(await mark.settle())) {
+        return workerActionResult(action, watch.startedAt, wentBeforeActOutcome(verdict));
+      }
       if (verdict.kind === "failed") {
         const failed = workerActionResult(action, watch.startedAt, verdict.outcome);
         return verdict.wait ? clickAfterClearedCheck(failed, verdict.wait) : failed;
@@ -334,6 +352,11 @@ async function sendStateCheckingLanding(
   } finally {
     watch.stop();
   }
+}
+
+/** Whether `action` is a press whose lost reply is judged by its landing, and so carries an act mark (t968). */
+export function pressJudgedByLanding(action: BrowserActionCommand, frameId: number = TOP_FRAME_ID): boolean {
+  return landingKind(action, frameId) === "press";
 }
 
 /**
@@ -668,6 +691,30 @@ function navigatedBeforeAnsweringOutcome(): WorkerActionOutcome {
     status: "succeeded",
     message: "The click navigated its page before it could answer.",
     validation: { status: "passed", expected: expectedLanding("click"), actual: "the click navigated its page before it could answer, and the page it landed on loaded" }
+  };
+}
+
+/**
+ * A press whose page went before the press was made (t968): the command was
+ * delivered, the page never marked an act, and its reply was lost to a
+ * navigation the page made by itself. Unacted either way, so Core makes the
+ * press again on the page the tab went to. A robot check that page is, and
+ * that a person must answer, is the person's, said as a check the page went to;
+ * anything else is `web.page.changed`, retryable.
+ */
+function wentBeforeActOutcome(verdict: LandingVerdict): WorkerActionOutcome {
+  const expected = expectedLanding("click");
+  const check = verdict.kind === "failed" && verdict.outcome.failure?.code === WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED;
+  if (check) {
+    const actual = "the page went to a robot check by itself before the click was made, which only a person can answer";
+    return { status: "failed", message: "The page went to a robot check by itself before the click was made.", validation: { status: "failed", expected, actual }, failure: { ...navigationChallengeFailure(expected, actual), effect: "unacted" } };
+  }
+  const actual = "the page navigated by itself before the click was made, so the click was not made";
+  return {
+    status: "failed",
+    message: "The page navigated by itself before the click was made.",
+    validation: { status: "failed", expected, actual },
+    failure: { ...workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED, expected, actual), effect: "unacted" }
   };
 }
 

@@ -28,11 +28,11 @@ function selections(): Selection[] {
   });
 }
 
-test("the manifest is a valid scenario: a bid, seven secondary workflows, three variants, every row judged on succeeding", () => {
+test("the manifest is a valid scenario: a bid, seven secondary workflows, four variants, every row judged on succeeding", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
   assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["watch-endings", "kestrel-auctions", "remove-watched-accessories", "cheap-accessories", "save-mark-ii-sellers", "buy-it-now-quote", "lens-hood-seller-shop"]);
-  assert.deepEqual([manifest, ...manifest.workflows!].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [[], ["watch-redesign"], ["grid-view", "feedback-survey"], [], [], [], [], []]);
+  assert.deepEqual([manifest, ...manifest.workflows!].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [[], ["watch-redesign"], ["grid-view", "feedback-survey"], [], [], [], [], ["browser-check-first"]]);
   for (const selection of selections()) {
     const { expected } = resolveScenarioWorkflow(manifest, selection);
     assert.ok((expected.finalState ?? []).length > 0, JSON.stringify(selection));
@@ -104,6 +104,15 @@ test("the fourth results page of a session is sent to the bot check, which then 
   assert.match(body(get(state, "splashui/challenge", "ru=https://elsewhere.example/")), /const returnTo = "\/scenarios\/auction-marketplace\/"/u);
   state = scenario.mutate(state, "pass-challenge", {});
   assert.equal(get(state, "sch/i.html", "_nkw=kestrel+35&LH_Auction=1")?.status, 200);
+});
+
+test("under browser-check-first the bot check stops the very first results page, once (t968)", () => {
+  let state = armed("browser-check-first");
+  const stopped = get(state, "sch/i.html", "_nkw=kestrel+35+lens+hood");
+  assert.equal(stopped?.status, 302);
+  assert.match(stopped?.headers?.location ?? "", /splashui\/challenge\?ru=%2Fscenarios%2Fauction-marketplace%2Fsch%2Fi\.html/u);
+  state = scenario.mutate(state, "pass-challenge", {});
+  assert.equal(get(state, "sch/i.html", "_nkw=kestrel+35+lens+hood")?.status, 200);
 });
 
 test("class names follow the lab seed, card ids change on every results page, and the text does not", () => {

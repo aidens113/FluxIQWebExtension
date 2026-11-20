@@ -1,8 +1,9 @@
 // One row of the state-aware recovery plan's acceptance matrix, as data.
 //
 // The plan (`docs/working/state-aware-recovery-plan.md`, "Acceptance matrix")
-// names thirteen behaviours a Flow must show on the realistic scenarios. Row 12
-// is a paid proof and is not here: every row in this table runs provider-free,
+// names thirteen behaviours a Flow must show on the realistic scenarios, and
+// t968 added a fourteenth: a press the page never answered is not a success.
+// Row 12 is a paid proof and is not here: every row in this table runs provider-free,
 // and a run that would call a model fails its row rather than calling one.
 //
 // A row is one or more cases. A case is one saved Flow, one switch on the site
@@ -43,7 +44,8 @@ export type RecoveryCheckId =
   | "worker-restart"
   | "retries-absorbed"
   | "row-reacquired"
-  | "deliberate-stop";
+  | "deliberate-stop"
+  | "act-effect-honest";
 
 /** What the site's state endpoint must show after the run: counts only, read from `/__control/final-state`. */
 export type RecoverySiteExpectation =
@@ -54,7 +56,9 @@ export type RecoverySiteExpectation =
   /** Photo social: exactly these posts liked and saved, each liked once and saved once, and no other like, save or collection change. */
   | Readonly<{ kind: "photo-liked-saved"; postCodes: readonly string[] }>
   /** Bigbox: exactly these cart lines, by product and quantity, and the shopper's store when it matters. */
-  | Readonly<{ kind: "bigbox-cart"; lines: readonly Readonly<{ productId: string; qty: number }>[]; storeId: string | null }>;
+  | Readonly<{ kind: "bigbox-cart"; lines: readonly Readonly<{ productId: string; qty: number }>[]; storeId: string | null }>
+  /** Auction marketplace: the bot check passed once, and no bid, purchase or watch made. */
+  | Readonly<{ kind: "auction-check-passed" }>;
 
 export type RecoveryMatrixCase = Readonly<{
   /** `1`, `4a`, `13b`: the row number and, where a row has several, a letter. */
@@ -98,7 +102,7 @@ export type RecoveryMatrixCase = Readonly<{
 export type RecoveryReacquireExpectation = Readonly<{ step: string; source: string; passes: number; reacquiredPasses: number }>;
 
 export type RecoveryMatrixRow = Readonly<{
-  /** The matrix row number, 1-13 (12 is the paid proof and is never in this table). */
+  /** The matrix row number, 1-14 (12 is the paid proof and is never in this table). */
   row: number;
   /** The plan's words for the row. */
   scenario: string;

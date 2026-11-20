@@ -10,6 +10,15 @@ import type { AuctionState, Listing } from "./types.js";
 /** Results pages a visitor may load before the bot check stops them, once. */
 const CHALLENGE_AFTER_VIEWS = 3;
 
+/**
+ * Under `browser-check-first` the bot check stops the very first results page
+ * (t968): the recovery matrix's case for a press made while a check that lets
+ * the visitor on by itself stands in front of the page.
+ */
+function challengeAfterViews(state: AuctionState): number {
+  return state.mode === "browser-check-first" ? 0 : CHALLENGE_AFTER_VIEWS;
+}
+
 /** The seller description's frame is served from the second origin and may be framed by the marketplace on the first. */
 const DESCRIPTION_CSP = "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors http://127.0.0.1:*";
 
@@ -26,8 +35,9 @@ function liveListing(id: string | undefined): Listing | undefined {
  * Every marketplace address below the home page.
  *
  * - `sch/i.html` is the results page. Serving one counts it, and the fourth
- *   results page of a session is sent to the bot check instead, which returns
- *   the visitor to the address they asked for once passed.
+ *   results page of a session (the first, under `browser-check-first`) is sent
+ *   to the bot check instead, which returns the visitor to the address they
+ *   asked for once passed.
  * - `itm/<item number>` is a listing, `desc/<item number>` its seller's
  *   description, `img/<item number>/<n>.svg` its photographs,
  *   `bfl/viewbids/<item number>` its bid history.
@@ -41,7 +51,7 @@ function liveListing(id: string | undefined): Listing | undefined {
 export function routeAuctionMarketplace(state: AuctionState, request: ScenarioRouteRequest, context: RenderContext): ScenarioRouteResponse | undefined {
   const { subpath, query } = request;
   if (subpath === RESULTS_SUBPATH) {
-    if (!state.challengePassed && state.resultsViews >= CHALLENGE_AFTER_VIEWS) {
+    if (!state.challengePassed && state.resultsViews >= challengeAfterViews(state)) {
       const back = `${MARKET_ROOT}${RESULTS_SUBPATH}?${query.toString()}`;
       return { status: 302, headers: { location: `${MARKET_ROOT}${CHALLENGE_SUBPATH}?ru=${encodeURIComponent(back)}` } };
     }

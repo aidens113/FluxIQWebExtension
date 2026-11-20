@@ -16,7 +16,8 @@ test("an empty selection, an unknown argument, a bad id and row 12 are refused",
   assert.throws(() => parseRecoveryMatrixCommand([]), /Usage: lab recovery-matrix/);
   assert.throws(() => parseRecoveryMatrixCommand(["--scenario", "bigbox-retail"]), /Unknown recovery-matrix argument/);
   assert.throws(() => parseRecoveryMatrixCommand(["--case", "row-1"]), /--case takes a case id/);
-  assert.throws(() => parseRecoveryMatrixCommand(["--row", "14"]), /from 1 to 13/);
+  assert.throws(() => parseRecoveryMatrixCommand(["--row", "15"]), /from 1 to 14/);
+  assert.deepEqual(parseRecoveryMatrixCommand(["--row", "14"]), { command: "recovery-matrix", list: false, caseIds: [], rows: [14], ready: false });
   assert.throws(() => parseRecoveryMatrixCommand(["--row", "12"]), /paid proof/);
   assert.throws(() => parseRecoveryMatrixCommand(["--case"]), /needs a value/);
 });

@@ -54,3 +54,13 @@ test("photo likes and saves must be exactly the expected posts, each changed onc
   const other = judgeSiteState(expectation, { liked: ["A1", "B2", "C3"], saved: ["A1"], activity: ["like", "like", "like", "save", "collection-toggle"] });
   assert.deepEqual(other.reasons, ["posts C3 were liked and should not have been", "posts B2 were not saved", "the site received 3 like change(s) where 2 were expected", "the site received 1 save change(s) where 2 were expected", "the site received 1 collection change(s) although the case asks only for likes and saves"]);
 });
+
+test("an auction check case holds once the bot check was passed and nothing was bid, bought or watched (t968)", () => {
+  const held = judgeSiteState({ kind: "auction-check-passed" }, { activity: ["dismissed app promotion", "passed challenge"], bids: [], purchases: [], watchToggleTimes: [] });
+  assert.equal(held.held, true);
+  assert.equal(held.observed.checkPassed, 1);
+  const never = judgeSiteState({ kind: "auction-check-passed" }, { activity: [], bids: [{}], purchases: [], watchToggleTimes: [] });
+  assert.equal(never.held, false);
+  assert.equal(never.reasons.length, 2);
+  assert.equal(never.duplicatedActs, 1);
+});

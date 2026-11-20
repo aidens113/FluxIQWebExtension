@@ -15,6 +15,8 @@ import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { sendClickCheckingLanding as sendWithAccess } from "../click-landing";
 import type { LandedTabAccess } from "../landed-check-wait";
+import { ACT_MARK_MESSAGE } from "../../shared/act-mark-message";
+import { watchActMark, type ActMarkWatch } from "../act-mark";
 
 /** Every page these rows land on answers that it is no robot check; the rows about checks name their own access. */
 const NO_CHECK: LandedTabAccess = {
@@ -571,4 +573,66 @@ for (const lostReply of [false, true]) test(`a cleared check survives a refused 
   assert.equal(result.status, "failed");
   assert.equal(result.failure?.code, "web.navigation.unexpected");
   assert.equal(typeof result.checkWait?.waitedMs, "number");
+});
+
+// t968: a press whose reply is lost to its page unloading counts as made only if
+// the page marked an act before it went (`../act-mark/`). In
+// `run-mwohvt8n-a57cad8a` auction-marketplace's "Checking your browser" page let
+// the visitor on by itself while a click still looked for its target, and the
+// click was reported as one that navigated.
+
+/** A message channel the act mark arrives on, and the watch on it for one command. */
+function markChannel(token: string): { mark: ActMarkWatch; post(): void } {
+  const listeners = new Set<(message: unknown, sender: chrome.runtime.MessageSender) => boolean | void>();
+  const mark = watchActMark(TAB_ID, 0, { addListener: (listener) => void listeners.add(listener), removeListener: (listener) => void listeners.delete(listener) }, token)!;
+  return { mark, post: () => { for (const listener of [...listeners]) listener({ type: ACT_MARK_MESSAGE, token }, { tab: { id: TAB_ID } as chrome.tabs.Tab, frameId: 0 }); } };
+}
+
+test("a click whose page went by itself before the press was marked fails web.page.changed, unacted and retryable", async (t) => {
+  t.mock.method(Date, "now", () => 5_000);
+  const browser = installBrowser(t, { "doc-results": 200 });
+  const { mark } = markChannel("token-1");
+  const result = await sendWithAccess(CLICK, TAB_ID, async () => {
+    // The check page's own timer takes the tab on; the content script never pressed.
+    land(browser, `${ORIGIN}/sch/i.html?_nkw=hood`, "doc-results");
+    throw new Error(CHANNEL_CLOSED_ERROR);
+  }, NO_CHECK, undefined, 0, mark);
+  mark.stop();
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.page.changed");
+  assert.equal(result.failure?.retryable, true);
+  assert.equal(result.failure?.effect, "unacted");
+  assert.deepEqual(result.validation, { status: "failed", expected: EXPECTED, actual: "the page navigated by itself before the click was made, so the click was not made" });
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
+});
+
+test("a click whose page marked the press before it went still stands as one that navigated", async (t) => {
+  t.mock.method(Date, "now", () => 5_000);
+  const browser = installBrowser(t, { "doc-listing": 200 });
+  const { mark, post } = markChannel("token-2");
+  const result = await sendWithAccess(CLICK, TAB_ID, async () => {
+    post();
+    land(browser, `${ORIGIN}/itm/176623309961`, "doc-listing");
+    throw new Error(CHANNEL_CLOSED_ERROR);
+  }, NO_CHECK, undefined, 0, mark);
+  mark.stop();
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.message, "The click navigated its page before it could answer.");
+});
+
+test("a page that went by itself to a check only a person can answer hands it to the person, unacted", async (t) => {
+  t.mock.method(Date, "now", () => 5_000);
+  const browser = installBrowser(t, { "doc-check": 200 });
+  const personCheck: LandedTabAccess = { send: <T>() => Promise.resolve({ challenge: "captcha", robotCheck: "person_only" } as T), settle: () => Promise.resolve() };
+  const { mark } = markChannel("token-3");
+  const result = await sendWithAccess(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/challenge`, "doc-check");
+    throw new Error(CHANNEL_CLOSED_ERROR);
+  }, personCheck, undefined, 0, mark);
+  mark.stop();
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.intervention.required");
+  assert.equal(result.failure?.effect, "unacted");
+  assert.equal(result.validation.status, "failed");
+  assert.match(result.validation.status === "failed" ? result.validation.actual : "", /went to a robot check by itself before the click was made/u);
 });

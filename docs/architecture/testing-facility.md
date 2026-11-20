@@ -737,6 +737,26 @@ instance's process lifecycle. Unlike disposable `isolated` and `clone`, it
 retains local state. Unlike `demo:record`/`demo:run`, it uses the ordinary
 scenario runner and produces a new attested evidence bundle per invocation.
 
+### The extension is told the run's Core before its panel opens
+
+Every Lab browser session (`run-scenario/browser-session/launch-extension-session.ts`: `lab run`, saved-Flow
+replays, recovery-matrix cases) opens the extension's side panel as its control page. While the extension
+is unpaired, the panel's getting-started step asks its configured web address for FluxIQ's discovery
+document, and a fresh profile's address is the product default, `127.0.0.1:3000`, which the run's network
+guard rightly refuses. So before the panel opens, the session writes the run's own Core and gateway into
+the extension's settings and restarts its worker on them (`preconfigure-run-extension.ts`, with the chat
+check's `extension-chat-check/preconfigure-extension.ts` and `stop-extension-workers.ts`). A page of the
+run's Scenario Lab wakes the new worker. The guard is never loosened. Since 2026-11-16, when the probe
+landed, until t968 every one of these sessions ended before its Flow on that refusal.
+
+The panel then finds the run's Core and sends its connection request by itself. The Lab's own pairing
+request joins that attempt instead of replacing it (`background/connect/pending/` in the extension), and
+the Lab approves the code the extension shows.
+
+`lab recovery-matrix` runs provider-free on its own environment (`scripts/lab/provider-free-run.mjs`): no
+provider key, `FLUXIQ_PROVIDER_KEY_FILES=none`, `FLUXIQ_TEST_ENV_FILES=none`, `FLUXIQ_TEST_TARGET=isolated`.
+A checkout whose `.env.local` holds live keys no longer has to unset them by hand.
+
 ### Replaying a saved Flow
 
 A Flow the created-Flow lane builds is run once, in the invocation that built
