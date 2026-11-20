@@ -151,10 +151,11 @@ import type { ExtractionCheckpoint } from "../../shared/extraction-continuation"
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
-import { assertDisclosed, contentKey, fieldReaders, isRenderedItem, readRecord, recordGaps, type FieldReaders, type ItemRead } from "./item-record";
+import { assertDisclosed, contentKey, fieldReaders, rememberRejected, isRenderedItem, readRecord, recordGaps, type FieldReaders, type ItemRead } from "./item-record";
 import { awaitListComplete, awaitPageComplete } from "./list-wait";
 import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continued-read";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
+import { readPlace, type ExtractionPlace } from "./list-place";
 import { listContinuesPast, type ListContinues } from "./read-coverage";
 import { itemOfferMarks } from "./item-offer";
 import { rejectedSamplesFor } from "./rejected-samples";
@@ -294,6 +295,8 @@ export type ListExtractionOutcome = {
   earlierPageRepeats?: number | undefined;
   /** How the list a read of one page read goes on past it, from the reader's own detection (`read-coverage/`); absent for a read that paged or a list that ended. */
   listContinues?: ListContinues | undefined;
+  /** Where the page's pager says the read was (`list-place/`). */
+  place?: ExtractionPlace | undefined;
   /** Rows whose own text-disclosure control this document's read pressed, present only once one was (`text-disclosure/`). */
   disclosedRows?: number | undefined;
 };
@@ -392,6 +395,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   let revealCutShort = false;
   let paginationStop: PaginationStop | undefined;
   let listContinues: ListContinues | undefined;
+  let place: ExtractionPlace | undefined;
+  let itemsAtStart: Element[] = []; // the list before the read revealed more of it, and the first item returned (`list-place/`)
+  let firstReturned: number | undefined;
   let stillGrowing = false; // whether a read of one page ran out of reveals while its list still grew (`list-wait.ts`)
   // In the modes that move to another page: the content of every item any
   // earlier page showed, kept or not, so a page that shows nothing else is known
@@ -480,6 +486,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(ordered === undefined ? {} : { order: { duplicates: duplicates + ordered.duplicates, unsortable: ordered.unsortable } }),
       ...(repeats === undefined ? {} : { earlierPageRepeats: repeats }),
       ...(listContinues === undefined ? {} : { listContinues }),
+      ...(place === undefined ? {} : { place }),
       ...(disclosedRows > 0 ? { disclosedRows } : {})
     };
   };
@@ -548,6 +555,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       // without scrolling the page a person is looking at.
       // Nor can a read that dedupes or sorts: a duplicate takes no place under
       // the bound, and a sort has to see every row.
+      itemsAtStart = Array.from(document.querySelectorAll(item));
       const completion = await awaitListComplete(item, rejects || order ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline, progress.listRetries);
       revealCutShort = completion === "timed_out";
       stillGrowing = completion === "growing";
@@ -661,6 +669,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         read.set(element, key);
         if (identity !== undefined) identities.add(identity);
         records.push(itemRead.record);
+        firstReturned ??= itemOrdinal;
         thisPage.push(content);
         for (const name of itemRead.missing) missing.add(name);
       } catch (error) {
@@ -736,7 +745,11 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   }
 
   // A read of one page says whether its list visibly goes on past what it read (`read-coverage/`).
-  if (paginate === undefined) listContinues = listContinuesPast(Array.from(document.querySelectorAll(item)), stillGrowing);
+  if (paginate === undefined) {
+    const run = Array.from(document.querySelectorAll(item));
+    listContinues = listContinuesPast(run, stillGrowing);
+    place = readPlace({ item, run, listContinues: listContinues?.kind, itemsAtStart, firstReturned, whole: !resume && order?.sorts !== true });
+  }
   return outcome({ timedOut });
 }
 
@@ -753,28 +766,6 @@ function conditionNotes(seen: (string | null)[], kept: string[][]): () => void {
 /** Whether a throw is a refusal of the whole read, which carries its own failure record, rather than a page fault. */
 function isRefusal(error: unknown): boolean {
   return error instanceof Error && typeof (error as { failure?: unknown }).failure === "object" && (error as { failure?: unknown }).failure !== null;
-}
-
-/** The rejected rows a read may have to fall back to, kept to the same item bound and the same deduplication as the records. */
-function rememberRejected(
-  aside: { records: ExtractedListRecord[]; missing: Set<string>; seen: Set<string>; truncated: boolean } | undefined,
-  itemRead: ItemRead,
-  fields: FieldReaders,
-  deduplicate: boolean,
-  maxItems: number
-): void {
-  if (aside === undefined) return;
-  if (aside.records.length >= maxItems) {
-    aside.truncated = true;
-    return;
-  }
-  if (deduplicate) {
-    const content = contentKey(itemRead.record, fields);
-    if (aside.seen.has(content)) return;
-    aside.seen.add(content);
-  }
-  aside.records.push(itemRead.record);
-  for (const name of itemRead.missing) aside.missing.add(name);
 }
 
 /** Whether the read moves from page to page -- replaced in place or loaded anew -- rather than growing one list. */

@@ -745,6 +745,25 @@ or a detection with no shown page, has no `at`. No value or selector is added. A
 `extractList`, and the node is built from what the handle keeps
 (`plan-resolution/extraction/slot.ts`).
 
+First-item handles and samples use the same captured selector walk, including
+the item itself when a field reads `:scope` or a table cell is its own field
+element. A group selector written as `container > group` resolves only a
+matching direct child of that exact container; a nested matching group or an
+ancestor outside the container cannot supply its heading. A bare group
+selector retains the live reader's nearest matching ancestor behavior.
+Ambiguous or unsupported matches supply neither a guessed sample nor a handle.
+
+A one-page read carries the domain's opaque structural `listKey` separately
+from its conditions, requested fields and transient extraction handle. Its
+optional `place` is observed on the page: the pager's current page, a parameter
+the pager's Next link actually advances, or a proved append offset. A whole,
+unsorted static list has origin `offset=0`, including a read whose conditions
+kept no item while the source list remains present. A resumed, locally sorted,
+growing or virtual window cannot claim that origin merely because no following
+control is shown. Declared feeds, larger row/set counts and positions away
+from the origin retain unknown place when no pager supplies it. No place is
+inferred from row values or from the read's requested page parameter.
+
 **A saved read keeps what its handle stood for.** A handle is a counter in one
 process's store (16 kept), so a saved `extractList` that named only
 `extraction.N` could not assemble after a restart, and numbers restart, so the

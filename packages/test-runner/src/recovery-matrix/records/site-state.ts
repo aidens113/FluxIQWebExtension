@@ -37,7 +37,26 @@ export function judgeSiteState(expectation: RecoverySiteExpectation, state: Read
   if (expectation.kind === "social-confirmed") return socialConfirmed(expectation, state);
   if (expectation.kind === "photo-liked-saved") return photoLikedSaved(expectation, state);
   if (expectation.kind === "auction-check-passed") return auctionCheckPassed(state);
+  if (expectation.kind === "crossborder-checks-passed") return crossborderChecksPassed(expectation, state);
   return bigboxCart(expectation, state);
+}
+
+/**
+ * Crossborder (case 15): the traffic screen was passed as often as the case meets it, none is left waiting, and the
+ * run put nothing in the cart and ordered nothing. A screen passed more often than expected is a results load the
+ * run made again: a step pressed a second time after the person cleared the check.
+ */
+function crossborderChecksPassed(expectation: Extract<RecoverySiteExpectation, { kind: "crossborder-checks-passed" }>, state: Readonly<Record<string, unknown>>): SiteReading {
+  const search = record(state.search);
+  const passed = typeof search?.checksPassed === "number" ? search.checksPassed : 0;
+  const waiting = search?.challenged === true;
+  const cartLines = list(state.cart).length;
+  const orders = list(state.orders).length;
+  const reasons: string[] = [];
+  if (passed !== expectation.checksPassed) reasons.push(`the site's traffic screen was passed ${passed} time(s) where ${expectation.checksPassed} were expected`);
+  if (waiting) reasons.push("the site's traffic screen was still waiting to be passed when the run ended");
+  if (cartLines || orders) reasons.push(`the site holds ${cartLines} cart line(s) and ${orders} order(s) where the case makes none`);
+  return { held: reasons.length === 0, reasons, duplicatedActs: Math.max(0, passed - expectation.checksPassed) + cartLines + orders, observed: { checksPassed: passed, checkWaiting: waiting, cartLines, orders } };
 }
 
 /** Auction marketplace (case 14): the bot check was passed, and the run bid on, bought and watched nothing. */

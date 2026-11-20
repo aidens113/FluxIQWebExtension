@@ -42,7 +42,13 @@
 // - `column`: the cell under the header in the item's table row, matched by
 //   position among the row's cells, which is what survives a column reorder;
 //   colspan is not modelled. A header no cell matches is unreadable, so the
-//   field is never read from the wrong column.
+//   field is never read from the wrong column;
+// - `value` with `shown`: instead of the live value, what the page view prints
+//   of the element after its words, read from the same source the view is
+//   printed from (`item-mark/shown-value.ts`): a select's chosen label or its
+//   option labels, a checkbox's `checked` or `unchecked`, `disabled` (by
+//   attribute, `aria-disabled` or a refusing cursor), `marked` (drawn apart
+//   from the like options beside it). A state that is off reads nothing.
 //
 // Every kind refuses a sensitive control first, and an element inside one too,
 // such as an option of a sensitive select (decision D2): the whole read is
@@ -56,7 +62,7 @@ import { WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR, WEB_AUTOMATION_FAILURE_CODES, we
 import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import type { ExtractFieldReader } from "./field-spec";
-import { flagValue } from "./item-mark";
+import { flagValue, shownValue } from "./item-mark";
 import { recordControlType } from "./record-control";
 import { tightestStatedValue } from "./value-statement";
 import { trackingFreeLinkIdentity } from "./link-identity";
@@ -96,7 +102,7 @@ function readElement(item: Element, name: string, reader: ElementFieldReader, co
     case "link":
       return linkTarget(element, reader.identity);
     case "value":
-      return controlValue(element);
+      return reader.shown === undefined ? controlValue(element) : shownValue(element, reader.shown);
   }
 }
 
