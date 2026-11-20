@@ -387,14 +387,15 @@ test("a condition over a kept column is stored by the key the plan keeps it unde
   assert.deepEqual(webAutomationExtractListIssues(stored), []);
 });
 
-test("a condition by key over a column the declared schema then drops reads that column through its own spec", async () => {
+test("a condition by key over a column the declared schema leaves out of the answer keeps naming that stored column", async () => {
   const instance = runtime();
   const { extraction } = await detect(instance);
 
   // F34's shape: a column kept only to filter by, under a record output that
-  // declares the others. The resolver names the helper by its kept key; the
-  // declared-columns read takes it out of the field map and must turn the
-  // condition back into the column's own read, or the reference dangles.
+  // declares the others. The resolver names the helper by its kept key; since
+  // t975 the declared-columns read keeps it in the field map, stored and
+  // hidden, read as optional, so the condition still names it by key and the
+  // judge's rows carry it.
   const resolved = await resolve(instance, {
     handle: extraction,
     fields: { title: "product-name", stock: "stock-badge" },
@@ -407,8 +408,8 @@ test("a condition by key over a column the declared schema then drops reads that
   const request = webAutomationExtractListRequestValue(resolved.status === "resolved" ? resolved.parameters.extractList : undefined);
   assert.notEqual(request, undefined);
   const declared = webAutomationDeclaredColumnsRead({ schema: { fields: [{ id: "title" }] } }, request!);
-  assert.deepEqual(declared?.request.fields, { title: asKept(NAME) });
-  const { required: _required, ...badgeRead } = BADGE;
-  assert.deepEqual(declared?.request.where, [{ read: badgeRead, is: "absent" }]);
-  assert.deepEqual([...declared!.columns], ["title"]);
+  assert.deepEqual(declared?.request.fields, { title: asKept(NAME), stock: asKept(BADGE) });
+  assert.deepEqual(declared?.request.where, [{ field: "stock", is: "absent" }]);
+  assert.deepEqual([...declared!.columns], ["title", "stock"]);
+  assert.deepEqual(declared?.shown, ["title"]);
 });

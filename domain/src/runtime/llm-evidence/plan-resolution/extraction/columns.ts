@@ -22,7 +22,9 @@
 // **A name nothing answers to is resolved to the nearest column rather than
 // refused** (`output-nodes/extract-list/column-match.ts` says why, and with what signals). What is still
 // refused is a selector, a kind that reads something else, a column two answer
-// to *exactly*, and a name with no plausible candidate at all -- with the
+// to *exactly*, a name with no plausible candidate at all, and a field that
+// reads exactly what another field of the read reads unless it says `sameAs`
+// that field (`sharedColumn`, t975 F23) -- with the
 // position it was refused at.
 //
 // ## Every strict reading is taken before any guess
@@ -54,7 +56,7 @@ import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import { webExtractionMatchedColumn } from "../../../../output-nodes";
 import type { WebPlanValuePath } from "../handle-tokens";
-import type { WebPlanRefusalIssue } from "./refusal-issues";
+import { webPlanBoundedIssues, type WebPlanRefusalIssue } from "./refusal-issues";
 import { webPlanUnknownColumnIssues } from "./unknown-column-issues";
 
 /**
@@ -86,10 +88,21 @@ export type WebExtractionColumnAssumption = {
 
 export type WebExtractionColumnIssue = "web.handle.malformed" | "web.handle.ambiguous" | "web.handle.unknown_field";
 
+/**
+ * Said beside a field refused for reading the very column another field of the
+ * same read reads (`sharedColumn`, t975 F23): a column object's `sameAs`, naming
+ * that other field, keeps both when the two are meant to be one value.
+ */
+export const WEB_EXTRACTION_SAME_AS_HINT = "web.handle.expected.extract_list.same_as";
+
 export type WebExtractionColumns =
   | { ok: true; fields: Record<string, WebAutomationExtractField>; assumed: WebExtractionColumnAssumption[] }
-  /** `issues` only for a name no column answers to: the name, the read's columns, and whether the items changed since the detection (`./unknown-column-issues.ts`, t502). */
-  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[] };
+  /**
+   * `issues` for a name no column answers to: the name, the read's columns, and whether the items changed since the
+   * detection (`./unknown-column-issues.ts`, t502); and for a field reading another field's column: the field, the
+   * field it shares with, and the columns no field reads (`sharedColumn`, t975), with `expected` saying how to keep both.
+   */
+  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[]; expected?: typeof WEB_EXTRACTION_SAME_AS_HINT };
 
 type Detected = Record<string, WebAutomationExtractField>;
 
@@ -116,7 +129,7 @@ export type WebExtractionColumnLook = {
 };
 
 /** The keys a column object may carry beside the ones that name its column. */
-const COLUMN_OBJECT_KEYS: ReadonlySet<string> = new Set(["handle", "location", "key", "field", "column", "header", "attribute", "required", "kind"]);
+const COLUMN_OBJECT_KEYS: ReadonlySet<string> = new Set(["handle", "location", "key", "field", "column", "header", "attribute", "required", "kind", "sameAs"]);
 const COLUMN_NAME_KEYS = ["key", "field", "column"] as const;
 /** An HTML attribute name, as a plan may name one after `@`. */
 const ATTRIBUTE_NAME = /^[A-Za-z_][A-Za-z0-9_.:-]{0,99}$/u;
@@ -160,6 +173,7 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
   }
 
   const kept: Record<string, WebAutomationExtractField> = {};
+  const keptUnder: string[] = [];
   const assumed: WebExtractionColumnAssumption[] = [];
   for (const written of entries) {
     // Every entry is resolved by now -- pass two returns on the first that is
@@ -174,9 +188,54 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
     if (!isWebAutomationExtractFieldKey(under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     if (Object.hasOwn(kept, under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     kept[under] = column.field;
+    keptUnder.push(under);
     if (column.assumed !== undefined) assumed.push(column.assumed);
   }
+  const shared = sharedColumn(entries, keptUnder, kept, detected);
+  if (shared !== undefined) return shared;
   return { ok: true, fields: kept, assumed };
+}
+
+/**
+ * The refusal of a field that reads exactly what another field of the same
+ * read reads -- the same detected column, read the same way -- unless its
+ * column object says `sameAs` that field (t975, F23).
+ *
+ * Run `run-mwounh32-24f9bc6b` (delete-stranger-requests) wrote `fields: {name:
+ * "<name column>", url: ..., mutuals: "<name column>"}`: its `mutuals` was the
+ * person's name, so the read the build judged "zero mutual friends" by held no
+ * mutual-friend count at all, and nothing said so. Two keys for one value is
+ * almost always a column named in the wrong place. The refusal is at the later
+ * field, and its issue names that field, the field it shares with (in the code,
+ * `web.handle.shared_column.with.<field>`), and the detected columns no field
+ * of the read reads, which are where the meant column usually is. The same
+ * element read another way -- its text and its link, `key` and `key@href` -- is
+ * two values, and is not refused.
+ */
+function sharedColumn(entries: readonly Entry[], keptUnder: readonly string[], kept: Readonly<Record<string, WebAutomationExtractField>>, detected: Detected): Extract<WebExtractionColumns, { ok: false }> | undefined {
+  const readBy = new Map<string, string[]>();
+  for (const [index, written] of entries.entries()) {
+    const under = keptUnder[index]!;
+    const reading = JSON.stringify(kept[under]);
+    const earlier = readBy.get(reading) ?? [];
+    readBy.set(reading, [...earlier, under]);
+    const first = earlier[0];
+    if (first === undefined) continue;
+    const sameAs = isJsonRecord(written.entry) ? written.entry.sameAs : undefined;
+    if (typeof sameAs === "string" && earlier.includes(sameAs)) continue;
+    if (sameAs !== undefined) return { ok: false, issue: "web.handle.malformed", path: [...written.at, "sameAs"] };
+    const read = new Set(entries.flatMap((each) => each.column?.ok === true ? [each.column.key] : []));
+    const unread = Object.keys(detected).filter((key) => !read.has(key));
+    const code = `web.handle.shared_column.with.${first}`;
+    return present<Extract<WebExtractionColumns, { ok: false }>>({
+      ok: false,
+      issue: "web.handle.malformed",
+      path: written.at,
+      issues: webPlanBoundedIssues([{ code: code.length <= 100 ? code : "web.handle.shared_column", field: under, valid: unread }]),
+      expected: WEB_EXTRACTION_SAME_AS_HINT
+    });
+  }
+  return undefined;
 }
 
 /**
@@ -229,7 +288,8 @@ function unknownColumn(written: Entry, detected: Detected): Extract<WebExtractio
     ok: false,
     issue: "web.handle.unknown_field",
     path: written.at,
-    issues: name === undefined ? undefined : webPlanUnknownColumnIssues(name, Object.keys(detected), detected)
+    issues: name === undefined ? undefined : webPlanUnknownColumnIssues(name, Object.keys(detected), detected),
+    expected: undefined
   });
 }
 

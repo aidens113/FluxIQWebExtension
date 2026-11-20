@@ -60,7 +60,7 @@ import { webAutomationExtractListRequestRead, webAutomationExtractListRequestVal
 import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
-import { keptWebExtractionColumns, type WebExtractionColumnAssumption, type WebExtractionColumnIssue } from "./columns";
+import { keptWebExtractionColumns, WEB_EXTRACTION_SAME_AS_HINT, type WebExtractionColumnAssumption, type WebExtractionColumnIssue } from "./columns";
 import { keptWebExtractionConditions } from "./conditions";
 import type { WebPlanRefusalIssue } from "./refusal-issues";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
@@ -111,8 +111,8 @@ export type WebExtractionSlotResolution =
  */
 const NEXT_PAGE_INSTEAD = "web.handle.expected.extract_list.next_page";
 
-/** The shape hints a slot refusal may carry beside its reason. */
-type WebExtractionSlotHint = typeof NEXT_PAGE_INSTEAD;
+/** The shape hints a slot refusal may carry beside its reason: paging, or `sameAs` for two fields meant to read one column (`./columns.ts`, t975). */
+type WebExtractionSlotHint = typeof NEXT_PAGE_INSTEAD | typeof WEB_EXTRACTION_SAME_AS_HINT;
 
 const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "minItems", "maxItems", "discloseText"]);
 const REFERENCE_KEYS: ReadonlySet<string> = new Set(["handle", "location"]);
@@ -262,7 +262,7 @@ function refused(issue: WebExtractionSlotIssue, path: WebPlanValuePath): Refused
   return { status: "refused", issue, path };
 }
 
-/** A refused `fields` or `where`, with the issues that name what it wrote and what it can use where it has them (t497, t502). */
-function refusedWith(failed: { issue: WebExtractionSlotIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[] | undefined }): Refused {
-  return present<Refused>({ status: "refused", issue: failed.issue, path: failed.path, expected: undefined, issues: failed.issues });
+/** A refused `fields` or `where`, with the issues that name what it wrote and what it can use where it has them (t497, t502), and the shape that keeps a shared column (t975). */
+function refusedWith(failed: { issue: WebExtractionSlotIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[] | undefined; expected?: WebExtractionSlotHint | undefined }): Refused {
+  return present<Refused>({ status: "refused", issue: failed.issue, path: failed.path, expected: failed.expected, issues: failed.issues });
 }
