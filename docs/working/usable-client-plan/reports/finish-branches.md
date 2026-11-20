@@ -58,3 +58,43 @@
     which hid the store clash above. This is dev code.
   - Retiring a publication writes an actor-less `deleted` audit event through `deleteRunDatasets`. A dedicated "superseded"
     method would read more honestly.
+
+## Phase 2: t905 stage B (2026-11-18/19, in progress)
+
+- Read-vocabulary gaps: already closed by t905's p2 work (`t905-result-ledger/p2-read-gaps.md`). `read-vocabulary.test.ts`
+  passed whole in my stage-A domain run.
+- Unit B (Opus, `t905-unit-b.md`): root inputs seal only through the service's durable input owner, and only when every
+  assembled layer has an authenticated origin (the run's own request, or a current revision of an earlier run under the same
+  project, task and principal). Anything else stays unknown, with codes origin_unverified, stale, active_secrets,
+  resume_state_unverified, unverified_frame and fork_unverified. The seam is `AutomationStudioInputUseExecutions.of(service)`,
+  because service.ts may not grow past its baseline. The native-dispatch fifth argument is forwarded for C1/C2.
+- `vitest related` found 4 failures outside B's folders. I proved all 4 pass on Core dev (34/34) and fail on t905. A11 needs a
+  dev merge (255d606ab). Opus fixes (`t905-related-fixes.md`):
+  - The stream store wrote a run's events as one chunk (over 2,000 refused), read at most 5,000, and paged by stream sequence.
+    It now writes in chunks, reads every event, and pages by each attempt's own order. Its fixture was also fixed.
+  - Answer-first output group: the answer is every draft read appending to the same record output, as the saved Flow fills it.
+    Dev's fluxnode "declared type" test now has its scripted model drop its probe read.
+  - `keep` processes datasets before writing a waiting row (a race that `keep.test` exposed under load).
+  - B switched on in `flow-stage.ts`, with its scope from authenticated owners only.
+- Machine: OneDrive.Sync.Service committed about 21.6 GB on 11-19, leaving about 1.1 GB of commit free and failing shell forks.
+  Reported to the lead; not restarted (standing rule: ask first).
+- Gate after the 11-19 restart (on the current tree, all through slots):
+  - Folder run (answer-first, datasets, summaries, input-basis, runtime-session, fluxnode, service-flows, fluxnode-api,
+    project persistence, runtime/input-basis): 319 files / 2153 tests passed (2 files and 4 tests skipped).
+  - `vitest related --dir src/framework` on all 33 changed sources: 4371 passed, 1 failed (A11, fixed on dev by 255d606ab;
+    needs a dev merge).
+  - `vitest related --dir src/server` on keep.ts: 44/44. fluxiq check exit 0. Audit passed (554 warnings, 909 baselined).
+  - I stopped the `runtime` related run (30 min) and an all-`src` related run (90 min of import-graph walking, no test
+    started), because they held a slot while the campaign waited. The worker had run related for runtime, programs,
+    platform, flows, tests, engine and client-gateway before its last two edits; those were not repeated.
+- Unit J (judge trail and instructions) moved to t963 by the lead.
+- Lead's dev merge b2625910d; A11 and the earlier failures now pass (6 files, 40/40).
+- C1 (Opus, `t905-c1.md`) finished an interrupted, unattributed WIP found after the 11-19 power loss. The worker kept most of it
+  and fixed 5 points: the one-seam call form, a stale graph entry voiding node seals, labels fixed at event start,
+  cancellation during the check, and an audit import rule. Each real callback (builtin, native, composite, Call Subflow helper)
+  now gets exactly the authority's leased copy, or the original values when the proof is unknown. The no-port path is a
+  synchronous pass-through on the original objects (I checked `NodeUse.invoke` and `withParameters` identity). Uncovered:
+  C2 (native port filtering, effects, child entry) and C3 (live state). In production every node event is
+  authority_unavailable until the service gains a node producer.
+  - Checks (worker, ordinary slots, no typecheck by rule): 5 folders, 44 files, 463/463; related engine 636/636; related
+    framework 4136 passed, 1 skipped; audit passed (559 warnings, 909 baselined).
