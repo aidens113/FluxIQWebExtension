@@ -537,6 +537,16 @@ Workers build against these at the same time; a change needs the lead.
 - Validation: t978 lead-run `vitest run src/runtime/result-verification src/runtime/models/providers/anthropic/tests src/runtime/llm/anthropic/tests` -> 1,881 of 1,882 (the one: a test pinning the reference-to-nothing behaviour, updated), then run-trail and provider tests 49/49; targeted tsc exit 0; structure audit passed; merge script: fluxiq 16 passed, finishes exit 0, pushed. t977: Core finish tests 9/0, extension 8/0, merge script finishes exit 0, pushed.
 - Outcome: next, with the user's OK, restart OneDrive; then re-dispatch t976, t979 (one test) and t981 (implementation), merge them, sync the shared Core, resync the lanes and restart the campaign under a new supervisor.
 
+### 2026-11-20 (afternoon) — After the reboot: three fixes resumed, F24 and F23 diagnosed
+
+- Agent: Senior supervisor (new session); workers t976 (Opus), t979 (Sonnet), t981 (Opus), F24 diagnosis (Opus), F23 diagnosis (Opus).
+- What ended the night: the lead's OneDrive question (07:00) was declined at 14:33 and the machine rebooted at 14:52, which cleared the leak (commit 8.6 of 27.9 GB) and every orphaned waiter; the queued lane A launch never spent. The heavy-step gate reads empty. Nothing was lost: t976 (45 Core and 7 Lab files, test migration under option (c) part done, last edit 06:50), t979 (25 Core files, one fix round left) and t981 (3 files of the implementation begun 06:55) are intact in their trees.
+- The user asked why the campaign shows zero SUCCESS. SUCCESS needs attempts 2-4 at zero model calls; 9 of 36 runs had all four attempts right, and the closest (run 31) missed only by a judge per replay. The causes between PARTIAL and SUCCESS are F24, F23 and F26, so F24 and F23 are no longer held for review: each gets a read-only root-cause diagnosis (reports `reports/f24-replay-judged-after-retry.md`, `reports/f23-replay-target-gone.md`), then a fix task.
+- Re-dispatched with last night's decisions unchanged: t976 option (c) (the chat's declaration carries the act classes; no added read), t979 items 1-3 (build-judge test, standalone continuation reason, unreadable-mock sweep), t981 (a) and (b) with the rerun ordering fix.
+- Still to check: whether the Core web build crash (0xC0000005, 3 of 3, at `a8cb2c618`) was memory alone; it is rebuilt at dev before the lanes run again.
+- Validation: none yet (dispatch only).
+- Outcome: next, verify and merge t979, t981 and t976, open fix tasks from the F24 and F23 reports, rebuild and resync the lanes, then restart the paid campaign.
+
 ## Open Questions
 
 None blocking.
