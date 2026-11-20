@@ -41,3 +41,4 @@ export {
 export { createActivityFeed, createSharedActivityFeed, listenToRuntime, type ExtensionActivityFeedDeps, type SharedActivityFeed } from "./feed";
 export { createOnPageStatusSetting, onPageStatusModel, type OnPageStatusModel, type OnPageStatusSetting } from "./settings";
 export { createChatOwnerContext, type ChatOwner } from "./owner-context";
+export { KEY_WRITE_MESSAGES, modelKeysPort, readModelAccess } from "./transport";

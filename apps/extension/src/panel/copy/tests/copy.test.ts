@@ -22,7 +22,7 @@ function status(overrides: Partial<ExtensionStatus> & { paired?: boolean } = {})
 
 test("status card: disconnected distinguishes never paired from paired before", () => {
   assert.deepEqual(connectionCopy(status()), {
-    dot: "grey", sentence: "FluxIQ isn't connected", line: "Connect this browser so FluxIQ can work in it."
+    dot: "grey", sentence: "FluxIQ isn't connected", line: "Connect to ask FluxIQ to approve this browser."
   });
   assert.deepEqual(connectionCopy(status({ paired: true })), {
     dot: "grey", sentence: "FluxIQ isn't connected", line: "Connect to pick up where you left off."
@@ -38,7 +38,7 @@ test("status card: connecting, reconnecting, error and pairing", () => {
     dot: "red", sentence: "Can't reach FluxIQ", line: "Make sure FluxIQ is running on this computer, then try again."
   });
   assert.deepEqual(connectionCopy(status({ connectionState: "pairing", pairingReferenceCode: "ABC123" })), {
-    dot: "amber", sentence: "Approve this browser in FluxIQ", line: "In FluxIQ, approve the request that shows this code."
+    dot: "amber", sentence: "Connect and approve in FluxIQ", line: "In FluxIQ, approve the request that shows this code."
   });
 });
 

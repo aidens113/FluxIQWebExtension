@@ -6,7 +6,9 @@
 // `../navigation-events/page-work.ts`). The stable-address second it used to
 // wait is kept only where nothing can speak for the page: no page world, or a
 // refresh the page declares due within it. A move the page makes by itself
-// later is a navigation event, which the next action waits out.
+// later is a navigation event, which the next action waits out -- except a
+// move inside the same document (`history.pushState`), which the proof follows
+// and the content script waits out instead (t893).
 //
 // The browser is a stub that reports a navigation as Chrome does, and answers
 // the two injected questions -- the page's own work, a declared refresh -- as
@@ -121,14 +123,27 @@ test("the listing: a page still drawing its panel after its load is ready only o
   assert.ok(Date.now() - startedAt >= 600, `waited ${Date.now() - startedAt} ms`);
 });
 
-test("the sort: an address rewritten in place waits for the page's own work, though no load ended", async (t) => {
+test("the sort: an address rewritten in place leaves the proof standing, at the new address, for the content script to wait in (t893)", async (t) => {
   const page = browser(t, { pageWork: 400 });
   await resolveAutomationTab({ initialUrl: "https://kerbfind.test/search/?query=dining+table" });
   page.pushState("https://kerbfind.test/search/?query=dining+table&sortBy=price_ascend");
-  assert.equal(await readyFromSnapshot(TAB), false, "the page moved");
+  // The same document: the worker does not wait for it. The page's redraw is
+  // waited for by the first action on it, in the page
+  // (`content/action-runtime/page-work/address-settle.ts`).
   const startedAt = Date.now();
-  await waitForTabReady(TAB);
-  assert.ok(Date.now() - startedAt >= 400, `waited ${Date.now() - startedAt} ms`);
+  assert.equal(await readyFromSnapshot(TAB), true, "the document it proved is still the one there");
+  assert.ok(Date.now() - startedAt < 400, `the worker asked the page nothing (${Date.now() - startedAt} ms)`);
+  page.pushState("https://kerbfind.test/search/?query=dining+table&sortBy=price_ascend#top");
+  assert.equal(await readyFromSnapshot(TAB), true, "it follows each move in the document");
+});
+
+test("a proof does not follow a document that was replaced, even back at the address it proved", async (t) => {
+  const page = browser(t, { loadMs: 20 });
+  await resolveAutomationTab({ initialUrl: "https://kerbfind.test/search/" });
+  assert.equal(await readyFromSnapshot(TAB), true);
+  await page.navigate("https://kerbfind.test/search/");
+  assert.equal(await readyFromSnapshot(TAB), false, "a new document is not the one the look proved");
+  assert.equal(await readyFromSnapshot(TAB), false, "and the proof, once failed, is forgotten");
 });
 
 test("with no page world to ask, or a refresh declared within the second, the old second is kept", async (t) => {

@@ -35,6 +35,8 @@ export type SettingField<K extends keyof FluxIQSettings> = {
   readonly policy?: keyof ExtensionCaptureAllowed;
   readonly allowedHint?: string;
   readonly forbiddenHint?: string;
+  /** A switch that does nothing while forbidden is not drawn at all, rather than shown as a disabled box. */
+  readonly hideWhenForbidden?: boolean;
 };
 
 const POLICY_OFF = "Turned off by FluxIQ's recording policy.";
@@ -57,7 +59,7 @@ export const SETTING_FIELDS: {
   readonly toggles: readonly SettingField<ToggleKey>[];
 } = {
   addresses: [
-    { key: "gatewayUrl", id: "gatewayUrl", label: "FluxIQ connection address", hint: "Where this browser connects to FluxIQ. Usually ws://127.0.0.1:4777/client." },
+    { key: "gatewayUrl", id: "gatewayUrl", label: "FluxIQ connection address", hint: "Where this browser connects to FluxIQ." },
     { key: "coreApiUrl", id: "coreApiUrl", label: "FluxIQ web address", hint: "The address you open FluxIQ at." }
   ],
   toggles: [
@@ -65,6 +67,6 @@ export const SETTING_FIELDS: {
     governed({ key: "captureMutations", id: "captureMutations", label: "Record page changes" }, "captureMutations", "Lets FluxIQ notice when a page changes by itself, such as a list that loads more.", POLICY_OFF),
     governed({ key: "captureInputValues", id: "captureInputValues", label: "Record what I type" }, "captureInputValues", "Needed to replay typing. Passwords are never recorded.", POLICY_OFF),
     governed({ key: "captureSnapshots", id: "captureSnapshots", label: "Record page snapshots" }, "captureSnapshots", "Lets FluxIQ keep a copy of the page as it looked at each step.", POLICY_OFF),
-    governed({ key: "requestsEnabled", id: "requestsEnabled", label: "Allow direct requests" }, "directRequests", "Lets a Flow call a site's addresses directly.", "Unavailable in this version.")
+    { ...governed({ key: "requestsEnabled", id: "requestsEnabled", label: "Allow direct requests" }, "directRequests", "Lets a Flow call a site's addresses directly.", "Unavailable in this version."), hideWhenForbidden: true }
   ]
 };

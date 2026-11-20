@@ -1,4 +1,3 @@
-import type { ModelKeyAvailability } from "fluxiq/ui";
 import {
   CLIENT_GATEWAY_PROTOCOL_VERSION,
   type ClientGatewayActionCommand,
@@ -255,13 +254,13 @@ export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHuman
 
 /**
  * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
- * `purpose: "model-key"`, the ordinary keys configuration page; with `purpose: "projects"`, the projects page.
+ * `purpose: "model-key"`, the ordinary keys configuration page; with `purpose: "projects"`, the projects page; with `purpose: "pairing"`, the home page with `?pairing=1`.
  * A purpose excludes `flowId` and `runId`, and `flowId` and `runId` exclude each other.
  */
 export type PanelOpenFluxIQRequest = {
   flowId?: string | undefined;
   runId?: string | undefined;
-  purpose?: "model-key" | "projects" | undefined;
+  purpose?: "model-key" | "projects" | "pairing" | undefined;
 };
 
 /**
@@ -384,6 +383,12 @@ export const AUTOMATION_PANEL_MESSAGES = {
   removeTask: RUNTIME_MESSAGES.panelRemoveTask,
   /** `secret-keys` `snapshot`. Answers `{ keys: PanelModelKeySummary[] }`; metadata only, never key values. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
+  /** `secret-keys` `save-model-key` with `{ provider, value, name? }`: the person's own model key. Answers `{ modelAccess }`; the key is never echoed. */
+  modelKeySave: RUNTIME_MESSAGES.panelModelKeySave,
+  /** `secret-keys` `replace-model-key` with `{ value }`: the same key slot, a new value. Answers `{ modelAccess }`. */
+  modelKeyReplace: RUNTIME_MESSAGES.panelModelKeyReplace,
+  /** `secret-keys` `remove-model-key` with `{}`. Answers `{ modelAccess }`. */
+  modelKeyRemove: RUNTIME_MESSAGES.panelModelKeyRemove,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,
   /** `run-runtime-session` with `{ projectId, flowId }` for the proposal's Flow: no run intent, so the test is not repaired. */
@@ -415,19 +420,12 @@ export const AUTOMATION_PANEL_MESSAGES = {
 
 export type AutomationPanelMessageType = (typeof AUTOMATION_PANEL_MESSAGES)[keyof typeof AUTOMATION_PANEL_MESSAGES];
 
-/** Safe model metadata. Null availability means malformed status; absence permits legacy compatibility. */
-export type PanelModelKeySummary = {
-  readonly kind?: string;
-  readonly provider?: string;
-  readonly enabled: boolean;
-  readonly heldByYou?: boolean;
-  readonly availability?: ModelKeyAvailability | null;
-  /** Only an old explicit refusal is retained, so an incompatible server never looks ready. */
-  readonly unlocked?: false;
-};
-
 /** The fields automation panel requests carry beside `type`. Every field is optional on the wire and checked by the relay. */
 export type AutomationPanelRequest = {
+  /** The person's model key (`modelKeySave`, `modelKeyReplace`); never logged, stored or echoed. */
+  key?: string | undefined;
+  /** Which provider the key is for (`modelKeySave`); `name` below is its optional name. */
+  provider?: string | undefined;
   projectId?: string | undefined;
   flowId?: string | undefined;
   runId?: string | undefined;

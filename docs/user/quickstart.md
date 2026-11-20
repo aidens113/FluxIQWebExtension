@@ -12,82 +12,76 @@ In the `!FluxIQWebExtension` folder, run:
 pnpm dev
 ```
 
-Then open `http://127.0.0.1:3000` and sign in. The first time, sign in with
-the username `admin` and the temporary password `admin`. FluxIQ then asks you
-to replace the temporary password with one of at least 12 characters. Keep
-that password: FluxIQ asks for it again before it stores an API key.
+The first time, the terminal prints **FluxIQ first-time setup** with a link.
+Open it, choose your name and password (at least 12 characters), and you are
+signed in. The link works once; restart FluxIQ for a new one. After that, open
+`http://127.0.0.1:3000` and sign in with the name and password you chose.
 
-**It worked if** the FluxIQ web app loads and shows **Programs**.
+**It worked if** the FluxIQ web app opens on **Home**. You can already talk to
+the assistant beside every page once you add your AI key (step 3); you do not
+need a project first.
 
-The panel says the same thing when you open it before FluxIQ is running: its
-**Get started with FluxIQ** screen lists the steps in order (**Start FluxIQ**,
-**Sign in to FluxIQ**, **Connect this browser**, **Approve this browser in
-FluxIQ** and **Add a model key**), each marked done, next, in progress or
-needing attention. Only what the panel has really detected is marked done.
-
-Open `http://127.0.0.1:3000/get-started` for a live checklist of the next
-steps. It shows each step as done, current, or waiting on an earlier step, and
-updates as you go.
+The extension's **Get started with FluxIQ** screen lists the steps in order
+(**Start FluxIQ**, **Connect and approve**, **Add your AI key**), each marked
+done, next, in progress or needing attention. The first step names the address
+it checked ("FluxIQ found at 127.0.0.1:3000"), with **Change** to point it at
+another FluxIQ. Only what the extension has really detected is marked done.
 
 ## 2. Pair your browser (about 1 minute)
 
 1. Click the FluxIQ button in the browser toolbar. If you have not pinned it,
    it is in the **Extensions** menu (the puzzle-piece button). Chrome and Edge
    open the FluxIQ side panel, and Firefox opens the FluxIQ popup.
-2. Under **Connect this browser**, choose **Connect**. The step **Approve
-   this browser in FluxIQ** then shows a six-digit code and an **Open
-   FluxIQ** button.
-3. Switch to the FluxIQ web app. A **Client pairing request** appears with the
-   same code. Check that the codes match, then choose **Confirm pairing**. The
-   request lasts five minutes; you do not need to hurry.
+2. Once FluxIQ is found, the browser asks it for approval by itself: the step
+   **Connect and approve** shows a six-digit code and an **Open FluxIQ**
+   button. There is nothing to press first.
+3. Switch to the FluxIQ web app (sign in if it asks). **A browser or app wants
+   to connect** appears, naming your browser, with the same code. Check that
+   the codes match, then choose **Confirm**. The request lasts five minutes;
+   you do not need to hurry.
 
 **It worked if** the panel's dot turns green, the chat appears, and
 **Settings** (the gear button) says **Connected to FluxIQ** under
 **Connection**.
 
-If the panel says **Can't reach FluxIQ**, first check that `pnpm dev` is still
-running, then choose **Try again**. If it still cannot connect, choose
-**Check the connection address**, or open **Settings** (the gear button) and
-open **Advanced**. **FluxIQ connection address** should be
-`ws://127.0.0.1:4777/client` and **FluxIQ web address** should be
-`http://127.0.0.1:3000`. Choose **Save** after changing either.
+If the extension says **FluxIQ isn't answering**, first check that `pnpm dev`
+is still running, then choose **Try again**. If FluxIQ runs at another
+address, choose **Change** on the first step and type its web address (for
+example `http://127.0.0.1:3000`); the extension finds the rest by itself.
 
-## 3. Add your DeepSeek API key (about 1 minute)
+## 3. Add your AI key (about 1 minute)
 
-FluxIQ uses your own DeepSeek API key to create automations and adapt them.
-DeepSeek is the only provider in this release. FluxIQ adds no charge of its
-own: DeepSeek bills your account directly for the calls FluxIQ makes.
+FluxIQ uses your own AI key, from Anthropic (Claude) or DeepSeek, to build
+automations and adapt them. FluxIQ adds no charge of its own: the provider
+bills your account directly for the calls FluxIQ makes.
 
-Once the browser is connected the chat is ready to use. Until FluxIQ has a
-model key, a card above the chat says what is done and what is left, with
-**Open FluxIQ** and **Not now**; it goes away by itself once the key is
-ready. **Settings** also shows the state of your model key under **Model key**.
+You add the key once, in the web app or in the extension, and both show it
+straight away. In the web app open **Settings**: **AI keys** is at the top
+(`/settings#ai-keys`); the assistant beside every page and **Home** show the same
+card. In the extension, open **Settings** (the gear button) and find **Model**,
+or use the card in the empty chat.
 
-1. In the FluxIQ web app, open **Secret Keys** (`/programs/secret-keys`) and
-   choose **Add Key**. In the panel, **Open FluxIQ** on the card, or under
-   **Model key** in **Settings**, opens that page.
-2. Fill in the form:
-   - Name: any name, for example **DeepSeek**
-   - Secret value: your DeepSeek API key
-   - Type: **LLM**
-   - Provider: **DeepSeek** (the form starts on OpenAI, so change it)
-   - Scope: **Global**
-3. Choose **Continue**. Under **Authorize New Key**, enter your FluxIQ
-   password (and your PIN, if you set one), then choose **Save Key**.
-**It worked if** the key is listed as enabled. The key's value is not shown
-again. A paired browser uses the saved key straight away: there is nothing to
-unlock, no password box when you approve the pairing, and no PIN.
+1. Choose **Add a key**.
+2. Pick the provider (**Anthropic (Claude)** or **DeepSeek**), paste the key,
+   and give it a name if you like. **Where do I get one?** opens the
+   provider's key page.
+3. Choose **Save and check**. FluxIQ checks the key with the provider, at no
+   cost, and the card shows the answer in place.
 
-Two cases need a word:
+**It worked if** the card says **Ready** and names your key. The key is never
+shown again; to change it, choose **Replace key**. There is no password box and
+no PIN, and a paired browser uses the key straight away.
 
-- **No key yet.** The card above the chat says so and goes away by itself once
-  a key is saved.
-- **A key saved a long time ago.** An older key that was sealed under your
-  password needs one sign-in to FluxIQ in the panel (**Open FluxIQ** on the
-  card, or under **Model key** in **Settings**) so FluxIQ can re-save it for
-  every paired browser. If a password was reset without the old one, no
-  password can open that key, so FluxIQ asks you to add it again. A task that
-  finds its key not ready waits and carries on by itself once it is.
+The card always says where things stand, with the one thing to do next:
+
+- **No key**: add one.
+- **Can't open**: FluxIQ saved the key but cannot read it any more; paste it
+  again.
+- **Not accepted**: the provider turned the key down; check it was copied in
+  full, then replace it.
+- **Can't reach** the provider: FluxIQ tries again on your next message, or
+  choose **Try now**.
+- **Update FluxIQ**: this FluxIQ is too old for your key.
 
 You can see which key and model a flow uses in that flow's **Settings**, under
 **AI Provider**. The same section has the **Adaptation** switch:
@@ -95,7 +89,7 @@ You can see which key and model a flow uses in that flow's **Settings**, under
 - **On (the default).** When a page changes, FluxIQ may use AI to find a way
   through. It then saves what it learned, so later runs do not need AI there.
 - **Off.** FluxIQ only replays steps it has already learned and never calls
-  DeepSeek. If a page has changed, the run stops instead.
+  your AI provider. If a page has changed, the run stops instead.
 
 ## 4. Create an automation (about 2 minutes)
 

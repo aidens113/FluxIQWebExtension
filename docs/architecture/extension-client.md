@@ -215,7 +215,7 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   authentication, balance or connectivity.
 
 While a recording runs, a bar under the top bar on every screen shows its step
-count, "Extract Data From This Page" and "Stop recording". It also holds a
+count, "Extract data from this page" and "Stop recording". It also holds a
 recording refusal (with OK) and any failed recording request. Nothing in the
 panel lists the steps of a run; what FluxIQ decides and does is the chat's to
 show, and internal page reads are never shown as steps. Flow editing, run logs
@@ -274,7 +274,7 @@ either opens a dialog titled "What should FluxIQ learn from this?"
 Firefox's popup adds a note that clicking the page closes it while recording
 goes on) and, once a sentence is given, records the current tab. The chat
 stays on screen: the panel does not move to another tab. The red recording
-bar then holds the step count, "Extract Data From This Page" and "Stop
+bar then holds the step count, "Extract data from this page" and "Stop
 recording". When a recording ends, the panel waits for FluxIQ to save it
 ("Saving your recording so it can go with your next message...", read at most
 40 times, one second apart), attaches it to the next message as a chip with
@@ -1379,7 +1379,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
 the title "What can FluxIQ do for you?", a concept paragraph that ends "You
 can stop it, or take over the page, at any time.", two starts and the
 fill-only examples. Describe focuses the composer and sends nothing; Extract
-switches to Automations and presses "Extract Data From This Page" (or
+switches to Automations and presses "Extract data from this page" (or
 focuses it beside the line saying why it is unavailable). Model readiness is
 read once each time the connected, empty latest chat appears
 (`ui-components/src/chat/onboarding/model-readiness.ts`, through `modelReadiness`); only when no key
@@ -2866,7 +2866,11 @@ page did instead of a fixed wait.
 `action-runner.ts`). The worker counts each tab's top-frame navigation events: `webNavigation`
 before-navigate, committed, history-state and fragment updates, and a tab replaced. A look's readiness
 proof records that count, and the proof now stands across the act until the page moves, with no age
-limit. A navigation event means a wait (`waitForTabReady`, below). `tabs.onUpdated` is not used,
+limit. A navigation event that replaces the document means a wait (`waitForTabReady`, below). Since
+t893 the proof follows its document across an address the page rewrites in place (`history.pushState`,
+a fragment): it records a second count, of the events that replace the top document only, and moves to
+the new address when only the first count moved. The wait such a move still needs is made in the page
+(`content/action-runtime/page-work/`, under "Acting without fixed waits"). `tabs.onUpdated` is not used,
 because its `loading` also reports child frames. A proof left by a worker before a restart keeps the
 old rule: used once, and only within 10 seconds. Firefox reports no `documentId`, so it keeps no proof
 and waits as before.
@@ -2927,6 +2931,29 @@ kept only where nothing can speak for the page:
 A move the page makes by itself afterwards is a navigation event, and the next action waits it out. A
 wait that finds the tab settled leaves the same readiness proof a look does (t890), so the next action
 on that document starts at once.
+
+**A move within the document is waited out in the page** (t893, `content/action-runtime/page-work/`,
+`shared/scheduled-work-settled.ts`). An address the page rewrote in place used to drop the proof, and
+the next action waited in the worker: an injected question and 80-200 ms before replayed presses on
+local-classifieds after its radius and sort rewrote the address (`run-mwaqjkxp-ae3d862c`). The proof
+now follows the document, and each content script remembers the address it last found the page settled
+at. An action that finds the address moved since asks the page world the same question the worker
+asked, through the same function, before the action's own clock starts. An idle page answers within a
+task. A page still drawing what the new address says (local-classifieds clears its results, rewrites
+the address and requests the new ones) is waited for. Where no page world counts, the address must
+stand still the old second. The wait is bounded by the worker's 20 s readiness deadline, and a wait
+that ran out proves nothing. A child frame's content script sees only its own address, so an action
+addressed to a child frame does not wait for a move of the top document.
+
+**A one-page list read's growth windows end on the page's word** (t893, `content/extraction/list-wait.ts`,
+`content/extraction/page-render.ts`). The read gave its list 900 ms to hold still, and 900 ms more after
+scrolling the list's end into view. On a list already at its end, both were waited out in full, most
+of a replayed read's 2.3 s on local-classifieds. Both now also ask the page world, after two animation
+frames so the page's `scroll` handlers and `IntersectionObserver` callbacks have run. A reveal that set
+a load going is counted work, so its growth is seen first. When the work is done and the document held
+still a task, the window closes. A page that cannot say keeps the window: no page world, or a hidden
+tab, which draws no frames. Work the page world does not count is the remaining gap, chiefly a list
+fed over a WebSocket.
 
 **A press reports what its own document saw** (`content/action-runtime/navigation-watch/`,
 `shared/protocol.ts` `ActionNavigationSeen`). From the start of each action to its reply, the content

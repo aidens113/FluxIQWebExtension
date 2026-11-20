@@ -98,7 +98,7 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
   if (message.type === RUNTIME_MESSAGES.panelOpenFluxIQ) {
     let automation: { projectId: string; flowId: string } | undefined;
     if (message.purpose !== undefined) {
-      if ((message.purpose !== "model-key" && message.purpose !== "projects") || message.runId !== undefined || message.flowId !== undefined) return relayFailure("invalid_request", "That request names an unknown purpose.");
+      if ((message.purpose !== "model-key" && message.purpose !== "projects" && message.purpose !== "pairing") || message.runId !== undefined || message.flowId !== undefined) return relayFailure("invalid_request", "That request names an unknown purpose.");
       const page = fluxIQPurposeAddress((await deps.readSettings()).coreApiUrl, message.purpose);
       if (!page) return relayFailure("invalid_request", "The FluxIQ address in settings is not a web address.");
       await deps.openTab(page);

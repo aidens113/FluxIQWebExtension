@@ -4,6 +4,5 @@
 // work (S10).
 export { refreshDeclaredSoon } from "./declared-refresh";
 export { tabNavigationEpochs } from "./epochs";
-export { pageSettledInPage } from "./page-settled";
 export { pageWorkSettled } from "./page-work";
 export { declaredRefreshDelayMs } from "./refresh-delay";

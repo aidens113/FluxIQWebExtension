@@ -80,7 +80,7 @@ test("the reshaping form writes a read of other columns and a press for a later 
 });
 
 test("it repeats over the read, runs forward from it, and says so when the forward run did not pass", () => {
-  const steps = [{ step: 6, actionId: "web.output.dom-extract_list", disposition: "kept" }, { step: 7, actionId: "web.output.dom-click", disposition: "kept" }];
+  const steps = [{ step: 6, callId: "read-invitations", actionId: "web.output.dom-extract_list", disposition: "kept" }, { step: 7, callId: "accept-first", actionId: "web.output.dom-click", disposition: "kept" }];
   const hand = [DETECTED, made("read-invitations"), made("accept-first")];
   const amended = decide("plain", [...hand, made("draft", "core.flow_draft", { steps })]);
   assert.deepEqual(amended.amendments, [{ step: 7, change: "repeat", over: 6 }]);
@@ -89,6 +89,36 @@ test("it repeats over the read, runs forward from it, and says so when the forwa
   assert.equal(forward.toolId, "core.run_flow");
   assert.equal(forward.input?.from, 6);
   assert.throws(() => decide("plain", [...hand, made("draft", "core.flow_draft", { steps: repeating }), made("forward", "core.run_flow", { passed: false })]), /did not pass/u);
+});
+
+test("the repeat goes on the press by hand even when a conversation closed after it is the last press in the draft", () => {
+  // run-mwm2glmb-f6c5aed3: a conversation opened over the page right after the accept by hand, its Close was step 8,
+  // and a repeat on the last press of its kind looked for that Close in every row.
+  const steps = [
+    { step: 6, callId: "read-invitations", actionId: "web.output.dom-extract_list", disposition: "kept" },
+    { step: 7, callId: "accept-first", actionId: "web.output.dom-click", disposition: "kept" },
+    { step: 8, callId: "close-7", actionId: "web.output.dom-click", disposition: "kept" },
+  ];
+  const hand = [DETECTED, made("read-invitations"), made("accept-first"), made("close-7")];
+  assert.deepEqual(decide("notes-back", [...hand, made("draft", "core.flow_draft", { steps })]).amendments, [{ step: 7, change: "repeat", over: 6 }]);
+  const repeating = [steps[0], { ...steps[1], runs: "repeats through step 7, over step 6" }, steps[2]];
+  assert.equal(decide("notes-back", [...hand, made("draft", "core.flow_draft", { steps: repeating })]).input?.from, 6);
+});
+
+test("the reshaping form repeats the press it wrote over the read it wrote, not the steps by hand", () => {
+  const steps = [
+    { step: 6, callId: "read-invitations", actionId: "web.output.dom-extract_list", disposition: "taken" },
+    { step: 7, callId: "accept-first", actionId: "web.output.dom-click", disposition: "taken" },
+    { step: 8, callId: "write-read", actionId: "web.output.dom-extract_list", written: true },
+    { step: 9, callId: "write-accept", actionId: "web.output.dom-click", written: true },
+  ];
+  const hand = [DETECTED, made("read-invitations"), made("accept-first"), made("write-read"), made("write-accept")];
+  assert.deepEqual(decide("reshape", [...hand, made("draft", "core.flow_draft", { steps })]).amendments, [{ step: 9, change: "repeat", over: 8 }]);
+});
+
+test("a repeat is never put on a step the draft does not name by the script's own call", () => {
+  const steps = [{ step: 6, actionId: "web.output.dom-extract_list", disposition: "kept" }, { step: 7, actionId: "web.output.dom-click", disposition: "kept" }];
+  assert.throws(() => decide("plain", [DETECTED, made("read-invitations"), made("accept-first"), made("draft", "core.flow_draft", { steps })]), /no unique step for accept-first/u);
 });
 
 test("a form the script does not have is refused, and the default is the plain one", () => {
@@ -104,6 +134,12 @@ const CONVERSATIONS = made("back-detect", "web.detect_repeating_structure", {
   fields: [{ key: "row_div", sample: "Ximena Ruiz · Sep 21 · New connection · A note longer than every other field of the row" }, { key: "strong", sample: "Ximena Ruiz" }, { key: "date_span", sample: "Sep 21" }, { key: "tag_span", sample: "New connection" }, { key: "line_div", sample: "A note longer than every other field of the row" }],
 });
 
+const draft = (...steps: Record<string, unknown>[]) => made("draft", "core.flow_draft", { steps });
+const resultStep = (callId: string, disposition: string, extra: Record<string, unknown> = {}) => ({ step: 14, callId, actionId: "web.output.dom-extract_list", disposition, ...extra });
+const lookRead = (callId: string) => made(callId, "core.run_node", { ok: true, resultNote: "a look: the result is unchanged (step 6, 3 rows)." });
+const accepted = [DETECTED, made("read-invitations"), made("accept-first"), made("write-read"), made("write-accept"), made("forward", "core.run_flow", { passed: true }), lookRead("read-accepted")];
+const notesRead = [OPENED, CONVERSATIONS, lookRead("back-read")];
+
 test("the notes-back form, finding the invitations answered, opens Messaging and presses no Accept", () => {
   const open = decide("notes-back", [], AFTER);
   assert.equal(open.callId?.startsWith("back-open-messaging"), true);
@@ -117,7 +153,74 @@ test("the notes-back form reads the tagged conversations' name and own message l
   assert.equal(read.callId, "back-read");
   assert.deepEqual(read.input?.parameters?.extractList.fields, { name: "strong", message: "line_div" });
   assert.deepEqual(read.input?.parameters?.extractList.where, [{ field: "tag_span", contains: "New connection" }]);
-  assert.equal(decide("notes-back", [OPENED, CONVERSATIONS, made("back-read")], MESSAGING).kind, "complete");
+  assert.equal(decide("notes-back", [...notesRead, draft(resultStep("back-read", "kept"))], MESSAGING).kind, "complete");
+});
+
+test("every form takes its deliberately selected accepted read before completing", () => {
+  for (const form of ["plain", "reshape", "thin", "notes-back"]) {
+    assert.deepEqual(decide(form, [...accepted, draft(resultStep("read-accepted", "taken"))]), { kind: "amend_draft", amendments: [{ step: 14, change: "add" }] });
+    assert.equal(decide(form, [...accepted, draft(resultStep("read-accepted", "kept"))]).kind, "complete");
+  }
+});
+
+test("a completed result read is authored before any unrelated page action or transient field lookup", () => {
+  const moved = ['PAGE "Another view"', 't90 button "Not now"', 't91 button "Close your conversation"'].join("\n");
+  for (const [form, call] of [["plain", "read-accepted"], ["notes-back", "back-read"]] as const) {
+    for (const disposition of ["taken", "kept"]) {
+      const extra = [lookRead(call), draft(resultStep(call, disposition))];
+      const decision = decide(form, extra, moved);
+      assert.equal(decision.kind, disposition === "taken" ? "amend_draft" : "complete");
+      assert.equal(decision.toolId, undefined);
+      if (disposition === "taken") assert.deepEqual(decision.amendments, [{ step: 14, change: "add" }]);
+    }
+  }
+});
+
+test("a later Messaging look is taken by actual call identity while earlier rows and other probes stay alone", () => {
+  const otherSteps = [
+    resultStep("read-invitations", "kept", { step: 6 }),
+    resultStep("probe", "taken", { step: 20 }),
+    resultStep("working", "kept", { step: 21, input: { parameters: { recordOutput: { purpose: "intermediate" } } } }),
+    resultStep("discarded", "dropped", { step: 22 }),
+  ];
+  const extra = [...notesRead, made("probe"), made("result", "core.result", { result: "step 6, 3 rows" })];
+  const before = draft(resultStep("back-read", "taken"), ...otherSteps);
+  const unchanged = JSON.stringify(before);
+  assert.deepEqual(decide("notes-back", [...extra, before], MESSAGING), { kind: "amend_draft", amendments: [{ step: 14, change: "add" }] });
+  assert.equal(JSON.stringify(before), unchanged);
+  assert.deepEqual(otherSteps.map((step) => step.disposition), ["kept", "taken", "kept", "dropped"]);
+  assert.equal(decide("notes-back", [...extra, draft(resultStep("back-read", "kept"), ...otherSteps)], MESSAGING).kind, "complete");
+});
+
+test("the chosen result read is not inferred from an unnamed or ambiguous draft step", () => {
+  for (const steps of [
+    [{ step: 14, actionId: "web.output.dom-extract_list", disposition: "taken" }, resultStep("another-read", "kept")],
+    [resultStep("back-read", "taken"), resultStep("back-read", "kept", { step: 15 })],
+  ]) {
+    assert.throws(() => decide("notes-back", [...notesRead, draft(...steps)], MESSAGING), /unique call identity/u);
+  }
+});
+
+test("a replaced, withdrawn or intermediate result read is never silently restored", () => {
+  for (const step of [
+    resultStep("back-read", "taken", { replacedBy: 15 }),
+    resultStep("back-read", "dropped"),
+    resultStep("back-read", "exploratory"),
+    resultStep("back-read", "taken", { input: { parameters: { recordOutput: { purpose: "intermediate" } } } }),
+  ]) {
+    assert.throws(() => decide("notes-back", [...notesRead, draft(step)], MESSAGING), /final read back-read/u);
+  }
+});
+
+test("a failed final read cannot be taken as the result", () => {
+  assert.throws(() => decide("notes-back", [OPENED, CONVERSATIONS, made("back-read", "core.run_node", { ok: false }), draft(resultStep("back-read", "taken"))], MESSAGING), /successful final read back-read/u);
+});
+
+test("a fresh attempt already on Messaging reads there without opening My Network again", () => {
+  const detect = decide("notes-back", [], MESSAGING);
+  assert.equal(detect.callId, "back-detect");
+  assert.equal(detect.toolId, "web.detect_repeating_structure");
+  assert.equal(detect.input?.node, undefined);
 });
 
 test("the notes-back form's first attempt is still the plain accept path, and its judge reads the rows it was shown", () => {
@@ -125,4 +228,17 @@ test("the notes-back form's first attempt is still the plain accept path, and it
   const judge = (count: number) => (scriptedModelScriptFor(TASK, "notes-back").replies.loop_verification![0]!({ kind: "loop_verification", ordinal: 1, model: "m", jsonText: true, message: "", payload: { context: { resultSummary: { totalRecordCount: count } } } }) as { diagnosis: { answersRequest: string } }).diagnosis.answersRequest;
   assert.equal(judge(0), "no");
   assert.equal(judge(3), "yes");
+});
+
+test("the script keeps its decision and judge allowances, and every notes-back judge refuses zero rows", () => {
+  for (const form of ["plain", "reshape", "thin", "notes-back"]) {
+    const replies = scriptedModelScriptFor(TASK, form).replies;
+    assert.equal(replies.evidence_tool_decision?.length, 24);
+    assert.equal(replies.loop_verification?.length, form === "notes-back" ? 4 : 1);
+    assert.equal(replies.panel_command?.length, form === "notes-back" ? 2 : 1);
+  }
+  for (const reply of scriptedModelScriptFor(TASK, "notes-back").replies.loop_verification!) {
+    const verdict = reply({ kind: "loop_verification", ordinal: 1, model: "m", jsonText: true, message: "", payload: { context: { resultSummary: { totalRecordCount: 0 } } } }) as { diagnosis: { answersRequest: string } };
+    assert.equal(verdict.diagnosis.answersRequest, "no");
+  }
 });

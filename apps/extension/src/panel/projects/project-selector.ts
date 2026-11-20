@@ -27,6 +27,8 @@ export type ProjectSelectorOptions = {
 /** Builds the selector over `port`; a choice goes through `request`. */
 export function createProjectSelector(request: PanelStore["request"], port: ProjectsPort, options: ProjectSelectorOptions): ProjectSelector {
   let current: string | undefined;
+  /** Names already seen per project id, so a status that names the id before its name never drops the label back to "Project". */
+  const known = new Map<string, string>();
   const switcher = createProjectSwitcher({
     port,
     onSelect: (project) => {
@@ -40,6 +42,7 @@ export function createProjectSelector(request: PanelStore["request"], port: Proj
     try {
       const found = (await port.list()).find((project) => project.id === id)?.name.trim();
       // Only while this status is still the current one: a newer status names itself.
+      if (found) known.set(id, found);
       if (found && current === key) switcher.setCurrent({ id, name: found });
     } catch {
       /* best-effort: the label stays generic; opening the switcher shows the real error */
@@ -49,7 +52,9 @@ export function createProjectSelector(request: PanelStore["request"], port: Proj
     element: switcher.element,
     render(status) {
       const id = typeof status.projectId === "string" && status.projectId !== "" ? status.projectId : undefined;
-      const name = status.projectName?.trim() ?? "";
+      const statusName = status.projectName?.trim() ?? "";
+      if (id !== undefined && statusName !== "") known.set(id, statusName);
+      const name = statusName !== "" ? statusName : id === undefined ? "" : known.get(id) ?? "";
       const key = id === undefined ? "" : `${id}\n${name}`;
       if (key === current) return;
       current = key;

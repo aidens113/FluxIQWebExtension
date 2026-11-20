@@ -19,7 +19,7 @@ export type PanelContext = { readonly store: PanelStore; readonly surface: Panel
 export type PanelTasks = { readonly port: TasksPort; readonly results: ChatResultsPort };
 
 export type PanelPorts = {
-  /** Reads the model key for the setup card; the default reads the background's model readiness (`extensionSetupPort`). */
+  /** Reads the AI key for the Settings key card; the default reads the background's model readiness (`extensionSetupPort`). */
   readonly setup?: SetupPort;
   /** Asks whether FluxIQ answers at its web address before pairing; the default fetches its discovery document. */
   readonly reachability?: ReachabilityProbe;

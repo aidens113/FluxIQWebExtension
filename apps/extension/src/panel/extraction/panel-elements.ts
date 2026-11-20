@@ -1,7 +1,7 @@
 // The extraction panel's DOM, built into a host the caller chooses.
 //
 // The panel HTML pages are stubs, so this builds what used to be the
-// extraction markup in `popup/index.html`: the "Extract Data From This Page"
+// extraction markup in `popup/index.html`: the "Extract data from this page"
 // entry button, then the sheet. Every id, class, label and sentence is the one
 // that markup had, because the Lab drives them (`#extraction*`, "Extract Data
 // From This Page", "Confirm"; packages/test-runner/src/ui-e2e/journeys/
@@ -44,7 +44,7 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
   const openButton = createElement("button", {
     id: "extractDataButton",
     className: "small-button extract-button",
-    text: "Extract Data From This Page",
+    text: "Extract data from this page",
     attrs: { type: "button" }
   });
   openButton.disabled = true;
@@ -104,7 +104,7 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     attrs: { role: "dialog", tabindex: "-1", "aria-modal": "true", "aria-labelledby": "extractionTitle" }
   }, [
     createElement("header", { className: "extraction-header" }, [
-      createElement("div", {}, [createElement("h2", { id: "extractionTitle", text: "Extract Data From This Page" }), status]),
+      createElement("div", {}, [createElement("h2", { id: "extractionTitle", text: "Extract data from this page" }), status]),
       closeButton
     ]),
     notice,

@@ -5,7 +5,7 @@
 //                  connected and idle. One press asks what FluxIQ should learn
 //                  from it and starts recording this tab; the chat stays on screen.
 //   newAutomation  the automations tab's "New automation" section: "Show FluxIQ
-//                  how" (the same name) and "Extract Data From This Page", each
+//                  how" (the same name) and "Extract data from this page", each
 //                  with a line saying what it does or why it can't
 //   bar            a slim bar under the top bar, on every tab, while a
 //                  recording runs: how many steps, "Extract Data From This

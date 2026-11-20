@@ -334,6 +334,177 @@ Workers build against these at the same time; a change needs the lead.
 - Validation: key-backend supervisor's final sweep (a claim until the lead's re-run): contracts, fluxiq and web checks exit 0; fluxiq vitest over changed directories 492 files, 4671 passed; contracts 10 passed; web 329 passed; both audits passed; extension `test-extension.mjs` 420 pass 0 fail, check and build exit 0; headed live run on the production build (ports 3300/5077): a dummy key reads "Not accepted" in both clients through the push, the real key got a real Claude reply in the extension chat and in a panel project chat (two paid calls, key removed afterwards), `/api/keys` 200 instead of 503, the key value found 0 times in every file written. Lead: key-shaped strings in the change are test fixtures only (`sk-ant-secret-value-123`).
 - Outcome: the key path works end to end on the task branch. Next: the security review and the lead's re-run on dev with t931, then merge t928 into both `dev` branches, then t925's live round.
 
+### 2026-11-18 — t893, t942 and t944 merged; t928 and t931 sent back; t943 sent back; t945-t947 and checkout started
+
+- Agent: Senior supervisor; finish-branches supervisor; hosted-cloud supervisor; key-backend supervisor (t928 fix round); worker-heavy serving-lease-claim-release (t931); worker empty-repeat-zero-calls (t945).
+- Changed:
+  - **t893 merged** (extension `ac03992bb`). The professional-network script names the read and press by call id, uses Core dev's `add` amendment, and sizes its judges to the four-attempt path. Its provider-free four-attempt proof passed (`run-mwm3xdhv-216b9033`; model calls 15, 7, 1, 1).
+  - **Attempt 4's one call is a Core defect.** A repeat over zero remaining rows is marked `not_reached`, so the run is judged again. It is now t945, which also lowers the script's `NOTES_BACK_JUDGES` to 3 so a regression fails.
+  - **t942 merged** (Core `a5c43571e`). The cloud package renders the commerce config, and admission reads the same grace period.
+  - **t944 merged** (Core `5339b8e4a`). The hosted sign-up page is a real 404 while closed. Open, it sends one welcome email and gives the same answer for a known address, with rate limiting.
+  - **t943 (tenant-bound enrolment) sent back.** Its expired-ticket test fails on merged dev even after its clock was frozen.
+  - **t928's independent security review** (held in `fxwork/.held/t928-security-review.md`) found no key or token leak and no cross-tenant path.
+    - It confirmed one defect, now fixed in t928's fix round: saving one's own key moved the workspace-wide assistant key and cleared the admin's model, so another admin or their paired token could strand members who used an offered key. The lead's earlier acceptance of decision 1 is withdrawn.
+    - Accepted as product behaviour: a key offered to the workspace may pay for members' Flows and standing result checks, and withdrawing the offer stops it.
+    - Held for a hosted unit (HC-keys): the hosted profile refuses every key write, and the model-access push does not ask IAM.
+  - **t928's re-run on merged dev also found:**
+    - `shared/protocol.ts` at 818 lines, which fails the extension audit;
+    - a `global.sqlite` handle left open after the runtime closes (EBUSY in two panel tests that pass on dev).
+    Both are added to its fix round.
+  - **t931's panel tests** hang because its data-root claim keeps renewing after a runtime closes ("claim is no longer renewed" for deleted roots). A worker is tracing the cause.
+  - **Dev itself fails 7 workspace tests.** t927 added `prepareLocalFirstRun` without adding it to two test mocks; t931 already fixes them.
+  - **Started:** t945 (empty repeat), t946 hc2b-a-routing, t947 hc2b-b-membership-cascade, and hc-checkout (with the admission wiring folded in).
+  - **Committed:** the enterprise SSO design (`docs/working/hosted-platform-launch-plan/designs/enterprise-sso.md`).
+  - **Phase 3 decisions:** yes to PKCE-state tab claim and a 30-minute sign-in expiry. Pricing order: checkout, HC2b A and B, billing-admin, spending-limits, license slot.
+- Validation:
+  - t893: lead's `verify-t893.sh` on merged dev:
+    - `pnpm --filter @fluxiq-web-extension/extension check` exit 0, build exit 0;
+    - `test-extension.mjs src/content src/runtime src/shared` "# pass 2309 # fail 0";
+    - test-runner build exit 0;
+    - script test "# pass 21 # fail 0";
+    - audit exit 0;
+    - `pnpm task finish t893` exit 0.
+  - Cloud: lead's `verify-cloud3.sh`, each on dev merged in.
+    - t942: fluxiq, web and cloud checks exit 0; cloud vitest 61 passed; web commerce 39 passed, 3 skipped; both audits passed; finishes exit 0.
+    - t944: fluxiq and web checks exit 0; profile 34 passed; sign-up, request-guard and middleware 31 passed; both audits passed; finishes exit 0.
+    - t943: checks and Core tests (44) passed; web 1 failed, 77 passed.
+  - t928 on merged dev: contracts, fluxiq and web checks exit 0; contracts 268/268; Core 4905/4905; extension check, build and tests 1034/0; Core audit passed; extension audit 1 violation (`protocol.ts` 818 lines); web 9 failed, 570 passed. Of the 9, 7 are the `prepareLocalFirstRun` mock, which also fails on dev (lead ran the two files on the shared Core at dev: 7 failed, 17 passed). The other 2 are EBUSY and t928-only.
+  - t931: checks and Core tests passed; web 2 failed, 265 passed (timeouts with EBUSY in `web-workspaces.test.ts`).
+- Outcome: the hosted sign-up page and commerce config are on `dev`, and t893 is finished. Open: t928 fix round, t931 claim release, t943 expiry test, t945, t905 guard, t925, t946, t947, checkout.
+
+### 2026-11-18 — t943, t947, t945, t949 and t931 merged; new installs start with no login
+
+- Agent: Senior supervisor; hosted-cloud supervisor; workers serving-lease-claim-release (Opus, t931), empty-repeat-zero-calls (Sonnet, t945), gateway-lifecycle-revoked (Sonnet, t949).
+- Changed:
+  - **t943 merged** (Core `fcd72a591`). A dedicated browser enrols only into its own tenant. The failing expired-ticket test came from the test world mixing two clocks (the route table captured the real `Date.now` before fake timers), so the world now runs on one injected clock.
+  - **t947 merged** (Core `068874e9f`). Membership suspend, reinstate and remove, plus an account deletion cascade through browser trust, billing and the workspace's storage. Scheduled deletions are swept on every profile.
+  - **t945 merged** (Core `4436453ab`, extension `8252ac08d`). A repeat whose For Each answered done with a recorded count of 0 and took no pass now counts as run, so a later deterministic attempt makes no model call. A skipped loop, a loop with rows left, a failed list read and a run that stopped short stay `not_reached`. `NOTES_BACK_JUDGES` stays 4: attempts 2 and 3 are judged legitimately, and an attempt-4 regression would be a refused fifth judge.
+  - **t949 merged** (Core `b86b9cd58`). The gateway lifecycle test asserts t929's revoked-client behaviour: `server.revoked` and `server.disconnect`, no pairing offered, across a restart. The product was right and the test was stale.
+  - **t931 merged** (Core `b01953e5f`, extension `b88ebe891`).
+    - The panel gives its data-root claim back when close returns.
+    - A claim whose root is gone or taken leaves the process registry.
+    - `opened()` starts every identity store empty on every profile, tenant workspaces included. A hosted or self-hosted panel never holds a well-known `admin`/`admin` login before its owner is claimed, and the ~1 s of hashing that public password per new workspace is gone. Older roots still have it retired on claim, and the self-hosting and data-and-state docs say so.
+    - The slow workspace tests' cause was that hashing, not machine load: the slowest default-timeout test went from 5.1-5.3 s (timing out) to 2.2-3.6 s.
+    - Dev's seven `prepareLocalFirstRun` mock failures are fixed with it.
+  - **t946 (HC2b A)** had its work committed (`4ff6cbf1b`) and dev merged in for t942's image-build heap fix. Its service and self-hosted runs are in progress.
+  - **Checkout (t948)** has t943 and t947 and is dispatched.
+  - **Version policy:** fluxiq and contracts get one minor bump at the next Core promotion to `main`, as Core's history does. Parallel units do not bump, since they would conflict on the version line.
+  - **Machine:** Windows' drive optimisation (`defragsvc`) held about 2.5 GB, so only one heavy slot could open. Stopping it needs the user's action.
+  - **Follow-ups recorded:**
+    - **Connection pool.** Each account creation opens and closes `global.sqlite` 22-26 times (about 0.3 s of SQLite); it becomes its own task after checkout.
+    - **Answer-first ending error.** An error thrown at a task's ending after model calls is labelled `pre_provider_validation_failed` and shown as "before anything was done or spent" (`service.ts` → `generation-catch.ts` → `setup-needed.ts`); it becomes its own task after t905's service wiring.
+    - **t947's remaining follow-ups:** suspended members hidden in the multi-tenant list go to HC2b C; `closeAccount` expiring checkouts and the environments purge are in checkout; t931's command line passing a workspace id is open.
+- Validation:
+  - t943 (lead's `verify-t943-t947.sh` on dev merged in): fluxiq and web checks exit 0; Core environments and enrolment 44 passed; web environments and browser-trust 78/78 three runs in a row; audit passed; finishes exit 0.
+  - t947: contracts, fluxiq and web checks exit 0; contracts 49 passed; Core 309 passed, 1 failed (gateway-lifecycle, dev's own); web 410 passed, 7 failed (dev's own mock), 4 skipped; audit passed; finishes exit 0.
+  - t945: Core answer-first 970 passed; fluxiq check exit 0; script test "# pass 21 # fail 0"; both audits passed. The proof's own `attempt.json` (`run-mwmex6vu-17db361e`, provider scripted) shows four attempts achieved with verdict right on one Flow, calls 15, 7, 1, 0, and continuation held.
+  - t949: fluxiq check exit 0; browser-trust and client-gateway service 395 passed; both audits passed.
+  - t931: fluxiq and web checks exit 0; Core 588 passed, 4 skipped; web workspaces, instrumentation, sync, owner-claim, auth, setup and fluxiq tests 369/369 twice; both audits passed. The finish first refused because t949 had moved Core dev; dev was merged in (one test file) and both finishes exited 0.
+- Outcome: five more units are on `dev`, dev's known test failures are gone, and new installs have no default login. Open: t928 fix round (critical path), then t925's live round; t905; t946; checkout; HC-keys, HC6a and HC2b C after t928 and t925.
+
+### 2026-11-18 — t928 merged: keys save from the panel and paired clients with no unlock
+
+- Agent: Senior supervisor; sub-supervisor key-backend (fix round: key-choice-fix and sqlite-leak on Opus, protocol-split and activity-join on Sonnet).
+- Changed:
+  - **t928 merged** (Core `9c7ba4524`, extension `15284bee2`). A model key is saved, replaced and removed from a signed-in panel and from a paired extension with no password, PIN or unlock; IAM decides. The paired route admits the three key writes. A save runs the provider's free check and pushes one model-access change after the check is recorded.
+  - **Fix round, after the security review and the lead's re-run:**
+    - A save sets only the saver's own key choice. Only a workspace with no assistant key takes the first save, and removing the workspace key leaves others at No key. Every caller chooses the person's own choice, then the workspace choice under consent, then their newest own key.
+    - The model-access ledger reads lazily and closes with its runtime, and `FluxIQ.close()` awaits `settled()`, which removed the `global.sqlite` handle leak.
+    - Activity carries each key write's outcome as `result` and `errorKind`, joined on the server, so request ids never leave it.
+    - `shared/model-key-messages.ts` is split out of `shared/protocol.ts` (818 to 793 lines).
+  - **Next for t925:** dev is merged into both of its trees (Core `c447a817d`, extension `d883c832a`). Its live round has started: the constants switch, one Activity entry type, the after-screenshots, and the approved-client proof of the whole first-run journey in both clients.
+  - **Found on dev, not from t928:** `subflow-trial/tests/run.test.ts` "hands the start hook the brief's host lease ... (A11)" fails on dev itself (lead's baseline on the shared Core at `b01953e5f`: 1 failed, 10 passed). It is now its own task.
+  - **Shared Core sync failure:** the sync failed because the panel's `next build` type-check worker ran out of Node's default heap ("Linting and checking validity of types", then "Next.js build worker exited with code: 134"). The Docker image already builds with a larger heap for this reason; the local build gets the same through its worker environment as its own task.
+  - **Started:** HC-keys (hosted customers save their own key; the push asks IAM), web-build-heap, subflow-a11-host-lease and identity-no-pin (Identity Access still stores and requires PINs; the MVP has none).
+- Validation: lead's `verify-t928b.sh` on dev merged in:
+  - contracts, fluxiq and web checks exit 0;
+  - Core vitest over secret-keys, `_shared`, runtime models, llm and assistant, program-route, client-gateway, platform IAM, panel-assistant, identity-access, `src/tests` and subflow-trial: 5067 passed, 1 failed (A11, the same as dev's baseline);
+  - web vitest over api/security, `lib/workspaces`, panel changes, key-sessions, discovery and programs: 618 passed;
+  - extension check and build exit 0; `test-extension.mjs src/background src/shared src/panel` "# pass 1743 # fail 0";
+  - both audits passed; finishes exit 0; pushed.
+- Outcome: the key problem the user reported is fixed on `dev` in both repositories. Next: t925's live proof, then the next full sweep and promotion.
+
+### 2026-11-18 — Checkout, heap and A11 merged; t925 live round 1 passed; one billed call per message
+
+- Agent: Senior supervisor; sub-supervisors key-security-ux (t925), hosted-cloud, finish-branches; workers web-build-heap (t951), subflow-a11-host-lease (t952), paired-cap-key-writes (t955), identity-no-pin (t954), billed-calls investigation (Opus, read-only).
+- Changed:
+  - **Merged:**
+    - **t948 (checkout):** plans sold by quantity; admission counts paid browsers; the paying account comes from FluxIQ's own checkout record; `/plans` is a real 404 while billing is off; the app-route paired actor narrowed to the four permissions app routes use, with a contracts test.
+    - **t951 (panel build heap):** a launcher gives Next's type-check worker `NODE_OPTIONS` 3584 MB, one value for local and image builds; the cloud package now builds and checks through the build cache. It removed the shared-Core sync failures.
+    - **t952:** the A11 subflow trial test binds the brief's lease as production does since t911, and checks the unbound refusal.
+  - **t925 live round 1** (production build, both clients):
+    - Extension first: Ready in both clients after 1.68 s and a first reply in 3.1 s; about 5 clicks, 4 fields and 3 screens to a first reply, against about 12, 6 and 5 before.
+    - The panel assistant replied with no project.
+    - A fake key read "Not accepted" in about 0.31 s, and a removed key "No key" in about 0.17 s.
+    - The real key was found 0 times in 530 files.
+    - The approved-client proof was refused by Claude Code's permission check for a worker. It is the user's to run or allow, and the lead did not run it on the worker's behalf.
+  - **Billed calls** (read-only investigation, `reports/key-security-ux/billed-calls-per-message.md`):
+    - One billed provider call per simple message in both clients. "Save and check" is free (Anthropic `GET /v1/models`; DeepSeek `GET /models` and `GET /user/balance`).
+    - Activity shows 4 "used a key" lines per call, because one key release records four permission checks.
+    - Flow settings saves write "used a key" with no model call.
+    - A key lent by someone else is recorded as "send panel message".
+    - "It last answered" uses one word for a free check and a paid reply.
+    - Fix at the cause: decide the three repeat checks unrecorded (`decideUnrecorded`) and record the call's outcome on its one row. It becomes a task after t950, which shares the key code, and it is groundwork for spending limits.
+  - **Routed:**
+    - To t950: a refused key is stored before it is checked, so the key list showed "Turned on" and Activity "replaced". The save now checks first, and a refused key never becomes active.
+    - To t925's Settings pass: the password fields left on the key forms, and the user's note that the Settings widgets look janky.
+  - **In flight:**
+    - t955: the generic paired cap is back to four permissions, and only the three key writes add `secrets.manage`. The first-sign-in timeout was the test not closing the platform services that real shutdown closes.
+    - t946: waits for t955.
+    - t954: no PIN anywhere in Core. Destructive calls are confirmed by the person's own press, the extension's Lab follows in the same unit, and the PIN UI comes after t925 merges.
+    - t950: hosted key saving proven live in three modes, round 2 running.
+    - t953: dedicated browsers in Docker.
+    - t905: stage B.
+- Validation:
+  - t948: fluxiq, web and cloud checks exit 0; Core 586 passed; cloud 62 passed; web 196 passed, 5 skipped; both audits passed; finishes exit 0.
+  - t951: `pnpm --filter @fluxiq/web build` exit 0 with "One Core graph: 320 Node server files bundle 0 Core module(s)" and the type check passing; launcher tests 4 passed; registry test 11/11 after the cloud registration; audit passed. The shared Core sync then succeeded at `d04637123`.
+  - t952: fluxiq check exit 0; subflow and candidate trials 321 passed; audits passed; finishes exit 0.
+- Outcome: the whole first-run key journey works live in both clients on the production build. Next: t955 then t946; t925's Settings pass and live round 2, then t925 merges, then t954's PIN UI; the key-use audit task after t950.
+
+### 2026-11-18 — t955, t946 and t957 merged; dev's known test failures cleared; t925 Settings pass committed
+
+- Agent: Senior supervisor; workers paired-cap-key-writes (Opus, t955), dev-stale-seal-transport-tests (Sonnet, t957), identity-no-pin (Opus, t954); sub-supervisors key-security-ux (t925) and hosted-cloud.
+- Changed:
+  - **Merged:**
+    - **t955** (Core `b33b9d334`): the generic paired-client cap is back to four permissions, from one module (`programs/_shared/paired-client`) with a test against copies; only `save-`, `replace-` and `remove-model-key` add `secrets.manage`, when the approver holds it. First-sign-in's hook hung on deleting its folder, because a key-sessions request (reached since t928's local instance id) opens the platform IAM audit database and the test closed the runtime without closing platform services as production shutdown does.
+    - **t946** (Core `2a5c00afa`, HC2b A): requests route to the signed-in person's own workspace, with the parity table covering checkout's routes.
+    - **t957** (Core `b0bd551b4`): two stale tests follow t928's v3 host seal and the conversation list's `unreadableProjects`.
+  - **t925's Settings pass**, committed on its branch (Core `6fd230cb9`, extension `beb97ce26`) and then merged with dev:
+    - Every key form is password-free, through the shared card's "Save and check".
+    - The panel Settings widgets are aligned, wrap-free at 390 px and jump-free on save.
+    - The extension Settings use one control family and one save model, with labelled tabs.
+    - Live round 2 is running.
+  - **t954 (no PIN):** work in progress committed on its branch (Core `7b7af4752`, extension `df8f14dfc`). A destructive call is confirmed only by a press grant minted from a trusted click on that call's own confirm control, sent once and never resent; the panel no longer auto-confirms. The Lab and the extension confirm without PINs. Its final round (the security pages' PIN UI and the ui-components press for chat-confirmed deletes) follows t925's merge.
+  - **Lead's decision (user rules: work from a client or the panel with no extra steps; a dangerous act asks a plain question):** a person's trusted click in the extension's own confirm control may confirm a destructive command, minted for that exact call as in the panel. This becomes its own unit after t954; until then Core refuses paired press grants.
+  - **Process:**
+    - Narrow pre-merge runs select tests by import graph as well as by folder: `vitest related` in `apps/web`, and a static import scan in `packages/fluxiq`, where `vitest related` runs out of heap.
+    - A pre-commit hook regenerates the working-docs index when a working document changes (`.githooks/pre-commit`).
+- Validation:
+  - t955: Core program-route, `_shared`, secret-keys, the paired-permission test and framework tests 819 passed. The web runs failed only on the 4 parity tests t946 fixes (413 run, 409 passed; `vitest related` on `paired-client-route-actor.ts` 1076 run, 1072 passed). Checks exit 0; audits passed.
+  - t946 on dev with t955: web 788/788; checks exit 0; audits passed.
+  - t957: both tests pass (1 and 4); audit passed. Finishes exit 0; pushed; shared Core synced.
+- Outcome: dev has no known failing Core or web tests in the areas checked. Next: t925 live round 2 and merge, then t954's final round; t950, t953 and t956 in the cloud lane; t905 stage B.
+
+### 2026-11-19 — t956 and t925 merged; t950, t953 and t958 wait for the live campaign's first round break
+
+- Agent: Senior supervisor; sub-supervisors key-security-ux (t925) and hosted-cloud (t950, t953, t956); workers t958-provisioning-connections (Sonnet), membership-permissions design (Opus), provisioning-connections trace (Sonnet); the live-campaign supervisor.
+- Changed:
+  - **Merged:**
+    - **t956** (Core `396449cd3`, HC2b C): `fluxiq storage`; guardrail v2 denies local identity administration under `service`; a hosted member's own sign-in security acts on the platform directory, caller only; suspended members resume. The lead fixed `decision-audit.test.ts`, which still expected an admin's local `update-user` to pass under `service`.
+    - **t925** (Core `76535e793`, extension `b7a8a1843`): password-free keys, the seven-state key card, and Settings fixed. Live round 2 passed in both clients: key Ready in 3.19 s, first replies about 3 s, a fake key "Not accepted", removal "No key"; 15 of 18 Settings items fixed and the last two jumps fixed after it (CSS tests, not re-shot live).
+  - **Committed, waiting for the campaign's first round break** (merging moves dev, and the Lab refuses lanes behind dev):
+    - **t950** (hosted keys: own-key writes for members and their browsers, honest save, F1 and F4). Its one failure, `person-project.test.ts`, used a permissions list to stand for a reader under `service`; since t950 a person's own policies decide there, so the test now gives a separate reader the Read Only policy.
+    - **t953** (environments API, Docker driver, runner image, fake provider on disk).
+    - **t958** (provisioning opened the platform databases 21-27 times per account: one pool per composition, kept per run and sweep; one account now opens 2).
+  - **Designed, held off the repos:** per-workspace identity under `service` (`fxwork/.held/hosted-cloud/workers/membership-permissions-design.md`). The union role is a latent hazard with wrong UI and labels, not an escalation: IAM decides first on every path.
+  - **Shared Core:** its web build failed on t925's new exports because `pnpm task sync-core` ran from `fxwork/t353-finish-refuses-stale-core`, whose tooling was 2,640 commits old and skipped sdk and ui-components. That worktree is now detached at dev and the sync reruns from it.
+  - **Live campaign (user, 2026-11-19):** many live runs on all ten sites, the hardest tasks, Haiku, Sonnet and Opus, success/partial/failure per run; simple bugs fixed, fundamental ones recorded for review. Lanes t959 and t960; `lab-slots/OVERRIDE-loop` created on the user's instruction ("you can override the 3 runs per 30 mins to unlimited with supervision"). The lead's session ended at about 03:00 before any live run started (the lanes were still queued for builds behind the merge chain); the campaign resumed at 12:55. Results: `docs/working/mvp-launch-plan/reports/live-campaign-2026-11-19/results.md` in t959.
+- Validation:
+  - t956: fluxiq related 2,092 passed in six batches; web related 1,075 and folders 323 passed after the test fix; checks exit 0; audits passed; finishes exit 0; pushed.
+  - t925 on dev: ui-components 782, web related 2,123, extension tests 1,781 pass / 0 fail; ui, web and extension checks and the extension build exit 0; audits and the Core mirror passed; finishes exit 0; pushed.
+  - t950: fluxiq related 1,903 of 1,904 (the `person-project` case above, rerun pending); web folders 95 passed; checks exit 0. t958: provisioning-listener tests 46 passed, `tsc` 0.
+- Outcome: the usable-client goal's last screens are on dev. Next: the campaign's round 1; at its break, verify and merge t950, t953 and t958, resync the lanes, then t954's final round.
+
 ## Open Questions
 
 None blocking.
