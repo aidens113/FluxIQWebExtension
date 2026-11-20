@@ -182,7 +182,8 @@ export async function openConnectedClients(page: Page, evidence: BrowserEvidence
 
 export async function approvePairingInPanel(page: Page, referenceCode: string, evidence: BrowserEvidenceRecorder): Promise<void> {
   await page.bringToFront();
-  const globalDialog = page.getByRole("dialog", { name: "A browser or app wants to connect" });
+  // Core titles the prompt "<client> wants to connect" (`pairingTitle` in apps/web/src/app/GlobalClientGatewayPairing.tsx).
+  const globalDialog = page.getByRole("dialog", { name: /^.+ wants to connect$/u });
   await globalDialog.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
   if (await globalDialog.isVisible().catch(() => false)) {
     if (!await globalDialog.getByText(referenceCode, { exact: true }).isVisible().catch(() => false)) {

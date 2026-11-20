@@ -57,7 +57,7 @@ export async function attemptPersonFor(input: AttemptPersonInput): Promise<LiveA
         scenarioId: input.scenarioId, scenarioLabDist: input.scenarioLabDist, workflowId: input.workflowId, variantId: input.variantId,
         task: input.task, permissions: { point: input.permissionPoint }, ...(answerInChat ? { answerInChat } : {}),
         write: async (snapshot) => { snapshots.set(ordinal, snapshot); },
-        publish: async (handOff: PersonHandOff) => { input.log?.(`[attempt] the Lab played the person at a check: ${handOff.check ?? "none showing"}, ${handOff.did}, answered ${handOff.answer ?? "nothing"}${handOff.via ? ` in the ${handOff.via}` : ""}`); },
+        publish: async (handOff: PersonHandOff) => { input.log?.(`[attempt] the Lab played the person at a check: ${handOff.check ?? "none showing"}, ${handOff.did}, answered ${handOff.answer ?? "nothing"}${handOff.via ? ` in the ${handOff.via}` : ""}${handOff.note ? ` (${handOff.note})` : ""}`); },
         publishPermission: async (answer: PersonPermissionAnswer) => { input.log?.(`[attempt] the Lab answered a permission question as the person: ${JSON.stringify(answer)}`); },
       });
       return { finish: () => person.finish() };

@@ -104,7 +104,8 @@ export async function proveApprovedClientAccess(context: ChatCheckContext, input
   try {
     await panel.goto(`${input.fluxiqOrigin}${KEYS_PAGE_PATH}${KEYS_PAGE_HASH}`, { waitUntil: "domcontentloaded" });
     await runtimeMessage(control, { type: "fluxiq.connect", settings: { gatewayUrl: input.gatewayUrl, coreApiUrl: input.coreApiUrl, autoReconnect: true } });
-    const dialog = panel.getByRole("dialog", { name: "A browser or app wants to connect" });
+    // Core titles the prompt "<client> wants to connect" (`pairingTitle` in apps/web/src/app/GlobalClientGatewayPairing.tsx).
+    const dialog = panel.getByRole("dialog", { name: /^.+ wants to connect$/u });
     await panel.bringToFront();
     await dialog.waitFor({ state: "visible", timeout: 30_000 });
     result.checks.approvalNeedsNoSecondPassword = await dialog.locator('input[type="password"]').count() === 0;
