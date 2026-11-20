@@ -32,6 +32,7 @@ import { promisify } from "node:util";
 import { processesUsingRoots, readSideState, removeWorktree, runGit, runPnpm } from "../worktree/index.mjs";
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
 import { checkCoreCurrent } from "./core-currency.mjs";
+import { deleteMergedBranch } from "./delete-merged-branch.mjs";
 import { locateTask } from "./locate.mjs";
 import { pairedCore } from "./paired-core.mjs";
 
@@ -98,7 +99,7 @@ export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integ
     await removeWorktree({ repositoryRoot, root: task.worktree.root, allowRunning });
   }
 
-  await runGit(repositoryRoot, ["branch", "-d", task.branch]);
+  await deleteMergedBranch({ repositoryRoot, branch: task.branch, integrationBranch });
 
   return { id, branch: task.branch, merged: subject, validation, worktree: task.worktree?.root ?? null, removed: Boolean(task.worktree), core: pairing, coreChecked, applied: true };
 }
