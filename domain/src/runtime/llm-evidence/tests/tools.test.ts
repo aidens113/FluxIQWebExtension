@@ -172,7 +172,11 @@ test("binds from the production host seam and selects the sole trusted web clien
   // A condition may test a column the plan does not keep, and the text says so:
   // live run `run-muq4oaof-464f5bce` kept `plus` and `ad` only to filter on them,
   // stored six columns where four were asked, and the judge paired no row.
-  assert.match(detectDescription, /It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter\./u);
+  assert.match(detectDescription, /It may name a column fields does not keep: keep only the columns asked for and a mark core\.set_result_processing filters by\./u);
+  // t970 (user, 2026-11-19): filtering the rows already read is offered beside the page's own filters, and
+  // the page is narrowed first only where that cuts reading a lot; it never names a site, task or answer.
+  assert.match(detectDescription, /Narrow on the page only where it cuts reading a lot; else filter rows read with core\.set_result_processing where offered\./u);
+  assert.doesNotMatch(detectDescription, /Narrow the page first/u);
   // And it says what the node does when conditions reject everything, since a
   // model that read an empty answer as an empty page would repair nothing.
   assert.match(detectDescription, /returns what it read and says so in its report/u);
