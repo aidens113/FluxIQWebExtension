@@ -555,6 +555,13 @@ Workers build against these at the same time; a change needs the lead.
 - Campaign figures the decision answers: all 11 runs at or near the $5 purse had climbed (10 to Opus, run 41 to Sonnet), and Sonnet and Opus judges continuing long conversations cost $0.20-$1.01 each (40-45% of spend on failing tasks). Run 42 (local-classifieds test-ride-question, 06:27, budget_out x4, $5.00) came after interim 6's tally, so the campaign is 37 counted runs, 0 SUCCESS, 17 PARTIAL, 20 FAILURE, about $90.
 - Validation: not validated: a decision record; nothing was built or run. The figures come from the campaign's results table (`fxwork/t959/.../live-campaign-2026-11-19/results.md`, cost and model columns read with awk: 11 rows at or over $4.50, each with a climb).
 
+### 2026-11-20 — How the campaign used result processing (t970)
+
+- User asked whether the data processing layer was used. Of the 23 runs after t970 reached the lanes (from 02:35), 9 called `core.set_result_processing`, 43 calls in all: run 24 (remote-easy-apply) 15, run 34 (free-hubs) 11, run 21 (free-hubs) 3, run 28 (photo-social) 4, run 37 (remote-easy-apply) 4, run 42 (test-ride) 3, and one each in runs 29 (Alex price), 35 and 36 (apprentices).
+- Helped: runs 29 and 36 (one filter each; both Lab-passed; run 36 is the first zero-call later attempt).
+- Went wrong: (1) used as trial and error: run 24's 15 calls alternate between keeping 3 and 7 of the same rows, several stated as "inspect" or "see why", and its date filter dropped matching rows (the judge's no); run 34 likewise kept 2 of 77 after 11 calls. (2) The conditions were not in the rows: the read had dropped the column (run 34's ad flag, recovered from `?src=ad` in the url; run 28's date, F3 family), so 6 of 43 calls were refused `result_processing.invalid`. (3) A wrong dedupe key left visible duplicates (run 24, 0124: 6 rows, each job twice). (4) Splitting a block of text into title, price and seller did not give the asked table (run 42, F27 family). Not used where it was needed: run 33 (earbuds) answered 42 unfiltered rows. Not checked: whether run 36's saved Flow carried its filter into the zero-call attempts.
+- Validation: `node <scratchpad>/processing-calls.mjs C:/Users/osrs_/FluxStuff/lab-runs/2026-11-20 <9 run ids>` (prints each call's operations, its stated why and the read/leftOut/repeats/kept counts, no row values) -> the counts above; per-run call counts from `ls steps | grep -c set_result_processing` over all 28 run folders of 2026-11-20.
+
 ## Open Questions
 
 None blocking.
