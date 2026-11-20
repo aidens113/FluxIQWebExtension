@@ -111,6 +111,7 @@ test("the samples are never in what the Flow keeps, and a playback of it never a
   assert.equal(JSON.stringify(ran.draft).includes(TRUE_EARBUDS), false);
   const kept = ran.draft?.ranWith?.parameters as JsonObject;
   assert.equal(Object.hasOwn(kept, "rejectedSamples"), false);
+  assert.equal(Object.hasOwn(kept.extractList as JsonObject, "answer"), false, "the Flow's own dispatch adds the answer, so the kept call does not");
   // A sample list is three long; the read's own account says it returned one
   // row, and that is what the replay compares (t194-w35: until then this was
   // the payload's longest list, two -- the column names).

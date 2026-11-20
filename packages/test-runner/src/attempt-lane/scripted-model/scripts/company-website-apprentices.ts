@@ -6,7 +6,7 @@ import { scriptedJudgement } from "./judgement.js";
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
 
 /** What stands over the page on a first visit, in the order a person clears it, each only while it shows. */
-const COVERS: readonly { summary: string; callId: string; words: RegExp }[] = [
+export const COMPANY_WEBSITE_COVERS: readonly { summary: string; callId: string; words: RegExp }[] = [
   { summary: "Close the chat greeting that sits over the page.", callId: "close-chat", words: /\bclickable\b.*(?:"×"|"Close"|title="Close")|button "Close"/u },
   { summary: "Accept cookies so the page can be used.", callId: "accept-cookies", words: /"Accept all"/u },
   { summary: "Decline the newsletter offer.", callId: "decline-newsletter", words: /No thanks, I will pay full price/u },
@@ -62,7 +62,7 @@ const decide: ScriptedReply = (request) => {
   const taken = new Set(evidence.map((entry) => entry.callId));
   const read = [...evidence].reverse().find((entry) => entry.toolId === "core.run_node" && /^read-team(?:-retry-\d+)?$/u.test(entry.callId));
   if (readSucceeded(read, evidence)) return { kind: "evidence_tool_decision", summary: "The apprentices are read.", decision: { kind: "complete", result: { summary: "Listed every apprentice across the branches, from the team page." } } };
-  for (const cover of COVERS) {
+  for (const cover of COMPANY_WEBSITE_COVERS) {
     if (!taken.has(cover.callId) && pageLine(page, cover.words)) return pressOf(request, cover.summary, cover.callId, cover.words);
   }
   if (!/^URL ~\/team\b/mu.test(page)) return pressOf(request, "Go to the team page.", "open-team", /link "Our team"/u);

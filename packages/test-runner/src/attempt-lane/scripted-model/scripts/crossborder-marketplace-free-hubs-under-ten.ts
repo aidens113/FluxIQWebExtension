@@ -88,7 +88,7 @@ const decide: ScriptedReply = (request) => {
     if (!box) throw new Error("The page shows no search box");
     return toolCall("Search for the hubs.", "search", "core.run_node", { node: "web.output.dom-type", parameters: { target: { handle: box.handle }, text: "usb c hub", submit: true }, consequences: [] }, true);
   }
-  // Each step once, by the calls made: after a check a person cleared, the page a decision reads may still be the one before the press, and a press made twice is a step the Flow cannot place.
+  // The current declared view is the page after any cleared check; the address says which filters already hold.
   if (!made.has("free-shipping") && applied.get("freeShipping") !== "y") return pressOf(request, "Narrow to hubs that ship free.", "free-shipping", /clickable "Free shipping"$/u);
   const ceilingOn = applied.get("maxPrice") === String(CEILING);
   if (!made.has("ceiling-typed") && !ceilingOn) {
@@ -98,7 +98,10 @@ const decide: ScriptedReply = (request) => {
   }
   if (!made.has("ceiling-applied") && !ceilingOn) return pressOf(request, "Apply the price ceiling.", "ceiling-applied", /clickable "OK"$/u);
   if (!made.has("sort-by-price") && applied.get("sort") !== "price_asc") return pressOf(request, "Sort the hubs cheapest first.", "sort-by-price", /clickable "Price ↑"$/u);
-  const structure = latestOf(request, "web.detect_repeating_structure");
+  const detected = latestOf(request, "web.detect_repeating_structure");
+  // A failed detection is reported with its real cause; the script never disguises it as an empty field list.
+  const structure = detected && Array.isArray(detected.value.fields) ? detected : undefined;
+  if (detected && !structure) throw new Error(`The detection of the hub cards failed: ${JSON.stringify(detected.value)}`);
   if (!structure) {
     const card = pageLine(page, /^t\d+ link ".*\bHub\b.*" same href/u);
     if (!card) throw new Error("The results show no hub card to take the shape of");
@@ -191,22 +194,22 @@ const LATER_ATTEMPTS = 3;
 
 /**
  * The task's script, for the unarmed read or its `timed-check` variant (`taskId` names which). `plain` is the read's
- * honest path for two attempts; `timed-check` is that path behind a look at the timed check, for the default four;
+ * honest path for the default four; `timed-check` is that path behind a look at the timed check, for the default four;
  * `left-out` is the plain path for the default four, judged on what each read page left out.
  */
 export function crossborderMarketplaceFreeHubsUnderTenScript(taskId: string, form: string = "plain"): ScriptedModelScript {
   if (form !== "plain" && form !== "timed-check" && form !== "left-out") throw new Error(`This script has no form "${form}". It has plain, timed-check and left-out`);
+  const attempts = 1 + LATER_ATTEMPTS;
   if (form === "plain") {
     return Object.freeze({
       taskId,
       replies: {
-        panel_command: [startAttempt, startAttempt],
+        panel_command: Array.from({ length: attempts }, () => startAttempt),
         evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
-        loop_verification: [answersRequest, answersRequest, answersRequest],
+        loop_verification: Array.from({ length: 2 * attempts }, () => answersRequest),
       },
     });
   }
-  const attempts = 1 + LATER_ATTEMPTS;
   if (form === "left-out") {
     return Object.freeze({
       taskId,

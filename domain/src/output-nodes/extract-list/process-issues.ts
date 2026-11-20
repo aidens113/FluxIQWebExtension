@@ -84,7 +84,13 @@ function sortIssues(sort: JsonValue | undefined, stored: readonly string[]): Web
 /** Every field `process` names, as Core's parser checks them: dedupe, where, sort, then columns. */
 function processNames(process: JsonObject): string[] {
   const deduped = isJsonObject(process.dedupe) ? strings(process.dedupe.by) : [];
-  return [...deduped, ...listed(process.where).flatMap(fieldOf), ...listed(process.sort).flatMap(fieldOf), ...strings(process.columns)];
+  // Core's `anyOf`, `compare` and `derive` (t970) name fields too; a column `derive` makes is not a field.
+  const grouped = listed(process.anyOf).flatMap((group) => listed(group).flatMap(fieldOf));
+  const compared = listed(process.compare).flatMap((entry) => isJsonObject(entry) ? ["field", "atLeast", "atMost", "lessThan", "greaterThan", "equals"].flatMap((key) => typeof entry[key] === "string" ? [entry[key] as string] : []) : []);
+  const sources = listed(process.derive).flatMap((entry) => isJsonObject(entry) && typeof entry.from === "string" ? [entry.from] : []);
+  const derived = new Set(listed(process.derive).flatMap((entry) => isJsonObject(entry) && typeof entry.id === "string" ? [entry.id] : []));
+  const named = [...sources, ...deduped, ...listed(process.where).flatMap(fieldOf), ...grouped, ...compared, ...listed(process.sort).flatMap(fieldOf), ...strings(process.columns)];
+  return named.filter((name) => !derived.has(name));
 }
 
 function fieldOf(entry: JsonValue): string[] {

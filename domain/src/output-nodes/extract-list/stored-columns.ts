@@ -17,8 +17,10 @@
 //
 // **So a name the record output gives a column the read reads becomes that
 // column.** Every name it writes -- a schema field's `id`, and each field a
-// `process` names in `columns`, `where`, `sort` and `dedupe.by` -- is looked up
-// among the read's own columns:
+// `process` names in `columns`, `where`, `sort` and `dedupe.by`, and since t970
+// in `anyOf`, `compare` (both sides) and a `derive`'s `from` -- is looked up
+// among the read's own columns. A column a `derive` makes is Core's own
+// computed column, never a read's, and is not looked up:
 //
 // - a key of the read's field map is that column, as it always was;
 // - any other name is matched by the extraction node's column matcher
@@ -138,10 +140,23 @@ function recordOutputNames(recordOutput: JsonValue | undefined): WebAutomationSt
   }
   const process = recordOutput.process;
   if (!isJsonObject(process)) return [...names.values()];
-  for (const [index, column] of listed(process.columns)) add(column, ["process", "columns", index]);
-  for (const [index, condition] of listed(process.where)) if (isJsonObject(condition)) add(condition.field, ["process", "where", index, "field"]);
-  for (const [index, key] of listed(process.sort)) if (isJsonObject(key)) add(key.field, ["process", "sort", index, "field"]);
-  if (isJsonObject(process.dedupe)) for (const [index, by] of listed(process.dedupe.by)) add(by, ["process", "dedupe", "by", index]);
+  // Core's computed columns (t970), which no read reads.
+  const derived = new Set(listed(process.derive).flatMap(([, field]) => (isJsonObject(field) && typeof field.id === "string" ? [field.id] : [])));
+  const addRead = (written: JsonValue | undefined, path: WebAutomationStoredColumnPath) => {
+    if (typeof written !== "string" || !derived.has(written)) add(written, path);
+  };
+  for (const [index, column] of listed(process.columns)) addRead(column, ["process", "columns", index]);
+  for (const [index, condition] of listed(process.where)) if (isJsonObject(condition)) addRead(condition.field, ["process", "where", index, "field"]);
+  for (const [index, key] of listed(process.sort)) if (isJsonObject(key)) addRead(key.field, ["process", "sort", index, "field"]);
+  if (isJsonObject(process.dedupe)) for (const [index, by] of listed(process.dedupe.by)) addRead(by, ["process", "dedupe", "by", index]);
+  for (const [group, conditions] of listed(process.anyOf)) {
+    for (const [index, condition] of listed(conditions)) if (isJsonObject(condition)) addRead(condition.field, ["process", "anyOf", group, index, "field"]);
+  }
+  for (const [index, comparison] of listed(process.compare)) {
+    if (!isJsonObject(comparison)) continue;
+    for (const key of ["field", "atLeast", "atMost", "lessThan", "greaterThan", "equals"]) addRead(comparison[key], ["process", "compare", index, key]);
+  }
+  for (const [index, field] of listed(process.derive)) if (isJsonObject(field)) addRead(field.from, ["process", "derive", index, "from"]);
   return [...names.values()];
 }
 

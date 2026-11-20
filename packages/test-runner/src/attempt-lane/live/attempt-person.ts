@@ -30,7 +30,7 @@ export type AttemptPersonInput = {
 };
 
 /** What the Lab's person recorded for one attempt, by the attempt's ordinal. */
-export type AttemptPersonRecords = { snapshotOf(ordinal: number): LabPersonSnapshot | undefined };
+export type AttemptPersonRecords = { snapshotOf(ordinal: number): LabPersonSnapshot | undefined; readonly answerFailure: Error | undefined };
 
 /**
  * The Lab playing the scenario's declared person for each attempt of a `lab attempt` run, as the legacy lane
@@ -45,12 +45,14 @@ export type AttemptPersonRecords = { snapshotOf(ordinal: number): LabPersonSnaps
 export async function attemptPersonFor(input: AttemptPersonInput): Promise<LiveAttemptPerson & AttemptPersonRecords> {
   const module = await loadPersonChecks(input.scenarioLabDist, input.scenarioId);
   const snapshots = new Map<number, LabPersonSnapshot>();
+  let current: Awaited<ReturnType<typeof startLabPerson>> | undefined;
   const scope = { projectId: input.projectId, domainId: LAB_PROJECT_DOMAIN_ID };
   const answerInChat = input.panel ? chatAnswerer(input.control, scope, input.panel) : undefined;
   return {
     playable: module !== null,
     answersPermissions: input.permissionPoint?.askFirst !== true,
     snapshotOf: (ordinal) => snapshots.get(ordinal),
+    get answerFailure() { return current?.answerFailure; },
     start: async (ordinal): Promise<LiveAttemptPersonRun> => {
       const person = await startLabPerson({
         control: input.control, projectId: input.projectId, context: input.context, scenarioOrigin: input.scenarioOrigin, runToken: input.runToken,
@@ -60,6 +62,7 @@ export async function attemptPersonFor(input: AttemptPersonInput): Promise<LiveA
         publish: async (handOff: PersonHandOff) => { input.log?.(`[attempt] the Lab played the person at a check: ${handOff.check ?? "none showing"}, ${handOff.did}, answered ${handOff.answer ?? "nothing"}${handOff.via ? ` in the ${handOff.via}` : ""}${handOff.note ? ` (${handOff.note})` : ""}`); },
         publishPermission: async (answer: PersonPermissionAnswer) => { input.log?.(`[attempt] the Lab answered a permission question as the person: ${JSON.stringify(answer)}`); },
       });
+      current = person;
       return { finish: () => person.finish() };
     },
   };

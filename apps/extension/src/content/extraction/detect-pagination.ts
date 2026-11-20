@@ -343,6 +343,25 @@ export function nextControlOnPage(named: Element | null, run: readonly Element[]
   return undefined;
 }
 
+/** A pager can remain on its last page with only a way back; absence of Next does not make the list static. */
+export function hasPagerOnPage(run: readonly Element[]): boolean {
+  if (nextControlOnPage(null, run) !== undefined) return true;
+  const outsideRun = (element: Element): boolean => !run.some((item) => item === element || item.contains(element));
+  let level = run[0]?.parentElement ?? null;
+  for (let depth = 0; level && depth < MAX_ANCESTOR_LEVELS; depth += 1, level = level.parentElement) {
+    const backward = (element: Element): boolean => outsideRun(element) && isPagerBack(element);
+    if (Array.from(level.querySelectorAll(PAGER_CONTROL_SELECTOR)).some(backward) || pageDrawnControls(level, backward).length > 0) return true;
+  }
+  return false;
+}
+
+function isPagerBack(control: Element): boolean {
+  if (isStepControl(control)) return false;
+  const rel = control.getAttribute("rel")?.trim().toLowerCase().split(/\s+/u);
+  if (rel?.includes("prev")) return true;
+  return /\bprev(?:ious)?\s+page\b|^[^\p{L}\p{N}]*(?:prev(?:ious)?|earlier|newer)(?:\s+\p{L}+)?[^\p{L}\p{N}]*$/u.test(labelOf(control));
+}
+
 function labelOf(control: Element): string {
   return (control.getAttribute("aria-label") ?? textOutsideSensitiveControls(control)).replace(/\s+/gu, " ").trim().toLowerCase();
 }
