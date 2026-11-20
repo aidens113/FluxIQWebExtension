@@ -140,3 +140,30 @@ test("act-effect-honest fails a success the next step never found its target aft
   const slow = [attempt("s1", "succeeded"), attempt("s2", "failed", { failure: notFound }), attempt("s2", "succeeded", { retry: true })];
   assert.equal(MATRIX_CHECKS["act-effect-honest"](evidence({ attempts: slow }), caseOf("14")).verdict, "passed");
 });
+
+// Row 15 (t972): a check a person cleared is gone on from at its step, the Flow's last step included.
+// The steps as case 15's Flow saves them: an optional step, then the merge its plan adds, twice, then the search and the presses.
+const CASE_15_STEPS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"].map(nodeKey => ({ subflowKey: "main", nodeKey, definitionId: nodeKey === "s2" || nodeKey === "s4" ? "builtin.control.merge" : "web.output.dom-click", lasting: false }));
+const PERSON_CHECK = { category: "user_intervention_required", code: "web.intervention.required" };
+
+test("person-cleared-resume passes a run that went on from each cleared step to its end, as matrix run rmx-2026-11-20T10-04-51-026Z-2f5801 did", () => {
+  const attempts = [
+    ...["s1", "s2", "s3", "s4", "s5", "s6"].map(step => attempt(step, "succeeded")),
+    attempt("s7", "failed", { failure: PERSON_CHECK, clearedByPerson: true }),
+    ...["s8", "s9"].map(step => attempt(step, "succeeded")),
+    attempt("s10", "failed", { failure: PERSON_CHECK, clearedByPerson: true }),
+  ];
+  const checked = MATRIX_CHECKS["person-cleared-resume"](evidence({ steps: CASE_15_STEPS, attempts }), caseOf("15"));
+  assert.equal(checked.verdict, "passed", checked.reasons.join("; "));
+  assert.deepEqual(checked.observed.clearedSteps, ["s7", "s10"]);
+  assert.equal(checked.observed.lastStep, "s10");
+});
+
+test("person-cleared-resume fails the run that ended at the last step the person cleared, as run-mwoq9g4l-dbd69bd6 did", () => {
+  const ended = MATRIX_CHECKS["person-cleared-resume"](evidence({ steps: CASE_15_STEPS, run: { status: "failed", failure: PERSON_CHECK, stopCode: null }, attempts: [attempt("s7", "failed", { failure: PERSON_CHECK, clearedByPerson: true }), attempt("s10", "failed", { failure: PERSON_CHECK, clearedByPerson: true })] }), caseOf("15"));
+  assert.equal(ended.verdict, "failed");
+  assert.ok(ended.reasons.some(reason => /Core reported the run failed/u.test(reason)));
+  // A check nobody cleared at a step the case names is no proof, and neither is one cleared elsewhere.
+  const missed = MATRIX_CHECKS["person-cleared-resume"](evidence({ steps: CASE_15_STEPS, attempts: [attempt("s6", "failed", { failure: PERSON_CHECK, clearedByPerson: true }), attempt("s10", "failed", { failure: PERSON_CHECK, clearedByPerson: true })] }), caseOf("15"));
+  assert.deepEqual(missed.reasons, ["step s7 did not meet a check the person cleared", "the person cleared a check at step(s) s6, which the case does not expect"]);
+});

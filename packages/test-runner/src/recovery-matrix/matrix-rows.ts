@@ -1,4 +1,4 @@
-// The acceptance matrix, rows 1-11, 13 and 14, with each row's site assignment
+// The acceptance matrix, rows 1-11 and 13-15, with each row's site assignment
 // from t390's report (`docs/working/state-aware-recovery-plan/reports/
 // t390-lab-perturbations.md`). Row 12 is the paid proof and is never here.
 
@@ -111,5 +111,12 @@ export const RECOVERY_MATRIX_ROWS: readonly RecoveryMatrixRow[] = [
     scenario: "A press the page never answered is not a success",
     needs: [],
     cases: [{ caseId: "14", taskInstructions: "Search the marketplace for a Kestrel 35 lens hood, open the hood's own listing, open its seller's shop and read every item the shop lists with its title and price. If the site checks your browser first, wait for it to let you through rather than answering it.", title: "a browser check that lets the visitor on by itself stands in front of the first results page; the listing is counted open only once it is, and the seller's shop is read", scenarioId: "auction-marketplace", workflowId: "lens-hood-seller-shop", variantId: "browser-check-first", flow: "HOOD_SELLER_SHOP", check: "act-effect-honest", site: { kind: "auction-check-passed" }, goalFacts: false }],
+  },
+  {
+    row: 15,
+    scenario: "A check a person cleared is gone on from at its step, with no model call",
+    needs: [],
+    // `CHECKED_HUB_SEARCH`'s 4★ filter (s7) is the third results load and its price OK (s10, the last step) the third after the screen was passed.
+    cases: [{ caseId: "15", taskInstructions: "On Farbazaar, search for usb c hub. Then, with the results page's own controls and in this order, show only Free shipping listings, show only listings rated 4★ & up, sort by Price ↑, type 10 into the price Max box and press OK, and leave those results on screen. If the site shows a check only a person may pass, hand it to the person and carry on from where it stood.", title: "the traffic screen meets a saved Flow's run at a filter and again at its last step; the Lab's person clears each and the run goes on from that step to its end with no model call", scenarioId: "crossborder-marketplace", workflowId: "free-hubs-under-ten", flow: "CHECKED_HUB_SEARCH", check: "person-cleared-resume", personCleared: { steps: ["s7", "s10"] }, site: { kind: "crossborder-checks-passed", checksPassed: 2 }, goalFacts: false }],
   },
 ];

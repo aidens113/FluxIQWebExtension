@@ -66,6 +66,12 @@ export type MatrixAttemptRecord = Readonly<{
   /** When the attempt began and ended, in epoch milliseconds as Core recorded them; `null` when absent. */
   startedAt: number | null;
   finishedAt: number | null;
+  /**
+   * The attempt met a check only a person may pass, Core asked the person (`metadata.ask`, `personNeeded`), they
+   * pressed Continue, and the run went on down `success`. Absent otherwise. Closed words only: neither the question
+   * nor the answer is read.
+   */
+  clearedByPerson?: true;
 }>;
 
 const EVENTS = new Set(["start", "before", "retry", "fail", "before_next"]);
@@ -103,8 +109,14 @@ export function matrixAttemptRecords(runDetail: Readonly<Record<string, unknown>
         skipped: skippedOf(attempt.skipped ?? metadata.skipped),
         startedAt: epochMs(attempt.startedAt),
         finishedAt: epochMs(attempt.finishedAt),
+        ...(clearedByPerson(record(attempt.ask ?? metadata.ask)) ? { clearedByPerson: true as const } : {}),
       };
     });
+}
+
+/** Core's own record of a person-needed ask answered Continue: the run went on down `success`. */
+function clearedByPerson(ask: Record<string, unknown> | undefined): boolean {
+  return ask?.personNeeded === true && ask.status === "answered" && ask.route === "success";
 }
 
 function failureOf(value: unknown): MatrixAttemptRecord["failure"] {

@@ -3,6 +3,8 @@
 // The plan (`docs/working/state-aware-recovery-plan.md`, "Acceptance matrix")
 // names thirteen behaviours a Flow must show on the realistic scenarios, and
 // t968 added a fourteenth: a press the page never answered is not a success.
+// t972 added a fifteenth: a check only a person may pass, once the Lab's person
+// clears it, is gone on from at the step it stopped, with no model call.
 // Row 12 is a paid proof and is not here: every row in this table runs provider-free,
 // and a run that would call a model fails its row rather than calling one.
 //
@@ -45,7 +47,8 @@ export type RecoveryCheckId =
   | "retries-absorbed"
   | "row-reacquired"
   | "deliberate-stop"
-  | "act-effect-honest";
+  | "act-effect-honest"
+  | "person-cleared-resume";
 
 /** What the site's state endpoint must show after the run: counts only, read from `/__control/final-state`. */
 export type RecoverySiteExpectation =
@@ -58,7 +61,9 @@ export type RecoverySiteExpectation =
   /** Bigbox: exactly these cart lines, by product and quantity, and the shopper's store when it matters. */
   | Readonly<{ kind: "bigbox-cart"; lines: readonly Readonly<{ productId: string; qty: number }>[]; storeId: string | null }>
   /** Auction marketplace: the bot check passed once, and no bid, purchase or watch made. */
-  | Readonly<{ kind: "auction-check-passed" }>;
+  | Readonly<{ kind: "auction-check-passed" }>
+  /** Crossborder: the traffic screen passed exactly `checksPassed` times and not left waiting, and nothing put in the cart or ordered. */
+  | Readonly<{ kind: "crossborder-checks-passed"; checksPassed: number }>;
 
 export type RecoveryMatrixCase = Readonly<{
   /** `1`, `4a`, `13b`: the row number and, where a row has several, a letter. */
@@ -90,7 +95,20 @@ export type RecoveryMatrixCase = Readonly<{
   declaredFailure?: Readonly<{ category: string; code: string }>;
   /** The row-bound step whose stale row must be found again, and from which read (13c). */
   reacquire?: RecoveryReacquireExpectation;
+  /**
+   * The steps, by node key, at which the run must meet a check only a person may
+   * pass that the Lab's person clears (15). Present, the Lab plays the person for
+   * the run (`../person-simulation/`); absent, nobody answers a person-needed ask.
+   */
+  personCleared?: RecoveryPersonClearedExpectation;
 }>;
+
+/**
+ * What a person-cleared case requires (15): each of `steps` met the check and the
+ * person cleared it, the last of them is the Flow's last step, and the run went on
+ * from each and succeeded.
+ */
+export type RecoveryPersonClearedExpectation = Readonly<{ steps: readonly string[] }>;
 
 /**
  * What a re-acquire case requires of its step (13c): it ran once per pass of
@@ -102,7 +120,7 @@ export type RecoveryMatrixCase = Readonly<{
 export type RecoveryReacquireExpectation = Readonly<{ step: string; source: string; passes: number; reacquiredPasses: number }>;
 
 export type RecoveryMatrixRow = Readonly<{
-  /** The matrix row number, 1-14 (12 is the paid proof and is never in this table). */
+  /** The matrix row number, 1-15 (12 is the paid proof and is never in this table). */
   row: number;
   /** The plan's words for the row. */
   scenario: string;

@@ -70,3 +70,17 @@ test("an act already done and an unhandled handler's reason are read in closed w
   assert.equal(odd!.skipped, null);
   assert.equal(odd!.lifecycle!.unhandledReason, null);
 });
+
+test("a check the person cleared is read from Core's ask record, and nothing of the question or answer is kept (t972)", () => {
+  const [cleared, stopped, other] = matrixAttemptRecords({
+    actionAttempts: [
+      { order: 1, nodeId: `${NODE}.s5`, status: "failed", failure: { category: "user_intervention_required", code: "web.intervention.required" }, metadata: { ask: { askId: "person-needed.1", kind: "choice", status: "answered", route: "success", personNeeded: true, text: "page words" } } },
+      { order: 2, nodeId: `${NODE}.s6`, status: "failed", metadata: { ask: { status: "answered", route: "failed", personNeeded: true } } },
+      { order: 3, nodeId: `${NODE}.s7`, status: "failed", metadata: { ask: { status: "answered", route: "success" } } },
+    ],
+  });
+  assert.equal(cleared!.clearedByPerson, true);
+  assert.equal(stopped!.clearedByPerson, undefined);
+  assert.equal(other!.clearedByPerson, undefined);
+  assert.ok(!JSON.stringify(cleared).includes("page words"));
+});
