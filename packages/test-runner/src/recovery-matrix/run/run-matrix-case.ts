@@ -39,6 +39,7 @@ import { requirementRefusal } from "./requirement-refusal.js";
 import { matrixCaseMeasures, type MatrixCaseMeasures } from "../measures.js";
 import { judgeSiteState, matrixAttemptRecords, matrixModelCalls, matrixTraceAttempts, readSiteState, type MatrixModelCalls, type MatrixRecoveryActivity, type MatrixTraceAttempt } from "../records/index.js";
 import { watchMatrixActivity, type MatrixActivityWatch } from "./activity-watch.js";
+import { startMatrixCasePerson, type MatrixCasePerson } from "./case-person.js";
 
 export type MatrixCaseOptions = {
   repositoryRoot: string;
@@ -106,6 +107,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
   let perturbationReport: PerturbationReport | null = null;
   let run: PersistedFlowRunOutcome | undefined;
   let activityWatch: MatrixActivityWatch | undefined;
+  let person: MatrixCasePerson | undefined;
   let outcome: { -readonly [Key in keyof MatrixCaseResult]: MatrixCaseResult[Key] } | undefined;
   try {
     const setup = await startTopology({ ...topologyOptions, runId: `${options.matrixRunId}-${matrixCase.caseId}-setup` });
@@ -141,8 +143,12 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
     const facilityRunId = `${options.matrixRunId}-${matrixCase.caseId}`;
     // A case judged by a recovery row reads Core's live activity throughout the run: the stream keeps only its last events.
     if (matrixCase.reacquire) activityWatch = watchMatrixActivity(() => control.automationStudioCall("get-activity", { projectId }));
+    // A case whose run meets a check only a person may pass has the Lab play the person, started before the run asks (`./case-person.ts`).
+    person = await startMatrixCasePerson({ matrixCase, control, projectId, context: browser.context, scenarioOrigin: started.scenarioOrigin, runToken: started.allocation.controllerToken, scenarioLabDist: labPaths.scenarioLabDist, workflowId: workflow.workflowId, variantId: workflow.variant?.id });
     // No `llmExecution`: Core runs it with `adaptiveMode: "deterministic"`, and its host was built with no model wiring.
     run = await executeRecordedFlowRun(control, { projectId, flowId: compiled.flowId, facilityRunId, actionTypes, inputs: { scenarioId: scenario.id, facilityRunId } });
+    const handOffs = person ? await person.finish() : null;
+    person = undefined;
     const detail = await settledRunDetail(control, projectId, run.runId);
     const modelCalls = matrixModelCalls(detail);
     const raw = await control.automationStudioCall("get-flow-run-detail", { projectId, runId: run.runId });
@@ -173,7 +179,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
       verdict: reasons.length ? "failed" : checked.verdict,
       reasons,
       missingRecords: checked.missingRecords,
-      observed: { ...checked.observed, site: site.observed },
+      observed: { ...checked.observed, site: site.observed, ...(handOffs ? { person: handOffs } : {}) },
       compiled,
       run: { runtimeRunId: run.runId, status: run.status, failure: evidence.run.failure, attempts: evidence.attempts.length },
       attempts: attemptSummaries(evidence),
@@ -200,6 +206,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
     }));
   } finally {
     await activityWatch?.stop().catch(/* best-effort: the verdict is already decided */ () => undefined);
+    await person?.finish().catch(/* best-effort: the verdict is already decided */ () => undefined);
     await perturbation?.close().catch(/* best-effort: the verdict is already decided */ () => undefined);
     await browser?.close().catch(/* best-effort: the verdict is already decided */ () => undefined);
     await topology?.close().catch(/* best-effort: the verdict is already decided */ () => undefined);

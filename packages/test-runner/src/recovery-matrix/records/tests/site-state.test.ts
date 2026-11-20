@@ -64,3 +64,17 @@ test("an auction check case holds once the bot check was passed and nothing was 
   assert.equal(never.reasons.length, 2);
   assert.equal(never.duplicatedActs, 1);
 });
+
+test("a crossborder checks case holds when the traffic screen was passed as often as expected and nothing was carted or ordered (t972)", () => {
+  const expectation = { kind: "crossborder-checks-passed", checksPassed: 2 } as const;
+  const held = judgeSiteState(expectation, { search: { loadsSinceCheck: 1, challenged: false, checksPassed: 2 }, cart: [], orders: [] });
+  assert.equal(held.held, true);
+  assert.deepEqual(held.observed, { checksPassed: 2, checkWaiting: false, cartLines: 0, orders: 0 });
+  // A step pressed again after the person cleared it is one more results load, and so one more screen passed.
+  const again = judgeSiteState(expectation, { search: { loadsSinceCheck: 0, challenged: false, checksPassed: 3 }, cart: [], orders: [] });
+  assert.equal(again.held, false);
+  assert.equal(again.duplicatedActs, 1);
+  const stuck = judgeSiteState(expectation, { search: { loadsSinceCheck: 2, challenged: true, checksPassed: 1 }, cart: [{ listingId: "1" }], orders: [] });
+  assert.equal(stuck.held, false);
+  assert.equal(stuck.reasons.length, 3);
+});

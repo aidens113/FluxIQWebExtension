@@ -32,6 +32,7 @@ export const MATRIX_CHECKS: Readonly<Record<RecoveryCheckId, Check>> = {
   "row-reacquired": rowReacquired,
   "deliberate-stop": deliberateStop,
   "act-effect-honest": actEffectHonest,
+  "person-cleared-resume": personClearedResume,
 };
 
 /** Row 1: the run began at the primary Subflow's first step, never jumped, and completed normally. */
@@ -299,6 +300,26 @@ function actEffectHonest(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatri
   for (const attempt of falseSuccesses) reasons.push(`step ${stepOfNode(evidence.steps, attempt.nodeId)?.nodeKey ?? attempt.nodeId} answered success, and the step after it never found its target on the page that success left`);
   const codes = (code: string) => evidence.attempts.filter(attempt => attempt.failure?.code === code).length;
   return result(reasons, [], { pageWentBeforePress: codes("web.page.changed"), noEffect: codes("web.action.no_effect"), falseSuccesses: falseSuccesses.length });
+}
+
+/**
+ * Row 15: each named step met a check only a person may pass and the person cleared it, the last of them is the
+ * Flow's last step, and the run went on from each to its end and succeeded (t972). A cleared step the run never went
+ * on from shows as a run that did not succeed; one pressed again shows on the site, which then counts the screen
+ * passed once more than expected (`../records/site-state.ts`).
+ */
+function personClearedResume(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): MatrixCheckResult {
+  const reasons = floor(evidence, matrixCase);
+  succeeded(evidence, reasons);
+  const expected = matrixCase.personCleared?.steps ?? [];
+  const cleared = evidence.attempts.filter(attempt => attempt.clearedByPerson === true).map(attempt => stepOfNode(evidence.steps, attempt.nodeId)?.nodeKey ?? attempt.nodeId ?? "unknown");
+  const personNeeded = evidence.attempts.filter(attempt => attempt.failure?.category === "user_intervention_required").length;
+  for (const step of expected) if (!cleared.includes(step)) reasons.push(`step ${step} did not meet a check the person cleared`);
+  const unexpected = cleared.filter(step => !expected.includes(step));
+  if (unexpected.length) reasons.push(`the person cleared a check at step(s) ${unexpected.join(", ")}, which the case does not expect`);
+  const last = evidence.steps.filter(step => step.subflowKey === evidence.primarySubflowKey && step.definitionId !== "builtin.control.end").at(-1)?.nodeKey ?? null;
+  if (expected.length && expected.at(-1) !== last) reasons.push(`the case's last cleared step ${expected.at(-1)} is not the Flow's last step ${last ?? "(none)"}`);
+  return result(reasons, [], { clearedSteps: cleared, personNeededAttempts: personNeeded, lastStep: last });
 }
 
 function floor(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): string[] {

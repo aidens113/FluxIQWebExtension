@@ -1,6 +1,7 @@
 // The matrix's hand-authored candidate scripts, one per file, each written
 // against the realistic scenario's own markup. `../matrix-rows.ts` names them
 // by export name.
+export * from "./checked-hub-search.js";
 export * from "./confirm/index.js";
 export * from "./hub/index.js";
 export * from "./hood-seller-shop.js";
