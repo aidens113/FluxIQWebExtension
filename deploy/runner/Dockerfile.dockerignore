@@ -1,0 +1,8 @@
+# The runner image's context is the repository root; only the built extension,
+# the built browser host and its package.json are sent.
+*
+!apps/extension/dist/chrome
+!packages/browser-host/package.json
+!packages/browser-host/dist
+packages/browser-host/dist/**/tests
+packages/browser-host/dist/**/*.map

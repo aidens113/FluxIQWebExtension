@@ -11,14 +11,17 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
  * Brings the extension to a connected gateway session.
  *
  * A named profile first connects without a ticket, since the token it stored
- * resumes. Otherwise a ticket is taken for each attempt: a connect that fails
+ * resumes, unless its launcher knows no stored token can (`resumeStoredToken`
+ * false: a dedicated environment's trust is revoked at every start). Otherwise
+ * a ticket is taken for each attempt: a connect that fails
  * before redemption (transport, a socket dropped before the session was ready)
  * is retried with a new one, the first attempt plus 3 retries, each cause
  * kept. An `enrolment.*` refusal is final and reported as is.
  */
 export async function connectHost(page: Page, request: FluxIQHostLaunchRequest, options: BrowserHostOptions, isClosed: () => boolean): Promise<void> {
   const base = { gatewayUrl: request.gatewayUrl, coreApiUrl: request.coreApiUrl, timeoutMs: options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS };
-  if (request.profile.kind === "named" && (await enrolExtension(page, base)).state === "connected") return;
+  const resumes = request.profile.kind === "named" && options.resumeStoredToken !== false;
+  if (resumes && (await enrolExtension(page, base)).state === "connected") return;
   const causes: string[] = [];
   for (let attempt = 1; attempt <= ATTEMPTS && !isClosed() && !request.signal.aborted; attempt++) {
     try {
