@@ -14,7 +14,7 @@
 // **So there is one reader.** Once the step's parameters are final and its dry
 // dispatch accepts them (`webPlanUndispatchable`), the record output the step
 // keeps is the one that dispatch built: the same reconcile, the same narrowing
-// to the declared columns (a helper `process` needs stored and hidden), the same
+// to the declared columns (a helper a condition or `process` reads stored and hidden), the same
 // processing from the read, the same records path, as Core's parser read it.
 // Core then validates what will run, and the Flow saves it. Dispatching that
 // value again builds the same value, so a saved Flow runs unchanged.

@@ -443,6 +443,7 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.not_a_field",
     EXTRACTION_HINT,
     "web.handle.expected.extract_list.next_page",
+    "web.handle.expected.extract_list.same_as",
     "web.handle.expected.next_page.list_control",
     TARGET_HINT,
     USE_CLICK,

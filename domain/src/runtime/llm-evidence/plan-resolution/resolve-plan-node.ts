@@ -190,6 +190,10 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // `read-list-collect-design.md` 6.1). Until S4 the read paged by itself, and
   // a bound in the wrong place or over a list with no pager had hints of its own.
   "web.handle.expected.extract_list.next_page",
+  // Beside a read field refused for reading the very column another field of
+  // the read reads: a column object `{column, sameAs: <that field>}` keeps
+  // both when they are meant to be one value (`extraction/columns.ts`, t975 F23).
+  "web.handle.expected.extract_list.same_as",
   // The Next page node's `nextPage` as `{ list, control? }`: the detected
   // list's handle, and optionally the page's own Next control by its
   // handle (`next-page-slot.ts`).

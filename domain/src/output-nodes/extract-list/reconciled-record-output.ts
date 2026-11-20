@@ -39,10 +39,10 @@
 // same reason: the node knows where its rows are, the catalog tells a model to
 // leave it out, and a path naming anywhere else can only find nothing.
 //
-// **Except which kept columns are stored**, when the author's schema names a
-// subset of the field map: the rest were read only to filter by, and are left
-// out of the read and the schema alike (`./declared-columns.ts`, live run 11's
-// `plus` and `ad`).
+// **Except which kept columns are shown**, when the author's schema names a
+// subset of the field map: the rest -- live run 11's `plus` and `ad`, read to
+// filter by -- stay stored and are left out of the answer through
+// `process.columns` (`./declared-columns.ts`, t975).
 //
 // Field labels and valid authored column order are kept: a recording's own record output carries the names the user gave
 // their columns (`domain/src/web-panel-host.ts`), and reconciling must leave a
@@ -65,15 +65,14 @@ const SCHEMA_ONLY = "schema-only";
  * The record output the node saves under: the author's, with the columns the
  * extraction reads and the records path the node supplies.
  *
- * `columns` are the kept columns the author declared, when the dispatch
- * narrowed the read to them (`./declared-columns.ts`). A column the read still
- * takes for an ordering and the author did not declare is then left out of the
- * schema, so Core's capture, which copies each row by the schema, does not
+ * `columns` are the columns stored, when the dispatch said which
+ * (`./declared-columns.ts`): a column of the read outside them is left out of
+ * the schema, so Core's capture, which copies each row by the schema, does not
  * store it. An excluded column stays declared, as it always is (D12).
  *
- * `shown` are the answer's columns when a helper is stored only for
- * processing and the author wrote no `process.columns` (`./declared-columns.ts`,
- * t510): they are written there, so the helper is stored and not shown.
+ * `shown` are the answer's columns when the author's schema leaves a stored
+ * column out and the author wrote no `process.columns` (`./declared-columns.ts`,
+ * t510, t975): they are written there, so the column is stored and not shown.
  *
  * A value that is not an object is handed back untouched, so the dispatch's
  * parse refuses it with its own codes as it always did.

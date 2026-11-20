@@ -117,9 +117,9 @@ test("the auction run's 0022 and 0024 resolve at submit with the record output t
     assert.equal(dispatch.ok, true, JSON.stringify(dispatch));
     if (dispatch.ok) assert.deepEqual(dispatch.payload.recordOutput, saved);
     assert.deepEqual(automationStudioFlowBootstrapRecordOutputIssues(DEFINITION, saved), []);
-    // The sort key is stored and hidden; the helpers only conditions read are not stored.
+    // The sort key and the columns the conditions read are stored and hidden; the helpers nothing reads are not stored (t975).
     const fields = (saved.schema as { fields: { id: string; handling?: string }[] }).fields;
-    assert.deepEqual(fields.map((field) => [field.id, field.handling ?? null]), [["title", null], ["price", null], ["bids", null], ["postage", null], [sortField, null]]);
+    assert.deepEqual(fields.map((field) => [field.id, field.handling ?? null]), [["title", null], ["price", null], ["bids", null], ["postage", null], [sortField, null], ["pounds", null], ["ad", null]]);
     assert.deepEqual((saved.process as JsonObject).sort, [{ field: sortField, order: "asc" }]);
     assert.deepEqual((saved.process as JsonObject).columns, ["title", "price", "bids", "postage"]);
   }
