@@ -51,8 +51,12 @@
 // a helper, not a declared column: stored when a process needs it, and
 // otherwise read only by its conditions, never stored. And a helper kept only
 // for processing is hidden: when the author wrote no `process.columns`, the
-// declared columns are written there (`shown`), with any helper a `process.where`
-// names, because Core refuses a where over a column `columns` drops.
+// declared columns are written there (`shown`). Until t970 any helper a
+// `process.where` names was shown too, because Core refused a where over a
+// column `columns` drops; Core now filters the collected rows, which hold every
+// stored column, so a mark kept only to filter by stays out of the answer.
+// The fields Core's `anyOf`, `compare` and `derive` read (t970) are helpers an
+// authored `process` names, as its `where`'s are.
 //
 // **Only a schema that is a subset of the field map narrows anything.** A
 // schema naming a column the field map does not read says the author's names
@@ -93,7 +97,7 @@ export type WebAutomationDeclaredColumnsRead = {
   /**
    * The answer's columns, for `process.columns`, when a helper is stored only
    * for processing and the author wrote no `process.columns`: the declared
-   * columns, then any kept helper a `process.where` names (header).
+   * columns (header).
    */
   shown?: string[];
   /** The read's columns this narrowing drops that no condition, sort or dedupe uses, in field-map order (header, t877). */
@@ -130,7 +134,7 @@ export function webAutomationDeclaredColumnsRead(authored: JsonValue | undefined
   if (sent === undefined) return undefined;
   const stored = new Set([...columns, ...ordered]);
   if (ordered.length === 0 || !process.columnsUnwritten) return { request: sent, columns: stored, dropped };
-  return { request: sent, columns: stored, shown: [...columns, ...ordered.filter((key) => process.filtered.has(key))], dropped };
+  return { request: sent, columns: stored, shown: [...columns], dropped };
 }
 
 /**
@@ -155,20 +159,27 @@ function declaredColumns(authored: JsonValue | undefined, request: WebAutomation
 
 /**
  * What the authored `process` says about columns: every field it names, which
- * it runs over the stored rows; the fields its `where` names; and whether it
- * left `columns` for this read to write. A `process` that is not an object is
- * Core's parser's to refuse, and nothing is written into it.
+ * it runs over the stored rows -- its sort's, dedupe's, `where`'s, `anyOf`'s,
+ * `compare`'s (both sides) and the sources of its `derive` (t970) -- and
+ * whether it left `columns` for this read to write. A `process` that is not an
+ * object is Core's parser's to refuse, and nothing is written into it.
  */
-function authoredProcess(authored: JsonValue | undefined): { names: string[]; filtered: ReadonlySet<string>; columnsUnwritten: boolean } {
+function authoredProcess(authored: JsonValue | undefined): { names: string[]; columnsUnwritten: boolean } {
   const process = isJsonObject(authored) ? authored.process : undefined;
-  if (process === undefined) return { names: [], filtered: new Set(), columnsUnwritten: true };
-  if (!isJsonObject(process)) return { names: [], filtered: new Set(), columnsUnwritten: false };
+  if (process === undefined) return { names: [], columnsUnwritten: true };
+  if (!isJsonObject(process)) return { names: [], columnsUnwritten: false };
   const fieldOf = (entry: JsonValue) => isJsonObject(entry) && typeof entry.field === "string" ? [entry.field] : [];
   const filtered = listed(process.where).flatMap(fieldOf);
+  const grouped = listed(process.anyOf).flatMap((group) => listed(group).flatMap(fieldOf));
+  const compared = listed(process.compare).flatMap((entry) => isJsonObject(entry) ? [...fieldOf(entry), ...COMPARISONS.flatMap((key) => typeof entry[key] === "string" ? [entry[key] as string] : [])] : []);
+  const derivedFrom = listed(process.derive).flatMap((entry) => isJsonObject(entry) && typeof entry.from === "string" ? [entry.from] : []);
   const sorted = listed(process.sort).flatMap(fieldOf);
   const deduped = isJsonObject(process.dedupe) ? strings(process.dedupe.by) : [];
-  return { names: [...sorted, ...deduped, ...filtered, ...strings(process.columns)], filtered: new Set(filtered), columnsUnwritten: !Object.hasOwn(process, "columns") };
+  return { names: [...sorted, ...deduped, ...filtered, ...grouped, ...compared, ...derivedFrom, ...strings(process.columns)], columnsUnwritten: !Object.hasOwn(process, "columns") };
 }
+
+/** The keys a Core `compare` names its other column under (t970). */
+const COMPARISONS = ["atLeast", "atMost", "lessThan", "greaterThan", "equals"] as const;
 
 function listed(value: JsonValue | undefined): JsonValue[] {
   return Array.isArray(value) ? value : [];
