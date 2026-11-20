@@ -1,4 +1,4 @@
-# t970 phase 1: result processing stage (worker report)
+# t970: result processing stage, phases 1 and 2 (worker report)
 
 ## Outcome
 
@@ -13,8 +13,8 @@ and then re-ran until they passed.
 - **Guidance.** Changed in Core and in the domain, and the Core prompt is re-pinned.
 - **Proof.** The provider-free proof over the three runs passes, and the promoted row drops.
 
-The tool is not yet offered in a live attempt. Offering it, handing the held declaration to the completion, and
-showing the judge the processing account are the phase 2 hooks inside t905's files.
+Phase 1 left the tool unoffered in live attempts. Phase 2, against t905's merged code, is in the section at the end
+of this report.
 
 ## What changed and why
 
@@ -190,3 +190,132 @@ typecheck was run, per the user rule.
   the same list.
 - **The mwojyaub order defect is out of scope.** That run read page 4 first. Processing drops the promoted and
   suggestions rows, but cannot restore site order.
+
+## Phase 2 (after t905 merged into t970)
+
+### Outcome
+
+Done.
+- **Live attempts.** Every answer-first round now offers `core.set_result_processing` and answers it without
+  touching the page.
+- **The answer.** The result feed applies the held declaration, merged over the output step's own processing, to the
+  answer that the completion check, the person and the publication see.
+- **The judge.** It is given the declaration and its account, both in `resultEvidence.processing` and on the trail.
+- **Saved Flows.** The declaration is saved inside the output steps' record outputs, so a saved Flow applies it with no
+  model call.
+- **Docs.** Core's architecture docs are updated.
+
+All checks pass.
+
+### What changed and why (Core `fxwork/t970/!FluxIQ`; no extension source changed)
+
+- **`answer-first/result-processing/` (new).**
+  - `automationStudioAnswerFirstResultProcessingTools` adds the tool once to a round's tools.
+  - `automationStudioAnswerFirstResultProcessingExecutor` answers the tool's calls itself and passes every other call
+    on. Each call:
+    - validates the declaration against the rows the answer is made from, before processing (`feed.collected()`);
+    - holds the declaration on the run (`run.resultProcessing`) and hands it to the feed (`feed.setProcessing`);
+    - pushes the call and its answer onto the attempt's trail.
+  - **Default columns.** A declaration that names no `columns` gets the person's columns, when the request names them
+    surely and the rows hold them all, so a mark used only to filter is never shown.
+  - **Saving.** `automationStudioAnswerFirstStepsWithResultProcessing` writes the declaration into the record output
+    of every step in the output group.
+  - The module sits at `answer-first/result-processing/`. Under `attempt/` it broke the audit's 25-file and 9-segment
+    limits, and importing the attempt-state file directly broke its barrel rule, so it uses a structural run type
+    instead.
+- **`attempt/round.ts`**: offers the tool and wraps the round's executor.
+- **`attempt/state.ts`**: holds `resultProcessing`.
+- **`attempt/draft-save.ts` and `attempt/remember.ts`**: write the declaration into the steps before they are
+  checked and kept.
+- **`runtime/llm/evidence-loop.ts`**: the tool's calls are never draft steps, as `core.run_flow`'s are not. I removed
+  one comment line so the file stays at its 800-line limit.
+- **`result-feed/feed.ts`**
+  - `rows()` merges the held declaration over the output step's own declaration, key by key.
+  - A declaration's own `columns` decide the columns shown.
+  - The account is kept, and `evidence().processing` carries the declaration, the counts (collected, left out,
+    repeats, cut, kept), and for each filter its words, how many rows it left out and the labels of the rows it alone
+    left out.
+  - It adds `setProcessing` and `collected`.
+- **`rows/processed-rows.ts`**: returns the account instead of discarding it.
+- **`result-verification/result-evidence/`**
+  - Adds the type `AutomationStudioResultEvidenceProcessing` and the field `bundle.processing`.
+  - `from-batches.ts` carries the latest stored `processing`. The publication stores the bundle as its evidence, so a
+    finished run's judge reads it too.
+  - A new test in `from-batches.test.ts` covers this.
+- **`flow-less/question.ts`**: one sentence telling the judge to check each filter against the request and each
+  left-out row against its filter, and that a left-out row the request asks for is a concrete defect. The judged-summary
+  snapshot gets the same sentence. The deepseek system-prompt pins do not hold this question, so no re-pin was needed.
+- **`run-dataset-store.ts`**: two doc lines trimmed. The t905 merge took the file to 801 lines, over the 800 limit.
+- **Docs**
+  - `docs/architecture/automation-studio-native-nodes.md`: the new keys, the filters on hidden columns, the
+    latest-declaration store, and a new section "The result's own processing" covering the tool, the answer, the
+    judge, saving and guidance.
+  - `docs/architecture/package-boundaries.md`: a "Next minor (unreleased)" entry listing what was added and what
+    changed.
+
+### Where this departs from the brief, and why
+
+- **`row-sink.ts` (item 2).** t905 rewrote the sink. It no longer re-processes answer rows and no longer keeps `where`
+  helper columns shown. It only stores reads and publishes the ledger's answer, already processed and with
+  `process: {dedupe: false}`. Nothing is left to remove. The result feed is now where processing applies.
+- **Not `setProcess` on the publication.** The published rows are already processed and narrowed to the answer's
+  columns. Processing them again would re-filter rows that no longer hold the hidden mark columns. `setProcess` stays
+  for callers whose datasets hold collected rows.
+- **Not `draftResultProcessing` to the completion.** A saved Flow is re-assembled from its saved steps every time it
+  runs (`flow-run/assemble.ts`: "the steps are the source of truth, not a stored plan"). If the projection ran at save
+  time, the plan saved would differ from the plan its steps later assemble to. So the declaration is written into the
+  steps, and the completion reads it as each step's own. The phase-1 parameter stays for callers without saved steps.
+- **The trail's summary (item 3).** The tool's call is on the trail with its full answer, and the account is in
+  `resultEvidence`. No separate change to the trail's summary was needed.
+- **Where the tool is offered.** It is offered in `attempt/round.ts`, which builds each round's tools and executor,
+  not in `run-attempt.ts`, which only builds the run.
+
+### Commands run and observed results
+
+- **Targeted tsc.** `tsc -p <scratchpad>/tsconfig.fluxiq.json`, over every changed source and test, exited 0 with no
+  output on its final run.
+- **Core structure audit.** The final run passed (559 warnings, 909 baselined). Earlier runs failed:
+  - `attempt/tests` held 26 files.
+  - `run-dataset-store.ts` and `evidence-loop.ts` were each 801 lines.
+  - A test packed two statements on one line.
+  - The module was 10 path segments deep, and an import went past a barrel.
+
+  I fixed each one as described above.
+- **Docs links.** `structure-audit --rule docs-links` passed. The extension's structure audit passed (256 warnings,
+  551 baselined).
+- **Tests.** All five batches went through the gate as `t970-p2-*`. Together they are all 151 answer-first test files,
+  plus the flow-less, result-evidence and run-trail tests, the evidence-loop tests and the result tool's tests.
+
+| Batch | Files passed | Tests passed |
+| --- | --- | --- |
+| `af-00` | 37/37 | 189 |
+| `af-01` | 38/38 | 245 |
+| `af-02` | 38/38 | 310 |
+| `af-03` (includes the new `answer-first/result-processing/tests/processing.test.ts`) | 38/38 | 300 |
+| `rv` | 50/50 | 583 |
+
+Two more runs:
+- `af-00` was re-run on the final tree (`t970-p2-af-00b`), because the module moved while the first run was going:
+  37/37 files passed, 189 tests.
+- A last batch (`t970-p2-last`) covered the result-evidence tests (including the new from-batches test), the store
+  tests (`run-dataset-store.test.ts`, whose doc lines were trimmed) and the new processing tests: 4/4 files passed, 47
+  tests.
+
+**The test the brief asked for** is in `answer-first/result-processing/tests/processing.test.ts`, "puts a filter that
+drops a right row in front of the judge, with the condition that dropped it".
+- The filter `title not contains "cover"` drops "Garden table with storage cover", a right row.
+- The completion check's judge receives `resultEvidence.processing.filters` containing that condition, with the row in
+  `leftOutOnlyByThis`.
+- The judged summary sent to the model contains the row, the condition's words, the question's `resultEvidence.processing`
+  sentence, and the tool's call on the trail.
+
+### Not verified
+
+- **No live or Lab run.** The time and model-call measurement on the scraping tasks is still to run.
+- **Full suites not run** (the twice-a-day rule).
+- **The domain was not re-tested.** Phase 2 changed no extension source.
+
+### Open questions
+
+None blocking. `record_output.process_where_column_dropped` is still named in dead code (see phase 1); it can be
+removed in a cleanup.
