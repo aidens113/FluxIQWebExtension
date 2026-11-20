@@ -23,7 +23,8 @@ import { keptLooks, type LookReuseAccess } from "./look-reuse";
 import { tabNavigationEpochs } from "./navigation-events";
 import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
-import { sendClickCheckingLanding } from "./click-landing";
+import { pressJudgedByLanding, sendClickCheckingLanding } from "./click-landing";
+import { watchActMark } from "./act-mark";
 import { closesOpenedTabs, frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction, tabRequestForAction } from "./command-options";
 import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
 import { waitForFrameChoice } from "./frame-address";
@@ -485,14 +486,22 @@ async function runActionInFrame(
       return withTarget(unreachableFrameFailure(action, startedAt, targetFrameId, unreachable), tabId, targetFrameId);
     }
   }
-  const message = executeActionMessage(action, frameId);
+  // A press judged by its landing carries a token its page sends back just before it acts, so a reply lost to a
+  // page that went by itself is not taken for the press (t968, `act-mark/`).
+  const mark = pressJudgedByLanding(action, targetFrameId) ? watchActMark(tabId, targetFrameId) : undefined;
+  const message = mark ? { ...executeActionMessage(action, frameId), actMark: mark.token } : executeActionMessage(action, frameId);
   const send = () => sendAction(action, tabId, message, targetFrameId, pace, delivery);
   // The last moment before the page can act: the in-flight record names where it went.
   await noteDispatch?.(tabId, targetFrameId);
   const drivenBefore = currentAutomationTabId();
   // A check or a choice in the top frame whose reply is lost to its own
   // navigation is judged by the state it asked for, read on the new document.
-  const result = await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace, targetFrameId);
+  let result: BrowserActionResult;
+  try {
+    result = await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace, targetFrameId, mark);
+  } finally {
+    mark?.stop();
+  }
   // A click that opened its page in a tab of its own made that tab the one the
   // run drives (`click-landing.ts`), and the result names it, top frame.
   const drivenAfter = currentAutomationTabId();

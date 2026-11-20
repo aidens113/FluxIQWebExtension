@@ -144,7 +144,7 @@ export function routeMessage(message: unknown): ContentRoute | undefined {
 }
 
 function routeUnfenced(message: unknown): ContentRoute | undefined {
-  const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; capturePolicy?: unknown; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown; request?: unknown };
+  const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; capturePolicy?: unknown; action?: BrowserActionCommand; extraction?: unknown; actMark?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown; request?: unknown };
   if (typed.type === "fluxiq.ping") {
     return { liveness: true, answer: (sendResponse) => sendResponse({ ok: true, active: isActiveContentInstance() && revokedEpoch.current() === 0, version: CONTENT_SCRIPT_VERSION }) };
   }
@@ -195,9 +195,10 @@ function routeUnfenced(message: unknown): ContentRoute | undefined {
     if (!isAddressedToThisFrame(typed)) return undefined;
     const action = typed.action;
     // `extraction` rides beside the action when the worker carries a
-    // paginated list read across documents (`action-runtime/extraction-continuation.ts`).
+    // paginated list read across documents (`action-runtime/extraction-continuation.ts`),
+    // and `actMark` beside a press whose landing the worker judges (`action-runtime/act-mark/`, t968).
     return {
-      answer: (sendResponse) => void executeAction(action, typed.extraction)
+      answer: (sendResponse) => void executeAction(action, typed.extraction, typed.actMark)
         .then(sendResponse)
         // A revoked document builds no failure: that would read its page.
         .catch((error: unknown) => sendResponse(error instanceof ContentRevokedError ? contentRevokedRefusal("interrupted") : actionFailure(action, error)))

@@ -1,4 +1,4 @@
-// The acceptance matrix, rows 1-11 and 13, with each row's site assignment
+// The acceptance matrix, rows 1-11, 13 and 14, with each row's site assignment
 // from t390's report (`docs/working/state-aware-recovery-plan/reports/
 // t390-lab-perturbations.md`). Row 12 is the paid proof and is never here.
 
@@ -105,5 +105,11 @@ export const RECOVERY_MATRIX_ROWS: readonly RecoveryMatrixRow[] = [
       { caseId: "13b", taskInstructions: "Confirm only the requests from Amara Osei, Jonas Weber and Lin Zhao. Then check whether any request remains unanswered; if so, deliberately end with a failed result explaining that requests still wait rather than confirm anyone else.", title: "a check fails on purpose and its failed path ends the run at an End the Flow marked failed", scenarioId: "social-network-feed", workflowId: "confirm-requests", flow: "CONFIRM_THEN_STOP", check: "deliberate-stop", site: { kind: "social-confirmed", requestIds: QUALIFYING_REQUESTS.slice(0, 3), rateLimitedAtLeast: 0 }, goalFacts: false },
       { caseId: "13c", taskInstructions: "On the home feed, like the first two posts that show a like count, and save each of those two posts to your saved posts right after liking it. Like and save each of them exactly once, and leave every other post as it is.", title: "a post's like moves its count, so the row the read took is gone and its bookmark fails three times; the run reads the posts again, finds the same post and saves it", scenarioId: "photo-social", flow: "LIKE_THEN_SAVE", check: "row-reacquired", reacquire: { step: "s11", source: "s7", passes: 2, reacquiredPasses: 2 }, site: { kind: "photo-liked-saved", postCodes: FIRST_FEED_POSTS }, goalFacts: false },
     ],
+  },
+  {
+    row: 14,
+    scenario: "A press the page never answered is not a success",
+    needs: [],
+    cases: [{ caseId: "14", taskInstructions: "Search the marketplace for a Kestrel 35 lens hood, open the hood's own listing, open its seller's shop and read every item the shop lists with its title and price. If the site checks your browser first, wait for it to let you through rather than answering it.", title: "a browser check that lets the visitor on by itself stands in front of the first results page; the listing is counted open only once it is, and the seller's shop is read", scenarioId: "auction-marketplace", workflowId: "lens-hood-seller-shop", variantId: "browser-check-first", flow: "HOOD_SELLER_SHOP", check: "act-effect-honest", site: { kind: "auction-check-passed" }, goalFacts: false }],
   },
 ];

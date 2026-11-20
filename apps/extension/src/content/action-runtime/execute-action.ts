@@ -35,8 +35,9 @@ import { watchRobotCheck } from "./robot-check";
 import { actionFailure, actionNeedsPerson, actionNotImplemented, actionRateLimited, actionRefusedByPage, actionRejected, actionTimedOut, success } from "./results";
 import { listReadFor } from "./extraction-continuation";
 import { hoverState } from "./hover-state";
+import { actMarkSender } from "./act-mark";
 
-export async function executeAction(action: BrowserActionCommand, extractionContinuation?: unknown): Promise<BrowserActionResult> {
+export async function executeAction(action: BrowserActionCommand, extractionContinuation?: unknown, actMark?: unknown): Promise<BrowserActionResult> {
   // A hover lasts until the next action that acts, as a resting pointer lasts until the hand moves (t903).
   hoverState.releaseFor(action.actionType);
   return executeContentAction(action, {
@@ -72,5 +73,5 @@ export async function executeAction(action: BrowserActionCommand, extractionCont
     needsPerson: actionNeedsPerson,
     timedOut: actionTimedOut,
     notImplemented: actionNotImplemented
-  });
+  }, actMarkSender(actMark));
 }

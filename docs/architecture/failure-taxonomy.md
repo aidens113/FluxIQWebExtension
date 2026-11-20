@@ -95,7 +95,7 @@ will not run at all; `execution` while the action ran; `confirmation` while
 confirming the action itself landed; `verification` while checking a
 post-condition or an authored assertion.
 
-`NO_EFFECT` carries `effect: "unacted"` and `certainNoEffect: true`. The click watch compares the settled press region with its pre-press state, including field values, and excludes a request, navigation, focus move or observed change elsewhere. A transient spinner that reverts is not a completed effect. The comparison stays local and never enters the failure record. Core retains the first attempt plus three retries for confirmed no effect, including lasting steps, and stamps each subsequent attempt `retry.repress: true`. If a later effect is uncertain or already landed, another act is held back. Four failed attempts stop default continuation; authored failure routes, handlers and explicit optional/continue choices keep their precedence. Model feedback uses `press_had_no_effect` with a next step to inspect prerequisites or another control after automatic retries finish.
+`NO_EFFECT` carries `effect: "unacted"` and `certainNoEffect: true`. The click watch compares the settled press region with its pre-press state, including field values, and excludes a request, navigation, focus move or observed change elsewhere. A transient spinner that reverts is not a completed effect. The comparison stays local and never enters the failure record. Core retains the first attempt plus three retries for confirmed no effect, including lasting steps, and stamps each subsequent attempt `retry.repress: true`. If a later effect is uncertain or already landed, another act is held back. Four failed attempts stop default continuation; authored failure routes, handlers and explicit optional/continue choices keep their precedence. Model feedback uses `press_had_no_effect` with a next step to inspect prerequisites or another control after automatic retries finish. Since t968 Core also re-acquires a certain no-effect act's target from its source step before the last retry, as it does a lost target (Core `target-reacquire/stale-failure.ts`).
 
 For detected list loaders, a positive `NO_EFFECT` result additionally requires browser-owned list/control provenance, an unchanged original list, a settled page comparison, a healthy request-start observer and an idle supported click-work observer. A spinner or status change alone is not pagination progress. Missing, replaced, unsupported or pending observations remain uncertain. FluxIQ status UI is identified by private registration of its actual closed shadow host. Only its style changes and exclusive host insertion/removal outside the page-control scope are excluded from the settled-page observation; matching DOM markers, clones, custom attributes, site light DOM and mixed changes remain observed. A normal loader attempt presses once; Core owns the counted retries. Existing page-offered Retry and explicit pause recovery keep their prior bounds. Checkpoints remain local to that command, and a move already observed as landed settles without another press. Authored selectors and model annotations cannot grant this proof. `OUTPUT_NOT_OBSERVED` with an `unacted` field is still a verification failure and does not substitute for the execution-stage `NO_EFFECT` constructor.
 
@@ -344,9 +344,13 @@ the result says how long it stood on `checkWait` instead.
 [Robot checks](extension-client.md#robot-checks) says how each is told apart.
 Every robot-check record leads `actual` with `captcha:`. For a press or a
 click, it also says the act itself was made, so the step stands once the
-person has answered. `PAGE_CHANGED` has one:
-`content/actions/page-identity.ts`, for a verb that failed while the document
-it started against was replaced or routed away under it. Beyond the code
+person has answered (a robot check a page went to by itself before the press
+was made says that instead, and states `effect: "unacted"`, t968). `PAGE_CHANGED`
+has two producers: `content/actions/page-identity.ts`, for a verb that failed
+while the document it started against was replaced or routed away under it,
+and `runtime/click-landing.ts` (t968), for a press whose reply was lost to a
+page that navigated by itself before the press was made (no act mark,
+`runtime/act-mark/`), stated `effect: "unacted"`. Beyond the code
 table's own tests they are covered by
 `e2e/content/tests/modal-intervention.spec.ts`,
 `client/tests/gateway-mapping.test.ts` and

@@ -116,3 +116,27 @@ test("row 8 needs an attempt on a called part's own step, not only a handler bod
   assert.equal(bodyOnly.verdict, "failed");
   assert.match(bodyOnly.reasons.join(" "), /no attempt ran in a called part's frame/);
 });
+
+// Row 14 (t968): a press the page never answered is not a success.
+test("act-effect-honest passes a run whose every success the next step could build on, and says which defence answered", () => {
+  const attempts = [
+    attempt("s1", "succeeded"),
+    attempt("s2", "failed", { failure: { category: "page_changed", code: "web.page.changed" } }),
+    attempt("s2", "succeeded", { retry: true }),
+    attempt("s3", "succeeded")
+  ];
+  const checked = MATRIX_CHECKS["act-effect-honest"](evidence({ attempts }), caseOf("14"));
+  assert.equal(checked.verdict, "passed");
+  assert.equal(checked.observed.pageWentBeforePress, 1);
+});
+
+test("act-effect-honest fails a success the next step never found its target after, as run-mwohvt8n-a57cad8a's click", () => {
+  const notFound = { category: "target_not_found", code: "web.target.not_found" };
+  const attempts = [attempt("s1", "succeeded"), attempt("s2", "failed", { failure: notFound }), attempt("s2", "failed", { failure: notFound, retry: true })];
+  const checked = MATRIX_CHECKS["act-effect-honest"](evidence({ attempts, run: { status: "failed", failure: null, stopCode: null } }), caseOf("14"));
+  assert.equal(checked.verdict, "failed");
+  assert.ok(checked.reasons.some(reason => /answered success, and the step after it never found its target/u.test(reason)));
+  // A slow page the next step found its target on at a retry is no false success.
+  const slow = [attempt("s1", "succeeded"), attempt("s2", "failed", { failure: notFound }), attempt("s2", "succeeded", { retry: true })];
+  assert.equal(MATRIX_CHECKS["act-effect-honest"](evidence({ attempts: slow }), caseOf("14")).verdict, "passed");
+});

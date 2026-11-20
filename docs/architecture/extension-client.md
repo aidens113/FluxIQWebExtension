@@ -2994,6 +2994,17 @@ the page (the press, the key, the value set) as `actedAt`. The domain's payload 
 (`domain/src/runtime/llm-evidence/node-run/timing/`). Its offset in the step is the step's
 decision-to-press.
 
+**The act mark** (t968, `shared/act-mark-message.ts`, `content/action-runtime/act-mark/`,
+`runtime/act-mark/`). A press judged by its landing (a click, a typed entry sent with Enter, Enter
+itself) carries a token beside its `executeAction` message (`actMark`). The content script sends it back
+to the worker, once, from the acted clock's first note, which every act primitive makes just before it
+dispatches. A reply lost to its page unloading is a press made only if the mark arrived
+(`runtime/click-landing.ts`). Without it, the page went by itself while the command was still looking
+for its target, and the click fails `web.page.changed`, retryable and `unacted`; a robot check that page
+went to and that only a person can answer is handed over as such, unacted. Until t968 delivery alone
+counted, and a click sent to auction-marketplace's "Checking your browser" page, which lets the visitor
+on after five seconds, read as a click that navigated (`run-mwohvt8n-a57cad8a`).
+
 **The page pace is set by evidence** (`background/page-pace/origin-pace.ts`). An origin that has
 never refused a load is not paced. A 429 or 503, whether to a read's page load or to a navigation's
 landing (`runtime/rate-limited-landing.ts`), holds the origin's next load for 8.5 s. It then spaces
