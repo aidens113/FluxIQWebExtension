@@ -32,6 +32,7 @@ import {
   WEB_AUTOMATION_EXTRACT_SORT_ORDERS,
   WEB_AUTOMATION_EXTRACT_SORT_TYPES
 } from "./request";
+import { WEB_AUTOMATION_EXTRACT_VALUE_SHOWN } from "./value-shown";
 
 export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObject): JsonObject {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
@@ -63,6 +64,8 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       identity: { type: "string", label: "Link identity", enum: ["tracking-free"] },
       // A field that reads a mark: a value only where the row carries it (`./request.ts`).
       mark: { type: "string", label: "Mark", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_MARKS] },
+      // A `value` field only: what of the control it reads as the page view shows it (`./request.ts`).
+      shown: { type: "string", label: "Shown as", enum: [...WEB_AUTOMATION_EXTRACT_VALUE_SHOWN] },
       element: elementFingerprintSchema
     }
   } satisfies JsonObject;

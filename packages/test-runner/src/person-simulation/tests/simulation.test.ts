@@ -83,6 +83,25 @@ test("a thread Core cannot list is counted and retried, not thrown", async () =>
   assert.deepEqual([snapshot.playable, snapshot.handOffs.length], [false, 0]);
 });
 
+test("a failed chat answer stays pending and exposes its original failure to the observer", async () => {
+  const { control, answers } = waitingCore();
+  const failure = new Error("The trusted Continue press did not reach the button");
+  const store = new FakeTab(["Enter the characters you see below"], (step, tab) => { if (step === "press Continue shopping") tab.load([]); });
+  const published: PersonHandOff[] = [];
+  const person = startPersonSimulation({
+    control, scope: { projectId: "p", domainId: "web-automation" }, scenarioId: "everything-store", module: TYPED_CHECK, expected: null,
+    tabs: () => [store], readState: async () => ({ image: 0, wrong: 0 }), pollMs: 5,
+    answerInChat: async () => { throw failure; }, onHandOff: async (handOff) => { published.push(handOff); },
+  });
+  await until(() => published.length > 0);
+  const snapshot = await person.stop();
+  assert.ok("answerFailure" in person);
+  assert.equal(person.answerFailure, failure);
+  assert.deepEqual(answers, [], "the failed chat answer never falls back to a direct Core answer");
+  assert.deepEqual(snapshot.handOffs.map(({ did, answer }) => ({ did, answer })), [{ did: "cleared", answer: null }]);
+  assert.equal(store.done.filter((step) => step === "press Continue shopping").length, 1, "the website check is never completed again after its answer failed");
+});
+
 type PermissionAsk = { askId: string; missing: string[]; control: string | null; subject?: { kind: string; id: string } };
 
 /** Core with permission asks waiting, each pending until answered, and nothing else. */
@@ -105,6 +124,32 @@ function permissionCore(raised: PermissionAsk[]): { control: PersonAskControl; a
 }
 
 const PLACE_ORDER = { consequence: "move_money", control: "Place order" } as const;
+
+test("a failed permission answer exposes its original failure and leaves that ask pending", async () => {
+  const core = permissionCore([{ askId: "request-order", missing: ["move_money"], control: "Place order" }]);
+  const failure = new Error("The permission answer did not reach Core");
+  let answerCalls = 0;
+  const published: PersonPermissionAnswer[] = [];
+  const control: PersonAskControl = { automationStudioCall: async (endpoint, ...args) => {
+    if (endpoint === "answer-ask") {
+      answerCalls += 1;
+      throw failure;
+    }
+    return core.control.automationStudioCall(endpoint, ...args);
+  } };
+  const person = startPersonSimulation({
+    control, scope: { projectId: "p", domainId: "web-automation" }, scenarioId: "bigbox-retail", module: null, expected: null,
+    tabs: () => [], readState: async () => ({}), permissions: { point: PLACE_ORDER }, pollMs: 5,
+    onPermissionAnswer: async (answer) => { published.push(answer); },
+  });
+  await until(() => published.length > 0);
+  const snapshot = await person.stop();
+  assert.ok("answerFailure" in person);
+  assert.equal(person.answerFailure, failure);
+  assert.equal(answerCalls, 1);
+  assert.deepEqual(core.answers, []);
+  assert.equal(snapshot.permissionAnswers[0]?.answer, null);
+});
 
 test("given the task's point, the person allows the act there and refuses it anywhere else, each answer recorded apart from the hand-offs", async () => {
   const { control, answers } = permissionCore([

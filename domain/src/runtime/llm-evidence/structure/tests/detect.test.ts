@@ -38,6 +38,7 @@ import {
 } from "../..";
 import { CAPTURED_DETECTIONS, type CapturedDetectionName } from "./captured-detections";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { webLlmExtractionListKey } from "../index";
 
 const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one", flowId: "flow.one" };
 
@@ -258,7 +259,7 @@ test("every real detection becomes a selector-free packet and a handle that reso
     const item = detection.proposal.item;
     const fields = Object.fromEntries(detection.proposal.fields.map((field) => [field.key, readableSpec(field.spec)]));
     const expected = expectedPaginate === undefined ? { item, fields } : { item, fields, paginate: expectedPaginate };
-    assert.deepEqual(resolved.binding, { handle: packet.extraction, location: page.url, extractList: expected, itemCount: detection.proposal.itemCount }, name);
+    assert.deepEqual(resolved.binding, { handle: packet.extraction, location: page.url, extractList: expected, itemCount: detection.proposal.itemCount, listKey: webLlmExtractionListKey({ extractList: expected }) }, name);
     // Executable as it stands: the reader the parameter lift refuses a Flow by takes it unchanged.
     assert.deepEqual(webAutomationExtractListRequestValue(resolved.binding.extractList), resolved.binding.extractList, name);
   }

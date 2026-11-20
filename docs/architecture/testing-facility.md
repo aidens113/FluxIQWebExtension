@@ -56,6 +56,16 @@ The mode that ran (`side-panel`, `popup`, `none` with both reasons, or
 `snapshots/live-panel.json`, and to the interactive session's ready line.
 `--no-live-panel` turns it off. A headless run never opens it.
 
+The attempt lane delivers answer choices to the panel's own browser target
+with trusted CDP input and verifies that the requested button received a
+trusted click with user activation. A visible, hit-testable button stays in
+place. A clipped button is exposed by trusted wheel input on its current
+scroll owner, accounting for ancestor clipping, then located afresh. This
+preserves the chat's normal scroll-follow behavior. A missed delivery retains
+target identifiers, pre/post geometry, connectivity, focus, visibility,
+viewport metrics and event-hit booleans; those diagnostics contain no chat or
+page content, credentials or raw DOM.
+
 ## Instruction-driven web exploration seam
 
 `packages/test-runner/src/web-flow-exploration.ts` provides the web-specific
@@ -2555,6 +2565,15 @@ every other ask is left for its own answer. For each person-needed ask it:
    document, only once that load has happened, because crossborder's box
    turns into "Checking your browser…" two seconds before its reload;
 4. answers Continue if the check went, and Stop otherwise.
+
+For an answer-first attempt on the project chat, the Lab presses the actual
+rendered choice and confirms that Core recorded it. An answer exception is
+kept as the original error and is not marked handled. The helper stops and
+the attempt proof reports `not_judged` with `LabPersonAnswerFailed`, retaining
+the failure and a screenshot while leaving Core's pending ask and task
+unchanged. It sends no fallback Stop or synthetic answer and does not repeat
+the completed website check. Permission-answer exceptions follow the same
+path; a task's intentional `askFirst` unanswered question stays distinct.
 
 What a person does at each check is data beside the fixture, in
 `apps/scenario-lab/src/scenarios/<scenario>/person-check.ts`, exported as

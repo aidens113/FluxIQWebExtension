@@ -32,6 +32,8 @@ export type PersonSimulationInput = {
 export type PersonSimulation = {
   /** Stops looking, waits for a hand-off in progress to be answered, and returns the whole record. */
   stop(): Promise<LabPersonSnapshot>;
+  /** The original failed answer, so a proof stops observing instead of silently waiting on an unanswered ask. */
+  readonly answerFailure: Error | undefined;
 };
 
 const POLL_MS = 1_000;
@@ -63,6 +65,8 @@ export function startPersonSimulation(input: PersonSimulationInput): PersonSimul
   const permissionAnswers: PersonPermissionAnswer[] = [];
   let pollFailures = 0;
   let lastPollFailure: string | null = null;
+  let answerFailure: Error | undefined;
+  const failedAnswer = (error: unknown): void => { answerFailure ??= error instanceof Error ? error : new Error(String(error), { cause: error }); };
   let stopped = false;
   let wake: (() => void) | undefined;
   const loop = (async () => {
@@ -78,22 +82,24 @@ export function startPersonSimulation(input: PersonSimulationInput): PersonSimul
       for (const ask of asks.filter(({ askId }) => !handled.has(askId))) {
         if (ask.kind === "permission") {
           if (!input.permissions) continue;
-          handled.add(ask.askId);
-          const answer = await answerPermissionAskAsPerson({ control: input.control, scope: input.scope, play: input.permissions, now, answerInChat: input.answerInChat }, ask);
+          const answer = await answerPermissionAskAsPerson({ control: input.control, scope: input.scope, play: input.permissions, now, answerInChat: input.answerInChat, onAnswerFailure: failedAnswer }, ask);
           permissionAnswers.push(answer);
+          if (answer.answer !== null || input.permissions.point?.askFirst) handled.add(ask.askId);
           if (input.onPermissionAnswer) {
             await input.onPermissionAnswer(answer).catch((error: unknown) => { lastPollFailure = `publishing a permission answer failed: ${firstLine(error)}`; });
           }
+          if (answerFailure) break;
           continue;
         }
-        handled.add(ask.askId);
-        const handOff = await handOffOne(input, ask, now);
+        const handOff = await handOffOne(input, ask, now, failedAnswer);
         handOffs.push(handOff);
+        if (handOff.answer !== null) handled.add(ask.askId);
         if (input.onHandOff) {
           await input.onHandOff(handOff).catch((error: unknown) => { lastPollFailure = `publishing a hand-off failed: ${firstLine(error)}`; });
         }
+        if (answerFailure) break;
       }
-      if (stopped) break;
+      if (stopped || answerFailure) break;
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, input.pollMs ?? POLL_MS);
         wake = () => { clearTimeout(timer); resolve(); };
@@ -101,6 +107,7 @@ export function startPersonSimulation(input: PersonSimulationInput): PersonSimul
     }
   })();
   return {
+    get answerFailure() { return answerFailure; },
     stop: async () => {
       stopped = true;
       wake?.();
@@ -111,7 +118,7 @@ export function startPersonSimulation(input: PersonSimulationInput): PersonSimul
 }
 
 /** One ask, played and answered. The answer is Continue only for a check the person saw go. */
-async function handOffOne(input: PersonSimulationInput, ask: PendingPersonAsk, now: () => number): Promise<PersonHandOff> {
+async function handOffOne(input: PersonSimulationInput, ask: PendingPersonAsk, now: () => number, failedAnswer: (error: unknown) => void): Promise<PersonHandOff> {
   let playedCheck: PlayedCheck;
   try {
     playedCheck = await playPersonCheck({
@@ -131,6 +138,7 @@ async function handOffOne(input: PersonSimulationInput, ask: PendingPersonAsk, n
     if (input.answerInChat && await input.answerInChat(ask, { kind: "choice", value: option })) via = "chat";
     else await answerPersonAsk(input.control, input.scope, ask.askId, option);
   } catch (error) {
+    failedAnswer(error);
     answer = null;
     note = [note, `the answer did not reach Core: ${firstLine(error)}`].filter((part) => part !== null).join("; ");
   }

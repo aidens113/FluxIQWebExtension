@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { CDPSession } from "@playwright/test";
 import { attachTarget, type TargetChannel } from "./attach-target.js";
 import { inPanelTarget, type PanelTargetAnswer, type PanelTargetStep, type PressSeen } from "./in-panel-target.js";
+import { panelScrollPlan } from "./scroll-plan.js";
 
 /** How long one command to the panel's target may take. */
 const CALL_MS = 5_000;
@@ -26,6 +27,8 @@ const NOT_SHOWN_YET = "not shown yet";
  * finds the button and its centre (`inPanelTarget`, which also starts a watch
  * for the click), `Input.dispatchMouseEvent` moves, presses and releases the
  * left button there, and the watch is read back until it saw the click.
+ * A visible button stays in place. A clipped one is exposed with trusted wheel
+ * input on its actual scroll owner and located afresh by the caller's loop.
  *
  * Answers `"pressed"` once the panel saw a trusted click with a person's
  * activation reach the button, or why nothing was pressed (`NOT_SHOWN_YET`
@@ -40,25 +43,28 @@ export async function pressInViewTarget(session: CDPSession, input: { viewUrl: s
   if (views.length === 0) return `no side panel target among ${targetInfos.length} browser target(s)`;
   let outcome = NOT_SHOWN_YET;
   for (const view of views) {
-    outcome = await pressInTarget(session, view.targetId, input.label);
+    outcome = await pressInTarget(session, view.targetId, input.label, own);
     if (outcome !== NOT_SHOWN_YET) return outcome;
   }
   return outcome;
 }
 
-async function pressInTarget(session: CDPSession, targetId: string, label: string): Promise<string> {
+async function pressInTarget(session: CDPSession, targetId: string, label: string, ownTargetId: string): Promise<string> {
   const channel = await attachTarget(session, targetId);
   const key = `__fluxiqLabPress${randomUUID().replaceAll("-", "")}`;
   try {
     const located = await evaluate(channel, { step: "locate", label, key });
     if (located === null || !("found" in located)) throw new Error(`The side panel answered the press lookup with ${JSON.stringify(located)}`);
-    if (!located.found) return located.reason;
+    if (!located.found) {
+      if (located.scroll) await channel.call("Input.dispatchMouseEvent", { type: "mouseWheel", x: located.scroll.x, y: located.scroll.y, deltaX: 0, deltaY: located.scroll.deltaY }, CALL_MS);
+      return located.reason;
+    }
     for (const type of ["mouseMoved", "mousePressed", "mouseReleased"] as const) {
       const pressing = type !== "mouseMoved";
       await channel.call("Input.dispatchMouseEvent", { type, x: located.x, y: located.y, button: pressing ? "left" : "none", buttons: type === "mousePressed" ? 1 : 0, clickCount: pressing ? 1 : 0 }, CALL_MS);
     }
     const seen = await watchForClick(channel, key);
-    if (!seen.seen) return `the press at (${Math.round(located.x)}, ${Math.round(located.y)}) did not reach the "${label}" button`;
+    if (!seen.seen) return `the press at (${Math.round(located.x)}, ${Math.round(located.y)}) did not reach the "${label}" button; delivery ${JSON.stringify({ targetId, ownTargetId, observation: seen.observation ?? null })}`;
     if (!seen.trusted || !seen.activation) throw new Error(`The "${label}" press reached the side panel as ${seen.trusted ? "trusted" : "untrusted"} input ${seen.activation ? "with" : "without"} a person's activation, so the panel would not take it as an answer`);
     return "pressed";
   } finally {
@@ -81,7 +87,7 @@ async function watchForClick(channel: TargetChannel, key: string): Promise<Press
 }
 
 async function evaluate(channel: TargetChannel, step: PanelTargetStep): Promise<PanelTargetAnswer> {
-  const expression = `(${inPanelTarget.toString()})(${JSON.stringify(step)})`;
+  const expression = `(${inPanelTarget.toString()})(${JSON.stringify(step)},${panelScrollPlan.toString()})`;
   const answer = await channel.call("Runtime.evaluate", { expression, returnByValue: true }, CALL_MS);
   const failure = answer.exceptionDetails as { text?: string; exception?: { description?: string } } | undefined;
   if (failure) throw new Error(`The side panel could not run the press script: ${failure.exception?.description ?? failure.text ?? "no description"}`);

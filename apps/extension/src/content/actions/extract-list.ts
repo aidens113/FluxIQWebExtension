@@ -193,6 +193,8 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
     ...(outcome.earlierPageRepeats === undefined ? {} : { earlierPageRepeats: outcome.earlierPageRepeats }),
     // Whether a read of one page saw its list go on past it: two closed words (`extraction/read-coverage/`).
     ...(outcome.listContinues ? { listContinues: { kind: outcome.listContinues.kind, evidence: outcome.listContinues.evidence } } : {}),
+    // Where the pager says the read was in its list: a page, offset or cursor, never counted from rows (`extraction/list-place/`).
+    ...(outcome.place ? { place: { kind: outcome.place.kind, value: outcome.place.value } } : {}),
     // The kept rows whose own collapsed text the read opened itself (`discloseText`, t752).
     ...(outcome.disclosedRows === undefined ? {} : { disclosedRows: outcome.disclosedRows })
   };

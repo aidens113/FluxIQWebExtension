@@ -64,15 +64,20 @@ function answeredUnfiltered(read: JsonObject): boolean {
   return extraction.conditions.unfiltered === true;
 }
 
-/** The sentence accounting for all kept rows and any rejected rows. */
+/**
+ * The sentence accounting for a read's rows: `extracted` holds the rows its
+ * conditions kept, and `rejectedRows` the rows they turned down, left out. An
+ * answer that arrives unfiltered is those rejected rows, never kept ones.
+ */
 function restOfRows(rows: JsonValue | undefined, rejected: boolean, unfiltered: boolean): string | undefined {
   const count = Array.isArray(rows) ? rows.length : undefined;
   if (count === undefined) return undefined;
-  if (unfiltered) return `the read kept none of the ${count} row${count === 1 ? "" : "s"} in extracted: the conditions turned every one down, and extracted shows them unfiltered, so none of them is a result row.`;
+  if (unfiltered) return `the read kept none of the ${count} row${count === 1 ? "" : "s"} in extracted: the conditions turned every one down, and extracted shows those rejected rows unfiltered, so none of them is a result row.`;
+  if (count === 0) return rejected ? "the read kept no row: extracted is empty, and rejectedRows are the rows the conditions turned down, left out and not result rows." : undefined;
   const more = count > WEB_NODE_READ_FIRST_ROWS;
   if (!more && !rejected) return undefined;
   const kept = `extracted holds all ${count} kept row${count === 1 ? "" : "s"}`;
-  const turned = rejected ? " and rejectedRows those the conditions turned down" : "";
+  const turned = rejected ? "; rejectedRows are the rows the conditions turned down, left out and not result rows" : "";
   return `${kept}${turned}.`;
 }
 

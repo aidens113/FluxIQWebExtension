@@ -279,3 +279,13 @@ test("a definition member on another read kind is inactive, like a stray header"
     assert.deepEqual(request?.fields.cell, field);
   }
 });
+
+test("a value field's shown reading is kept as written, left behind on any other kind, and an unknown one refuses the field", () => {
+  for (const shown of ["label", "options", "checked", "disabled", "marked"]) {
+    const request = webAutomationExtractListRequestWhole({ item: "li", fields: { seat: { kind: "value", selector: "input", shown } } });
+    assert.deepEqual(request?.fields.seat, { kind: "value", selector: "input", shown }, shown);
+  }
+  const stray = webAutomationExtractListRequestWhole({ item: "li", fields: { seat: { kind: "attribute", attribute: "title", shown: "checked" } } });
+  assert.deepEqual(stray?.fields.seat, { kind: "attribute", attribute: "title" });
+  assert.equal(webAutomationExtractListRequestWhole({ item: "li", fields: { seat: { kind: "value", shown: "booked" } } }), undefined);
+});

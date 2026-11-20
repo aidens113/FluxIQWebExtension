@@ -11,3 +11,4 @@ export { isRenderedItem } from "./rendered-item";
 export { assertDisclosed } from "./assert-disclosed";
 export { contentKey } from "./content-key";
 export { recordGaps } from "./record-gaps";
+export { rememberRejected } from "./remember-rejected";
