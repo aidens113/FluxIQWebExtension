@@ -18,6 +18,7 @@ export function fluxIQKeysAddress(coreApiUrl: string | undefined): string | unde
 }
 
 /** The page a purpose names; undefined when the address is not an http(s) address. */
-export function fluxIQPurposeAddress(coreApiUrl: string | undefined, purpose: "model-key" | "projects"): string | undefined {
+export function fluxIQPurposeAddress(coreApiUrl: string | undefined, purpose: "model-key" | "projects" | "pairing"): string | undefined {
+  if (purpose === "pairing") return fluxIQWebPageAddress(coreApiUrl, { kind: "pairing" });
   return purpose === "projects" ? fluxIQWebPageAddress(coreApiUrl, { kind: "projects" }) : fluxIQKeysAddress(coreApiUrl);
 }

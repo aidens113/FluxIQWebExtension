@@ -42,10 +42,16 @@ export function createSettingsForm(): SettingsForm {
   // Whether each switch is forbidden now; starts as Core's default lists it.
   const forbiddenNow = new Map(toggles.map(({ field }) => [field.key, field.disabled === true]));
 
-  const toggleRow = ({ field, input, hint }: (typeof toggles)[number]): HTMLElement => createElement("div", { className: "toggle" }, [
-    createElement("label", {}, [input, createElement("span", { text: field.label })]),
-    hint
-  ]);
+  // A switch the policy forbids and that does nothing meanwhile is hidden, not drawn disabled (`hideWhenForbidden`).
+  const rows = new Map<string, HTMLElement>();
+  const toggleRow = ({ field, input, hint }: (typeof toggles)[number]): HTMLElement => {
+    const row = createElement("div", { className: "toggle", hidden: field.hideWhenForbidden === true && field.disabled === true }, [
+      createElement("label", {}, [input, createElement("span", { text: field.label })]),
+      hint
+    ]);
+    rows.set(field.key, row);
+    return row;
+  };
   const addressRows = createElement("div", { className: "settings-form" }, addresses.map(({ field, input }) => createElement("div", { className: "field" }, [
     createElement("label", { text: field.label, attrs: { for: field.id } }),
     input,
@@ -78,6 +84,8 @@ export function createSettingsForm(): SettingsForm {
           input.checked = false;
         } else input.removeAttribute("disabled");
         if (hint.textContent !== view.hint) hint.textContent = view.hint;
+        const row = rows.get(field.key);
+        if (row !== undefined && field.hideWhenForbidden === true) row.hidden = view.disabled;
       }
     },
     markInvalid(invalid) {

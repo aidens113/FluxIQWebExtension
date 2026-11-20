@@ -74,7 +74,9 @@ h2 { font-size: 13px; }
 .top-actions { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
 .top-actions .icon-button { width: 30px; min-height: 30px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
 .top-actions .icon-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-.top-actions .icon-button.active, .top-actions .top-settings.active { background: transparent; color: var(--accent-text); }
+.top-actions .icon-button.active { background: transparent; color: var(--accent-text); }
+/* Settings in use reads like a selected tab (plain text colour, semi-bold), not a separate amber highlight. */
+.top-actions .top-settings.active { background: transparent; color: var(--text); font-weight: 600; }
 .top-actions .top-settings { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; border-color: transparent; padding: 4px 8px; color: var(--muted); font-weight: 500; }
 .top-settings:hover:not(:disabled) { color: var(--text); }
 .top-dot { margin: 0 5px; width: 6px; height: 6px; }

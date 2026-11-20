@@ -1,6 +1,6 @@
 // Settings, opened by the gear in place of the chat, read top down by what a
 // person cares about: Connection (state, approval, project, reconnect, Disconnect),
-// Model (key status, Open FluxIQ), Behaviour (the Humanness slider, status on the
+// AI key (the shared key card), Behaviour (the Humanness slider, status on the
 // page), Permissions (what FluxIQ may record or request), one Save, Appearance
 // (theme, applied at once and kept per browser), and Report a problem. Under
 // Advanced, the two addresses and Forget this pairing behind a confirmation
@@ -23,8 +23,7 @@ import type { ExtensionStatus, FluxIQSettings } from "../../shared/protocol";
 import { createOnPageStatusSetting } from "../chat";
 import { connectionCopy } from "../copy";
 import { createElement } from "../dom";
-import type { ModelKeyReading, SetupPort } from "../getting-started";
-import { createOpenFluxIQButton } from "../open-fluxiq";
+import type { SetupPort } from "../getting-started";
 import type { PanelContext } from "../shell";
 import type { PanelResult } from "../state";
 import { createAdvancedSection } from "./advanced-section";
@@ -33,13 +32,14 @@ import { createSettingsForm } from "./address-form";
 import { approvalLine } from "./approval-line";
 import { readConnectionDraft, writeConnectionDraft } from "./draft-store";
 import { createForgetConfirmation } from "./forget-confirmation";
-import { modelKeyLine } from "./model-key-line";
+import { createModelSection } from "./model-section";
 import { createProblemReportSection } from "./problem-report-section";
 import { forgetOutcomeWords } from "./forget-outcome-words";
 import { createHumannessControl, readHumanness, withHumanness } from "./humanness";
 import { durabilityLine } from "./durability-line";
 import { projectLine } from "./project-line";
 import { savePlan } from "./save-plan";
+import { unsavedLabels, unsavedSentence } from "./unsaved-changes";
 import "./settings.css";
 
 /** What the save action shows; its accessible name is the same words, the name the Lab presses. */
@@ -48,7 +48,7 @@ const SAVE_LABEL = "Save changes";
 /** The mounted settings screen; `shown` and `hidden` start and stop what it reads. */
 export type SettingsView = { readonly element: HTMLElement; shown(): void; hidden(): void };
 
-/** What settings reads beside the status: the model key, through the setup screens' one seam. Absent, the key line says it could not check. */
+/** What settings reads beside the status: the AI key, through the setup screens' one seam. Absent, the card reads the readiness message itself. */
 export type SettingsViewOptions = {
   readonly setup?: SetupPort;
   /** Opens the header's project switcher (the Project row's Change). Absent: the row names the project and offers no button. */
@@ -60,9 +60,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const { store } = context;
   let dirty = false;
   let editRevision = 0;
-  let mutation: "save" | "disconnect" | "forget" | undefined;
-  let modelKey: ModelKeyReading = "unknown";
-  let reading = 0;
+  let mutation: "save" | "disconnect" | "connect" | "forget" | undefined;
   let isShown = false;
 
   const back = createElement("button", { className: "icon-button settings-back", text: "←", attrs: { type: "button", "aria-label": "Close settings", title: "Close settings" } });
@@ -75,23 +73,29 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   changeProject.addEventListener("click", () => options.changeProject?.());
   const projectRow = createElement("div", { className: "settings-project", attrs: { "aria-label": "Project" } }, [project, changeProject]);
   const durability = createElement("p", { className: "card-line", hidden: true });
-  const keyLine = createElement("p", { className: "card-line" });
   const draftLine = createElement("p", { className: "card-line", text: "You have changes that aren't saved yet.", hidden: true });
+  // Names what Save would save, so the bar never says only "changes".
+  const unsavedLine = createElement("p", { className: "card-line field-hint", hidden: true });
   const form = createSettingsForm();
   const humanness = createHumannessControl();
   const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: SAVE_LABEL, attrs: { type: "button" } });
   const disconnectButton = createElement("button", { id: "disconnectButton", className: "small-button", text: "Disconnect", attrs: { type: "button" } });
+  // Disconnect and Connect take the same place: after Disconnect there is a way back, never a dead end.
+  const connectButton = createElement("button", { id: "settingsConnectButton", className: "small-button", text: "Connect", hidden: true, attrs: { type: "button" } });
   const message = createElement("p", { className: "card-line success-line", hidden: true, attrs: { role: "status" } });
   const notice = createElement("div", { className: "notice danger", hidden: true, attrs: { role: "alert" } });
   // The on-page status preference is the chat's (`panel/chat/settings`); settings only hold it.
   const onPage = createOnPageStatusSetting(store.request);
   const forget = createForgetConfirmation(forgetPairing);
-  const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small", purpose: "model-key" });
+  const model = createModelSection(context, options.setup);
   const advanced = createAdvancedSection([form.parts.addresses, forget.element]);
 
   // Sticks to the bottom of the scroll; shows only while something is unsaved or an outcome is on screen.
-  const saveBar = createElement("section", { className: "settings-save", hidden: true, attrs: { "aria-label": "Save" } }, [draftLine, createElement("div", { className: "card-actions" }, [saveButton]), message, notice]);
+  const saveBar = createElement("section", { className: "settings-save", hidden: true, attrs: { "aria-label": "Save" } }, [draftLine, unsavedLine, createElement("div", { className: "card-actions" }, [saveButton]), message, notice]);
   const syncSave = (): void => {
+    const sentence = dirty ? unsavedSentence(unsavedLabels(form.read(), savedSettings(store.current()), { current: humanness.read(), saved: readHumanness(store.current()?.settings) })) : "";
+    unsavedLine.textContent = sentence;
+    unsavedLine.hidden = sentence === "";
     saveButton.hidden = !dirty;
     saveBar.hidden = !dirty && message.hidden && notice.hidden;
   };
@@ -106,13 +110,9 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
         durability,
         projectRow,
         form.parts.reconnect,
-        createElement("div", { className: "card-actions" }, [disconnectButton])
+        createElement("div", { className: "card-actions" }, [disconnectButton, connectButton])
       ]),
-      createElement("section", { className: "settings-group", attrs: { "aria-label": "Model" } }, [
-        createElement("h3", { className: "settings-group-title", text: "Model" }),
-        keyLine,
-        open.element
-      ]),
+      model.element,
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Behaviour" } }, [
         createElement("h3", { className: "settings-group-title", text: "Behaviour" }),
         humanness.element,
@@ -220,6 +220,21 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     }
   }
 
+  async function connect(): Promise<void> {
+    if (mutation !== undefined) return;
+    clearOutcome();
+    mutation = "connect";
+    renderBusy();
+    try {
+      failed(await store.request({ type: RUNTIME_MESSAGES.connect }));
+    } catch {
+      showFailure("Couldn't connect. Try Connect again.");
+    } finally {
+      mutation = undefined;
+      renderBusy();
+    }
+  }
+
   async function forgetPairing(): Promise<boolean> {
     if (mutation !== undefined) return false;
     clearOutcome();
@@ -242,12 +257,18 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   function renderBusy(): void {
     saveButton.disabled = mutation !== undefined;
     saveButton.textContent = mutation === "save" ? "Saving..." : SAVE_LABEL;
-    disconnectButton.disabled = mutation !== undefined || store.current()?.connectionState === "disconnected";
+    disconnectButton.disabled = mutation !== undefined;
+    // Pressed once, Disconnect has nothing left to do: it goes, and comes back with the next connection.
+    const idle = store.current()?.connectionState === "disconnected";
+    disconnectButton.hidden = idle;
+    connectButton.hidden = !idle;
+    connectButton.disabled = mutation !== undefined;
     forget.setBusy(mutation !== undefined);
   }
 
   saveButton.addEventListener("click", () => void save());
   disconnectButton.addEventListener("click", () => void disconnect());
+  connectButton.addEventListener("click", () => void connect());
 
   function render(): void {
     renderBusy();
@@ -261,8 +282,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     changeProject.hidden = options.changeProject === undefined || status.connectionState !== "connected";
     durability.textContent = durabilityLine(status);
     durability.hidden = durability.textContent === "";
-    keyLine.textContent = modelKeyLine(modelKey, status.connectionState === "connected");
-    open.observe(status);
+    model.render(status);
     // Before filling, so a switch Core's policy forbids fills as off.
     form.allow(status.captureAllowed);
     if (!dirty) {
@@ -271,24 +291,10 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     }
   }
 
-  /** Reads the model key again (settings just opened, or the panel came back from FluxIQ); the newest read wins. */
-  async function readKey(): Promise<void> {
-    if (options.setup === undefined || store.current()?.connectionState !== "connected") return;
-    const mine = ++reading;
-    let next: ModelKeyReading;
-    try {
-      next = await options.setup.readModelKey();
-    } catch {
-      next = "unknown";
-    }
-    if (mine !== reading) return;
-    modelKey = next;
-    render();
-  }
-
   syncSave();
   store.subscribe(render);
-  globalThis.addEventListener?.("focus", () => { if (isShown) void readKey(); });
+  // Coming back from FluxIQ (a key added there) reads the key again.
+  globalThis.addEventListener?.("focus", () => { if (isShown) model.refresh(); });
   void readConnectionDraft().then((draft) => {
     if (draft === undefined || dirty) return;
     editRevision += 1;
@@ -305,18 +311,25 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     shown() {
       isShown = true;
       render();
-      void readKey();
+      model.shown();
       onPage.setActive(true);
     },
     hidden() {
       isShown = false;
+      model.hidden();
       onPage.setActive(false);
+      // An outcome belongs to the visit it happened in: leaving settings clears "Saved." so a later visit never shows it as new.
+      if (!message.hidden) {
+        message.hidden = true;
+        syncSave();
+      }
     }
   };
 }
 
-function savedSettings(status: ExtensionStatus): FluxIQSettings {
+/** The settings as saved: the defaults until the background has reported a status. */
+function savedSettings(status: ExtensionStatus | undefined): FluxIQSettings {
   const defaults = defaultSettings();
-  const settings = { ...defaults, ...status.settings };
-  return { ...settings, gatewayUrl: settings.gatewayUrl || status.gatewayUrl || defaults.gatewayUrl, coreApiUrl: settings.coreApiUrl || defaults.coreApiUrl };
+  const settings = { ...defaults, ...status?.settings };
+  return { ...settings, gatewayUrl: settings.gatewayUrl || status?.gatewayUrl || defaults.gatewayUrl, coreApiUrl: settings.coreApiUrl || defaults.coreApiUrl };
 }

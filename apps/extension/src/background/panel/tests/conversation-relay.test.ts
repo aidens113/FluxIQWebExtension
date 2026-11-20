@@ -304,9 +304,40 @@ test("the thread list reads the project it names, and every project when it name
   await relayConversation({ type: read, kind: "list-all", projectId: "", limit: 0 }, c.value);
   assert.deepEqual(c.calls, [
     { endpoint: "list-conversations", payload: { projectId: null, limit: 25 } },
+    { endpoint: "list-panel-threads", payload: { limit: 25 } },
     { endpoint: "list-conversations", payload: { projectId: "project-2", limit: 50 } },
-    { endpoint: "list-conversations", payload: { projectId: null } }
+    { endpoint: "list-conversations", payload: { projectId: null } },
+    { endpoint: "list-panel-threads", payload: {} }
   ]);
+});
+
+const flat = (id: string, extra: Record<string, unknown> = {}) => ({ conversationId: id, status: "open", createdAt: 1, updatedAt: 2, subjectKind: "panel", ...extra });
+
+test("the all-chats list joins the assistant's chats to the project chats, once each, as project-shaped conversations", async () => {
+  const c = context({
+    "list-conversations": { ok: true, payload: { conversations: [{ conversationId: "p1", projectId: "project-1" }, { conversationId: "shared", projectId: "project-1" }], more: true } },
+    "list-panel-threads": { ok: true, payload: { conversations: [flat("a1", { title: " Help ", turnCount: 3 }), flat("shared"), flat("", {}), flat("bad", { status: "x" }), flat("late", { createdAt: "now" })] } }
+  });
+  const result = await relayConversation({ type: read, kind: "list-all", limit: 25 }, c.value);
+  assert.deepEqual(result, { ok: true, payload: { more: true, conversations: [
+    { conversationId: "p1", projectId: "project-1" },
+    { conversationId: "shared", projectId: "project-1" },
+    { conversationId: "a1", projectId: "panel", subject: { kind: "project", id: "panel" }, status: "open", title: " Help ", turnCount: 3, pendingAskCount: 0, createdAt: 1, updatedAt: 2 }
+  ] } });
+});
+
+test("a project's own list does not read the assistant's chats", async () => {
+  const c = context();
+  await relayConversation({ type: read, kind: "list-all", projectId: "project-2" }, c.value);
+  assert.deepEqual(c.calls.map((call) => call.endpoint), ["list-conversations"]);
+});
+
+test("a failed read of either list is reported as Core said it, never hidden behind the other", async () => {
+  const down: PanelRelayResponse = { ok: false, code: "unreachable", error: "FluxIQ is not answering." };
+  const assistantDown = context({ "list-conversations": { ok: true, payload: { conversations: [{ conversationId: "p1" }] } }, "list-panel-threads": down });
+  assert.deepEqual(await relayConversation({ type: read, kind: "list-all" }, assistantDown.value), down);
+  const projectsDown = context({ "list-conversations": down, "list-panel-threads": { ok: true, payload: { conversations: [flat("a1")] } } });
+  assert.deepEqual(await relayConversation({ type: read, kind: "list-all" }, projectsDown.value), down);
 });
 
 test("New chat is open-conversation with fresh: true; a panel subject, or a project one with no id, is the project's own thread", async () => {

@@ -5,112 +5,152 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ExtensionStatus } from "../../../../shared/protocol";
 import { statusWith } from "../../../tests/status-fixture";
+import type { ServerFinding } from "../../reachability";
 import { startGuide, type StartGuide } from "../steps";
 
 const states = (guide: StartGuide) => guide.steps.map((step) => `${step.key}:${step.state}`);
+const FOUND: ServerFinding = { origin: "http://127.0.0.1:3100", host: "127.0.0.1:3100", found: true, gatewayUrl: "ws://127.0.0.1:4877/client" };
+const NOT_FOUND: ServerFinding = { origin: "http://127.0.0.1:3000", host: "127.0.0.1:3000", found: false };
+const approveLine = (guide: StartGuide) => guide.steps.find((item) => item.key === "approve")?.line;
 
-test("disconnected and never approved: every step in order, nothing ticked, Connect is the button", () => {
+test("disconnected and never approved: three steps in order, nothing ticked, Connect is the button", () => {
   const guide = startGuide(statusWith(), false);
   assert.equal(guide.gated, true);
-  assert.deepEqual(states(guide), ["start:current", "signin:todo", "connect:todo", "approve:todo", "key:todo"]);
+  assert.deepEqual(states(guide), ["start:current", "approve:todo", "key:todo"]);
   assert.deepEqual(guide.connect, { label: "Connect", action: "connect" });
   assert.equal(guide.pairingCode, undefined);
-  assert.equal(guide.steps[2]?.line, "Press Connect so FluxIQ can work in this browser.");
-  assert.equal(guide.card, false);
+  assert.equal(guide.autoConnect, false, "nothing was found yet, so nothing is sent");
   assert.doesNotMatch(guide.line, /three/iu, "the heading line no longer says three steps");
 });
 
-test("step one says how FluxIQ starts, in words; step two says to sign in", () => {
+test("there is no separate Sign in step: it is not known, so the approve step says to sign in if FluxIQ asks", () => {
+  for (const state of ["disconnected", "connecting", "reconnecting", "pairing", "error", "connected"] as const) {
+    for (const paired of [false, true]) {
+      const guide = startGuide(statusWith({ connectionState: state, paired }), false, undefined, FOUND);
+      assert.equal(guide.steps.some((item) => (item.key as string) === "signin"), false, `${state} paired=${paired}`);
+      assert.equal(guide.steps.some((item) => /^Sign in/u.test(item.title)), false, `${state} paired=${paired}`);
+    }
+  }
+  assert.match(approveLine(startGuide(statusWith({ connectionState: "pairing" }), false)) ?? "", /sign in if it asks/iu);
+});
+
+test("the AI key is the last step, a plain to-do the key card in the chat answers; no reading, no banned words", () => {
+  for (const state of ["disconnected", "connecting", "reconnecting", "pairing", "error"] as const) {
+    const guide = startGuide(statusWith({ connectionState: state, paired: true }), false);
+    assert.equal(guide.steps.at(-1)?.key, "key", state);
+    assert.equal(guide.steps.at(-1)?.title, "Add your AI key", state);
+    assert.equal(guide.steps.at(-1)?.state, "todo", state);
+    assert.doesNotMatch(JSON.stringify(guide), /unlock|vault|seal|credential|token|scope|password/iu, state);
+  }
+});
+
+test("step one says how FluxIQ starts, in words; the connect step says it asks by itself", () => {
   const guide = startGuide(statusWith(), false);
   assert.match(guide.steps[0]?.line ?? "", /running on this computer/u);
   assert.doesNotMatch(guide.steps[0]?.line ?? "", /pnpm|folder|!FluxIQ/u, "the first step names no command or folder");
-  assert.match(guide.steps[1]?.line ?? "", /sign in/iu);
+  assert.match(approveLine(guide) ?? "", /asks it for approval by itself/u);
   for (const state of ["disconnected", "connecting", "reconnecting", "pairing", "error"] as const) {
     for (const item of startGuide(statusWith({ connectionState: state }), false).steps) {
-      assert.doesNotMatch(`${item.title} ${item.line ?? ""}`, /ws:|wss:|127\.0\.0\.1|localhost/u, `${state}/${item.key}: no address in the words`);
+      assert.doesNotMatch(`${item.title} ${item.line ?? ""}`, /ws:|wss:|127\.0\.0\.1|localhost/u, `${state}/${item.key}: no address in the words until a server was looked for`);
     }
   }
 });
 
-test("disconnected but approved before: signing in and approval stay done, the rest is still to do", () => {
-  const guide = startGuide(statusWith({ paired: true }), false);
-  assert.deepEqual(states(guide), ["start:current", "signin:done", "connect:todo", "approve:done", "key:todo"]);
-  assert.equal(guide.steps[2]?.line, "Connect to pick up where you left off.");
+test("every step keeps its own title, done or not", () => {
+  for (const state of ["disconnected", "pairing", "connected"] as const) {
+    const titles = startGuide(statusWith({ connectionState: state, paired: true }), false, undefined, state === "disconnected" ? FOUND : undefined).steps.map((item) => item.title);
+    assert.deepEqual(titles, ["Start FluxIQ", "Connect and approve", "Add your AI key"], state);
+  }
+});
+
+test("FluxIQ found, nothing asked yet: the request goes out by itself and the step says it is asking", () => {
+  const guide = startGuide(statusWith(), false, undefined, FOUND);
+  assert.equal(guide.autoConnect, true);
+  assert.deepEqual(states(guide), ["start:done", "approve:waiting", "key:todo"]);
+  assert.equal(approveLine(guide), "Asking FluxIQ for approval...");
+  // Also for a browser approved before: the stored approval is used, and the request still goes out.
+  assert.equal(startGuide(statusWith({ paired: true }), false, undefined, FOUND).autoConnect, true);
+});
+
+test("the request is sent by itself only when nothing has asked yet: not found, already sent, or connected before", () => {
+  assert.equal(startGuide(statusWith(), false, undefined, NOT_FOUND).autoConnect, false, "nothing valid answered");
+  assert.equal(startGuide(statusWith(), false).autoConnect, false, "not asked where FluxIQ is yet");
+  const sent = startGuide(statusWith(), false, undefined, FOUND, { autoSent: true });
+  assert.equal(sent.autoConnect, false, "it already went out once; Connect is the retry");
+  assert.deepEqual(sent.connect, { label: "Connect", action: "connect" });
+  assert.equal(startGuide(statusWith({ paired: true }), false, undefined, FOUND, { wasConnected: true }).autoConnect, false, "a person who was connected is not asked again by itself");
+  for (const state of ["connecting", "reconnecting", "pairing", "error", "connected"] as const) {
+    assert.equal(startGuide(statusWith({ connectionState: state }), false, undefined, FOUND).autoConnect, false, state);
+  }
+  assert.equal(startGuide(statusWith(), false, "pairing", FOUND).autoConnect, false, "a lost wait waits for the person's Connect");
+});
+
+test("after a cancelled request the step says not connected and Connect is the button", () => {
+  const guide = startGuide(statusWith(), false, undefined, FOUND, { autoSent: true });
+  assert.deepEqual(states(guide), ["start:done", "approve:todo", "key:todo"]);
+  assert.equal(approveLine(guide), "Not connected. Connect again.");
 });
 
 test("connecting and reconnecting: the connect step is under way, with Cancel or Try now", () => {
   const connecting = startGuide(statusWith({ connectionState: "connecting" }), false);
-  assert.deepEqual(states(connecting), ["start:current", "signin:todo", "connect:waiting", "approve:todo", "key:todo"]);
+  assert.deepEqual(states(connecting), ["start:current", "approve:waiting", "key:todo"]);
   assert.deepEqual(connecting.connect, { label: "Cancel", action: "disconnect" });
   const reconnecting = startGuide(statusWith({ connectionState: "reconnecting", paired: true }), false);
-  assert.deepEqual(states(reconnecting), ["start:current", "signin:done", "connect:waiting", "approve:done", "key:todo"]);
+  assert.deepEqual(states(reconnecting), ["start:current", "approve:waiting", "key:todo"]);
   assert.deepEqual(reconnecting.connect, { label: "Try now", action: "connect" });
+});
+
+test("the approve step is never done while the browser is not connected", () => {
+  for (const connectionState of ["disconnected", "connecting", "reconnecting", "error", "pairing"] as const) {
+    for (const paired of [false, true]) {
+      assert.notEqual(startGuide(statusWith({ connectionState, paired }), false).steps.find((item) => item.key === "approve")?.state, "done", `${connectionState} paired=${paired}`);
+    }
+  }
+  assert.equal(startGuide(statusWith({ connectionState: "connected", paired: true }), false).steps.find((item) => item.key === "approve")?.state, "done");
+});
+
+test("a refused connection that FluxIQ answered with a removal says access was removed; any other loss says not connected", () => {
+  const removed = "Access was removed. Connect again to ask for approval.";
+  const refused = startGuide(statusWith({ connectionState: "error", paired: true, enrolmentRefusalCode: "enrolment.revoked" }), false);
+  assert.equal(approveLine(refused), removed);
+  // The trust is also gone when the approval was dropped after this panel had seen the browser connected.
+  assert.equal(approveLine(startGuide(statusWith({ connectionState: "disconnected", paired: false }), false, undefined, FOUND, { wasConnected: true })), removed);
+  assert.equal(approveLine(startGuide(statusWith({ connectionState: "error", paired: false }), false, undefined, undefined, { wasConnected: true })), removed);
+  // Anything else is only a loss.
+  for (const connectionState of ["error", "disconnected"] as const) {
+    assert.equal(approveLine(startGuide(statusWith({ connectionState, paired: true }), false)), "Not connected. Connect again.", connectionState);
+  }
+  assert.equal(approveLine(startGuide(statusWith({ connectionState: "error", paired: false }), false)), "Not connected. Connect again.");
+  const words = JSON.stringify([removed, "Not connected. Connect again."]);
+  assert.doesNotMatch(words, /approved earlier|may have removed|unlock|vault|seal|credential|token|scope/iu);
 });
 
 test("pairing: FluxIQ is reached and connected, approval is under way with the code", () => {
   const guide = startGuide(statusWith({ connectionState: "pairing", pairingReferenceCode: "482913" }), false);
   assert.equal(guide.gated, true);
-  assert.deepEqual(states(guide), ["start:done", "signin:waiting", "connect:done", "approve:waiting", "key:todo"]);
+  assert.deepEqual(states(guide), ["start:done", "approve:waiting", "key:todo"]);
   assert.equal(guide.pairingCode, "482913");
   assert.equal(guide.connect, undefined, "no Connect while waiting for approval");
   assert.equal(startGuide(statusWith({ connectionState: "pairing" }), false).pairingCode, "------", "a code not yet sent shows as dashes");
 });
 
-test("connected, key not read: the chat comes back, steps one to four are done and nothing is said of the key", () => {
+test("connected: the chat comes back and the steps before the key are done", () => {
   const guide = startGuide(statusWith({ connectionState: "connected", paired: true }), false);
   assert.equal(guide.gated, false);
-  assert.deepEqual(states(guide), ["start:done", "signin:done", "connect:done", "approve:done"]);
-  assert.equal(guide.card, false);
+  assert.deepEqual(states(guide), ["start:done", "approve:done", "key:todo"]);
 });
 
-test("connected with the key configured: five ticks and no card", () => {
-  const guide = startGuide(statusWith({ connectionState: "connected", paired: true }), false, undefined, "ready");
-  assert.deepEqual(states(guide), ["start:done", "signin:done", "connect:done", "approve:done", "key:done"]);
-  assert.equal(guide.card, false);
-  assert.equal(guide.steps.at(-1)?.title, "Model key configured");
+test("before the first status: a checking line, no steps, and the chat not yet shown", () => {
+  const guide = startGuide(undefined, false);
+  assert.equal(guide.gated, true);
+  assert.equal(guide.line, "Checking the connection...");
+  assert.deepEqual(guide.steps, []);
+  assert.equal(guide.autoConnect, false);
 });
 
-test("connected with no key: the key step is the one to do, the card shows, the chat is not gated", () => {
-  const guide = startGuide(statusWith({ connectionState: "connected", paired: true }), false, undefined, "missing");
-  assert.equal(guide.gated, false);
-  assert.deepEqual(states(guide), ["start:done", "signin:done", "connect:done", "approve:done", "key:current"]);
-  assert.equal(guide.card, true);
-  assert.match(guide.steps.at(-1)?.line ?? "", /open FluxIQ/u);
-  assert.match(guide.steps.at(-1)?.line ?? "", /Saved Flows.*can still run/u);
-});
-
-test("unavailable configuration never creates a sixth step or gates connected work", () => {
-  for (const code of ["legacy_recovery_required", "host_protection_unavailable", "ciphertext_invalid"] as const) {
-    const guide = startGuide(statusWith({ connectionState: "connected", paired: true }), false, undefined, { state: "unavailable", code });
-    assert.equal(guide.gated, false);
-    assert.deepEqual(states(guide), ["start:done", "signin:done", "connect:done", "approve:done", "key:problem"]);
-    assert.equal(guide.card, true);
-    assert.equal(guide.steps.at(-1)?.title, "Model key unavailable");
-    assert.doesNotMatch(JSON.stringify(guide), /unlock|password/iu);
-  }
-});
-
-test("legacy incompatibility offers an upgrade, leaving the connection usable", () => {
-  const guide = startGuide(statusWith({ connectionState: "connected", paired: true }), false, undefined, "upgrade_required");
-  assert.equal(guide.gated, false);
-  assert.equal(guide.steps.length, 5);
-  assert.match(guide.steps.at(-1)?.line ?? "", /Update FluxIQ/u);
-  assert.doesNotMatch(JSON.stringify(guide), /unlock|password/iu);
-});
-
-test("model availability never changes the independent connection steps", () => {
-  for (const state of ["disconnected", "connecting", "reconnecting", "pairing", "error"] as const) {
-    const guide = startGuide(statusWith({ connectionState: state }), false, undefined, { state: "unavailable", code: "ciphertext_invalid" });
-    assert.equal(guide.steps.length, 5, state);
-    assert.deepEqual(guide, startGuide(statusWith({ connectionState: state }), false, undefined, "missing"));
-    assert.equal(guide.steps.find((item) => item.key === "key")?.state, "todo", state);
-    assert.equal(guide.card, false, state);
-  }
-});
-
-test("no tick on anything not detected: before connecting only a stored approval ticks", () => {
+test("no tick on anything not detected before connecting", () => {
   for (const state of ["disconnected", "connecting", "reconnecting", "error"] as const) {
-    const done = startGuide(statusWith({ connectionState: state }), false).steps.filter((item) => item.state === "done");
+    const done = startGuide(statusWith({ connectionState: state, paired: true }), false).steps.filter((item) => item.state === "done");
     assert.deepEqual(done, [], state);
   }
 });
@@ -118,7 +158,7 @@ test("no tick on anything not detected: before connecting only a stored approval
 test("FluxIQ unreachable: the first step is the problem, in words, with Try again and a way to the address", () => {
   const guide = startGuide(statusWith({ connectionState: "error" }), false);
   assert.equal(guide.gated, true);
-  assert.deepEqual(states(guide), ["start:problem", "signin:todo", "connect:todo", "approve:todo", "key:todo"]);
+  assert.deepEqual(states(guide), ["start:problem", "approve:todo", "key:todo"]);
   assert.deepEqual(guide.connect, { label: "Try again", action: "connect" });
   assert.equal(guide.addressLink, true);
   assert.match(guide.steps[0]?.line ?? "", /isn't answering/u);
@@ -132,13 +172,6 @@ test("critical: the background never answered, so there are no steps, only what 
   assert.equal(guide.connect, undefined);
 });
 
-test("before the first status: a checking line, no steps, and the chat not yet shown", () => {
-  const guide = startGuide(undefined, false);
-  assert.equal(guide.gated, true);
-  assert.equal(guide.line, "Checking the connection...");
-  assert.deepEqual(guide.steps, []);
-});
-
 test("the Lab's connect button names: exactly one of Connect, Try again, Try now whenever the connection is idle or failed", () => {
   const idle: ExtensionStatus["connectionState"][] = ["disconnected", "error", "reconnecting"];
   for (const connectionState of idle) {
@@ -146,26 +179,24 @@ test("the Lab's connect button names: exactly one of Connect, Try again, Try now
   }
 });
 
-test("the sign-in step never prints a default credential", () => {
-  for (const state of ["disconnected", "pairing"] as const) {
-    const line = startGuide(statusWith({ connectionState: state }), false).steps.find((item) => item.key === "signin")?.line ?? "";
-    assert.doesNotMatch(line, /admin|password/iu, state);
-    assert.match(line, /sign in/iu, state);
-  }
+test("a valid FluxIQ found at the configured address: step one is done, says where, offers Change", () => {
+  const guide = startGuide(statusWith(), false, undefined, FOUND);
+  assert.equal(guide.steps[0]?.state, "done");
+  assert.equal(guide.steps[0]?.line, "FluxIQ found at 127.0.0.1:3100");
+  assert.equal(guide.steps[0]?.change, true);
+  assert.deepEqual(guide.server, FOUND);
 });
 
-test("FluxIQ answers before pairing: Start FluxIQ is done and Sign in is the next step", () => {
-  const guide = startGuide(statusWith(), false, undefined, "unknown", true);
-  assert.deepEqual(states(guide), ["start:done", "signin:current", "connect:todo", "approve:todo", "key:todo"]);
-  assert.equal(guide.steps[0]?.title, "FluxIQ is running");
+test("nothing valid at the configured address: step one is not done, says the address it asked, and offers Change", () => {
+  const guide = startGuide(statusWith(), false, undefined, NOT_FOUND);
+  assert.equal(guide.steps[0]?.state, "current");
+  assert.match(guide.steps[0]?.line ?? "", /isn't answering at 127\.0\.0\.1:3000/u);
+  assert.equal(guide.steps[0]?.change, true);
 });
 
-test("FluxIQ answers and the browser was approved before: Start is done, Sign in stays done, Connect is the button", () => {
-  const guide = startGuide(statusWith({ paired: true }), false, undefined, "unknown", true);
-  assert.deepEqual(states(guide).slice(0, 3), ["start:done", "signin:done", "connect:todo"]);
-});
-
-test("FluxIQ not answering or not asked: Start FluxIQ stays the next step", () => {
-  assert.equal(startGuide(statusWith(), false, undefined, "unknown", false).steps[0]?.state, "current");
-  assert.equal(startGuide(statusWith(), false).steps[0]?.state, "current");
+test("not asked yet: Start FluxIQ stays the next step and claims no address", () => {
+  const guide = startGuide(statusWith(), false);
+  assert.equal(guide.steps[0]?.state, "current");
+  assert.equal(guide.steps[0]?.change, undefined);
+  assert.equal(guide.server, undefined);
 });

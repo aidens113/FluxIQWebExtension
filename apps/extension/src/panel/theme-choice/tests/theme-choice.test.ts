@@ -1,8 +1,8 @@
-// The theme choice: stored under "fluxiq.ui.theme", dark by default, and applied as data-theme.
+// The theme choice: stored under "fluxiq.ui.theme", system (the device) by default, and applied as data-theme.
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyThemeChoice, mountThemeChoice, normaliseThemeChoice, readThemeChoice, saveThemeChoice, THEME_CHOICE_KEY } from "../index";
+import { applyThemeChoice, DEFAULT_THEME_CHOICE, mountThemeChoice, normaliseThemeChoice, readThemeChoice, saveThemeChoice, THEME_CHOICE_KEY } from "../index";
 
 type Changes = Record<string, { newValue?: unknown }>;
 
@@ -36,32 +36,50 @@ async function withStorage(initial: Record<string, unknown>, body: (store: Recor
 
 const dataTheme = () => (document.documentElement as unknown as { getAttribute(name: string): string }).getAttribute("data-theme");
 
-test("the key is fluxiq.ui.theme and anything but dark, light or system is dark", () => {
+test("the key is fluxiq.ui.theme and anything but dark, light or system is system (the first-run default follows the device)", () => {
   assert.equal(THEME_CHOICE_KEY, "fluxiq.ui.theme");
+  assert.equal(DEFAULT_THEME_CHOICE, "system");
   assert.equal(normaliseThemeChoice("light"), "light");
+  assert.equal(normaliseThemeChoice("dark"), "dark");
   assert.equal(normaliseThemeChoice("system"), "system");
-  for (const bad of [undefined, null, "", "blue", 3]) assert.equal(normaliseThemeChoice(bad), "dark");
+  for (const bad of [undefined, null, "", "blue", 3]) assert.equal(normaliseThemeChoice(bad), "system");
 });
 
-test("a choice is stored and read back; nothing stored is dark", async () => {
+test("a choice is stored and read back; nothing stored is system", async () => {
   await withStorage({}, async (store) => {
-    assert.equal(await readThemeChoice(), "dark");
+    assert.equal(await readThemeChoice(), "system");
     saveThemeChoice("light");
     assert.equal(store[THEME_CHOICE_KEY], "light");
     assert.equal(await readThemeChoice(), "light");
   });
 });
 
-test("mounting applies dark at once, then the stored choice, and follows a change live", async () => {
+test("first run: nothing stored mounts as system and stays system; a stored dark is kept", async () => {
+  await withStorage({}, async () => {
+    mountThemeChoice();
+    assert.equal(dataTheme(), "system", "the first paint follows the device");
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(dataTheme(), "system", "and so does the read when nothing was chosen");
+  });
+  await withStorage({ [THEME_CHOICE_KEY]: "dark" }, async () => {
+    mountThemeChoice();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(dataTheme(), "dark", "a person's earlier choice of dark wins");
+  });
+});
+
+test("mounting applies the default at once, then the stored choice, and follows a change live", async () => {
   await withStorage({ [THEME_CHOICE_KEY]: "light" }, async (_store, fire) => {
     mountThemeChoice();
-    assert.equal(dataTheme(), "dark", "dark before first paint");
+    assert.equal(dataTheme(), "system", "the default before first paint");
     await Promise.resolve();
     await Promise.resolve();
     assert.equal(dataTheme(), "light");
-    fire({ [THEME_CHOICE_KEY]: { newValue: "system" } });
-    assert.equal(dataTheme(), "system");
-    applyThemeChoice("dark");
+    fire({ [THEME_CHOICE_KEY]: { newValue: "dark" } });
     assert.equal(dataTheme(), "dark");
+    applyThemeChoice("system");
+    assert.equal(dataTheme(), "system");
   });
 });
