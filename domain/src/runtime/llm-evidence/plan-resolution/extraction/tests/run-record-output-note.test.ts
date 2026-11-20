@@ -40,12 +40,13 @@ function notesOf(run: () => JsonObject): { lines: string[]; result: JsonObject }
   }
 }
 
-test("t877: run mw49972k's read of title and price saved under a title schema notes price, and keeps only title", () => {
+test("t877: run mw49972k's read of title and price saved under a title schema notes price, and shows only title", () => {
   const { lines, result } = notesOf(() => webPlanRunRecordOutput({ extractList: listings, recordOutput: schemaOf("title") }));
   assert.deepEqual(lines, ["A saved read drops a column it was written with that nothing uses, because its declared columns leave it out: price."]);
-  // No widening: the saved schema is the declared one.
-  const saved = (result.recordOutput as JsonObject).schema as { fields: { id: string }[] };
-  assert.deepEqual(saved.fields.map((field) => field.id), ["title"]);
+  // No widening of the answer: it shows the declared column. The mark the condition reads is stored, hidden (t975).
+  const saved = result.recordOutput as JsonObject;
+  assert.deepEqual((saved.schema as { fields: { id: string }[] }).fields.map((field) => field.id), ["title", "sponsored"]);
+  assert.deepEqual((saved.process as JsonObject).columns, ["title"]);
 });
 
 test("t877: a saved read that drops only a column a condition reads, or drops nothing, writes no note", () => {

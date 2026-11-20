@@ -47,10 +47,9 @@
 // By key, the stored step says `field: "rating"`, a rerun writing the same
 // resolves the same way through the dispatch reader
 // (`actions/extraction/read-request.ts`), and the page tests the value already in
-// the row. A declared schema that later drops the column from the read turns the
-// condition back into the column's own spec
-// (`output-nodes/extract-list/declared-columns.ts`), so the reference never
-// dangles.
+// the row. A declared schema that leaves the column out of the answer keeps it
+// in the read, stored and hidden (`output-nodes/extract-list/declared-columns.ts`,
+// t975), so the reference never dangles.
 //
 // **A condition may also name a column by the key the plan keeps it under**,
 // and until 2026-09-23 it could not. A plan that keeps a column renames it --

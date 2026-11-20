@@ -1,62 +1,58 @@
 // The read a list extraction dispatches when its author declared the table's
-// columns: the same items, the same conditions, and only the declared columns
-// kept as columns.
+// columns: the same items, the same conditions, the declared columns shown, the
+// columns a condition or an ordering reads stored and hidden, and nothing else
+// kept as a column.
 //
 // **Why this exists.** Live runs 11 and 12 of 2026-09-30 built a Flow for "the
 // Plus earbuds under $50" whose read kept six fields -- name, price, rating and
 // url, which the instruction asked for, and `plus` and `ad`, which it kept only
 // to filter by (`where plus present`, `where ad absent`). The model's own
-// `recordOutput.schema` named the four. The answer stored all six, because the
+// `recordOutput.schema` named the four. The answer showed all six, because the
 // field map declares the columns (`./reconciled-record-output.ts`), so every row
 // had two columns the instruction never asked for and the Lab paired none of
 // them (`debugs/run-muq66ff9-cb3767a1.md` cause 8). Telling the model to keep
 // only the asked-for columns (F30) did not change what it wrote.
 //
-// **So a declared schema decides what is stored, and nothing about what is
-// read.** Every item the read would have tested is tested the same way: a
-// condition over a helper column is rewritten to carry that column's own spec
-// (`read`), which is the form a condition over a column the table does not keep
-// already takes (`runtime/llm-evidence/plan-resolution/extraction/conditions.ts`),
-// and the page reads it for the condition exactly as it read it for the field
-// (`content/extraction/item-filter.ts`). Nothing the model chose is refused.
+// **So a declared schema decides what is shown, and nothing about what is
+// read.** Every item the read would have tested is tested the same way, and
+// nothing the model chose is refused.
 //
-// **Why the read, and not only the schema.** Core's record capture copies each
-// row by the schema, so a schema of four columns alone would have stored four --
-// in the dataset and in the node's `result.extracted`, which capture replaces
-// with the stored rows (`runtime/executor/record-capture.ts`). But the page's own
-// account of the read, `extraction.fieldNames`, and the rejected rows it samples,
-// are built from the request's field map by the page, and would go on naming
-// `plus` and `ad`. Taking the helper out of the field map makes the page, the
-// stored rows, the preview and the account say the same thing from the source.
+// **A column a condition reads is stored, hidden (t975, F3).** Until t975 a
+// helper read only by the read's own `where` left the read: the condition was
+// rewritten to read the column through its own spec, and the column was never
+// stored. The page kept the right rows, but the rows the saved Flow stored --
+// and so the rows its judge saw on every replay -- no longer carried the value
+// the rows were kept for. Run `run-mwounh32-24f9bc6b` (delete-stranger-requests,
+// run 22) asked for the requests with zero mutual friends, and its attempt-2
+// judges could not verify the condition from the saved read's rows. Since t970
+// the answer shows exactly `process.columns` while Core keeps every stored
+// column, and a judge reads the stored rows
+// (`fluxiq` `runtime/result-verification/result-evidence/`). So a helper a
+// condition reads stays in the read under its key, stored, and the answer
+// leaves it out; its condition keeps naming it by key.
 //
-// **A helper an ordering names stays in the read, and is stored.** `sort` and
-// `dedupe` order and fold the rows a run collects, after they are stored
-// (`./record-output-process.ts`, read-list redesign C3), so a read sorted by a
-// helper would silently stop being sorted unless the helper is a stored column.
-// Until S4 the page did the ordering and such a column was left out of the
-// schema; now it is kept in it, as the one column the author did not declare
-// that the answer needs. A dedupe over every column the read reads -- "list
-// each once" -- names no column in particular: it is the whole row, Core's
-// default over whatever is stored, so it pins no helper and keeps its meaning
-// over the narrowed read by naming every column left.
+// **A helper an ordering or the authored `process` names is stored too.**
+// `sort` and `dedupe` order and fold the rows a run collects, after they are
+// stored (`./record-output-process.ts`, read-list redesign C3), and so do the
+// authored `process`'s `where`, `anyOf`, `compare` and the sources of its
+// `derive` (t510, t970), so each column they name is a stored column. A dedupe
+// over every column the read reads -- "list each once" -- names no column in
+// particular: it is the whole row, Core's default over whatever is stored, so it
+// pins no helper and keeps its meaning over the narrowed read by naming every
+// column left. A schema field marked `handling: "exclude"` over a column the
+// read reads is a helper, not a declared column.
 //
-// **Stored is not shown (t510).** The orderings are the read's own `sort` and
-// `dedupe`, and every field the authored record output's `process` names --
-// `sort`, `dedupe.by`, `where` and `columns` -- since all of them run over the
-// stored rows. Breadth wave 1's auction run (`run-mv6qrbgx-06151cdb`) sorted by
-// an end time the answer must not show, under a schema of the four answer
-// columns plus every helper marked `handling: "exclude"`; submit refused the
-// sort on an excluded field while the dispatch, which rebuilt the schema, would
-// have run it. So a schema field marked exclude over a column the read reads is
-// a helper, not a declared column: stored when a process needs it, and
-// otherwise read only by its conditions, never stored. And a helper kept only
-// for processing is hidden: when the author wrote no `process.columns`, the
-// declared columns are written there (`shown`). Until t970 any helper a
-// `process.where` names was shown too, because Core refused a where over a
-// column `columns` drops; Core now filters the collected rows, which hold every
-// stored column, so a mark kept only to filter by stays out of the answer.
-// The fields Core's `anyOf`, `compare` and `derive` read (t970) are helpers an
-// authored `process` names, as its `where`'s are.
+// **Stored is not shown (t510).** When any helper is stored and the author wrote
+// no `process.columns`, the declared columns are written there (`shown`). Which
+// stored columns are hidden is read from `process.columns` when it is written,
+// so the record output this builds, dispatched again with the read it came from,
+// builds the same value.
+//
+// **A hidden column never fails a row.** A hidden column is read as optional
+// (`required: false`), so the schema does not require it: a row the conditions
+// keep is stored whether or not the page had the helper's value -- `where ad
+// absent` keeps exactly the rows that lack it -- as it was while the helper was
+// read only by its condition. A string field is optional already (`field-spec.ts`).
 //
 // **Only a schema that is a subset of the field map narrows anything.** A
 // schema naming a column the field map does not read says the author's names
@@ -74,67 +70,74 @@
 // Core's build had declared the instruction's column list, which its reader cut
 // short at "title" ("columns title and price exactly as the shop shows them").
 // Price left the read, and the answer lost it with `ok: true` and no word
-// anywhere. Run 12's helpers were each read by a condition; price was read by
-// nothing. The answer still keeps exactly the declared columns -- no widening --
-// but each column of the read that the narrowing drops and no condition, sort
-// or dedupe uses is handed back as `dropped`, so the caller can say so.
+// anywhere. A helper no condition, ordering or `process` reads still leaves the
+// read -- a read of a detected list carries every column the detector found,
+// and storing them all would fill the dataset and the judge's evidence with
+// columns nothing asked for -- and each is handed back as `dropped`, so the
+// caller can say so.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   webAutomationExtractListRequestValue,
   type WebAutomationExtractField,
-  type WebAutomationExtractItemCondition,
   type WebAutomationExtractListRequest
 } from "../../actions/extraction";
 import { webAutomationRecordOutputProcessOfRead } from "./record-output-process";
 
-/** A read narrowed to its author's declared columns, and those columns. */
+/** A read narrowed to its author's declared columns and the helpers something reads, and those columns. */
 export type WebAutomationDeclaredColumnsRead = {
-  /** The request the page runs: the declared columns, the helpers an ordering names, and every condition. */
+  /** The request the page runs: the declared columns, the helpers something reads (each hidden one optional), and every condition. */
   request: WebAutomationExtractListRequest;
-  /** The kept columns stored: the field keys the author's schema declares, and the helpers an ordering or the authored `process` names. */
+  /** The kept columns stored: the field keys the author's schema declares, and the helpers a condition, an ordering or the authored `process` names. */
   columns: ReadonlySet<string>;
-  /**
-   * The answer's columns, for `process.columns`, when a helper is stored only
-   * for processing and the author wrote no `process.columns`: the declared
-   * columns (header).
-   */
+  /** The answer's columns, for `process.columns`, when a helper is stored and the author wrote no `process.columns`: the declared columns (header). */
   shown?: string[];
-  /** The read's columns this narrowing drops that no condition, sort or dedupe uses, in field-map order (header, t877). */
+  /** The stored columns the answer does not show, in field-map order (header, t975). */
+  hidden: string[];
+  /** The read's columns this narrowing drops, none of which anything reads, in field-map order (header, t877). */
   dropped: string[];
 };
 
 /**
- * The read narrowed to the columns the authored record output declares, or
- * `undefined` when nothing is to be narrowed: no schema, a schema that is not a
- * subset of the field map, or a field map with no column outside it.
+ * The read narrowed to the columns the authored record output declares and the
+ * helpers something reads, or `undefined` when nothing changes: no schema, a
+ * schema that is not a subset of the field map, or a read with no column to
+ * drop or hide.
  */
 export function webAutomationDeclaredColumnsRead(authored: JsonValue | undefined, request: WebAutomationExtractListRequest): WebAutomationDeclaredColumnsRead | undefined {
-  const columns = declaredColumns(authored, request);
-  if (columns === undefined) return undefined;
+  const declared = declaredColumns(authored, request);
+  if (declared === undefined) return undefined;
   const wholeRow = webAutomationRecordOutputProcessOfRead(request).wholeRowDedupe;
   const process = authoredProcess(authored);
-  const ordering = new Set([...(request.sort ?? []).map((key) => key.field), ...(wholeRow ? [] : request.dedupe?.by ?? []), ...process.names]);
-  const helpers = Object.entries(request.fields).filter(([key, field]) => !columns.has(key) && isReadAsColumn(field));
-  if (helpers.length === 0) return undefined;
-  const removed = new Map(helpers.filter(([key]) => !ordering.has(key)));
-  const conditioned = new Set((request.where ?? []).flatMap((condition) => condition.field === undefined ? [] : [condition.field]));
-  const dropped = [...removed.keys()].filter((key) => !conditioned.has(key));
+  const used = new Set([
+    ...(request.sort ?? []).map((key) => key.field),
+    ...(wholeRow ? [] : request.dedupe?.by ?? []),
+    ...(request.where ?? []).flatMap((condition) => condition.field === undefined ? [] : [condition.field]),
+    ...process.names
+  ]);
+  const helpers = Object.entries(request.fields).filter(([key, field]) => !declared.has(key) && isReadAsColumn(field)).map(([key]) => key);
+  const removed = new Set(helpers.filter((key) => !used.has(key)));
+  const stored = new Set([...declared, ...helpers.filter((key) => !removed.has(key))]);
+  // The answer's columns: the author's, or the declared columns this writes for them.
+  const answer = new Set(process.columns ?? declared);
+  const hidden = Object.keys(request.fields).filter((key) => stored.has(key) && !answer.has(key) && isReadAsColumn(request.fields[key]!));
+  if (removed.size === 0 && hidden.length === 0) return undefined;
+  const optional = new Set(hidden);
   const narrowed: WebAutomationExtractListRequest = {
     ...request,
-    fields: Object.fromEntries(Object.entries(request.fields).filter(([key]) => !removed.has(key))),
-    ...(wholeRow && request.dedupe !== undefined ? { dedupe: { by: request.dedupe.by.filter((key) => !removed.has(key)) } } : {}),
-    ...(request.where !== undefined ? { where: request.where.map((condition) => readingItsOwnColumn(condition, removed)) } : {})
+    fields: Object.fromEntries(Object.entries(request.fields)
+      .filter(([key]) => !removed.has(key))
+      .map(([key, field]) => [key, optional.has(key) ? readAsOptional(field) : field])),
+    ...(wholeRow && request.dedupe !== undefined ? { dedupe: { by: request.dedupe.by.filter((key) => !removed.has(key)) } } : {})
   };
   // Read back as the dispatch's own reader would, so what is sent is a request
   // the page runs. A narrowing it could not run -- every column left excluded --
   // narrows nothing.
   const sent = webAutomationExtractListRequestValue(narrowed);
-  const ordered = helpers.filter(([key]) => ordering.has(key)).map(([key]) => key);
   if (sent === undefined) return undefined;
-  const stored = new Set([...columns, ...ordered]);
-  if (ordered.length === 0 || !process.columnsUnwritten) return { request: sent, columns: stored, dropped };
-  return { request: sent, columns: stored, shown: [...columns], dropped };
+  const dropped = [...removed];
+  const writesColumns = process.columns === undefined && process.columnsUnwritten && stored.size > declared.size;
+  return { request: sent, columns: stored, ...(writesColumns ? { shown: [...declared] } : {}), hidden, dropped };
 }
 
 /**
@@ -160,11 +163,12 @@ function declaredColumns(authored: JsonValue | undefined, request: WebAutomation
 /**
  * What the authored `process` says about columns: every field it names, which
  * it runs over the stored rows -- its sort's, dedupe's, `where`'s, `anyOf`'s,
- * `compare`'s (both sides) and the sources of its `derive` (t970) -- and
- * whether it left `columns` for this read to write. A `process` that is not an
- * object is Core's parser's to refuse, and nothing is written into it.
+ * `compare`'s (both sides) and the sources of its `derive` (t970) -- its
+ * `columns` when it wrote them, and whether it left `columns` for this read to
+ * write. A `process` that is not an object is Core's parser's to refuse, and
+ * nothing is written into it.
  */
-function authoredProcess(authored: JsonValue | undefined): { names: string[]; columnsUnwritten: boolean } {
+function authoredProcess(authored: JsonValue | undefined): { names: string[]; columns?: string[]; columnsUnwritten: boolean } {
   const process = isJsonObject(authored) ? authored.process : undefined;
   if (process === undefined) return { names: [], columnsUnwritten: true };
   if (!isJsonObject(process)) return { names: [], columnsUnwritten: false };
@@ -175,7 +179,12 @@ function authoredProcess(authored: JsonValue | undefined): { names: string[]; co
   const derivedFrom = listed(process.derive).flatMap((entry) => isJsonObject(entry) && typeof entry.from === "string" ? [entry.from] : []);
   const sorted = listed(process.sort).flatMap(fieldOf);
   const deduped = isJsonObject(process.dedupe) ? strings(process.dedupe.by) : [];
-  return { names: [...sorted, ...deduped, ...filtered, ...grouped, ...compared, ...derivedFrom, ...strings(process.columns)], columnsUnwritten: !Object.hasOwn(process, "columns") };
+  const columns = Array.isArray(process.columns) ? strings(process.columns) : undefined;
+  return {
+    names: [...sorted, ...deduped, ...filtered, ...grouped, ...compared, ...derivedFrom, ...(columns ?? [])],
+    ...(columns === undefined ? {} : { columns }),
+    columnsUnwritten: !Object.hasOwn(process, "columns")
+  };
 }
 
 /** The keys a Core `compare` names its other column under (t970). */
@@ -194,23 +203,9 @@ function isReadAsColumn(field: WebAutomationExtractField): boolean {
   return typeof field === "string" || field.handling === undefined || field.handling === "include";
 }
 
-/** The condition reading its column through that column's own spec, when the column leaves the field map. */
-function readingItsOwnColumn(condition: WebAutomationExtractItemCondition, removed: ReadonlyMap<string, WebAutomationExtractField>): WebAutomationExtractItemCondition {
-  const column = condition.field === undefined ? undefined : removed.get(condition.field);
-  if (column === undefined) return condition;
-  const { field: _field, ...says } = condition;
-  return { read: conditionRead(column), ...says };
-}
-
-/**
- * The column's spec as a condition reads it. `required` says whether a row may
- * lack the column, which a condition does not ask: the page reads a condition's
- * value for itself and tests whether it is there (`item-filter.ts`).
- */
-function conditionRead(column: WebAutomationExtractField): WebAutomationExtractField {
-  if (typeof column === "string") return column;
-  const { required: _required, ...read } = column;
-  return read;
+/** A hidden column as the page reads it: optional, so a row never fails for lacking it (header). A string field already is. */
+function readAsOptional(field: WebAutomationExtractField): WebAutomationExtractField {
+  return typeof field === "string" || field.required === false ? field : { ...field, required: false };
 }
 
 function isJsonObject(value: JsonValue | undefined): value is JsonObject {
