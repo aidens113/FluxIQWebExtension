@@ -548,6 +548,13 @@ Workers build against these at the same time; a change needs the lead.
 - **Stopped by the user minutes later** ("STOP THE FUCKING AGENTS"; the Claude credits are spent): all five agents and the web build check were stopped before any reported; nothing is running, the gate is empty. Whatever they edited is uncommitted in the t976, t979 and t981 trees; the F24 and F23 reports were not written. Campaign spend: failures $41.61, partials $35.23 (priced rows), and the 11 runs at or near the $5 cap made $53.99 of it.
 - Outcome: nothing resumes, and no paid run starts, until the user says so.
 
+### 2026-11-20 — Decision: the model ladder is removed
+
+- User: "We're removing the ... ladder system for going to better models. from now on its just the model we start with." Recorded in AGENTS.md ("No model ladder") as a standing rule. Not built; nothing is running.
+- What it touches when it is built (from the merged units, not yet re-read): Core's ladder routing (t962, `runtime/llm/role-routing/provider.ts` `laddered`, the sticky step up); the loop decision's `escalate_model` choice (t962, t969), and the rule that `ask_person` is offered only once "the ladder has climbed"; the campaign's ladder notes. t964 (a key serves every model of its provider) can stay: it lets a task start on any model. The uncommitted t979 work climbs a rung every two unreadable judge replies (`judgeRungsUp`); that part must come out before t979 merges, keeping the re-ask on the same model.
+- Campaign figures the decision answers: all 11 runs at or near the $5 purse had climbed (10 to Opus, run 41 to Sonnet), and Sonnet and Opus judges continuing long conversations cost $0.20-$1.01 each (40-45% of spend on failing tasks). Run 42 (local-classifieds test-ride-question, 06:27, budget_out x4, $5.00) came after interim 6's tally, so the campaign is 37 counted runs, 0 SUCCESS, 17 PARTIAL, 20 FAILURE, about $90.
+- Validation: not validated: a decision record; nothing was built or run. The figures come from the campaign's results table (`fxwork/t959/.../live-campaign-2026-11-19/results.md`, cost and model columns read with awk: 11 rows at or over $4.50, each with a climb).
+
 ## Open Questions
 
 None blocking.
