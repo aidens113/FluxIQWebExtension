@@ -88,3 +88,13 @@
     started), because they held a slot while the campaign waited. The worker had run related for runtime, programs,
     platform, flows, tests, engine and client-gateway before its last two edits; those were not repeated.
 - Unit J (judge trail and instructions) moved to t963 by the lead.
+- Lead's dev merge b2625910d; A11 and the earlier failures now pass (6 files, 40/40).
+- C1 (Opus, `t905-c1.md`) finished an interrupted, unattributed WIP found after the 11-19 power loss. The worker kept most of it
+  and fixed 5 points: the one-seam call form, a stale graph entry voiding node seals, labels fixed at event start,
+  cancellation during the check, and an audit import rule. Each real callback (builtin, native, composite, Call Subflow helper)
+  now gets exactly the authority's leased copy, or the original values when the proof is unknown. The no-port path is a
+  synchronous pass-through on the original objects (I checked `NodeUse.invoke` and `withParameters` identity). Uncovered:
+  C2 (native port filtering, effects, child entry) and C3 (live state). In production every node event is
+  authority_unavailable until the service gains a node producer.
+  - Checks (worker, ordinary slots, no typecheck by rule): 5 folders, 44 files, 463/463; related engine 636/636; related
+    framework 4136 passed, 1 skipped; audit passed (559 warnings, 909 baselined).
