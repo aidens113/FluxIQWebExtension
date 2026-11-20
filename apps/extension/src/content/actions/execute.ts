@@ -147,7 +147,7 @@ class UnsupportedActionTypeError extends Error implements WebAutomationFailureCa
  * which codes PAGE_CHANGED supersedes -- it had no producer at all until this
  * one, which made the member of the closed set a promise nothing kept.
  */
-export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies): Promise<BrowserActionResult> {
+export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies, onFirstAct?: () => void): Promise<BrowserActionResult> {
   // A page that moved its address in place since the last action is let finish
   // its redraw first (task speed S10, `action-runtime/page-work/`): the wait the
   // worker made before, now made here, before the action's own clock starts.
@@ -156,8 +156,9 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
   // What the document says of its own navigation while the action runs, for the
   // worker's landing check (task speed S10, `action-runtime/navigation-watch.ts`).
   const navigation = watchActionNavigation();
-  // When the action first acts on the page, for the step's decision-to-press (task speed S10, `action-runtime/acted-at/`).
-  actedClock.begin();
+  // When the action first acts on the page, for the step's decision-to-press (task speed S10, `action-runtime/acted-at/`),
+  // and the worker's act mark sent just before it (t968, `action-runtime/act-mark/`).
+  actedClock.begin(onFirstAct);
   let resolved: Element | undefined;
   const watched = resolvedNoted(deps, (element) => { resolved = element; });
   // What the defence pressed between attempts, for the result's own record of it.

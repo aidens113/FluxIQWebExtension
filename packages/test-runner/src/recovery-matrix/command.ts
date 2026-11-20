@@ -35,7 +35,7 @@ export function parseRecoveryMatrixCommand(args: readonly string[]): RecoveryMat
         caseIds.push(value);
       } else {
         const row = Number(value);
-        if (!Number.isInteger(row) || row < 1 || row > 13) throw new Error(`--row takes a matrix row from 1 to 13, not ${JSON.stringify(value)}`);
+        if (!Number.isInteger(row) || row < 1 || row > 14) throw new Error(`--row takes a matrix row from 1 to 14, not ${JSON.stringify(value)}`);
         if (row === 12) throw new Error("Row 12 is the paid proof; the recovery matrix runs provider-free and never runs it");
         rows.push(row);
       }

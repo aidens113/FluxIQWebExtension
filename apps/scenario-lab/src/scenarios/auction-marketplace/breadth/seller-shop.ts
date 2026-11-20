@@ -41,4 +41,14 @@ export const sellerShopWorkflow: ScenarioWorkflow = {
     finalState: accountFacts(FRESH, "shop-unchanged"),
     allowedConsoleErrors: [],
   },
+  variants: [{
+    id: "browser-check-first",
+    description: "The marketplace's bot check stops the very first results page: \"Checking your browser before you continue\", which lets the visitor on to the results by itself after five seconds, or at once on Continue. The same shop is owed. A step that presses while the check stands, or whose page the check takes away before it is pressed, has not opened the listing (t968).",
+    arm: { operation: "set-mode", payload: { mode: "browser-check-first" } },
+    expected: {
+      pageFacts: accountFacts(FRESH, "shop-start"),
+      extracted: [{ step: "extract-seller-shop", count: records.length, records }],
+      finalState: accountFacts(FRESH, "shop-unchanged"),
+    },
+  }],
 };

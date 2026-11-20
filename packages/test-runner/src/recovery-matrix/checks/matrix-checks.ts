@@ -31,6 +31,7 @@ export const MATRIX_CHECKS: Readonly<Record<RecoveryCheckId, Check>> = {
   "retries-absorbed": retriesAbsorbed,
   "row-reacquired": rowReacquired,
   "deliberate-stop": deliberateStop,
+  "act-effect-honest": actEffectHonest,
 };
 
 /** Row 1: the run began at the primary Subflow's first step, never jumped, and completed normally. */
@@ -276,6 +277,30 @@ function deliberateStop(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrix
 }
 
 /** The floor every case is held to: zero model calls, and the site's acts as expected. The goal facts where the case judges by them. */
+/**
+ * Row 14 (t968): a press the page never answered is not a success. The run
+ * completed with no model, and no step answered success only for the next one
+ * to find nothing of the page it was to lead to: in `run-mwohvt8n-a57cad8a` a
+ * click sent to a browser check, whose page then went on by itself, was
+ * reported done, and the next step looked for its target on the wrong page
+ * until the run stopped. Says which defence answered, if any: a press refused
+ * as never made on a page that went by itself (`web.page.changed`), or one
+ * that changed nothing (`web.action.no_effect`).
+ */
+function actEffectHonest(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): MatrixCheckResult {
+  const reasons = floor(evidence, matrixCase);
+  succeeded(evidence, reasons);
+  const stepped = evidence.attempts.filter(attempt => attempt.nodeId !== null);
+  const falseSuccesses = stepped.filter((attempt, index) => {
+    const next = stepped[index + 1];
+    return attempt.status === "succeeded" && next !== undefined && next.nodeId !== attempt.nodeId && next.failure?.category === "target_not_found"
+      && stepped.slice(index + 1).filter(later => later.nodeId === next.nodeId).every(later => later.status !== "succeeded");
+  });
+  for (const attempt of falseSuccesses) reasons.push(`step ${stepOfNode(evidence.steps, attempt.nodeId)?.nodeKey ?? attempt.nodeId} answered success, and the step after it never found its target on the page that success left`);
+  const codes = (code: string) => evidence.attempts.filter(attempt => attempt.failure?.code === code).length;
+  return result(reasons, [], { pageWentBeforePress: codes("web.page.changed"), noEffect: codes("web.action.no_effect"), falseSuccesses: falseSuccesses.length });
+}
+
 function floor(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): string[] {
   const reasons = modelGateReasons(evidence.model);
   reasons.push(...evidence.site.reasons);

@@ -36,7 +36,20 @@ export function judgeSiteState(expectation: RecoverySiteExpectation, state: Read
   if (expectation.kind === "crossborder-cart") return crossborderCart(expectation, state);
   if (expectation.kind === "social-confirmed") return socialConfirmed(expectation, state);
   if (expectation.kind === "photo-liked-saved") return photoLikedSaved(expectation, state);
+  if (expectation.kind === "auction-check-passed") return auctionCheckPassed(state);
   return bigboxCart(expectation, state);
+}
+
+/** Auction marketplace (case 14): the bot check was passed, and the run bid on, bought and watched nothing. */
+function auctionCheckPassed(state: Readonly<Record<string, unknown>>): SiteReading {
+  const passed = list(state.activity).filter(entry => entry === "passed challenge").length;
+  const bids = list(state.bids).length;
+  const purchases = list(state.purchases).length;
+  const watchToggles = list(state.watchToggleTimes).length;
+  const reasons: string[] = [];
+  if (passed === 0) reasons.push("the site's bot check was never passed: the run never reached the results the check guards");
+  if (bids || purchases || watchToggles) reasons.push(`the site received ${bids} bid(s), ${purchases} purchase(s) and ${watchToggles} watch change(s) where the case makes none`);
+  return { held: reasons.length === 0, reasons, duplicatedActs: bids + purchases + watchToggles, observed: { checkPassed: passed, bids, purchases, watchToggles } };
 }
 
 function crossborderCart(expectation: Extract<RecoverySiteExpectation, { kind: "crossborder-cart" }>, state: Readonly<Record<string, unknown>>): SiteReading {

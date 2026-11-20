@@ -27,3 +27,14 @@ test("a managed-host proof is credential-free even before its flags are parsed",
     assert.equal(passed.FLUXIQ_TEST_ENV_FILES, "none");
   }
 });
+
+test("a recovery-matrix run gets no key, opens no env file and runs on the isolated target (t968)", () => {
+  for (const args of [["recovery-matrix", "--case", "14"], ["recovery-matrix", "--list"]]) {
+    const passed = providerFreeWhenScripted(args, { [key]: standIn, PATH: "/bin", FLUXIQ_TEST_TARGET: "existing" });
+    assert.equal(passed[key], undefined);
+    assert.equal(passed.PATH, "/bin");
+    assert.equal(passed.FLUXIQ_PROVIDER_KEY_FILES, "none");
+    assert.equal(passed.FLUXIQ_TEST_ENV_FILES, "none");
+    assert.equal(passed.FLUXIQ_TEST_TARGET, "isolated");
+  }
+});

@@ -6,6 +6,7 @@ import { extensionControlPage } from "../extension-control-page.js";
 import { chromeWorkerTarget } from "./chrome-worker-target.js";
 import { installRunNetworkGuard } from "./install-run-network-guard.js";
 import { launchBrowser } from "./launch-browser.js";
+import { preconfigureRunExtension } from "./preconfigure-run-extension.js";
 
 type Options = {
   scenarioOrigins: readonly string[];
@@ -16,6 +17,8 @@ type Options = {
   openControl?: typeof extensionControlPage;
   installGuard?: typeof installRunNetworkGuard;
   findTarget?: typeof chromeWorkerTarget;
+  /** Tells the extension the run's own addresses before the control page (the side panel) opens (t968, `./preconfigure-run-extension.ts`). */
+  preconfigure?: typeof preconfigureRunExtension;
 };
 
 /** Rebind an unobserved worker by restarting its owned browser, never by bypassing containment. */
@@ -24,6 +27,7 @@ export async function launchExtensionSession(topology: RunningTopology, extensio
   const installGuard = options.installGuard ?? installRunNetworkGuard;
   const openControl = options.openControl ?? extensionControlPage;
   const findTarget = options.findTarget ?? chromeWorkerTarget;
+  const preconfigure = options.preconfigure ?? preconfigureRunExtension;
   for (let attempt = 1; ; attempt++) {
     const session = await launch(topology, extensionPath);
     const { context } = session;
@@ -31,6 +35,8 @@ export async function launchExtensionSession(topology: RunningTopology, extensio
     await options.trace.attach(context);
     const guard = await installGuard(context, topology, options.scenarioOrigins);
     options.onGuard?.(guard);
+    // Before the side panel opens: it asks its configured web address on first load, which must be the run's own Core.
+    await preconfigure(context, topology);
     let controlPage;
     try {
       controlPage = await openControl(context);
