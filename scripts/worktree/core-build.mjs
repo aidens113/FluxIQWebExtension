@@ -82,10 +82,12 @@ export function coreDistPaths(coreRoot) {
  * Where a FULLY built Core has left output: the libraries, plus the web panel's
  * Next output. A shared Core missing the last one is not built, however current
  * its libraries are, or nothing would ever build the web panel into a Core that
- * was provisioned before `sync-core` built it.
+ * was provisioned before `sync-core` built it. The panel counts by its
+ * `BUILD_ID`, which Next writes only when a build finished: a failed build
+ * leaves `.next` itself with its cache and partial output (2026-11-19).
  */
 export function fullCoreDistPaths(coreRoot) {
-  return [...coreDistPaths(coreRoot), path.join(coreRoot, "apps", "web", ".next")];
+  return [...coreDistPaths(coreRoot), path.join(coreRoot, "apps", "web", ".next", "BUILD_ID")];
 }
 
 /**

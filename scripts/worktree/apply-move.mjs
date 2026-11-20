@@ -2,9 +2,14 @@
 // target, install it if its lockfile changed, and build Core if it was last
 // built anywhere else.
 //
-// Each marker is cleared before its step and written only once the step
+// The install marker is cleared before its step and the build marker set to
+// `incomplete:<commit>`; each is written with its value only once the step
 // succeeded, so a move that dies halfway leaves a worktree whose markers say
 // exactly what still has to run, and running the same move again finishes it.
+// The build marker is never merely cleared: a shared Core plans a build from
+// an absent marker only when output is missing, and a failed build can leave
+// the old libraries' output in place (2026-11-19: the panel build failed on a
+// stale ui-components, and every later sync called that Core built).
 // Refusals are not decided here: by the time a plan reaches this function its
 // caller has already decided the move may happen.
 //
@@ -36,7 +41,7 @@ export async function applyMove(plan, { env, note = noteProgress, runInstall = i
     await writeMarker(plan.root, "install", plan.targetLock);
   }
   if (plan.build) {
-    await clearMarker(plan.root, "build");
+    await writeMarker(plan.root, "build", `incomplete:${plan.to}`);
     await runBuild(plan.root, { env, note: (line) => note({ side: plan.side, commit: plan.to, ...line }), ...plan.packages ? { packages: plan.packages } : {} });
     await writeMarker(plan.root, "build", plan.to);
   }
