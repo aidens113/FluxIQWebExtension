@@ -23,9 +23,13 @@ const NOT_SHOWN_YET = "not shown yet";
  * `session` is a CDP session on another page (the run's control tab). The
  * view's target is the one whose url starts with `viewUrl` and that is not the
  * session's own page. Attached to it without flattening: `Runtime.evaluate`
- * finds the button and its centre (`inPanelTarget`, which also starts a watch
- * for the click), `Input.dispatchMouseEvent` moves, presses and releases the
- * left button there, and the watch is read back until it saw the click.
+ * finds the button and its centre where it stands (`inPanelTarget`, which also
+ * starts a watch for the click), `Input.dispatchMouseEvent` moves, presses and
+ * releases the left button there, and the watch is read back until it saw the
+ * click. Nothing scrolls the panel by script: the chat puts back a scroll that
+ * is not the person's, so a button scrolled away is brought into view by a
+ * turn of the mouse wheel over the chat (`mouseWheel`), and pressed on the
+ * caller's next try.
  *
  * Answers `"pressed"` once the panel saw a trusted click with a person's
  * activation reach the button, or why nothing was pressed (`NOT_SHOWN_YET`
@@ -52,7 +56,11 @@ async function pressInTarget(session: CDPSession, targetId: string, label: strin
   try {
     const located = await evaluate(channel, { step: "locate", label, key });
     if (located === null || !("found" in located)) throw new Error(`The side panel answered the press lookup with ${JSON.stringify(located)}`);
-    if (!located.found) return located.reason;
+    if (!located.found) {
+      // Scrolled away: turn the wheel over the chat as a person would, so the chat takes it as the person's scrolling and keeps it; the caller looks again.
+      if (located.wheel) await channel.call("Input.dispatchMouseEvent", { type: "mouseWheel", x: located.wheel.x, y: located.wheel.y, deltaX: located.wheel.deltaX, deltaY: located.wheel.deltaY, button: "none", buttons: 0 }, CALL_MS);
+      return located.reason;
+    }
     for (const type of ["mouseMoved", "mousePressed", "mouseReleased"] as const) {
       const pressing = type !== "mouseMoved";
       await channel.call("Input.dispatchMouseEvent", { type, x: located.x, y: located.y, button: pressing ? "left" : "none", buttons: type === "mousePressed" ? 1 : 0, clickCount: pressing ? 1 : 0 }, CALL_MS);
