@@ -5,15 +5,17 @@ Outcome: Partial. Worker report (worker-heavy). Extension worktree `fxwork/t968/
 
 ## Outcome
 
-**Partial: code and unit checks done; the Lab proof is blocked by a defect on dev that is outside t968.**
+**Done.** The run's false success was a click whose reply was lost when the check page navigated by
+itself, which the worker counted as the click navigating (`runtime/click-landing.ts:239-255`). The act
+mark fixes it at the root, and Lab case 14 now proves it in a browser:
 
-- **The fix.** The run's false success was a click whose reply was lost when the check page navigated by
-  itself, which the worker counted as the click navigating (`runtime/click-landing.ts:239-255`). The act
-  mark fixes it at the root. The lead decided (2026-11-19) to keep the act mark, to add no landing check
-  for Enter, and to make rung 1 its own later unit.
-- **What passed.** The targeted tsc is clean, and the unit tests pass in both repositories.
-- **The blocker.** Lab case 14 cannot run. Every recovery-matrix case errors before its Flow starts:
-  case 1, which none of my changes touch, fails the same way (below).
+- the click is refused `web.page.changed`, unacted, when the page goes on by itself before it is made;
+- the retry opens the listing once the check has passed;
+- the run finishes with no model call.
+
+The two recovery-matrix blockers found on the way are fixed at their causes (below, "Recovery-matrix
+blockers"). Cases 1 and 14 pass. The lead decided (2026-11-19) to keep the act mark, to add no landing
+check for Enter, and to make rung 1 its own later unit.
 
 ## Cause (step 1)
 
@@ -274,18 +276,62 @@ and three earlier runs were killed by my own 900 s wrapper while still queued (r
     (`shared/constants.ts:2`). The Lab's deterministic network policy refuses that destination. No
     recovery-matrix run exists anywhere since 2026-10-10.
 
+## Recovery-matrix blockers (fixed in t968 at the lead's request)
+
+1. **The panel's probe of the product default address.** Every Lab browser session
+   (`launchExtensionSession`: `lab run`, replays, matrix cases) opens the side panel as its control page.
+   While unpaired, the panel's getting-started reachability reader (2026-11-16) asks its configured web
+   address, which is the product default `127.0.0.1:3000` on a fresh profile. The run's network guard
+   rightly refuses it. Traced: the probe is the panel's intended first-run detection of a local install,
+   not the hosted-connect code; the chat check had already met this and solved it by telling the
+   extension its addresses first. The fix (`packages/test-runner/src/run-scenario/browser-session/preconfigure-run-extension.ts`,
+   called from `launch-extension-session.ts` before the control page opens) writes the run's own Core and
+   gateway into the extension and restarts its worker on them, woken by a page of the run's Scenario Lab.
+   The guard is untouched.
+2. **Two connection requests for one pairing.** With the probe answered, the panel sends its connection
+   request by itself, and the Lab's pairing request replaced it. Every `fluxiq.connect` opened a fresh
+   socket and dropped the pending code, so Core answered the approval 409 ("The browser disconnected before
+   this pairing was approved") on cases 1 and 14. That is a product defect, since any second request (a
+   person's, the popup's) loses a code on screen. The fix (`apps/extension/src/background/connect/pending/`,
+   used in `background/index.ts`): an identical request while one is connecting or pairing joins it
+   (settings saved, no new socket). A different address, an enrolment ticket, or no attempt under way
+   still starts over.
+3. **`lab recovery-matrix` needed the keys unset by hand.** `scripts/lab/provider-free-run.mjs` now gives it
+   the scripted attempt's environment: no provider key, `FLUXIQ_PROVIDER_KEY_FILES=none`,
+   `FLUXIQ_TEST_ENV_FILES=none`, and `FLUXIQ_TEST_TARGET=isolated`.
+
+Results, all through the heavy-slot gate, with the cases run as plain `pnpm lab recovery-matrix` and no
+environment tweaks:
+
+- Structure audit: `structure-audit: passed (254 warning(s), 551 baselined)`.
+- Targeted tsc on the changed test-runner files: `TSC-CLEAN`. On the changed extension files (`background/index.ts`
+  and `connect/pending` included): `EXT-TSC-CLEAN`.
+- Extension `test-extension.mjs src/background/connect src/background/tests` (the hosted PKCE connect tests
+  included): 587 tests, 587 pass, 0 fail.
+- `node --test` on `scripts/lab/tests/provider-free-run.test.mjs`: 4 of 4. From the rebuilt `dist/`:
+  `launch-extension-session.test.js` and `preconfigure-run-extension.test.js`, 9 of 9.
+- `pnpm lab recovery-matrix --case 1`: `{"caseId":"1","verdict":"passed","reasons":[]}`
+  (run `rmx-2026-11-20T08-07-41-933Z-adbf1b`).
+- `pnpm lab recovery-matrix --case 14`: `{"caseId":"14","verdict":"passed","reasons":[]}`
+  (run `rmx-2026-11-20T08-09-36-471Z-923753`). Its attempts, in order:
+  - search typed with Enter: succeeded (it landed on the check);
+  - open the listing: failed `web.target.not_found` on the check page (state routing `no_pre_states`);
+  - its retry: failed `web.page.changed`, the act mark, because the check page went on by itself before the
+    click was made;
+  - its next retry: succeeded;
+  - the seller link and the shop read: succeeded.
+
+  Run `succeeded`, 6 attempts, model calls 0. Observed: `pageWentBeforePress 1`, `falseSuccesses 0`,
+  site `checkPassed 1`, bids 0.
+
 ## Not verified
 
-- **Lab case 14 in a browser.** Blocked by the matrix-wide defect above. So neither the incident path end
-  to end (the act mark failing the unmade click, then a retry after the check passes) nor the new fixture
-  variant and Flow selectors are proven in a browser. Once the block is fixed:
-  `env -u CLAUDE_API_KEY -u DEEPSEEK_API_KEY FLUXIQ_PROVIDER_KEY_FILES=none FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=isolated pnpm lab recovery-matrix --case 14`
-  (everything is built in the t968 worktrees).
-- **The act mark in a real browser.** Both sides have unit tests, but no browser run proves the message
-  arrives before a cross-document unload. The design relies on it being posted synchronously before the
-  press is dispatched.
-- **Firefox.** Not considered: it keeps no response status, so its landing is not judged. The act mark
-  uses `chrome.runtime`, as the existing next-page mark does.
+- **`lab run` and saved-Flow replays.** They share the launcher fix but were not run; only matrix cases 1
+  and 14 were.
+- **The other matrix cases (2-13).** Not run.
+- **The joined-connect change in a real person's flow** (panel and popup both open). It has unit tests only.
+- **Firefox.** Not considered: the chat check's Firefox path does not use `launchExtensionSession`, and the
+  act mark uses `chrome.runtime`, as the next-page mark does.
 
 ## Open questions or contradictions found
 
@@ -306,7 +352,7 @@ and three earlier runs were killed by my own 900 s wrapper while still queued (r
    is the lead's call.
 5. The brief named `run-mwoi785f-ebe09067` as lane A's latest. That run is lane B's (job-board) and met no
    check. The run with the browser check is lane A's `run-mwohvt8n-a57cad8a`.
-6. **New: the recovery matrix cannot run on dev.** Since 487483302 the extension asks
+6. **Fixed in t968 (see "Recovery-matrix blockers"). Was:** **The recovery matrix cannot run on dev.** Since 487483302 the extension asks
    `127.0.0.1:3000/.well-known/fluxiq`, and the Lab's deterministic network policy blocks it, so every case
    errors before its Flow starts (cases 1 and 14 shown). Separately, `lab recovery-matrix` refuses to run
    while the worktree's `.env.local` holds provider keys, and does not switch the env files off as the

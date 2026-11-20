@@ -346,6 +346,15 @@ ended by drawing `lastError`, which the background had usually not set.
 
 ## Staying Connected
 
+**One connection request at a time** (t968, `background/connect/pending/`). A `fluxiq.connect` that arrives
+while a connection to the same web and connection addresses is still connecting or waiting on its
+approval joins that attempt: its settings are saved and it is answered with the attempt's status, whose
+approval code is the one to approve. Until t968 every request opened a fresh socket and dropped the
+pending pairing. The side panel sends the request by itself once it finds FluxIQ, so any second request
+(a person's, the popup's, a host's or the Lab's) threw away the code on screen, and Core answered the
+approval 409. A different address, an enrolment ticket, or a request after the attempt has ended still
+starts over.
+
 A browser FluxIQ has paired reconnects without anyone pressing Connect, as long
 as "Reconnect automatically" is on and the person has not pressed Disconnect
 since they last pressed Connect (remembered in `chrome.storage.session`).

@@ -44,6 +44,7 @@ function harness(failures: unknown[] = [timeout()]) {
       if (failure) throw failure;
       return {};
     }) as unknown as NonNullable<Options["openControl"]>,
+    preconfigure: async () => { events.push("preconfigure"); },
     findTarget: async () => {
       targets++;
       events.push("target");
@@ -60,7 +61,7 @@ test("a proved observation timeout closes its owner once and repeats strict read
   const result = await launchExtensionSession(topology, "unit-extension", h.options);
   assert.equal(result.context as unknown, h.current.context);
   assert.deepEqual(h.counts(), { launches: 2, controls: 2, targets: 1 });
-  assert.deepEqual(h.events, ["launch.1", "trace", "guard", "control", "target", "proof", "assert", "retry", "close.1", "launch.2", "trace", "guard", "control", "proof", "assert"]);
+  assert.deepEqual(h.events, ["launch.1", "trace", "guard", "preconfigure", "control", "target", "proof", "assert", "retry", "close.1", "launch.2", "trace", "guard", "preconfigure", "control", "proof", "assert"]);
 });
 
 test("missing timeout evidence, other failures and nonzero worker observations never relaunch", async () => {
