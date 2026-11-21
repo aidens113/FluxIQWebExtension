@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Approved by the user 2026-11-20 ("yes for everything"); nothing built yet; the next session starts with the three fixes in flight, then five lanes; the day-4 paid round is approved on any budget.
+Status detail: Approved by the user 2026-11-20 ("yes for everything"); nothing built yet; the next session starts with the three fixes in flight, then five lanes; the day-4 paid round is approved up to $50 absolute max.
 Created: 2026-11-20
 Last updated: 2026-11-20
 Owner: Senior supervisor agent
@@ -22,7 +22,11 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 - **U5. The framework does the heavy lifting.** "obviously the framework should be doing as much heavy lifting as possible."
 - **U6. The judge stays on the same model.** "YES judge stays on same model so we dont burn credits."
 - **U7. Everything below is approved.** "yes for everything": the lead's suggestions L1-L9, the systemic changes S1-S10, the lanes and the week. That includes Haiku as the starting model for build and judge (S9; the lead's recommendation, approved). The three fixes in flight go first: "if they are important then obviously fix them first". They are; see below.
-- **U8. The day-4 paid round is approved on any budget.** "and on any budget." The standing rules still hold: each task's purse stays $5 (AGENTS.md, 2026-10-30), an agent supervises every paid run, and the round stops at the first balance error. The only precondition is credit on the Lab's Claude key.
+- **U8. The day-4 paid round is approved, up to $50 absolute max.** At first: "and on any budget". Then: "Lets try and limit budget to $50 absolute max though for that."
+  - Lead's reading, the safer one: the $50 covers the week's paid runs together, the day-4 round and the day-5 rerun.
+  - Enforcement (lead): the supervisor starts a task only while the billed spend so far, plus that task's $5 purse, is at most $50. So the round cannot pass $50 even if every task spends its whole purse. Spend is read from the Lab's spend ledger after each run.
+  - The standing rules still hold: each task's purse stays $5 (AGENTS.md, 2026-10-30), an agent supervises every paid run, and the round stops at the first balance error.
+  - The only precondition is credit on the Lab's Claude key.
 
 **Suggested by the lead and approved by the user (2026-11-20; see "Lead's Suggestions"):**
 - L1. Rows keep their marks, identity and typed values.
@@ -135,7 +139,7 @@ Each phase is proven without a provider before the next. The acceptance for P1-P
 - **P4. Remove the ladder (U1).** Core's role routing (t962 `laddered`), the loop decision's `escalate_model` (t962, t969), the `ask_person` condition, and t979's climb.
 - **P5. Replays keep their repairs (L5).** F26, then F23, F4, F18 and F24, each diagnosed first from its recorded run.
 - **P6. A smaller judge (L6).**
-- **P7. A small supervised live round**, approved on any budget (U8). Only tasks whose fix passed provider-free, with each run's cost reported as it happens.
+- **P7. A small supervised live round**, approved up to $50 absolute max (U8). Only tasks whose fix passed provider-free, with each run's cost reported as it happens.
 
 ## Systemic Changes For The Week
 
@@ -189,7 +193,7 @@ Start: read this document's Current State, check memory and OneDrive, and confir
 - **Day 1:** P0, the row interface, and lanes 1, 3, 4 and 5 dispatched; lane 2 starts once the interface is fixed. Lanes 3 and 4 touch the same Core areas as t979 and t981, so each starts after its fix merges.
 - **Day 2:** lanes 1-4 land provider-free, and the first offline scoreboard runs. Constraint: two heavy slots on the 12 GB machine.
 - **Day 3:** the six near-passing tasks reach SUCCESS offline, and P6 (the smaller judge) lands.
-- **Day 4:** one small supervised live round on the starting model, about ten tasks. The lead's estimate is under $10 on Haiku, reported as it runs. Approved on any budget (U8). Constraint: credit on the Lab's Claude key.
+- **Day 4:** one small supervised live round on the starting model, about ten tasks. The lead's estimate is under $10 on Haiku, reported as it runs. Approved up to $50 absolute max (U8). Constraint: credit on the Lab's Claude key.
 - **Day 5:** fix forward from day 4 offline, a second small round on what failed, then the full sweep and `main` (S10).
 
 ## Work Ledger
@@ -228,12 +232,21 @@ Start: read this document's Current State, check memory and OneDrive, and confir
 - Outcome: Accepted.
 - Follow-up: next session, "Next Session" step 1.
 
+### 2026-11-20 — The day-4 round is limited to $50
+
+- Agent: Senior supervisor.
+- Changed: this document: Status detail, U8, P7, day 4, Open Questions.
+- Why: the user: "Lets try and limit budget to $50 absolute max though for that". This replaces "any budget" for the day-4 round. Lead's reading, the safer one: the $50 covers the week's paid runs together, day 4 and the day-5 rerun. The lead's enforcement is to start a task only while spend so far plus its $5 purse is at most $50.
+- Validation: not validated: plan text only.
+- Outcome: Accepted.
+- Follow-up: none.
+
 ## Open Questions
 
 - Answered by the user, 2026-11-20:
   - finish the three fixes first (U7);
   - the judge stays on the same model (U6);
-  - the day-4 round runs on any budget (U8);
+  - the day-4 round runs up to $50 absolute max (U8);
   - Haiku is the starting model (U7).
 
   Nothing is open for the user.
