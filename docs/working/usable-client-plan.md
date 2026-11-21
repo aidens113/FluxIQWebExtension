@@ -11,6 +11,8 @@ Related: [Hosted platform launch](./hosted-platform-launch-plan.md), [MVP launch
 
 ## Current State
 
+**Since 2026-11-20 the plan of record for the week is [data-first-simplification-plan.md](./data-first-simplification-plan.md)**, approved by the user. It covers the three campaign fixes in flight (t976, t979, t981), extraction keeping every column, the automatic data stage, no model ladder, replays keeping their repairs, and a ten-task scoreboard. Start there. This document's Current State below dates from 2026-11-18; its 2026-11-19/20 ledger entries hold the campaign history.
+
 **User request (2026-11-16):** "we need to get a working version of the extension/panel that I can test done today. The UI base looks good on the surface, but is functionality unusable. The panel is slow, seems to be missing some needed configuration stuff/ux navigation, and generally just needs to be reworked. Extension needs to actually be able to navigate through different chats and projects entirely through the extension, right now you cant do anything. And ENSURE that dumb unlock key feature is removed. if a client is connected, they are CONNECTED, meaning they have access to the basic feature of the fluxiq framework (llm)".
 
 **Done (accepted 2026-11-16, report `final-acceptance.md`):**

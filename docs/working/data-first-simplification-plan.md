@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Written 2026-11-20 after the live campaign (37 runs, 0 SUCCESS, about $90); the user's decisions and the lead's suggestions are recorded, nothing is built, and nothing runs until the user says so.
+Status detail: Approved by the user 2026-11-20 ("yes for everything"); nothing built yet; the next session starts with the three fixes in flight, then five lanes; the day-4 paid round is approved on any budget.
 Created: 2026-11-20
 Last updated: 2026-11-20
 Owner: Senior supervisor agent
@@ -13,15 +13,18 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **What happened.** The 2026-11-19/20 live campaign ran each site's hardest task: 37 counted runs, 0 SUCCESS (all four attempts right, and attempts 2-4 with zero model calls), 17 PARTIAL, 20 FAILURE, about $90. The first attempt was right in 17 runs. 10 failures were our own plumbing bugs, since fixed. 7 of the 11 runs that hit the $5 purse failed on the data: wrong or missing columns, a promoted row kept, a summary panel not shaped, an iframe or account never read. 3 failed on replay and 1 on the judge. Judges were 40-45% of the spend on failing tasks. Every one of those 11 runs had climbed the model ladder. The evidence is under "Evidence" below.
 
-**Decided by the user (2026-11-20). These are standing rules, all five also in AGENTS.md:**
+**Decided by the user (2026-11-20). These are standing rules; U1-U6 are also in AGENTS.md:**
 
 - **U1. No model ladder.** "We're removing the ... ladder system for going to better models. from now on its just the model we start with."
 - **U2. The data layer dedupes and cleans by itself, simply.** "the data layer should automatically remoe duplicates, and clean data using upstream data WHERE POSSIBLE. it should be kept simple." It restates the 2026-10-06 rule that post-processing dedupes by default, which the campaign shows was not in effect.
 - **U3. Extraction keeps every column.** "we should simply keep all columns data during extraction and have the data processing layer filter out what it needs to. This way we always have the data available."
 - **U4. The model collects broadly.** "encourage model to grab results for stuff that we may use, and tell it the data processing layer can remove bad results later."
 - **U5. The framework does the heavy lifting.** "obviously the framework should be doing as much heavy lifting as possible."
+- **U6. The judge stays on the same model.** "YES judge stays on same model so we dont burn credits."
+- **U7. Everything below is approved.** "yes for everything": the lead's suggestions L1-L9, the systemic changes S1-S10, the lanes and the week. That includes Haiku as the starting model for build and judge (S9; the lead's recommendation, approved). The three fixes in flight go first: "if they are important then obviously fix them first". They are; see below.
+- **U8. The day-4 paid round is approved on any budget.** "and on any budget." The standing rules still hold: each task's purse stays $5 (AGENTS.md, 2026-10-30), an agent supervises every paid run, and the round stops at the first balance error. The only precondition is credit on the Lab's Claude key.
 
-**Suggested by the lead (not the user's words; see "Lead's Suggestions"):**
+**Suggested by the lead and approved by the user (2026-11-20; see "Lead's Suggestions"):**
 - L1. Rows keep their marks, identity and typed values.
 - L2. Duplicates are removed by row identity.
 - L3. Conditions are stated once and applied by the framework.
@@ -32,16 +35,26 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 - L8. The machine's memory gate.
 - L9. Settle the work left in flight.
 
-**Not done.** Nothing in this plan is built. Three campaign fixes sit uncommitted in their task trees, stopped by the user on 2026-11-20 (L9):
-- **t976:** permission asked once per chat.
-- **t979:** an unreadable judge reply is asked again. Its model climb must come out under U1.
-- **t981:** a repaired draft is refused at save.
+**Not done.** Nothing in this plan is built. Three campaign fixes were cut off by the 06:57 crash and then stopped by the user on 2026-11-20. They sit uncommitted in their task trees (`C:/Users/osrs_/FluxStuff/fxwork/<task>/`, Core and extension side by side). The minutes the re-dispatched workers ran on 11-20 may have added edits. Each worker report sits in its tree under `docs/working/usable-client-plan/reports/`. All three come first:
 
-**Blocked.** The Claude credits are spent (user, 2026-11-20). No agent and no paid run starts until the user says so.
+- **t981, repaired Flows refused at save (F26). It directly blocks SUCCESS.**
+  - What goes wrong: when the model repairs a broken Flow during a run, the save is refused. The repair dropped a step that a loop still pointed at, or put routing inside a loop. So the next attempt cannot use the repair, and pays to repair again.
+  - The fix: refuse such an edit at the moment it is made, with words that tell the model the way out (`holds_a_repeat`, `span_holds_routing`), plus the rerun ordering fix. Never relax the save.
+  - State: cause traced and design agreed; implementation started (3 Core files). The words, the rerun ordering and the tests remain. The decision and paths are in the report and in `usable-client-plan.md` (2026-11-20).
+- **t979, garbled judge replies (F25). It caused 2 campaign failures.**
+  - What goes wrong: on long answers, the judge's JSON reply comes back broken. Today that counts as "not judged", and the attempt goes round again.
+  - The fix: ask again with a note, in the judge's own simple format, until a readable reply.
+  - State: done in Core with 208/208 targeted tests. Left: one framework test (`build-judge.test.ts`) whose fake judge never replies readably; an accurate log reason on the re-ask (`anthropic/provider.ts`); and a sweep of other fake judges that keep failing. Under U1 and U6, its climb to a stronger model after two unreadable replies (`judgeRungsUp`, `judgeOnDeciderRung`) comes out: the re-ask stays on the same model.
+- **t976, permission asked once, at the chat's start (F21). It breaks a standing rule and the delete task.**
+  - What goes wrong: for a delete, send or money task, the permission question was asked in the middle of the build, and again on every attempt. The standing rule is: once, when a Flow or chat starts, never mid-Flow.
+  - The fix (option (c), chosen 2026-11-20): the chat's declaration of what the person asked for also names the risky act classes. The one question is asked at the start, with no extra model call, and the answer holds for the chat.
+  - State: built in Core and the Lab; the test migration (about 35 answer-first tests) is part done. Left: the four stale `steps-ran-interruption` tests, the runtime repair and the legacy, candidate and project builds still asking mid-Flow, and the Lab's catalog check. The three Lab tests never ran.
+
+**Nothing is running.** Work starts next session with no further approval needed (U7). The day-4 paid round needs credit on the Lab's Claude key (`CLAUDE_API_KEY` in `.env.local`); the user approved it on any budget (U8).
 
 **Goal (user, 2026-11-20):** "we seriously NEED this to be working well by next week", so that the rest of the month goes to deploying and other fixes. This document is the plan of record for that week (S7).
 
-**Next, on the user's go:** "Next Session" below. That means settling the work in flight, fixing the stored-row interface, five lanes in parallel, and a ten-task scoreboard proven offline before one small paid round. The phases (P0-P7) and the systemic changes (S1-S10) are the content. Every change is proven without a provider before any paid run.
+**Next session:** "Next Session" below. That means the three fixes first, then the stored-row interface, five lanes in parallel, and a ten-task scoreboard proven offline before one small paid round. The phases (P0-P7) and the systemic changes (S1-S10) are the content. Every change is proven without a provider before any paid run.
 
 ## Evidence
 
@@ -85,11 +98,11 @@ Details are in `usable-client-plan.md`, ledger entry "How the campaign used resu
    - re-finding a target by identity.
 
    Much of this is already designed in `framework-heavy-lifting-plan.md` W7 (CC1 typed fields, CC2 marks, CC3 row identity). Whether W7 was built has not been checked.
-5. **One model per task (U1).** Build, repairs, later attempts and judge stay on the starting model. That the judge stays on it is the lead's reading of U1. Remove `escalate_model` from the loop decision, and stop offering `ask_person` only once "the ladder has climbed".
+5. **One model per task (U1).** Build, repairs, later attempts and judge stay on the starting model, Haiku (U6, U7). Remove `escalate_model` from the loop decision, and stop offering `ask_person` only once "the ladder has climbed".
 
 ## Lead's Suggestions
 
-These are the lead's, from the campaign evidence. They are not the user's rules until the user agrees.
+These are the lead's, from the campaign evidence, approved by the user on 2026-11-20 ("yes for everything").
 
 - **L1. Rows keep their marks, identity and typed values.** A badge or flag on an item is a field: "Sponsored", "Promoted", an ad link. So are the item's own link and the parsed form of each date, price and count. Then "leave out the ads" and "newest first" are lookups, not model work. This is W7's CC1-CC3.
 - **L2. Duplicates are removed by row identity.** Identity is the item's own link, or the key columns re-find already uses. Tracking parameters are ignored. Duplicates are removed first, always, never by hand and never by a key the model guesses.
@@ -115,14 +128,14 @@ These are the lead's, from the campaign evidence. They are not the user's rules 
 
 Each phase is proven without a provider before the next. The acceptance for P1-P3 is the campaign's own recorded reads: earbuds, free-shipping hubs, Netherlands data engineers, remote jobs and photo-social. Run with the same inputs and zero model calls, the stored rows must give the oracle's exact table.
 
-- **P0. Settle L9 with the user.**
+- **P0. Finish the three fixes in flight** (U7): t981, t979 without its climb, and t976. Merge each as it passes.
 - **P1. Extraction keeps every column, mark, identity and typed value (U3, L1).** First find exactly where a read drops undeclared columns (F3 says Core notes it). Then check W7's state, and build what is missing. Domain and extension: the read. Core: the stored rows.
 - **P2. The data stage (U2, L2, L3).** Automatic removal of duplicates, conditions from the instruction applied to stored fields, order and shape, plus what was removed and why. Replace the model-iterated processing tool, or reduce it to stating the conditions once.
 - **P3. Guidance to collect broadly (U4).** Generic words, checked against the "never teaches to the test" rule.
 - **P4. Remove the ladder (U1).** Core's role routing (t962 `laddered`), the loop decision's `escalate_model` (t962, t969), the `ask_person` condition, and t979's climb.
 - **P5. Replays keep their repairs (L5).** F26, then F23, F4, F18 and F24, each diagnosed first from its recorded run.
 - **P6. A smaller judge (L6).**
-- **P7. A small supervised live round**, on the user's go and budget. Only tasks whose fix passed provider-free, with each run's cost reported as it happens.
+- **P7. A small supervised live round**, approved on any budget (U8). Only tasks whose fix passed provider-free, with each run's cost reported as it happens.
 
 ## Systemic Changes For The Week
 
@@ -143,7 +156,7 @@ These are the lead's, 2026-11-20. The user's bottom line: "we seriously NEED thi
 - **S6. A provider-free preflight per site before any paid round:** pairing, the chat starting the task, a person check answered, a permission answered, one read. 10 campaign failures were plumbing, and 4 runs were lost to the Lab's own watchdog.
 - **S7. One plan of record, with a current Current State.** This session spent its first hour rebuilding the state. `usable-client-plan.md`'s Current State dates from 11-18, and the real state sat in the ledger of a 540-line document; the index lists 22 Active documents. This document is the plan of record for the week. The lead rewrites its Current State at every milestone, and pauses the Active documents that are not this week's work.
 - **S8. The machine** (L8): the heavy gate admits by need and commit headroom, OneDrive is killed when it leaks, and parallel agents stay within what two heavy slots can serve.
-- **S9. The starting model** (for the user; see Open Questions). With no ladder, the starting model sets both cost and capability.
+- **S9. The starting model is Haiku, for build and judge** (approved, U7). With no ladder, the starting model sets both cost and capability.
   - The campaign's runs that stayed on Haiku and got going cost $0.24-$0.76 each. Lens hood was right 4/4 for $0.58, on Haiku apart from one climb on its last attempt.
   - The lead recommends Haiku for build and judge, measured on the scoreboard.
 - **S10. `main` catches up.** `main` has not moved since 11-11: 460 extension and 356 Core commits behind `dev`. Run a full sweep once the week's changes land, then promote.
@@ -152,12 +165,12 @@ These are the lead's, 2026-11-20. The user's bottom line: "we seriously NEED thi
 
 Start: read this document's Current State, check memory and OneDrive, and confirm the gate is empty. Then:
 
-1. **Settle the work in flight (P0, L9) with the user.** The lead's recommendation:
-   - finish t981: F26 blocks SUCCESS directly;
-   - finish t979 without its model climb;
-   - finish t976.
+1. **Finish the three fixes in flight first** (P0; the user: "if they are important then obviously fix them first"). Re-dispatch each from its tree and report, with the decisions in Current State:
+   - t981 (worker-heavy): implement the refusals and the rerun ordering, with its tests.
+   - t979 (worker): the remaining items, and take out the model climb.
+   - t976 (worker-heavy): finish option (c) and the test migration.
 
-   All three are mostly written and uncommitted in their trees.
+   Merge each as it passes its narrow checks.
 2. **Fix one interface before dispatch:** the stored row. It holds every field, each field's typed value, the row's marks and its identity. Lanes 1 and 2 build against it.
 3. **Dispatch the lanes in parallel, partitioned by file:**
 
@@ -173,10 +186,10 @@ Start: read this document's Current State, check memory and OneDrive, and confir
 4. **Acceptance before any paid run:** the scoreboard's tasks pass offline on their recorded runs, with zero model calls on attempts 2-4.
 
 **The week, cut for parallel lanes.** These are the lead's estimates; the real constraints are named.
-- **Day 1:** P0, the row interface, and lanes 1, 3, 4 and 5 dispatched; lane 2 starts once the interface is fixed. Constraint: the user's decisions on P0.
+- **Day 1:** P0, the row interface, and lanes 1, 3, 4 and 5 dispatched; lane 2 starts once the interface is fixed. Lanes 3 and 4 touch the same Core areas as t979 and t981, so each starts after its fix merges.
 - **Day 2:** lanes 1-4 land provider-free, and the first offline scoreboard runs. Constraint: two heavy slots on the 12 GB machine.
 - **Day 3:** the six near-passing tasks reach SUCCESS offline, and P6 (the smaller judge) lands.
-- **Day 4:** one small supervised live round on the starting model, about ten tasks. The lead's estimate is under $10 on Haiku, reported as it runs. Constraint: Claude credits and the user's go.
+- **Day 4:** one small supervised live round on the starting model, about ten tasks. The lead's estimate is under $10 on Haiku, reported as it runs. Approved on any budget (U8). Constraint: credit on the Lab's Claude key.
 - **Day 5:** fix forward from day 4 offline, a second small round on what failed, then the full sweep and `main` (S10).
 
 ## Work Ledger
@@ -203,12 +216,27 @@ Start: read this document's Current State, check memory and OneDrive, and confir
 - Outcome: Accepted.
 - Follow-up: the user's answers to the Open Questions, then "Next Session".
 
+### 2026-11-20 — The user approves the plan; the three fixes go first
+
+- Agent: Senior supervisor.
+- Changed:
+  - this document: Status, Current State (U6-U8, the three fixes in plain words), Design 5, the suggestions' approval, P0, P7, S9, Next Session step 1, days 1 and 4, Open Questions;
+  - AGENTS.md: "No model ladder" now records the judge on the same model and Haiku as the starting model;
+  - `usable-client-plan.md`: Current State points here.
+- Why: the user said "yes for everything", "if they are important then obviously fix them first", "YES judge stays on same model so we dont burn credits", and, of the day-4 round, "and on any budget". They also asked what the day-4 question meant: it asked whether a paid round could run and on what budget, because the credits are spent.
+- Validation: not validated: plan and rule text only.
+- Outcome: Accepted.
+- Follow-up: next session, "Next Session" step 1.
+
 ## Open Questions
 
-- **For the user:** finish or set aside t976, t979 and t981 (L9)?
-- **For the user:** does the judge also stay on the starting model (the lead's reading of U1)?
-- **For the user:** when may a paid run happen again, and on what budget? The credits are spent. The plan needs one small round on day 4, under $10 on Haiku by the lead's estimate.
-- **For the user:** which starting model (S9)? The lead recommends Haiku for build and judge, measured on the scoreboard.
+- Answered by the user, 2026-11-20:
+  - finish the three fixes first (U7);
+  - the judge stays on the same model (U6);
+  - the day-4 round runs on any budget (U8);
+  - Haiku is the starting model (U7).
+
+  Nothing is open for the user.
 - **Lead:** how much of S1 (re-running a recorded run offline with its recorded model replies) the paused trace and offline-trial work already gives. Answer on day 1 in lane 5.
 - **Lead:** what does keeping every column cost per run? Fields only, never page captures. Measure it on the recorded campaign reads in P1.
 - **Lead:** is `framework-heavy-lifting-plan.md` W7 built, and if so, why did the campaign's rows lack marks and dates? Answer in P1.
