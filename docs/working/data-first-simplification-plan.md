@@ -39,7 +39,9 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **Blocked.** The Claude credits are spent (user, 2026-11-20). No agent and no paid run starts until the user says so.
 
-**Next, on the user's go:** the phases below, in order. Every phase is proven without a provider before any paid run.
+**Goal (user, 2026-11-20):** "we seriously NEED this to be working well by next week", so that the rest of the month goes to deploying and other fixes. This document is the plan of record for that week (S7).
+
+**Next, on the user's go:** "Next Session" below. That means settling the work in flight, fixing the stored-row interface, five lanes in parallel, and a ten-task scoreboard proven offline before one small paid round. The phases (P0-P7) and the systemic changes (S1-S10) are the content. Every change is proven without a provider before any paid run.
 
 ## Evidence
 
@@ -122,6 +124,61 @@ Each phase is proven without a provider before the next. The acceptance for P1-P
 - **P6. A smaller judge (L6).**
 - **P7. A small supervised live round**, on the user's go and budget. Only tasks whose fix passed provider-free, with each run's cost reported as it happens.
 
+## Systemic Changes For The Week
+
+These are the lead's, 2026-11-20. The user's bottom line: "we seriously NEED this to be working well by next week", so that the rest of the month goes to deploying and other fixes. Each item names the waste it removes.
+
+- **S1. Prove every fix without paying.** Re-run a failed live run offline: its recorded pages, and its recorded model replies up to the first point the fix changes behaviour. That re-run is the fix's acceptance.
+  - Waste removed: the campaign paid to learn whether each fix worked, rerunning photo-social 3 times ($11.82) and saturday-certificate twice ($10).
+  - Builds on the trace and offline-trial work in `trace-offline-trials-plan.md` (paused 10-19; tier 1 offline trials exist, offline trials inside builds do not) and on the step logs, which already hold every provider request and reply.
+  - This is the user's 2026-11-03 rule ("simulation ... with EXACTLY same inputs as real exploration calls recorded") made the standard path.
+- **S2. One fixed scoreboard of ten tasks, easiest that nearly works first.** One task per site. The six that already got 4/4 right reach SUCCESS first: Mk II sellers, lens hood, apprentices, Halvard roles, towels, bikes within Alex's price. They need only the replay and judge fixes. The hard tasks follow.
+  - Waste removed: hardest-first put most of the spend on runs that could not pass yet.
+  - The scoreboard runs provider-free every day and shows each task's SUCCESS, calls and cost per attempt.
+- **S3. The campaign's recorded runs become a regression gate.** A merge that touches the build, replay, data or judge re-runs the affected recorded runs offline (narrow, by import graph).
+  - Three of the night's findings came from its own changes (F8 and F11 from the ladder, F19 from turning thinking off), and F26 may have come from t975.
+  - Any change to prompts or model settings also gets a one-cent live smoke: the chat starting each site's task on the starting model. F19 would have shown on the first chat.
+- **S4. Fewer, larger changes, merged in rounds.** Last night merged about 20 tasks one by one. Each merge moved `dev`, and the lanes waited to resync and rebuild. Merge twice a day, with the lanes rebuilt once per round. This reasserts the existing rule that live lanes merge in rounds.
+- **S5. Cost visible as it happens, by stage.** Each attempt reports its decisions, repairs and judge calls in dollars as it runs, not only in interim reports. The campaign supervisor does not launch a task whose known blocker is still open.
+- **S6. A provider-free preflight per site before any paid round:** pairing, the chat starting the task, a person check answered, a permission answered, one read. 10 campaign failures were plumbing, and 4 runs were lost to the Lab's own watchdog.
+- **S7. One plan of record, with a current Current State.** This session spent its first hour rebuilding the state. `usable-client-plan.md`'s Current State dates from 11-18, and the real state sat in the ledger of a 540-line document; the index lists 22 Active documents. This document is the plan of record for the week. The lead rewrites its Current State at every milestone, and pauses the Active documents that are not this week's work.
+- **S8. The machine** (L8): the heavy gate admits by need and commit headroom, OneDrive is killed when it leaks, and parallel agents stay within what two heavy slots can serve.
+- **S9. The starting model** (for the user; see Open Questions). With no ladder, the starting model sets both cost and capability.
+  - The campaign's runs that stayed on Haiku and got going cost $0.24-$0.76 each. Lens hood was right 4/4 for $0.58, on Haiku apart from one climb on its last attempt.
+  - The lead recommends Haiku for build and judge, measured on the scoreboard.
+- **S10. `main` catches up.** `main` has not moved since 11-11: 460 extension and 356 Core commits behind `dev`. Run a full sweep once the week's changes land, then promote.
+
+## Next Session
+
+Start: read this document's Current State, check memory and OneDrive, and confirm the gate is empty. Then:
+
+1. **Settle the work in flight (P0, L9) with the user.** The lead's recommendation:
+   - finish t981: F26 blocks SUCCESS directly;
+   - finish t979 without its model climb;
+   - finish t976.
+
+   All three are mostly written and uncommitted in their trees.
+2. **Fix one interface before dispatch:** the stored row. It holds every field, each field's typed value, the row's marks and its identity. Lanes 1 and 2 build against it.
+3. **Dispatch the lanes in parallel, partitioned by file:**
+
+   | Lane | Work | Where |
+   | --- | --- | --- |
+   | 1 | P1: reads keep every column, mark, identity and typed value. Check W7 first. | domain and extension reads; Core's stored rows |
+   | 2 | P2: the automatic data stage, against the fixed row interface. | Core result processing |
+   | 3 | P4 and P3: remove the ladder (with t979's climb), then the collect-broadly guidance. | Core model routing, loop decision, build guidance |
+   | 4 | P5: diagnose F23, F24, F4 and F18 from their recorded runs, then fix them. t981's F26 lands first. | Core replay and draft |
+   | 5 | S1, S2 and S6: offline re-run of recorded runs, the ten-task scoreboard, and the per-site preflight. | Lab (`packages/test-runner`, `apps/scenario-lab`) |
+   | Lead | Verification, merges in rounds (S4), this document (S7), the user's questions. | |
+
+4. **Acceptance before any paid run:** the scoreboard's tasks pass offline on their recorded runs, with zero model calls on attempts 2-4.
+
+**The week, cut for parallel lanes.** These are the lead's estimates; the real constraints are named.
+- **Day 1:** P0, the row interface, and lanes 1, 3, 4 and 5 dispatched; lane 2 starts once the interface is fixed. Constraint: the user's decisions on P0.
+- **Day 2:** lanes 1-4 land provider-free, and the first offline scoreboard runs. Constraint: two heavy slots on the 12 GB machine.
+- **Day 3:** the six near-passing tasks reach SUCCESS offline, and P6 (the smaller judge) lands.
+- **Day 4:** one small supervised live round on the starting model, about ten tasks. The lead's estimate is under $10 on Haiku, reported as it runs. Constraint: Claude credits and the user's go.
+- **Day 5:** fix forward from day 4 offline, a second small round on what failed, then the full sweep and `main` (S10).
+
 ## Work Ledger
 
 ### 2026-11-20 — Plan written from the campaign and the user's decisions
@@ -133,10 +190,25 @@ Each phase is proven without a provider before the next. The acceptance for P1-P
 - Outcome: Accepted.
 - Follow-up: P0 with the user.
 
+### 2026-11-20 — Systemic changes and the next session laid out
+
+- Agent: Senior supervisor.
+- Changed: this document: "Systemic Changes For The Week" (S1-S10), "Next Session" (lanes and the week), Current State, Open Questions.
+- Why: the user asked for anything else that would make everything run smoother, with this working well by next week, and for the next session's systemic changes laid out.
+- Validation: not validated: a plan. Checked while writing:
+  - `trace-offline-trials-plan.md` is Paused, with tier-1 offline trials built and offline trials inside builds not built;
+  - the Lab has a scripted provider (`packages/test-runner/src/demo-llm-*.ts`);
+  - `main` is 460 (extension) and 356 (Core) commits behind `dev` (`git rev-list --count origin/main..origin/dev`);
+  - the Haiku run costs come from the results table.
+- Outcome: Accepted.
+- Follow-up: the user's answers to the Open Questions, then "Next Session".
+
 ## Open Questions
 
 - **For the user:** finish or set aside t976, t979 and t981 (L9)?
 - **For the user:** does the judge also stay on the starting model (the lead's reading of U1)?
-- **For the user:** when may a paid run happen again, and on what budget? The credits are spent.
+- **For the user:** when may a paid run happen again, and on what budget? The credits are spent. The plan needs one small round on day 4, under $10 on Haiku by the lead's estimate.
+- **For the user:** which starting model (S9)? The lead recommends Haiku for build and judge, measured on the scoreboard.
+- **Lead:** how much of S1 (re-running a recorded run offline with its recorded model replies) the paused trace and offline-trial work already gives. Answer on day 1 in lane 5.
 - **Lead:** what does keeping every column cost per run? Fields only, never page captures. Measure it on the recorded campaign reads in P1.
 - **Lead:** is `framework-heavy-lifting-plan.md` W7 built, and if so, why did the campaign's rows lack marks and dates? Answer in P1.
