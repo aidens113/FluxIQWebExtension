@@ -12,4 +12,3 @@ export { captureRecordedStart, runRecordedCaptureCommand } from "./capture/index
 export { verifyRecordedStartingPosition } from "./position.js";
 export { runRecordedReadCommand } from "./read-parity/index.js";
 export type { RecordedAttemptArtifact, RecordedExchange, ReplayDivergence } from "./types.js";
-

@@ -32,5 +32,3 @@ export async function captureRecordedStoppedStart(input: CaptureInput, stop: () 
   const receiptBytes = Buffer.from(JSON.stringify(receipt));
   return { snapshot, storeDigest, entryDigest, receipt, receiptBytes, attach: recordedCaptureAttachment(receipt, receiptBytes) };
 }
-
-

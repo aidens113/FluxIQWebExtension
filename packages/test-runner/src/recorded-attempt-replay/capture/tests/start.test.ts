@@ -51,4 +51,3 @@ test("a closed fixture snapshot gets one actual trace receipt, binding source me
     await rm(work, { recursive: true, force: true });
   }
 });
-

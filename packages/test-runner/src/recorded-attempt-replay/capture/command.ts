@@ -114,4 +114,3 @@ export async function runRecordedCaptureCommand(input: { repositoryRoot: string;
   await writeFile(path.join(input.evidenceDirectory, "capture-report.json"), JSON.stringify(report, null, 2));
   return report;
 }
-

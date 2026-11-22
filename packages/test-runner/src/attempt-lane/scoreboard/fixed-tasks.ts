@@ -11,4 +11,3 @@ export const OFFLINE_SCOREBOARD_TASKS = Object.freeze([
   Object.freeze({ scenarioId: "photo-social", taskId: "photo-social-august-over-1300", runId: "run-mwovqznu-0cbc3b10", historicalCalls: Object.freeze([84, 78, 49, 4]) }),
   Object.freeze({ scenarioId: "social-network-feed", taskId: "social-network-feed-delete-stranger-requests", runId: "run-mwp1jqze-388b466c", historicalCalls: Object.freeze([35, 46, 46, 27]) }),
 ] as const);
-

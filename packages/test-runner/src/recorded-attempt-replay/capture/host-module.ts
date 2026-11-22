@@ -34,5 +34,3 @@ export function registerFluxIQHost(fluxiq: FluxIQ): FluxIQ {
   service.bindLlmExecutionProvider(async () => ({ provider }));
   return registered;
 }
-
-

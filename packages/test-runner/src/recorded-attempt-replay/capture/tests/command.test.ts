@@ -32,4 +32,3 @@ test("fresh capture refuses an existing evidence directory before any fixture or
     await assert.rejects(() => runRecordedCaptureCommand({ repositoryRoot, fluxiqRepositoryRoot: path.join(repositoryRoot, "missing-core"), scenarioId: "company-website", taskId: "company-website-apprentices", evidenceDirectory, source: { core: "fixture", extension: "fixture" } }), { code: "EEXIST" });
   } finally { await rm(repositoryRoot, { recursive: true, force: true }); }
 });
-
