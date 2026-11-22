@@ -1,15 +1,17 @@
 # Hosted Platform Launch Audit And Plan
 
-Status: Active
-Status detail: Hosted-cloud lane (2026-11-17): t914 reconciled, dated schedule to launch 2026-12-10, units HC1-HC5a starting; nothing deployed.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-11-14
-Last updated: 2026-11-17
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: Hosted panel, coordinated releases, managed web cloud, local FluxNodes, marketplace and self-hosting.
 Paired document: ../!FluxIQ/docs/working/hosted-platform-launch-plan.md
 Related: [Hosted production](./hosted-production-plan.md), [MVP seal](./mvp-seal-plan.md)
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Hosted-cloud lane (2026-11-17): t914 reconciled, dated schedule to launch 2026-12-10, units HC1-HC5a starting; nothing deployed.
 
 Last updated 2026-11-17 (hosted-cloud lane). Go-live target **2026-12-10**. Nothing is deployed; hosted
 deployments are simulated on this machine until the user approves a VM, DNS or a payment provider.

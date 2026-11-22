@@ -1,15 +1,17 @@
 # Usable Client Plan
 
-Status: Active
-Status detail: t915 and follow-ups 2-6 and 8 (t916, t918-t921) on both `dev` branches, and t922 (setup bundle crash) on the extension's; `main` waits for the next full sweep; follow-ups 1 (waiting on Codex) and 7 (hosted design) open.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-11-16
-Last updated: 2026-11-18
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: Make the extension and the Core web panel usable for a person testing them today: no model-key unlock for connected clients, project and chat navigation entirely inside the extension, the settings a person needs, and a panel that is fast to open and move around.
 Paired document: none yet (Core edits are recorded here; a Core-side record is owed if the Core part grows beyond this task)
 Related: [Hosted platform launch](./hosted-platform-launch-plan.md), [MVP launch](./mvp-launch-plan.md)
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: t915 and follow-ups 2-6 and 8 (t916, t918-t921) on both `dev` branches, and t922 (setup bundle crash) on the extension's; `main` waits for the next full sweep; follow-ups 1 (waiting on Codex) and 7 (hosted design) open.
 
 **Since 2026-11-20 the plan of record for the week is [data-first-simplification-plan.md](./data-first-simplification-plan.md)**, approved by the user. It covers the three campaign fixes in flight (t976, t979, t981), extraction keeping every column, the automatic data stage, no model ladder, replays keeping their repairs, and a ten-task scoreboard. Start there. This document's Current State below dates from 2026-11-18; its 2026-11-19/20 ledger entries hold the campaign history.
 

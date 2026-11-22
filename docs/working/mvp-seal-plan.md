@@ -1,9 +1,9 @@
 # MVP Seal
 
-Status: Active
-Status detail: Revised 2026-11-09 with the user's second direction; Wave 1 started the same day (Core's plan lists it).
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-11-09
-Last updated: 2026-11-09
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: Sealing the MVP from this repository's side: landing the live lanes, the extension's finish and store submission, the managed browser host that FluxNodes run on, and the Lab's FluxNode lane and examples. The FluxNode design, the Core lanes and the cloud are owned by the paired document.
 Paired document: `C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/fluxnode-plan.md`
@@ -12,6 +12,8 @@ Related: [Answer First](./answer-first-plan.md), [hosted production](./hosted-pr
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Revised 2026-11-09 with the user's second direction; Wave 1 started the same day (Core's plan lists it).
 
 **State (2026-11-09).** Planning only, for the user's review. The user's words and the FluxNode design are in the paired Core document. In short: seal the MVP on two tracks, the extension ("nearly done") and the framework, where FluxNode becomes Core's main offering and the web panel gets no new feature work.
 

@@ -1,9 +1,9 @@
 # Extension And Core Boundary Audit
 
-Status: Active
-Status detail: Audit complete (no model calls downstream); the user approved implementing the six-phase move plan; lanes G, H, S (t726-t728) dispatched 2026-10-19.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-19
-Last updated: 2026-10-19
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: Find anything in this repository that belongs in FluxIQ Core (model calls, prompts, judging, generic framework or gateway behaviour, durable ownership of projects, policies and recordings) and plan the moves. Planning only; no code moves in this effort until the user approves the plan.
 Paired document: `docs/working/extension-boundary-moves.md` in FluxIQ Core
@@ -12,6 +12,8 @@ Related: [AGENTS.md](../../AGENTS.md) ("Repository Boundaries", "Automated Testi
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Audit complete (no model calls downstream); the user approved implementing the six-phase move plan; lanes G, H, S (t726-t728) dispatched 2026-10-19.
 
 **Request (user, 2026-10-19):** audit the extension codebase and make sure nothing in this repository should be in
 Core, such as calling models from the extension.
