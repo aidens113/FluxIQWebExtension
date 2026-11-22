@@ -10,6 +10,8 @@ Goal: collection guidance agrees with actual automatic processing and one explor
 - Core `packages/fluxiq/src/runtime/llm/evidence-loop-decision.ts` prose only, and owning provider-task/system-prompt tests and generated pins.
 - Core `packages/fluxiq/src/runtime/flow-authoring/bootstrap/authoring/draft-routing.ts` diagnostic prose only and owning tests, if its obsolete extraction advice is reached by automatic tasks.
 - Downstream `domain/src/runtime/llm-evidence/system-instructions/{instructions.ts,tests/}`.
+- Downstream `domain/src/output-nodes/extract-list/catalog-text.ts`, its owning tests and `domain/src/output-nodes/tests/definitions.test.ts` still describe manual filtering/field selection; align the actual offered tool grammar too.
+- Core `runtime/flow-authoring/bootstrap/plan/{flow-script-format,record-output-contract}.ts` prose and owning tests need the same check. P2 currently owns record-output-contract for dynamic input binding: wait for serial handoff, never overlap edits.
 - Must not touch P2 interpretation prompt, result tool, shared service/attempt files, P6 projection, or historical recording replies.
 - P2 worker confirmed no ownership overlap with these proposed paths on 2026-11-22.
 
