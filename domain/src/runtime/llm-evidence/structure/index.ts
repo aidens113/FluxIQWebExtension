@@ -31,6 +31,7 @@ export {
 } from "./handles";
 export { webLlmItemRow, webLlmItemWholeWords } from "./item-row";
 export type { WebLlmColumnType } from "./column-type";
+export { webLlmColumnType } from "./column-type";
 export type { WebLlmStructureItem, WebLlmStructureMark } from "./list-items";
 export {
   WEB_LLM_STRUCTURE_PAGINATION_MODES,

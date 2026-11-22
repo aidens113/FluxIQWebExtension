@@ -89,9 +89,10 @@ test("a name matching a column renames it in the read, everywhere the read names
   assert.equal(dispatch.ok, true, JSON.stringify(dispatch));
   if (!dispatch.ok) return;
   const schema = (dispatch.payload.recordOutput as { schema: { fields: { id: string }[] } }).schema;
-  assert.deepEqual(schema.fields.map((field) => field.id), ["name", MUTUAL]);
+  assert.deepEqual(schema.fields.map((field) => field.id), ["name", MUTUAL, PROFILE_URL, NAME_URL, AGE, CONFIRM, DELETE]);
   const sent = (dispatch.payload.parameters as { extractList: WebAutomationExtractListRequest }).extractList;
-  assert.deepEqual(Object.keys(sent.fields), ["name", MUTUAL]);
+  assert.deepEqual(Object.keys(sent.fields), [PROFILE_URL, "name", NAME_URL, MUTUAL, AGE, CONFIRM, DELETE]);
+  assert.deepEqual((dispatch.payload.recordOutput as JsonObject).process && ((dispatch.payload.recordOutput as JsonObject).process as JsonObject).columns, ["name", MUTUAL]);
 });
 
 test("the read's own names, the detector's keys, and no record output leave the read exactly as it is", () => {

@@ -56,6 +56,7 @@
 // guess is reported in the resolution's `assumed` rather than made silently.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import type { AutomationStudioRecordSchema } from "fluxiq/automation";
 import { webAutomationExtractListRequestRead, webAutomationExtractListRequestValue } from "../../../../actions/extraction";
 import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { present } from "../../present";
@@ -65,6 +66,7 @@ import { keptWebExtractionConditions } from "./conditions";
 import type { WebPlanRefusalIssue } from "./refusal-issues";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
 import { WEB_PLAN_EXTRACTION_BINDING_KEY, webPlanSavedExtractionBinding } from "./saved-list";
+import { webPlanRetainedExtractionSchema } from "./retained-schema";
 
 /** Why an `extractList` names no one detected list. Each is a plan resolver issue code. */
 export type WebExtractionSlotIssue = WebExtractionColumnIssue | "web.handle.misplaced" | "web.handle.unknown" | "web.handle.stale";
@@ -89,6 +91,8 @@ export type WebExtractionSlotResolution =
   | {
     status: "resolved";
     request: JsonObject;
+    recordSchema: AutomationStudioRecordSchema;
+    requestedColumns?: string[];
     frameId: number | undefined;
     /** The path of the child frame's document the list was detected in, which finds that frame again after a reload; absent for the top frame. */
     frameUrlPath: string | undefined;
@@ -147,6 +151,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if ("issue" in named) return named;
   // What the step holds of its list, where it holds it (`./saved-list.ts`); and a number it holds is one a new detection must not issue again.
   const saved = heldByHost ? webPlanSavedExtractionBinding(value, named.handle) : undefined;
+  if (saved === null) return refused("web.handle.malformed", [WEB_PLAN_EXTRACTION_BINDING_KEY]);
   if (saved) extractions.saw(named.handle);
   const resolution = saved ? { ok: true as const, binding: saved } : extractions.resolve(scope, named.handle);
   if (!resolution.ok) return refused(resolution.code === "stale_handle" ? "web.handle.stale" : "web.handle.unknown", named.path);
@@ -190,10 +195,12 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (checked === undefined) return refused("web.handle.malformed", []);
   if (checked.minItems !== request.minItems) return refused("web.handle.malformed", ["minItems"]);
   if (checked.maxItems !== request.maxItems) return refused("web.handle.malformed", ["maxItems"]);
-  const order = keptOrder(value, request);
+  const order = keptOrder(value, request, columns.requested);
   if ("issue" in order) return order;
   const assumed = [...columns.assumed, ...(where !== undefined && where.ok ? where.assumed : [])];
-  return { status: "resolved", request, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, assumed };
+  const resolved: Extract<WebExtractionSlotResolution, { status: "resolved" }> = { status: "resolved", request, recordSchema: webPlanRetainedExtractionSchema(binding, columns), frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, assumed };
+  if (columns.requested !== undefined) resolved.requestedColumns = columns.requested;
+  return resolved;
 }
 
 /**
@@ -205,10 +212,15 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
  * could not read -- because dropped here it would sort or dedupe nothing while
  * the model believed it had asked.
  */
-function keptOrder(value: Record<string, unknown>, request: JsonObject): { ok: true } | Refused {
+function keptOrder(value: Record<string, unknown>, request: JsonObject, requested?: readonly string[]): { ok: true } | Refused {
   if (value.dedupe === undefined && value.sort === undefined) return { ok: true };
   const probe: JsonObject = { ...request };
-  if (value.dedupe !== undefined) probe.dedupe = value.dedupe as JsonValue;
+  if (value.dedupe !== undefined) {
+    // An authored whole-row selection meant the fields it named before safe
+    // hidden fields were retained. Keep that action-row key stable; final
+    // answer identity processing is a separate declaration.
+    probe.dedupe = value.dedupe === true && requested !== undefined ? { by: [...requested] } : value.dedupe as JsonValue;
+  }
   if (value.sort !== undefined) probe.sort = value.sort as JsonValue;
   const read = webAutomationExtractListRequestRead(probe);
   if (read.dropped.includes("dedupe")) return refused("web.handle.malformed", ["dedupe"]);

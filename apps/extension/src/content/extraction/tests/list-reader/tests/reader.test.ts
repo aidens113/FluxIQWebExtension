@@ -9,12 +9,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
-import { extractList } from "../list-reader";
-import type { RefusedPageHost } from "../pagination";
-import { readExtractionCheckpoint, type ExtractionCheckpoint } from "../../../shared/extraction-continuation";
-import type { WebAutomationExtractListRequest } from "../../types";
-import { nthPagerLink, PAGE_ITEM, STORE_ITEM, STORE_LAZY_TAIL, storePage } from "./store-pager";
-import { el as pageEl, page as standPage, PageElement } from "./selector-page";
+import { extractList } from "../../../list-reader";
+import type { RefusedPageHost } from "../../../pagination";
+import { readExtractionCheckpoint, type ExtractionCheckpoint } from "../../../../../shared/extraction-continuation";
+import type { WebAutomationExtractListRequest } from "../../../../types";
+import { nthPagerLink, PAGE_ITEM, STORE_ITEM, STORE_LAZY_TAIL, storePage } from "../../store-pager";
+import { el as pageEl, page as standPage, PageElement } from "../../selector-page";
 
 test("an encrypt field refuses the read as not implemented before the page is read", async () => {
   await assert.rejects(

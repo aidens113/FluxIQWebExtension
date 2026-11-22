@@ -207,11 +207,11 @@ test("an explicit dedupe naming a subset is kept as written", () => {
   }
 });
 
-test("'each once' over a narrowed read still narrows: the whole-row dedupe pins no helper column", () => {
+test("'each once' keeps all safe fields while selected columns define the answer view", () => {
   const declared = { ...authored, schema: { ...authored.schema, fields: authored.schema.fields.filter((field) => field.id !== "company") } };
   const { extractList, recordOutput } = sent({ extractList: { ...read, dedupe: true }, recordOutput: declared });
-  assert.equal(Object.hasOwn(extractList.fields as JsonObject, "company"), false);
-  assert.equal(Object.hasOwn(recordOutput, "process"), false);
+  assert.equal(Object.hasOwn(extractList.fields as JsonObject, "company"), true);
+  assert.deepEqual((recordOutput.process as JsonObject).columns, ["title", "posted", "url"]);
 });
 
 test("a Flow's read asks the page for the rows it kept, possibly none", () => {

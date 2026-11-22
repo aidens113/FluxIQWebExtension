@@ -6,6 +6,8 @@ document carries the specifics an agent needs only once it is working in a
 particular area.
 
 The rest of the authored architecture, by subject:
+[retained extraction data](retained-extraction.md) for full field storage,
+typed metadata and display views,
 [extension client](extension-client.md) for the wire protocol and the
 recording path, [web capabilities](web-capabilities.md) for what each browser
 action does today, [element identity](element-identity.md) for how a target

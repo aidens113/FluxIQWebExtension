@@ -123,7 +123,7 @@ import { present } from "../present";
 import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
-import { resolveWebExtractionSlot, webPlanElementRecord, webPlanRunRecordOutput, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
+import { resolveWebExtractionSlot, webPlanElementRecord, webPlanRunRecordOutput, webPlanRetainedRecordOutput, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
 import { webPlanStepFoundByTooLittle } from "./identity-guard";
 import { webPlanReadIdentity } from "./read-identity";
 import { webPlanSameTargetIdentity as sameTargetIdentity } from "./same-target-identity";
@@ -495,7 +495,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   // A slot's key written dotted beside it, read as the slot's own (header, W2); a head the model wrote any dotted key of is the model's.
   const dotted = webPlanReadDottedKeys(written, NAMED_PARAMETERS.get(nodeDefinitionId) ?? NONE_NAMED, (value) => webPlanHandleKind(value) !== undefined);
   if (!dotted.ok) return { status: "refused", refusals: [{ code: dotted.issue, kind: slotKind(dotted.head), path: dotted.path, fits: dotted.head === "nextPage" ? NEXT_PAGE_SHAPE : undefined }] };
-  const parameters = dotted.parameters;
+  let parameters = dotted.parameters;
   const modelHeads = [...dotted.heads].filter(([key]) => webPlanModelWrote(authored, key)).map(([, head]) => head);
   const scope: Scoped = modelHeads.length === 0 ? authored : { ...authored, modelKeys: [...(authored.modelKeys ?? []), ...modelHeads] };
   const refusals: Refusal[] = [];
@@ -543,6 +543,8 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
       const slot = resolveWebExtractionSlot(record.status === "named" ? record.value : value, scope, stores.extractions, !webPlanModelWrote(scope, key));
       if (slot.status === "resolved") {
         const stored = webPlanStoredColumns(slot.request, parameters.recordOutput);
+        parameters = structuredClone(parameters);
+        parameters.recordOutput = webPlanRetainedRecordOutput({ authored: parameters.recordOutput, request: stored.request, schema: slot.recordSchema, requested: slot.requestedColumns, names: stored.assumed });
         const list: Resolved = { value: stored.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined };
         if (views !== undefined) list.views = views;
         replaced.set(key, list);
