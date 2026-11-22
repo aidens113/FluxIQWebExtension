@@ -20,7 +20,8 @@ test("only the explicitly deduped excluded link helper opts in, while displayed 
   if (!dispatch.ok) return;
   const parameters = dispatch.payload.parameters as JsonObject;
   const sent = parameters.extractList as unknown as WebAutomationExtractListRequest;
-  assert.deepEqual(sent.fields.identity, read.fields.identity);
+  // Stored for the dedupe and hidden from the answer, so read as optional (`../declared-columns.ts`, t975).
+  assert.deepEqual(sent.fields.identity, { ...(read.fields.identity as object), required: false });
   const output = dispatch.payload.recordOutput as JsonObject;
   assert.deepEqual((output.process as JsonObject).columns, ["title", "url"]);
   assert.deepEqual((output.process as JsonObject).dedupe, { by: ["identity"] });

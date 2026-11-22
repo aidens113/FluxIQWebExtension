@@ -204,8 +204,10 @@ test("the handle keeps every detected column, and the read never carries the det
   const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction } });
   assert.equal(scrolled.status === "resolved" && "paginate" in (scrolled.parameters.extractList as JsonObject), false);
 
-  // A column may be read twice, and the plan's bounds still apply.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: "product-name" }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }), {
+  // A column may be read twice when the second field says it is meant to be the
+  // same value (t975 F23; `./shared-column.test.ts` has the refusal without it),
+  // and the plan's bounds still apply.
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: { column: "product-name", sameAs: "title" } }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }), {
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { title: CARD_FIELDS.name, name: CARD_FIELDS.name }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }
   });
