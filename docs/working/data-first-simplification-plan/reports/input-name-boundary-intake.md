@@ -25,3 +25,7 @@ Validation: named source/validator/resolver and existing test inspection only; n
 Not verified: a shared helper implementation, complete end-to-end arbitrary-key input storage, or any expanded secret-input policy.
 Report: docs/working/data-first-simplification-plan/reports/input-name-boundary-intake.md
 Notes: Sent findings to p0_permission and root. Minimal lexical parity is additive for ordinary identifier bindings; arbitrary schema names and secrets require the separate compatibility choices described above.
+
+Dependency note: contracts-internal goal/type-schema consumers should import the dependency-free identifier leaf directly. flow/index.ts reexports interface.ts -> type-schema; a secret parser import through the flow barrel would create a cycle. Public barrel reexport can remain additive. Sent to permission worker; no source change.
+
+Implementation handoff (permission worker claim, not independently verified): checkpoint8c50dc21c adds dependency-free FLOW_INPUT_IDENTIFIER leaf/barrel, direct goal leaf import, draft alias and public processing import; secret parser stays unchanged. Its32-owner Core ticket and five contracts owners plus latest_date/LatestDate first+three replay tests were prepared but unexecuted at handoff. This read-only intake does not claim their acceptance.
