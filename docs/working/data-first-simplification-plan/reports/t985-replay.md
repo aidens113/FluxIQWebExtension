@@ -17,3 +17,11 @@ After merging accepted permission source a4baa606b, gated `pnpm --filter fluxiq 
 ## Lead synced-parent checks, 2026-11-22
 
 Merged accepted fixed-model dev into both t985 trees. Gated pnpm --filter fluxiq check -> exit 0, 100,501 ms. Gated node scripts/structure-audit.mjs -> exit 0, 564 warnings / 909 baselined. F24 source remains unchanged from the earlier 55/55 combined regression; package checks now include P4. F26 is covered by accepted t981 repeat-safe repair; exact recorded four-attempt acceptance remains with the shared offline-proof lane. F23 historical identity/source artifacts remain insufficient; no guessed persistence patch was made. This checkpoint does not claim complete P5 or browser acceptance.
+
+## Further screened F23 amendment reconstruction, 2026-11-22
+
+Canonical decision/result JSON files exist even though failed Flow-step folders contain only metadata. The final numbered amendment at 0509 requests a rerun of draft step102 with an extractList patch; 0510 reports draft_rerun, zero applied/refused ordinary amendments, targeted d102, and revision5->6. That zero ordinary-amendment count does not prove the rerun failed: the subsequent 0511 core.run_node extract-list call succeeded and was addable, with zero extracted rows. Its patch and actual request both contain handle/fields/where/minItems. This is a read repair, not proof of the identity or replacement of the earlier failing main.s5 click.
+
+Subsequent metadata shows a new detection, a repeat refusal, successful reads, and repeated already_answered responses. Existing request.ts/replacement.ts explicitly distinguish ordinary amendments from executed reruns and replace a step only after a proposable result, preserving routing and source references. Accepted t981 covers the rebind-before-withdrawal correction. No raw page text, selector, row values or handles were emitted or copied into tracked evidence. The original failed-click target mapping remains missing; do not invent a persistence patch from the misleading zero applied count.
+
+Validation: read-only structural inspection of 0509 decision, 0510 amendment result, 0511 call/result and 0512-0529 metadata; no browser or model call. F23 exact recorded root cause remains unverified.
