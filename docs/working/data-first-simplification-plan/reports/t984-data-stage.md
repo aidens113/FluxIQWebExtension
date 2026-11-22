@@ -103,13 +103,52 @@ git diff --check
 
 ## Persisted mode/clock handoff proposal approved, held for combined sync
 
-Read-only tracing showed `recordOutput.process` already crosses saved Flow, record batch and canonical `process_json`; `run-dataset-store.ts` parses it with the existing processing parser. The lead approved one strict optional `process.declaration` provenance field: `{ version: 1, source: instructionDigest, revision, bindings }`. The framework stamps digest/revision/bindings; a model does not author them. Version 1 opts into automatic semantics; absence remains legacy. This avoids a second schema, output contract or DB column. The owned parser/type plus direct parser/serialization tests will be extended only after combined sync, alongside the runtime declaration integration.
+Read-only tracing showed `recordOutput.process` already crosses saved Flow, record batch and canonical `process_json`; `run-dataset-store.ts` parses it with the existing processing parser. The lead approved one strict optional `process.declaration` provenance field: `{ version: 1, source: instructionDigest, revision, bindings }`. The framework stamps digest/revision/bindings; a model does not author them. Version 1 identifies the new automatic semantics; absence remains legacy. This avoids a second schema, output contract or DB column. The lead later authorized the independent owned contract/parser/stamp step below before P1's final handoff. Runtime dispatch remains held.
 
 The lead approved serialized transfer of `packages/fluxiq/src/framework/persistence/automation/project/run-dataset-answer/answer.ts`, `run-dataset-store.ts` and their owning tests AFTER P1 freeze/sync. They must dispatch to the same automatic evaluator; missing evidence must atomically invalidate any existing ready answer marker and cannot silently read collected rows as an answer. A fully materialized known-empty result follows explicit minRows/data-task contracts; a marker is not universal task success.
 
 The store already reads `runtime_runs.started_at_ms` for relative comparisons. The lead approved exposing that exact exploration start from `answer-first/rows/exploration-session.ts` via `rows/open-exploration-session.ts`'s session type and owning test, then supplying it to run-attempt/feed. This preserves real finish timestamps and avoids independent ambient clocks. All these dependent paths remain untouched until the combined P1/P4/permission sync.
 
 P1 coordination: a retained answer marker describes complete materialization, including truthful empty rows, independently of task success/belowMinRows. P1 reports that its receipt hashes canonical process metadata, so declaration provenance naturally changes that receipt. For empty captures the in-memory ledger already records a page by callId with kept:[]; it does not require datasetId to distinguish a source. P1 proposed persisting a zero-row batch only for a valid explicit host schema, preserving durable schema/capture identity for restart/readBack; this worker supports that seam. Legacy absent-schema empty reads remain unchanged. These P1 claims await the lead's verification/sync; no P1 source was edited here.
+
+### Independent provenance contract ready for handoff
+
+The lead checkpointed independent P2 source as `331a639ea` and report as `7e414d917`, synced both t984 trees to current dev including permission/P4, and reported its own independent **77/77 tests in 4 files** after that sync. P1 was still finishing downstream. The lead then authorized ONLY strict provenance contracts/parser/serialization tests and a framework-neutral binding stamp helper in existing owned process paths. All runtime/interpretation/memory/feed/store/completion/clock edits remain held.
+
+Public contract:
+
+```ts
+type AutomationStudioRecordProcessingDeclaration = {
+  version: 1;
+  source: string; // exactly 64 lowercase hexadecimal SHA-256 characters
+  revision: number; // positive safe integer
+  bindings: Readonly<Record<string, string>>; // original written ref -> allowed stored id
+};
+// Additive: AutomationStudioRecordProcessing.declaration?: AutomationStudioRecordProcessingDeclaration
+stampAutomationStudioRecordProcessing(raw, schema, { source, revision });
+// Returns the existing AutomationStudioRecordProcessingBinding success/failure union.
+```
+
+- The existing strict processing parser accepts exactly the four nested provenance keys, copies the metadata/map, and sorts binding keys deterministically. It rejects null/undefined stamps, missing/extra fields, unknown versions, noncanonical digests, invalid revisions, blank reference keys, and unknown/excluded/derived binding targets with `record_output.process_invalid_declaration`. Absent declaration keeps legacy parsing/JSON unchanged. There is no second schema or storage envelope.
+- `bindAutomationStudioRecordProcessing` is the untrusted instruction/amendment boundary. It now refuses ANY own `declaration` key, including null/undefined, with `record_output.process_declaration_framework_owned`. The public stamping helper binds through that boundary, validates the caller-supplied framework digest/revision, and supplies ONLY actual computed stored-field bindings. It cannot use a model-supplied stamp or binding map. The helper is browser/framework-neutral and computes no digest itself; the framework owns source hashing and revision changes.
+- Persisted parser shape validation does not authenticate an author. Future model/runtime entry points must use the binding/stamping boundary when creating/amending declarations; saved bound declarations use the strict parser. Current evaluator calls do not infer automatic mode from metadata alone. No runtime opt-in or model boundary was changed in this contract-only step.
+- Derived ids remain in existing derive/where/compare expressions. They are deliberately absent from provenance bindings; their stored source and other stored operands ARE bound. A full derive/condition/field-comparison stamp and JSON roundtrip is pinned, preventing valid virtual references from being rejected as provenance targets. Original values and exclusions are unchanged.
+- Owning tests pin canonical metadata roundtrip, fresh copies, legacy JSON compatibility, model stamp refusal, source/version/revision validation, exclusions and invalid binding targets, special own data keys without prototype changes, a no-reference empty binding map, and no implicit evaluator mode switch.
+
+Final provenance-step commands, run serially through heavy labels `t984-provenance-tests`, `t984-provenance-types`, `t984-provenance-audit` with no override:
+
+```powershell
+# Working directory: C:/Users/osrs_/FluxStuff/fxwork/t984/!FluxIQ/packages/contracts
+node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 src/record-sets/process/tests/processing-declaration.test.ts src/record-sets/process/binding/tests/bind.test.ts src/record-sets/process/tests/result-operators.test.ts
+# Working directory: C:/Users/osrs_/FluxStuff/fxwork/t984/!FluxIQ
+pnpm --filter @fluxiq/contracts check
+node scripts/structure-audit.mjs
+git diff --check
+```
+
+Observed **3 files / 59 tests passed**, exit 0, in **2.42 seconds** (39 provenance, 8 binder, 12 existing operators); contracts check **exit 0**, **5,652 ms** stamp; structure audit **exit 0**, **565 warnings / 909 baselined**; diff check **exit 0** (ordinary Git LF-to-CRLF notices on two existing binding files). No failing executable check in this step. Source/tests are frozen for lead verification/handoff.
+
+This step changed ONLY `packages/contracts/src/record-sets/process/{types.ts,parse-processing.ts,index.ts,declaration/{type.ts,parse.ts,index.ts},binding/{bind.ts,index.ts,stamp.ts},tests/processing-declaration.test.ts}` and this report. No git mutations, P1 files or dependent source changes.
 
 ## Discovery findings
 
@@ -124,7 +163,7 @@ P1 coordination: a retained answer marker describes complete materialization, in
 
 ## Proposed declaration and binding seam
 
-1. **Declare in the existing interpretation call.** Extend its existing answer with a `process` declaration using the present condition/sort dialect; field strings initially name instruction-level concepts. Keep the instruction/source digest and a revision beside it, outside `AutomationStudioRecordProcessing`, so the existing strict processing parser remains unchanged in purpose. There is no new interpretation or processing model call. A known task or saved Flow reuses its kept declaration.
+1. **Declare in the existing interpretation call.** Extend its existing answer with a `process` declaration using the present condition/sort dialect; field strings initially name instruction-level concepts. The framework stamps source digest, revision and bindings in the strictly parsed optional `process.declaration` provenance field. A model never supplies that metadata. There is no new interpretation or processing model call. A known task or saved Flow reuses its kept declaration.
 2. **Bind once actual retained schema exists.** In an owned result-processing binder, resolve each referenced field by exact id, then a unique normalized schema label. Validate handling/exclusion, comparison types and actual field availability; ambiguous or absent matches are actionable issues. Do not fuzzy-match page words, infer a key from a shared link, guess missing flags, or silently drop a condition. Use semanticType/mark to select the existing pure typed comparator, not as fabricated per-row truth.
 3. **Store one canonical bound plan.** Persist the semantic declaration independently of row availability in task/attempt state; write its bound `AutomationStudioRecordProcessing` into the same saved `recordOutput.process` seam already used by `automationStudioAnswerFirstStepsWithResultProcessing`. Keep the source digest, binding map and revision as provenance. An explicit evidenced amendment replaces that declaration; normal processing never asks the model to restate filters.
 4. **Apply automatically at the shared result owner.** Let exploration calls, forward passes, carried rows and saved-Flow batches all enter the same result-feed owner. Preserve their actual `RecordSchema`, reconcile compatible schemas explicitly, and refuse conflicting types/identity metadata instead of inferring over them. Every answer/read-back/completion/publication then uses the same pure evaluator over full retained rows, with presentation projection last.
@@ -143,9 +182,11 @@ P1 coordination: a retained answer marker describes complete materialization, in
 
 The remaining automatic-stage acceptance must cover schema metadata reconciliation, saved declarations and actual live/replay/shared-feed integration with one supplied reference clock. Owned operator tests now cover hidden conditions/sort, promoted/organic duplicates, incomplete identities, boolean flags, currency/count/date readers, missing evidence, exclusions, unchanged inputs, pure live/replay parity, and legacy preservation. Runtime integration remains dependent on the shared handoff/sync.
 
-Outcome: Partial — independent binder/operators and requested explicit-presence follow-up complete, validated and frozen. Remaining P2 runtime integration awaits combined sync.
-Changed: Core packages/contracts/src/record-sets/process/{process-rows.ts,index.ts,automatic-identity.ts,binding/{bind.ts,index.ts,result.ts,tests/bind.test.ts},readiness/{comparison.ts,condition.ts,filters.ts,index.ts,missing-evidence.ts,result.ts,value.ts},tests/automatic-processing.test.ts}; this report.
-Validation: Prior independent freeze -> 4 files / 70 tests plus contracts check/audit/diff passed. Follow-up owning automatic tests -> 32/32 passed; contracts check/audit/diff -> exit 0. Exact commands/failure history recorded above.
+Outcome: Partial — independent operators, presence follow-up and strict provenance/stamp step complete, validated and frozen. Remaining P2 runtime integration awaits P1 handoff/sync.
+Changed: Latest step is the ten owned process contract/parser/declaration/binding/test files listed above and this report; prior independent changes are checkpointed by the lead.
+Validation: Latest provenance step -> 3 files / 59 tests passed; contracts check/audit/diff -> exit 0. Prior operator/presence checks and lead's independent 77/77 post-sync result are recorded above with exact commands/history.
 Not verified: P1 transport completion, persistent declaration/feed integration, final clock/publication/completion/store readiness seams; live browser/provider behavior was not run.
 Report: `docs/working/data-first-simplification-plan/reports/t984-data-stage.md`.
 Notes: t976 stays frozen. No held P1/P4-dependent source changed. No git mutations or full/paid runs.
+
+Lead verification, 2026-11-22: gated pnpm --filter @fluxiq/contracts exec vitest run src/record-sets/process/tests/processing-declaration.test.ts src/record-sets/process/tests/automatic-processing.test.ts src/record-sets/process/binding/tests/bind.test.ts --maxWorkers=1 --minWorkers=1 --fileParallelism=false -> 3 files, 79/79 passed, 2.10 seconds. Core provenance checkpoint 8c86122d0. Runtime integration still held for P1.
