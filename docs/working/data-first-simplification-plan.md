@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Execution resumed 2026-11-22 with three P0 workers in existing paired task trees; changes await verification; subsequent lanes and paid proof remain pending.
+Status detail: P0 judge independently verified and integrating; repeat repair awaits lead acceptance; permission/Lab checks continue. P1 extraction is active; P4 and offline acceptance are prepared. No paid runs.
 Created: 2026-11-20
 Last updated: 2026-11-22
 Owner: Senior supervisor agent
@@ -11,17 +11,21 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 ## Current State
 
-**Execution resumed 2026-11-22.** The user requested agents and durable progress records. Lead inspected all three paired task trees: t976 has Core and Lab permission edits; t979 has judge/retry edits and fake-judge migrations; t981 has three amendment files started. None is accepted or integrated. Written briefs are in `data-first-simplification-plan/briefs/t976.md`, `t979.md`, and `t981.md`. Three workers resume these isolated trees; their reports live in each downstream tree under `docs/working/data-first-simplification-plan/reports/`. Lead owns verification and git. P1-P7 remain pending. No paid run launched.
+**Execution resumed 2026-11-22.** The user requested agents and durable progress records. Lead inspected all three paired task trees: t976 has Core and Lab permission edits; t979 has judge/retry edits and fake-judge migrations; t981 has three amendment files started. Judge acceptance has since passed; see the latest verification checkpoint below. Written briefs are in `data-first-simplification-plan/briefs/t976.md`, `t979.md`, and `t981.md`. Three workers resume these isolated trees; their reports live in each downstream tree under `docs/working/data-first-simplification-plan/reports/`. Lead owns verification and git. P1 implementation is active; later acceptance remains pending. No paid run launched.
 
 **Intake checks:** main downstream checkout is on dev with pre-existing edits in AGENTS.md, .clinerules/fluxiq.md and an untracked debug note; preserve them. Main Core checkout was clean. About 5.4 GiB physical memory was free; no OneDrive process was listed. Heavy validation uses the existing shared slot gate.
 
-**Lead source inspection (2026-11-22):** W7 is partly implemented: domain structure packets already carry field types/parsed samples, marks and rowIdentity (column-type.ts, packet.ts, list-items/row-identity.ts). The loss is downstream of detection: plan-resolution/extraction/slot.ts selects authored fields; output-nodes/extract-list/declared-columns.ts intentionally narrows stored fields; Core's answer-first/rows/derived-schema.ts rebuilds types from values and silently slices columns at maxFields. Existing RecordSchema has fields/valueType/primaryKey, and process.columns already separates display from storage. P1 must extend these existing seams, preserve explicit sensitive-field exclusions, and keep every readable discovered column. P2 must address process-rows.ts currently deduping after filtering by displayed/full rows instead of a retained stable identity. Stored-row interface is not yet frozen.
+**Lead source inspection (2026-11-22):** W7 is partly implemented: domain structure packets already carry field types/parsed samples, marks and rowIdentity (column-type.ts, packet.ts, list-items/row-identity.ts). The loss is downstream of detection: plan-resolution/extraction/slot.ts selects authored fields; output-nodes/extract-list/declared-columns.ts intentionally narrows stored fields; Core's answer-first/rows/derived-schema.ts rebuilds types from values and silently slices columns at maxFields. Existing RecordSchema has fields/valueType/primaryKey, and process.columns already separates display from storage. P1 must extend these existing seams, preserve explicit sensitive-field exclusions, and keep every readable discovered column. P2 must address process-rows.ts currently deduping after filtering by displayed/full rows instead of a retained stable identity. Stored-row interface is now frozen in The Design below.
 
 **P0 follow-up:** permission worker found saved-Flow preflight could ask twice and repair lost declined classes. Its owned scope now includes flow-run/permission.ts and the flow-stage entry. Tests use one Vitest worker after concurrent runs reduced free memory below 1 GiB. Documentation checkpoints were pushed to both dev branches; product changes still await verification.
 
 **Prepared, not dispatched:** paired task t982 (retain-extraction-data), created by `pnpm task start retain-extraction-data --worktree --core --skip-workspace-build`; Core libraries restored from cache and downstream full build skipped. Its written P1 brief requires an interface proposal before edits. Runtime provides three worker slots, currently occupied by P0; later lanes start as slots free, with dependent edits held until prerequisite integration.
 
 **Next-lane discovery:** paired t983 (fixed-task-model) is also prepared, with no downstream full build. While P0 checks queue, p0_repair may read t982 for a retained-row interface proposal and p0_judge may read t983 for remaining ladder/default-model paths; both are read-only until lead integration/sync. t979's source and architecture note are checkpointed locally as Core 021b1f631 (0.50.3); worker checks include typecheck/audit and 102 final budget/receipt tests, but lead acceptance and parent-sync checks remain pending. Review expanded t979 to fix missing billed-usage receipts on failed harness replies and t981 to cover move/add invalid routing and held-feedback renumbering. No paid calls or full sweeps.
+
+**Verification checkpoint (2026-11-22):** t979 passed lead verification after parent sync: 125/125 tests in 12 files, `pnpm --filter fluxiq check` exit 0, and `node scripts/structure-audit.mjs` passed (562 warnings, 909 baselined). Its downstream task finished with its audit passing; Core integration passed all 70 contract tests; both dev branches now contain t979. t981 is checkpointed as Core 258f83958, with worker-reported 281 focused tests, final typecheck and audit passing; lead acceptance after parent sync remains. t976 is reconciling inherited permission expectations and validating Core/Lab; no acceptance claimed yet.
+
+**Active extraction lane:** t982 is synced and p0_repair is implementing P1 under its written brief. The shared schema seam is stable: worker reports 60 record-set tests and contracts typecheck passing. Remaining extraction/live/saved/replay plumbing and lead verification are pending. t983 fixed-model discovery and offline-intake findings are backed up; P4 implementation is now assigned to p0_judge in synced paired t983. Offline discovery found recorded-response replay and strict ten-row orchestration still missing; scripted replies alone do not prove recorded replay. Reports distinguish raw recorded data, modeled calls, historical cost, and actual provider spend. No paid calls or full sweeps have run.
 
 **What happened.** The 2026-11-19/20 live campaign ran each site's hardest task: 37 counted runs, 0 SUCCESS (all four attempts right, and attempts 2-4 with zero model calls), 17 PARTIAL, 20 FAILURE, about $90. The first attempt was right in 17 runs. 10 failures were our own plumbing bugs, since fixed. 7 of the 11 runs that hit the $5 purse failed on the data: wrong or missing columns, a promoted row kept, a summary panel not shaped, an iframe or account never read. 3 failed on replay and 1 on the judge. Judges were 40-45% of the spend on failing tasks. Every one of those 11 runs had climbed the model ladder. The evidence is under "Evidence" below.
 
@@ -51,7 +55,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 - L8. The machine's memory gate.
 - L9. Settle the work left in flight.
 
-**Not done.** Nothing in this plan is built. Three campaign fixes were cut off by the 06:57 crash and then stopped by the user on 2026-11-20. They sit uncommitted in their task trees (`C:/Users/osrs_/FluxStuff/fxwork/<task>/`, Core and extension side by side). The minutes the re-dispatched workers ran on 11-20 may have added edits. Each worker report sits in its tree under `docs/working/usable-client-plan/reports/`. All three come first:
+**Original P0 intake (2026-11-20; superseded by the execution checkpoints above).** Three campaign fixes were cut off by the 06:57 crash and then stopped by the user on 2026-11-20. They sit uncommitted in their task trees (`C:/Users/osrs_/FluxStuff/fxwork/<task>/`, Core and extension side by side). The minutes the re-dispatched workers ran on 11-20 may have added edits. Each worker report sits in its tree under `docs/working/usable-client-plan/reports/`. All three come first:
 
 - **t981, repaired Flows refused at save (F26). It directly blocks SUCCESS.**
   - What goes wrong: when the model repairs a broken Flow during a run, the save is refused. The repair dropped a step that a loop still pointed at, or put routing inside a loop. So the next attempt cannot use the repair, and pays to repair again.
@@ -211,6 +215,14 @@ Start: read this document's Current State, check memory and OneDrive, and confir
 - **Day 5:** fix forward from day 4 offline, a second small round on what failed, then the full sweep and `main` (S10).
 
 ## Work Ledger
+
+### 2026-11-22 ? Judge integrated; extraction and fixed-model lanes active
+- Agent: Senior supervisor.
+- Changed: t979 integrated in both repositories; t982 extraction and t983 fixed-model implementation assigned. t981 repair source/report checkpointed and parent-synced for lead acceptance.
+- Validation: `pnpm task finish t979` downstream -> structure audit passed, merged, worktree removed. `pnpm task finish t979 --skip-checks` in Core -> mandatory contract gate 70/70 passed, merged; focused lead tests/typecheck/audit are recorded in the paired Core ledger. No full suite skipped as acceptance: narrow gates are repository policy.
+- Outcome: Partial: judge unit accepted; complete data-first plan still in progress.
+- Follow-up: independently validate repair, resolve permission review, complete P1/P4 and provider-free acceptance infrastructure before paid proof.
+
 
 ### 2026-11-22 — P0 workers resumed with written briefs
 - Agent: Senior supervisor.
