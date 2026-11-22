@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Judge and repeat repair integrated; permission/Lab checks continue. Extraction and fixed-model lanes active; data-stage and replay tasks prepared/in progress. No paid runs.
+Status detail: Judge/repeat repair pushed; permission accepted and integrated in both repositories after complete acceptance. Combined fixed-model validation and extraction/data/offline work active. No paid runs.
 Created: 2026-11-20
 Last updated: 2026-11-22
 Owner: Senior supervisor agent
@@ -16,17 +16,19 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 | Unit | Current state | Next action |
 | --- | --- | --- |
 | P0 t979 judge recovery | Accepted, integrated and pushed to both dev branches. Lead: 125/125 tests, package check, audit; merge contract gate 70/70. Same-model unreadable recovery and paid receipt preservation. | Covered by subsequent combined checks. |
-| P0 t981 repeat-safe repair | Accepted and integrated in both repositories. Lead: 281/281 tests in 16 files, package check (87,253 ms), audit; merge contract gate 70/70. Core 0.50.4. Paired dev push follows this checkpoint. | P5 can sync and continue. |
-| P0 t976 start-only permission | Worker p0_permission, final Core/Lab validation. Review fixed underlying gate still raising/ending after wrapper closure, concurrent startup callers, and plan-refusal abort. Current-source affected tests 170 passed; final typecheck passed after fixture correction. Lead acceptance pending. | Finish audit/build/Lab tests/catalog; lead verify, sync and integrate. |
+| P0 t981 repeat-safe repair | Accepted and integrated in both repositories. Lead: 281/281 tests in 16 files, package check (87,253 ms), audit; merge contract gate 70/70. Core 0.50.4. Both dev branches are pushed. | P5 can sync and continue. |
+| P0 t976 start-only permission | Worker complete: 170 Core tests, 66 Lab tests, 13 catalog tests, package checks/builds and both audits pass. Lead review fixed gate closure, concurrent startup and plan-refusal abort. Source checkpointed and parent synced; Core 0.50.5; lead 161/161 Core tests, 66/66 Lab tests, 13/13 catalog tests, both package checks, dependency builds and audits passed. Integrated in both repositories; Core merge contract gate 70/70 passed. Paired dev push next. | Paired integration, then fixed-model combined acceptance. |
 | P1 t982 retained extraction | Worker p0_repair. Schema seam stable; 68 record-set tests reported passing. Full field/metadata transport, compatible schema growth and batch retry parity under test. | Complete additive-page/privacy/campaign-shaped tests, checks, lead verification. |
-| P4 t983 fixed task model | Worker p0_judge. One provider, inert ladder compatibility, durable startingModel and same-task continuations implemented. 97 initial owner tests passed; remaining new test fixture/import/SQL-marker corrections and final gates in progress. | Finish interpreter climb cleanup, final gates and lead verification. |
-| P2 t984 automatic data stage | Prepared paired tree, brief backed up; p0_permission completed read-only proposal. No product edits. Existing evaluator, instruction declaration and precise field binding approved; dependent memory/interpretation seams await prior lane handoffs. | Start independent operators/binder after t976 report; sync P1/P4 before dependent edits. |
+| P4 t983 fixed task model | Worker p0_judge. Worker complete: one provider, durable startingModel, same-task continuations and no interpreter climb. Final 72 tests, typecheck and audit pass; checkpoint Core 002650596. Permission source merged; Core 0.51.0; lead combined 140/140 tests passed; final type/build/audit gates pending. | Integrate permission parent, verify combined model/permission behavior, integrate. |
+| P2 t984 automatic data stage | Worker p0_permission active on a minimal stable retainedRows evaluator seam, then operators/binder. Seam backed up/merged into P1; binder 8/8 worker tests/typecheck/audit pass. Explicit automatic-mode readiness/identity work active; dependent memory/interpretation seams await handoffs. | Validate/commit retainedRows seam and merge into P1; continue operators; sync P1/P4 before dependent edits. |
 | P5 t985 replay continuity | Lead implemented F24 successful-retry proof subset; 12/12 focused completion tests pass. Source/docs checkpointed on task branches; not integrated. F4/F23 diagnosis and F18 revalidation remain. | Sync t981; typecheck/audit and remaining recorded-path diagnosis. |
-| S1/S2/S6 offline proof | Read-only discovery in t983 reports/offline-intake.md. Existing scripted replies do not reproduce recorded responses; strict ten-row scoreboard/preflight orchestration remains to build. | Admit recorded evidence, build replay adapter and strict proof orchestration before paid acceptance. |
+| S1/S2/S6 t986 offline proof | Worker p0_judge active. Recorded adapter/scoreboard/CLI foundations implemented; narrow Core public trace wrapper 10 worker tests passed, types pending. Real preflight and admitted prefix composition in progress. | Build runnable real-entry proofs; no classifier/prefix mislabeled as task SUCCESS. |
 
-**Assignments and records:** written briefs and worker reports live under `docs/working/data-first-simplification-plan/{briefs,reports}/`, in the corresponding paired task tree until merged. Trees are `C:/Users/osrs_/FluxStuff/fxwork/t<id>/!FluxIQWebExtension` and sibling `!FluxIQ`. Lead owns integration, shared docs and git. No source edits in t984 yet; t985's F24 subset is lead-owned.
+**Assignments and records:** written briefs and worker reports live under `docs/working/data-first-simplification-plan/{briefs,reports}/`, in the corresponding paired task tree until merged. Trees are `C:/Users/osrs_/FluxStuff/fxwork/t<id>/!FluxIQWebExtension` and sibling `!FluxIQ`. Lead owns integration, shared docs and git. t984 retainedRows seam 2c4099965 passed lead 25/25 tests, preserves source symbols, is backed up and merged into P1; t985's F24 subset is lead-owned.
 
 **Contract and review decisions:** retained rows reuse JsonObject + RecordSchema/RecordBatch; The Design below fixes semanticType, mark and primaryKey. P1 retains full safe schemas through live/saved/replay paths and reconciles compatible additive schemas explicitly. Identical old-batch retries must preserve ordered rows after schema growth. P2 uses existing processing with one run clock, exact-id/unique-label binding and explicit missing evidence; no guessed filters or second DSL. P4 persists the original model atomically, preserves historical records, and must not treat an invalid stored model as a new task. Shared service/memory/interpreter edits are serialized and synced before acceptance.
+
+**New retained-data boundary (2026-11-22):** P2 exposes full qualifying `retainedRows` from the same selected array before display projection; lead will commit that minimal seam and merge it into P1 before dependent edits. P1 internal paging distinguishes collected raw rows and qualifying full rows from public projected views. Migration `0040_run_dataset_exclusions` is reserved to P1 for private excluded-field hashes and an answer_rows_retained marker; old projected rows are never guessed into full records. No user database migration/testing is authorized by the unit tests.
 
 **Validation and environment:** no paid calls or full sweeps have run. Main downstream pre-existing AGENTS.md, .clinerules/fluxiq.md and the untracked language-driven debug note are preserved. Heavy work uses the machine gate and narrow checks. S8 finding: `position < freeSlots` lets the first two tickets race, repeatedly starving the oldest job when only one fits; strict FIFO plus need/commit-headroom admission remains to build. No thresholds or priority overrides changed. OneDrive was about 33 MiB private memory, not leaking, and was left running. Serial validators now release/requeue between stages.
 
@@ -42,7 +44,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **Why this plan exists:** the recorded campaign counted 37 runs, 0 strict SUCCESS, 17 PARTIAL and 20 FAILURE, about $90. Strict SUCCESS means four correct attempts, three predecessor-Flow continuation proofs and zero model calls on attempts 2-4. The original campaign, causes and approved phased design follow; historical task diagnoses remain in the task reports and git history.
 
-**Next:** finish and integrate permission; complete extraction/model lanes; execute data processing, replay persistence and recorded offline proof; only then run the approved small supervised round and final full sweep/promotion. Nothing needs a user decision now.
+**Next:** push paired permission integration; complete extraction/model lanes; execute data processing, replay persistence and recorded offline proof; only then run the approved small supervised round and final full sweep/promotion. Nothing needs a user decision now.
 
 ## Evidence
 
@@ -153,34 +155,17 @@ These are the lead's, 2026-11-20. The user's bottom line: "we seriously NEED thi
 
 ## Next Session
 
-Start: read this document's Current State, check memory and OneDrive, and confirm the gate is empty. Then:
+Read Current State and the corresponding task report first; do not restart completed P0 work. Inspect running heavy-slot holders/queue before scheduling checks, and preserve another lane's frozen validation snapshot.
 
-1. **Finish the three fixes in flight first** (P0; the user: "if they are important then obviously fix them first"). Re-dispatch each from its tree and report, with the decisions in Current State:
-   - t981 (worker-heavy): implement the refusals and the rerun ordering, with its tests.
-   - t979 (worker): the remaining items, and take out the model climb.
-   - t976 (worker-heavy): finish option (c) and the test migration.
+1. Confirm paired permission pushes completed. P0 judge/repeat/permission are integrated; fixed-model t983 includes permission source and has 140 passing combined tests plus a passing typecheck. Finish its remaining build/audit and paired integration.
+2. P1 t982 owns retained schema/rows, internal collected/answer paging, migration 0040, private exclusion hashes/readiness/batch receipts and public projection. It includes t984 seam 2c4099965. Complete its focused Core/downstream acceptance, synchronize current parent, verify and integrate before dependent P2 edits.
+3. P2 t984 owns exact field binding and explicit automatic-mode processing/readiness. Independent binder tests/types/audit passed. Synchronize P1/P4/permission before interpretation, task-memory and completion edits; preserve saved legacy process behavior.
+4. P5 t985 has the tested F24 retry-proof subset. F4/F18 regressions pass with permission parent; F23 still needs exact target/semantic-repair reconstruction. Screened artifacts prove all successors loaded predecessor digests and some digests changed: do not repeat the unsupported blanket claim that nothing persisted.
+5. t986 owns recorded model/domain proof, strict scoreboard and real preflight. Public trace-scope wrapper and CLI foundations exist; enforce first-divergence closure and actual starting-state admission. A prefix, scripted model response, missing call count or generic confirm is not full task, zero-call or permission proof.
+6. After P1/P2 interfaces settle, implement P3 generic collection guidance, preserving action-row selection. P6 judge evidence reduction, S3 affected-recording gate, S5 live stage costs, S7 unrelated-plan reconciliation and S8 need/commit-headroom admission remain. Heavy-slot FIFO starvation is recorded; no threshold/priority bypass is authorized.
+7. Paid acceptance remains blocked on the approved provider-free proofs, not on another permission question. Strict SUCCESS is four correct attempts, three predecessor Flow/digest proofs and zero logical model calls on attempts 2-4. Only then launch the supervised approved round within the total $50 ceiling, report spend as it happens, and stop on balance error. Final full sweep/promotion follows coherent completed work, within the twice-daily sweep rule.
 
-   Merge each as it passes its narrow checks.
-2. **Fix one interface before dispatch:** the stored row. It holds every field, each field's typed value, the row's marks and its identity. Lanes 1 and 2 build against it.
-3. **Dispatch the lanes in parallel, partitioned by file:**
-
-   | Lane | Work | Where |
-   | --- | --- | --- |
-   | 1 | P1: reads keep every column, mark, identity and typed value. Check W7 first. | domain and extension reads; Core's stored rows |
-   | 2 | P2: the automatic data stage, against the fixed row interface. | Core result processing |
-   | 3 | P4 and P3: remove the ladder (with t979's climb), then the collect-broadly guidance. | Core model routing, loop decision, build guidance |
-   | 4 | P5: diagnose F23, F24, F4 and F18 from their recorded runs, then fix them. t981's F26 lands first. | Core replay and draft |
-   | 5 | S1, S2 and S6: offline re-run of recorded runs, the ten-task scoreboard, and the per-site preflight. | Lab (`packages/test-runner`, `apps/scenario-lab`) |
-   | Lead | Verification, merges in rounds (S4), this document (S7), the user's questions. | |
-
-4. **Acceptance before any paid run:** the scoreboard's tasks pass offline on their recorded runs, with zero model calls on attempts 2-4.
-
-**The week, cut for parallel lanes.** These are the lead's estimates; the real constraints are named.
-- **Day 1:** P0, the row interface, and lanes 1, 3, 4 and 5 dispatched; lane 2 starts once the interface is fixed. Lanes 3 and 4 touch the same Core areas as t979 and t981, so each starts after its fix merges.
-- **Day 2:** lanes 1-4 land provider-free, and the first offline scoreboard runs. Constraint: two heavy slots on the 12 GB machine.
-- **Day 3:** the six near-passing tasks reach SUCCESS offline, and P6 (the smaller judge) lands.
-- **Day 4:** one small supervised live round on the starting model, about ten tasks. The lead's estimate is under $10 on Haiku, reported as it runs. Approved up to $50 absolute max (U8). Constraint: credit on the Lab's Claude key.
-- **Day 5:** fix forward from day 4 offline, a second small round on what failed, then the full sweep and `main` (S10).
+All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls, full sweeps or browser acceptance have run in this resumed session so far.
 
 ## Work Ledger
 

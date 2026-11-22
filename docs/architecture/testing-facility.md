@@ -2489,8 +2489,19 @@ an attempt that reported none publishes none.
 
 ### Who answers a permission question in a campaign
 
-Nobody is watching a campaign, so a build that stops to ask a person waits for
-an answer that never comes. Since the permission gate learned to park, a build
+Current attempt-lane runs use the Lab's person simulation, and paid runs remain
+supervised by a live agent. Core asks once at task/chat startup. The Lab recognizes
+the `core.task_start` request even though it names no page control, and grants it
+only when its requested consequential classes match the task's declared
+`permissionPoint`. An additional class is refused; task wording is not a grant.
+The answer goes through the normal conversation/answer-ask path and is retained
+by Core for subsequent attempts. The Lab records the permission point as
+`control: "task"`; control-specific checks remain available for legacy evidence.
+
+#### Historical campaign accounting
+
+The following describes the older campaign path, before task-start permission.
+An unattended build could park waiting for an answer. Since the permission gate learned to park, a build
 can finish, leave a proposal and carry the unanswered question on it; Core then
 refuses to approve or apply that proposal (`FLOW_BOOTSTRAP_PERMISSION_REQUIRED`).
 Until 2026-09-23 the first anyone heard of it was that refusal, as an HTTP 400
