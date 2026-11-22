@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Judge/repeat repair pushed; permission downstream integrated and Core merge queued after complete acceptance. Combined fixed-model validation and extraction/data/offline work active. No paid runs.
+Status detail: Judge/repeat repair pushed; permission accepted and integrated in both repositories after complete acceptance. Combined fixed-model validation and extraction/data/offline work active. No paid runs.
 Created: 2026-11-20
 Last updated: 2026-11-22
 Owner: Senior supervisor agent
@@ -17,9 +17,9 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 | --- | --- | --- |
 | P0 t979 judge recovery | Accepted, integrated and pushed to both dev branches. Lead: 125/125 tests, package check, audit; merge contract gate 70/70. Same-model unreadable recovery and paid receipt preservation. | Covered by subsequent combined checks. |
 | P0 t981 repeat-safe repair | Accepted and integrated in both repositories. Lead: 281/281 tests in 16 files, package check (87,253 ms), audit; merge contract gate 70/70. Core 0.50.4. Both dev branches are pushed. | P5 can sync and continue. |
-| P0 t976 start-only permission | Worker complete: 170 Core tests, 66 Lab tests, 13 catalog tests, package checks/builds and both audits pass. Lead review fixed gate closure, concurrent startup and plan-refusal abort. Source checkpointed and parent synced; Core 0.50.5; lead 161/161 Core tests, 66/66 Lab tests, 13/13 catalog tests, both package checks, dependency builds and audits passed. Downstream integrated; Core merge queued. | Paired integration, then fixed-model combined acceptance. |
+| P0 t976 start-only permission | Worker complete: 170 Core tests, 66 Lab tests, 13 catalog tests, package checks/builds and both audits pass. Lead review fixed gate closure, concurrent startup and plan-refusal abort. Source checkpointed and parent synced; Core 0.50.5; lead 161/161 Core tests, 66/66 Lab tests, 13/13 catalog tests, both package checks, dependency builds and audits passed. Integrated in both repositories; Core merge contract gate 70/70 passed. Paired dev push next. | Paired integration, then fixed-model combined acceptance. |
 | P1 t982 retained extraction | Worker p0_repair. Schema seam stable; 68 record-set tests reported passing. Full field/metadata transport, compatible schema growth and batch retry parity under test. | Complete additive-page/privacy/campaign-shaped tests, checks, lead verification. |
-| P4 t983 fixed task model | Worker p0_judge. Worker complete: one provider, durable startingModel, same-task continuations and no interpreter climb. Final 72 tests, typecheck and audit pass; checkpoint Core 002650596. Permission source merged; Core 0.51.0; lead combined tests/typecheck queued/running. | Integrate permission parent, verify combined model/permission behavior, integrate. |
+| P4 t983 fixed task model | Worker p0_judge. Worker complete: one provider, durable startingModel, same-task continuations and no interpreter climb. Final 72 tests, typecheck and audit pass; checkpoint Core 002650596. Permission source merged; Core 0.51.0; lead combined 140/140 tests passed; final type/build/audit gates pending. | Integrate permission parent, verify combined model/permission behavior, integrate. |
 | P2 t984 automatic data stage | Worker p0_permission active on a minimal stable retainedRows evaluator seam, then operators/binder. Seam backed up/merged into P1; binder 8/8 worker tests/typecheck/audit pass. Explicit automatic-mode readiness/identity work active; dependent memory/interpretation seams await handoffs. | Validate/commit retainedRows seam and merge into P1; continue operators; sync P1/P4 before dependent edits. |
 | P5 t985 replay continuity | Lead implemented F24 successful-retry proof subset; 12/12 focused completion tests pass. Source/docs checkpointed on task branches; not integrated. F4/F23 diagnosis and F18 revalidation remain. | Sync t981; typecheck/audit and remaining recorded-path diagnosis. |
 | S1/S2/S6 t986 offline proof | Worker p0_judge active. Recorded adapter/scoreboard/CLI foundations implemented; narrow Core public trace wrapper 10 worker tests passed, types pending. Real preflight and admitted prefix composition in progress. | Build runnable real-entry proofs; no classifier/prefix mislabeled as task SUCCESS. |
@@ -44,7 +44,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **Why this plan exists:** the recorded campaign counted 37 runs, 0 strict SUCCESS, 17 PARTIAL and 20 FAILURE, about $90. Strict SUCCESS means four correct attempts, three predecessor-Flow continuation proofs and zero model calls on attempts 2-4. The original campaign, causes and approved phased design follow; historical task diagnoses remain in the task reports and git history.
 
-**Next:** finish Core permission integration; complete extraction/model lanes; execute data processing, replay persistence and recorded offline proof; only then run the approved small supervised round and final full sweep/promotion. Nothing needs a user decision now.
+**Next:** push paired permission integration; complete extraction/model lanes; execute data processing, replay persistence and recorded offline proof; only then run the approved small supervised round and final full sweep/promotion. Nothing needs a user decision now.
 
 ## Evidence
 
