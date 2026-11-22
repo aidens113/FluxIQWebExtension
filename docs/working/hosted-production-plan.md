@@ -1,9 +1,9 @@
 # Hosted Production Plan
 
-Status: Active
-Status detail: Hosted foundations through C0, C1 and E/D5 are independently verified and merged; product branding and retry-safe owned default projects are on dev. C2/C3 routing and extension/deployment gates remain.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-17
-Last updated: 2026-10-30
+Last updated: 2026-11-22
 Owner: Lane lead hosted-production-planner (plan); the senior supervisor agent owns execution
 Scope: Extension, domain and product side of three deployments (getfluxiq.com, local, self-hosted): server profiles and sign-in in the extension, transport and data minimisation, consent-bound execution, manifests and the Chrome Web Store, domain changes, the FluxIQWebsite additions and their local stand-in, the product host module, hosted infrastructure, user docs, privacy, cookies and legal prerequisites, Lab and e2e coverage. Core contracts live in the paired document.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/hosted-production-plan.md
@@ -12,6 +12,8 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Hosted foundations through C0, C1 and E/D5 are independently verified and merged; product branding and retry-safe owned default projects are on dev. C2/C3 routing and extension/deployment gates remain.
 
 **What is true now (2026-10-30).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route) is merged; C1 now wires profile IAM into workspace instances, with C2/C3 caller migration/routing still separate; lane A (t802, gateway and panel hardening), C0 (t808) and the A/B3 follow-ups (t809) are merged in Core; the stand-in W0-W2 is merged here, and its live sign-up round trip passes against a service-profile Core (t809). No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
 2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
