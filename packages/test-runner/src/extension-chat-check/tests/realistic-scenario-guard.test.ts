@@ -22,6 +22,8 @@ test("the chat check refuses basic-form and product-catalog before it starts a t
         pagePath: "",
         ask: false,
         evidenceDirectory: path.join(root, "evidence"),
+        hostModulePath: path.join(root, "no-capture-host.js"),
+        prepare: async () => assert.fail("capture preparation ran before scenario admission"),
       }), { message: new RegExp(`^The extension chat check refused ${scenarioId}: ${RULE.source}`, "u") });
     }
     assert.deepEqual(await readdir(root), [], "no evidence, run or topology state was written");

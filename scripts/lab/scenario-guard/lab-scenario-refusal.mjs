@@ -9,7 +9,7 @@
 import { unrealisticScenarioRefusal } from "@fluxiq-web-extension/test-runner/realistic-scenarios";
 
 /** The subcommands that name one scenario, right after the command. */
-const ONE_SCENARIO = new Set(["run", "interactive", "replay", "attempt"]);
+const ONE_SCENARIO = new Set(["run", "interactive", "replay", "attempt", "offline-preflight", "recorded-capture", "recorded-read"]);
 
 /**
  * The refusal for Lab arguments that would open a scenario outside the ten, or
@@ -22,6 +22,9 @@ const ONE_SCENARIO = new Set(["run", "interactive", "replay", "attempt"]);
  */
 export function labScenarioRefusal(args) {
   const [command, ...rest] = args;
+  if (["recorded-replay", "recorded-capture", "recorded-read", "offline-preflight"].includes(command) && rest.includes("--live-llm")) {
+    return `lab ${command} is provider-free and refuses --live-llm before any provider setup.`;
+  }
   if (command === "fluxnode-host") {
     if (rest.includes("--live-llm")) return "lab fluxnode-host is provider-free and refuses --live-llm before any provider setup.";
     const named = rest.flatMap((value, index) => value === "--scenario" ? [rest[index + 1]] : []);

@@ -12,6 +12,7 @@ import type { ExistingTargetConfiguration, FluxIQTargetConfiguration } from "./t
 import { acquireWorkspaceOperationLock, type WorkspaceOperationLock } from "./workspace-lock.js";
 import { loadOrCreatePersistentIdentity } from "./persistent-identity.js";
 import { hostBuildStep } from "./startup-build/index.js";
+import { restartCoreAtStoppedBoundary } from "./coordinator/index.js";
 
 export type TopologyOptions = {
   /** Host construction admission, disabled only by explicit provider-free replay. */
@@ -77,7 +78,7 @@ export type RunningTopology = {
   authorizationPassword?: string;
   processExitCodes(): Record<string, number | null>;
   /** Stops the Core this topology owns and starts it again on the same ports, over the same stores. */
-  restartCore?(): Promise<void>;
+  restartCore?(whileStopped?: () => Promise<void>): Promise<void>;
   close(): Promise<void>;
 };
 
@@ -181,6 +182,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       }
       await control.selectProject(projectId);
     }
+    let closing = false;
     return {
       allocation, targetMode: target.mode === "persistent-isolated" ? "persistent-isolated" : "isolated", scenarioOrigin, fluxiqOrigin,
       gatewayUrl: `ws://127.0.0.1:${allocation.gatewayPort}/client`,
@@ -188,12 +190,11 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       ...(credentials?.pin ? { authorizationPin: credentials.pin } : {}),
       ...(credentials?.password ? { authorizationPassword: credentials.password } : {}),
       processExitCodes: () => supervisor.processExitCodes(),
-      restartCore: async () => {
-        await supervisor.stop(coreProcess.name);
-        supervisor.start(coreProcess);
-        await coreReady();
+      restartCore: (whileStopped) => restartCoreAtStoppedBoundary({ stop: () => supervisor.stop(coreProcess.name), start: () => { supervisor.start(coreProcess); }, ready: coreReady, cancelled: () => closing || options.signal?.aborted === true, ...(whileStopped ? { whileStopped } : {}) }),
+      close: async () => {
+        closing = true;
+        await closeTopology(supervisor, workspaceLock)();
       },
-      close: closeTopology(supervisor, workspaceLock),
     };
   } catch (error) {
     // Preserve the startup failure: cleanup is best-effort here and must not

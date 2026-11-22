@@ -19,6 +19,16 @@ test("every other run's environment is handed on as it came", () => {
   assert.equal(providerFreeWhenScripted(["run", "company-website", "--scripted-model"], env), env);
 });
 
+test("recorded and preflight runners cannot inherit provider credentials", () => {
+  for (const args of [["recorded-replay", "--input", "recording.json"], ["recorded-capture", "company-website"], ["recorded-read", "everything-store"], ["offline-preflight", "company-website"], ["attempt", "company-website", "--recorded-model", "recording.json"]]) {
+    const passed = providerFreeWhenScripted(args, { [key]: standIn, PATH: "/bin" });
+    assert.equal(passed[key], undefined);
+    assert.equal(passed.PATH, "/bin");
+    assert.equal(passed.FLUXIQ_PROVIDER_KEY_FILES, "none");
+    assert.equal(passed.FLUXIQ_TEST_ENV_FILES, "none");
+  }
+});
+
 test("a managed-host proof is credential-free even before its flags are parsed", () => {
   for (const args of [["fluxnode-host"], ["fluxnode-host", "--scripted-model", "--lifecycle-only"]]) {
     const passed = providerFreeWhenScripted(args, { [key]: standIn, PATH: "/bin" });

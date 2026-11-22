@@ -8,6 +8,7 @@ import { EVERYTHING_STORE_DOUBLE_ADD_SCRIPT } from "./everything-store-batteries
 import { professionalNetworkAcceptMessagedScript } from "./professional-network-accept-messaged-invitations.js";
 import { localClassifiedsSaveDiningTablesScript } from "./local-classifieds-save-dining-tables.js";
 import { BIGBOX_RETAIL_RATED_DELIVERY_TOWELS_SCRIPT } from "./bigbox-retail-rated-delivery-towels.js";
+import { socialNetworkDeleteStrangerRequestsScript } from "./social-network-feed-delete-stranger-requests.js";
 
 export { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
 
@@ -23,6 +24,7 @@ const SCRIPTS: Readonly<Record<string, (form?: string) => ScriptedModelScript>> 
   "everything-store-batteries-and-descaler": () => EVERYTHING_STORE_DOUBLE_ADD_SCRIPT,
   "professional-network-accept-messaged-invitations": professionalNetworkAcceptMessagedScript,
   "local-classifieds-save-dining-tables": localClassifiedsSaveDiningTablesScript,
+  "social-network-feed-delete-stranger-requests": socialNetworkDeleteStrangerRequestsScript,
 });
 
 /** The built-in script for a task, or a refusal naming the tasks that have one. A form it does not have is refused by the script. */

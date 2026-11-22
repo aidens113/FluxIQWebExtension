@@ -34,12 +34,19 @@ export function routeModelCall(url: URL, init: RequestInit | undefined): ModelCa
  * its check lets past.
  */
 export function routedFetch(real: typeof fetch, origin: string): typeof fetch {
+  const target = new URL(origin);
+  if (target.protocol !== "http:" || !LOOPBACK.has(target.hostname) || target.username || target.password || target.pathname !== "/" || target.search || target.hash) throw new TypeError("A provider-free model endpoint must be a loopback HTTP origin");
   return async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
-    const route = routeModelCall(url, init ?? (input instanceof Request ? { method: input.method, headers: input.headers } : undefined));
+    const route = routeModelCall(url, input instanceof Request ? { ...init, method: init?.method ?? input.method, headers: init?.headers ?? input.headers } : init);
     if (route === "as_is") return real(input, init);
     if (route === "refused") throw new TypeError(`A scripted-model run refuses a call leaving this machine, to ${url.hostname}`);
-    const reply = await real(`${origin}/v1/messages`, init);
+    let forwarded = init;
+    if (input instanceof Request) {
+      const request = new Request(input, init);
+      forwarded = { method: request.method, headers: request.headers, body: await request.arrayBuffer(), signal: request.signal };
+    }
+    const reply = await real(`${target.origin}/v1/messages`, { ...forwarded, redirect: "error" });
     return new Response(reply.body, { status: reply.status, statusText: reply.statusText, headers: reply.headers });
   };
 }

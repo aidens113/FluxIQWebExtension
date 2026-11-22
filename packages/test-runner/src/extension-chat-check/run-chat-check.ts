@@ -12,12 +12,13 @@ import { evidenceWriter } from "./evidence-writer.js";
 import { openChromeChatSession, type WorkerRequest } from "./open-chrome-session.js";
 import { openFirefoxChatSession } from "./open-firefox-session.js";
 import { proveAskAnswered, proveChatBuild, proveChatRelay, proveApprovedClientAccess, type AskAnswerObservation, type ChatBuildObservation, type ApprovedClientAccessObservation, type ChatRelayObservation } from "./prove/index.js";
-import { scriptedModelChildEnvironment, scriptedModelKey, startScriptedModelServer, type ScriptedModelServer } from "../attempt-lane/scripted-model/index.js";
+import { providerFreeEnvironment, scriptedModelChildEnvironment, scriptedModelKey, startScriptedModelServer, type ScriptedModelServer } from "../attempt-lane/scripted-model/index.js";
 import { approvedClientModelScript } from "./model-fixture/index.js";
 import { LAB_PROJECT_DOMAIN_ID } from "../flow-lane/index.js";
 import { threadReader } from "./thread-reader.js";
 import type { Page } from "@playwright/test";
 import type { ChatBrowser, ChatBrowserSession, ChatCheckContext } from "./types.js";
+import type { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 
 export type ChatCheckOptions = {
   repositoryRoot: string;
@@ -34,6 +35,11 @@ export type ChatCheckOptions = {
   modelKey?: boolean;
   evidenceDirectory: string;
   log?: (line: string) => void;
+  /** Owned provider-free capture only; never supplied to an existing/user host. */
+  hostModulePath?: string;
+  prepare?: (input: { topology: RunningTopology; control: ExistingFluxIQControlClient; projectId: string; authorizationPin: string }) => Promise<void>;
+  /** Additional read-only protocol proof on this isolated paired context; owns its precise receipts. */
+  proof?: (input: { context: ChatCheckContext; control: ExistingFluxIQControlClient; authorizationPin: string; topology: RunningTopology }) => Promise<void>;
 };
 
 export type ChatCheckResult = {
@@ -100,15 +106,16 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
       seed: scenario.seed,
       target: { mode: "isolated" },
       scenarioEntrypoint: labPaths.scenarioEntrypoint,
-      hostModulePath: labPaths.hostModulePath,
+      hostModulePath: options.hostModulePath ?? labPaths.hostModulePath,
       prepareHost: false,
       bootstrapIdentity: true,
-      ...(modelStub ? { environment: scriptedModelChildEnvironment(process.env, modelStub.origin), modelProvidersEnabled: true, args: ["--llm-provider", "anthropic", "--llm-model", defaultLlmModelForProvider("anthropic")] } : {}),
+      ...(modelStub ? { environment: scriptedModelChildEnvironment(process.env, modelStub.origin), modelProvidersEnabled: true, args: ["--llm-provider", "anthropic", "--llm-model", defaultLlmModelForProvider("anthropic")] } : { environment: providerFreeEnvironment(process.env), modelProvidersEnabled: false }),
     });
     const control = topology.control;
     const projectId = topology.projectId;
     const authorizationPin = topology.authorizationPin;
     if (!control || !projectId || !authorizationPin || !topology.gatewayUrl) throw new Error("The isolated Core started without a signed-in control, a project, a PIN or a gateway");
+    await options.prepare?.({ topology, control, projectId, authorizationPin });
     stage("recording proxy");
     proxy = await startCoreRecordingProxy(topology.fluxiqOrigin);
     if (options.ask) {
@@ -181,6 +188,10 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
       stage("claim relay");
       result.relay = await proveChatRelay(context, { message: "What can you do?", expectedPageUrl: pageUrl });
       await evidence.shot("relay-answered");
+    }
+    if (options.proof) {
+      stage("additional protocol proof");
+      await options.proof({ context, control, authorizationPin, topology });
     }
     if (options.ask && result.flow && !options.modelKey) {
       stage("claim ask");

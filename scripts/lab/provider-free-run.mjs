@@ -22,6 +22,8 @@ import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
  */
 export function providerFreeWhenScripted(args, env) {
   if (args[0] === "recovery-matrix") return { ...withoutProviderSecrets(env), FLUXIQ_PROVIDER_KEY_FILES: "none", FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_TEST_TARGET: "isolated" };
-  if (args[0] !== "fluxnode-host" && (args[0] !== "attempt" || !args.includes("--scripted-model"))) return env;
+  const offline = ["fluxnode-host", "recorded-replay", "recorded-capture", "recorded-read", "offline-preflight"].includes(args[0]);
+  const providerFreeAttempt = args[0] === "attempt" && (args.includes("--scripted-model") || args.includes("--recorded-model"));
+  if (!offline && !providerFreeAttempt) return env;
   return { ...withoutProviderSecrets(env), FLUXIQ_PROVIDER_KEY_FILES: "none", FLUXIQ_TEST_ENV_FILES: "none" };
 }
