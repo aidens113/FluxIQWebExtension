@@ -8,7 +8,7 @@ import test from "node:test";
 import { RunnerFailure } from "../../../failure.js";
 import type { CreatedFlowPermissionRequest } from "../build-proposal.js";
 import { parseLiveInstructionTasks, type LiveInstructionTask } from "../instruction-task.js";
-import { judgeCreatedFlowPermissionStop, readCreatedFlowPermissionAsks, type CreatedFlowPermissionThreadControl } from "../permission-point.js";
+import { judgeCreatedFlowPermissionStop, permissionQuestionOf, readCreatedFlowPermissionAsks, type CreatedFlowPermissionThreadControl } from "../permission-point.js";
 
 /** Each task's declared act, as its catalog entry states it (`apps/scenario-lab/src/scenarios/<scenario>/live-tasks.ts`). */
 const DECLARED: ReadonlyArray<readonly [string, NonNullable<LiveInstructionTask["permissionPoint"]>]> = [
@@ -42,6 +42,18 @@ for (const [taskId, point] of DECLARED) {
     assert.deepEqual(judgeCreatedFlowPermissionStop(task, asked(point.consequence, null)), { verdict: "at_declared_point", consequence: point.consequence, control: "unnamed" });
   });
 }
+
+test("Core's one question when a task starts is the declared stop when it asks for the task's class and nothing beyond it (Core t976)", () => {
+  const task = { permissionPoint: { consequence: "delete", control: "Delete" } } as const;
+  const start = (missing: readonly string[]) => ({ missing, controlName: null, taskStart: true });
+  assert.deepEqual(judgeCreatedFlowPermissionStop(task, start(["delete"])), { verdict: "at_declared_point", consequence: "delete", control: "task" });
+  assert.deepEqual(judgeCreatedFlowPermissionStop(task, start(["delete", "send_or_publish"])), { verdict: "elsewhere", reason: "other_classes" });
+  assert.deepEqual(judgeCreatedFlowPermissionStop(task, start(["move_money"])), { verdict: "elsewhere", reason: "class_not_missing" });
+  assert.deepEqual(judgeCreatedFlowPermissionStop({}, start(["delete"])), { verdict: "elsewhere", reason: "no_point_declared" });
+  // Read off the ask Core wrote: its request's action says which question it is.
+  assert.deepEqual(permissionQuestionOf({ missing: ["delete"], control: { name: null, kind: null }, permissionRequest: { action: { kind: "flow_step", id: "core.task_start", ref: "task.start", verb: "do" } } }), { missing: ["delete"], controlName: null, taskStart: true });
+  assert.deepEqual(permissionQuestionOf({ missing: ["delete"], control: { name: "Delete", kind: "button" }, permissionRequest: { action: { kind: "exploration_step", id: "core.run_node", ref: "call.1", verb: "press" } } }), { missing: ["delete"], controlName: "Delete", taskStart: false });
+});
 
 test("a task that declares no permission point has no stop that passes it", () => {
   assert.deepEqual(judgeCreatedFlowPermissionStop({}, asked("delete", "Delete post")), { verdict: "elsewhere", reason: "no_point_declared" });

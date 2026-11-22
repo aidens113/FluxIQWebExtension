@@ -14,7 +14,7 @@ export const PERMISSION_STOP_INVARIANT = "stopped-for-permission";
  * `evaluation.json` says plainly what happened (`honestRunVerdict`).
  */
 export function permissionStopInvariant(stop: FlowLanePermissionStop, evidenceSequences: readonly number[] = []): InvariantResult {
-  const at = stop.control === "matched" ? "the task's declared control" : "a control the build did not name";
+  const at = stop.control === "matched" ? "the task's declared control" : stop.control === "task" ? "the start of the task" : "a control the build did not name";
   return {
     id: PERMISSION_STOP_INVARIANT,
     passed: false,

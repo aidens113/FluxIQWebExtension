@@ -102,14 +102,14 @@ test("a failed chat answer stays pending and exposes its original failure to the
   assert.equal(store.done.filter((step) => step === "press Continue shopping").length, 1, "the website check is never completed again after its answer failed");
 });
 
-type PermissionAsk = { askId: string; missing: string[]; control: string | null; subject?: { kind: string; id: string } };
+type PermissionAsk = { askId: string; missing: string[]; control: string | null; subject?: { kind: string; id: string }; taskStart?: true };
 
 /** Core with permission asks waiting, each pending until answered, and nothing else. */
 function permissionCore(raised: PermissionAsk[]): { control: PersonAskControl; answers: Answer[] } {
   const answers: Answer[] = [];
   const pending = (subjectKind: string) => raised
     .filter(({ askId, subject }) => (subject?.kind ?? "flow") === subjectKind && !answers.some((answer) => answer.askId === askId))
-    .map(({ askId, missing, control }, index) => ({ turnId: `t-${askId}`, ask: { askId, kind: "permission", status: "pending", missing, control: { name: control, kind: "button" }, createdAt: Date.now() - 1_000 + index } }));
+    .map(({ askId, missing, control, taskStart }, index) => ({ turnId: `t-${askId}`, ask: { askId, kind: "permission", status: "pending", missing, control: taskStart ? { name: null, kind: null } : { name: control, kind: "button" }, ...(taskStart ? { permissionRequest: { action: { kind: "flow_step", id: "core.task_start", ref: "task.start", verb: "do" }, control: { name: null, kind: null }, missing } } : {}), createdAt: Date.now() - 1_000 + index } }));
   return {
     answers,
     control: {
@@ -173,6 +173,20 @@ test("given the task's point, the person allows the act there and refuses it any
   assert.deepEqual([byAsk["request-unnamed"]?.verdict, byAsk["request-unnamed"]?.answer, byAsk["request-unnamed"]?.note], ["at_declared_point", "deny", "Core named no control, so the person cannot tell it is the task's act and refuses it"]);
   assert.ok(snapshot.permissionAnswers.every(({ secondsWaited }) => secondsWaited >= 0.9), "waited from the ask being raised");
   assert.deepEqual(published, snapshot.permissionAnswers);
+});
+
+test("Core's one question when a task starts is allowed for the task's own class alone, though it names no control (Core t976)", async () => {
+  const { control, answers } = permissionCore([
+    { askId: "start-order", missing: ["move_money"], control: null, taskStart: true },
+    { askId: "start-wider", missing: ["move_money", "delete"], control: null, taskStart: true, subject: { kind: "run", id: "run-1" } },
+  ]);
+  const person = startPersonSimulation({ control, scope: { projectId: "p", domainId: "web-automation" }, scenarioId: "bigbox-retail", module: null, expected: null, tabs: () => [], readState: async () => ({}), permissions: { point: PLACE_ORDER }, pollMs: 5 });
+  await until(() => answers.length >= 2);
+  const snapshot = await person.stop();
+  assert.deepEqual(answers.map(({ askId, kind }) => [askId, kind]).sort(), [["start-order", "grant"], ["start-wider", "deny"]]);
+  const byAsk = Object.fromEntries(snapshot.permissionAnswers.map((entry) => [entry.askId, entry]));
+  assert.deepEqual([byAsk["start-order"]?.verdict, byAsk["start-order"]?.note], ["at_declared_point", null]);
+  assert.deepEqual([byAsk["start-wider"]?.verdict, byAsk["start-wider"]?.reason], ["elsewhere", "other_classes"]);
 });
 
 test("with no point declared every permission is refused, and a task that says to ask first leaves the question for Core", async () => {
