@@ -101,7 +101,7 @@ import {
 } from "./replay-answer";
 import type { WebNodeRun } from "./context";
 import { webMovesThePage } from "./start-location";
-import { webListReadFlowRefused } from "./list-read";
+import { webListReadFlowRefused, webListReadRecordSchema } from "./list-read";
 import { webNodeReplayAsksToReach, webNodeReplayReach } from "./reach-page";
 import { verifyWebOutputNode } from "./verify";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeLookUntilPresent, webNodeReplayedReads, webNodeReplayRowReacquire } from "./retries";
@@ -484,7 +484,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // A list read's rows and command, so a later pass whose row went stale can read it again (`./retries/replayed-reads.ts`, t786).
   const rows = node.actionType === EXTRACT_LIST_ACTION && Array.isArray(outputs?.records) ? outputs.records.filter((row): row is JsonObject => isJsonRecord(row)) : undefined;
   if (rows !== undefined) webNodeReplayedReads(run).remember({ command: { actionType: node.actionType, parameters: ran }, parameters: resolvedParameters, rows });
-  return withNodeOutputs(replayed, outputs);
+  return webListReadRecordSchema(node.definitionId, resolvedParameters, withNodeOutputs(replayed, outputs));
 }
 
 /**

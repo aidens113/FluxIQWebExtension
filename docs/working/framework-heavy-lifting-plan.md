@@ -1,15 +1,17 @@
 # Framework Heavy-Lifting Plan
 
-Status: Active
-Status detail: t841 integrated 2026-11-03: filtered-out rows carry measured evidence; a fresh judge on it is proven by the next live round.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-28
-Last updated: 2026-10-31
+Last updated: 2026-11-22
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
 Scope: Where FluxIQ Core and the web domain can compute or enforce what the build model now has to get right: membership/bounds, judging, undo/reset bookkeeping, handler conditions, toggle state, stable targets, dedupe, paging, and per-call workload.
 Paired document: ../!FluxIQ/docs/working/framework-heavy-lifting-plan.md
 Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), debug notes in `language-driven-flow-loop-plan/debugs/`
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: t841 integrated 2026-11-03: filtered-out rows carry measured evidence; a fresh judge on it is proven by the next live round.
 
 **Integrated t840 native-paging-proof, 2026-10-31:** Published dev/origin d4dfcff5, Core16b5043c/SDK0.25.5 unchanged. Private status-UI presentation no longer falsely vetoes loader no-effect proof; real page changes remain protected. Installed saved Flow replay passed in58.796s, unchanged Flow/graph, exact8records/32fields, explicit0provider calls/interventions/harness. Root123owning tests/types/all3builds/audit pass, baseline583unchanged. Fresh supervised Claude run-mvx83b7v-5eda5d6c ended FAILED: saved Flow execution succeeded, real Next NO_EFFECT automatically recovered, oracle passed, but Core resultVerification/reportedVerdict stayed unverified despite positive judge responses. No required zero-call replay ran.20calls/USD1.0382852,330.795s evaluation; all Anthropic claude-sonnet-5-5, no balance error. This is a final-verification defect under investigation, not recurring target acquisition. Completed total124calls/USD6.7542538 across7invocations (one startup0calls). No paid run active. Both October31 full sweeps consumed; main promotion held. Reports: native-paging-proof/lead-acceptance.md; new debug run-mvx83b7v-5eda5d6c.md. Assigned t841 paired heavy worker to contracts processing producer and private screened summary/request-row consumer, preserving existing request-quote/verdict rules. Owning synthetic production-chain tests and offline actual-response probe precede SDK/types/build/audit/browser acceptance.
 

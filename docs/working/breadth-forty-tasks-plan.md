@@ -1,9 +1,9 @@
 # Forty-Task Breadth Round And Install Proof
 
-Status: Active
-Status detail: Latest accepted evidence is 15 of 40 tasks (2026-10-29). Framework fixes have since merged; Claude reruns require the user's go. Newest-likes and the everything-store gate still need qualification; adaptation has one passing round, not final acceptance.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-17
-Last updated: 2026-10-31
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: Forty new tasks across ten realistic sites, all provider-free audited, selective full live acceptance per site and repaired failure, plus installed-extension creation and replay proof.
 Paired document: `breadth-forty-tasks-plan.md` in FluxIQ Core
@@ -12,6 +12,8 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Latest accepted evidence is 15 of 40 tasks (2026-10-29). Framework fixes have since merged; Claude reruns require the user's go. Newest-likes and the everything-store gate still need qualification; adaptation has one passing round, not final acceptance.
 
 **Latest (2026-10-29).** recent-group-posts accepted (`run-mvtdmo5p-4dca4787`: exact oracle, zero-call replay, UI
 reviewed, and a general Flow: group present, no Join button, posted on or after the date): 15 of 40 accepted. The

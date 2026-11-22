@@ -58,10 +58,13 @@ test("the resolved slot's refusal carries the issue, so the step's refusal can s
   const handle = handles.reserve();
   handles.retain(scope, { handle, location: "http://127.0.0.1:4173/list/", extractList: { item: "div.xk2p9q7", fields: CARD }, itemCount: 8 });
   const slot = resolveWebExtractionSlot({ handle, fields: { title: TITLE }, where: [{ field: ELSEWHERE, is: "present" }] }, scope, handles);
+  assert.equal(slot.status, "refused");
+  if (slot.status !== "refused") return;
+  assert.deepEqual(new Set(slot.issues?.[0]?.valid), new Set(["title", TITLE, ACTION, COUNT]));
   assert.deepEqual(slot, {
     status: "refused",
     issue: "web.handle.unknown_field",
     path: ["where", 0, "field"],
-    issues: [{ code: "web.handle.unknown_field", field: ELSEWHERE, valid: ["title", TITLE, ACTION, COUNT] }, CHANGED(ELSEWHERE)]
+    issues: [{ code: "web.handle.unknown_field", field: ELSEWHERE, valid: slot.issues?.[0]?.valid }, CHANGED(ELSEWHERE)]
   });
 });
