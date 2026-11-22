@@ -31,6 +31,7 @@
 // attempt to repair them, on its purse. Nothing reads one as a failed task.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { parseAutomationStudioRecordSchema } from "fluxiq/components/automation";
 import type { WebLlmExtractionBinding, WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
@@ -50,12 +51,15 @@ export function webPlanSavedExtractionBinding(value: Record<string, unknown>, ha
   if (!isJsonRecord(list) || typeof list.item !== "string" || !isJsonRecord(list.fields)) return undefined;
   if (saved.frameId !== undefined && typeof saved.frameId !== "number") return undefined;
   if (saved.frameUrlPath !== undefined && typeof saved.frameUrlPath !== "string") return undefined;
+  const schema = saved.recordSchema === undefined ? undefined : parseAutomationStudioRecordSchema(saved.recordSchema);
+  if (schema && !schema.ok) return undefined;
   return present<WebLlmExtractionBinding>({
     handle,
     location: saved.location,
     frameId: saved.frameId,
     frameUrlPath: saved.frameUrlPath,
     extractList: structuredClone(list) as unknown as WebLlmExtractionBinding["extractList"],
+    recordSchema: schema?.ok ? schema.schema : undefined,
     itemCount: saved.itemCount,
     oneRecord: saved.oneRecord === true ? true : undefined
   });
@@ -75,7 +79,7 @@ export function webPlanWithExtractionBinding(parameters: JsonObject, scope: WebL
   const found = extractions.resolve(scope, handle);
   if (!found.ok) return parameters;
   const { binding } = found;
-  const held = present<Omit<WebLlmExtractionBinding, "handle">>({ location: binding.location, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, extractList: binding.extractList, itemCount: binding.itemCount, oneRecord: binding.oneRecord });
+  const held = present<Omit<WebLlmExtractionBinding, "handle">>({ location: binding.location, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, extractList: binding.extractList, recordSchema: binding.recordSchema, itemCount: binding.itemCount, oneRecord: binding.oneRecord });
   const saved = structuredClone(parameters);
   const savedList = saved[LIST_PARAMETER] as JsonObject;
   if (record !== undefined) {

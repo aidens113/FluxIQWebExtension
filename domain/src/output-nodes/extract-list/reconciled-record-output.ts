@@ -87,7 +87,19 @@ export function webAutomationReconciledRecordOutput(authored: JsonValue, request
     fieldLabels: authoredFieldLabels(authoredSchema)
   }).schema;
   const kept = columns === undefined ? derived.fields : derived.fields.filter((field) => columns.has(field.id) || field.handling === "exclude");
-  const stored = { ...derived, fields: authoredFieldOrder(authoredSchema, kept) };
+  const metadata = new Map((Array.isArray(authoredSchema?.fields) ? authoredSchema.fields : []).flatMap((field) => isJsonObject(field) && typeof field.id === "string" ? [[field.id, field] as const] : []));
+  const stored = {
+    ...derived,
+    fields: authoredFieldOrder(authoredSchema, kept).map((field) => {
+      const source = metadata.get(field.id);
+      return {
+        ...field,
+        ...(source?.semanticType === undefined ? {} : { semanticType: source.semanticType, valueType: source.valueType ?? field.valueType }),
+        ...(source?.mark === undefined ? {} : { mark: source.mark })
+      };
+    }),
+    ...(authoredSchema?.primaryKey === undefined ? {} : { primaryKey: authoredSchema.primaryKey })
+  };
   const process = shown === undefined ? {} : { process: { ...(isJsonObject(authored.process) ? authored.process : {}), columns: [...shown] } };
   return { ...authored, schema: stored as unknown as JsonValue, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH, ...process };
 }
