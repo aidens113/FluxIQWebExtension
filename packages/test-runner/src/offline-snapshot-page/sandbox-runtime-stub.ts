@@ -20,8 +20,14 @@ export function installSandboxRuntimeStub(globalName: string, scope: object): vo
   const sender = { id: "fluxiq-offline-snapshot-page" };
   const runtime = {
     id: sender.id,
-    sendMessage(message: unknown): Promise<undefined> {
+    sendMessage(message: unknown): Promise<unknown> {
       sent.push(copy(message));
+      // This isolated snapshot runtime owns no Core panel or gateway. Answer
+      // the background's real address protocol so ownDocument can decide;
+      // other messages retain their absent-background response.
+      if (typeof message === "object" && message !== null && !Array.isArray(message) && (message as { type?: unknown }).type === "fluxiq.ownPageAddresses") {
+        return Promise.resolve({ ok: true, addresses: [] });
+      }
       return Promise.resolve(undefined);
     },
     onMessage: {
