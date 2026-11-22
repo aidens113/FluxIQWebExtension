@@ -229,6 +229,7 @@ export function createWebAutomationLlmEvidenceRuntime(
     // is held to the same list before it is ever returned.
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,
     projectJudgeEvidence: projectWebJudgeEvidence,
+    judgeEvidenceVersion: 1,
     // The page and a read's rows, each replaced only by a newer one of its kind (`./observed-state/`).
     observedStateKeys: WEB_LLM_VIEW_KEYS,
     // A live read's kept rows, so a repair's rerun of a blamed read is compared

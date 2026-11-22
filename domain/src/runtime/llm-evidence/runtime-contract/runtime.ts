@@ -38,6 +38,7 @@ export type WebAutomationLlmEvidenceRuntime = {
   deniedEvidenceKeys: readonly string[];
   /** Pure semantic facts for judging; raw captures remain private, row values stay in their existing stores. */
   projectJudgeEvidence?: AutomationStudioJudgeEvidenceProjector;
+  judgeEvidenceVersion?: 1;
   observedStateKeys: readonly string[];
   /**
    * Where a live list read's answer holds its kept rows, as Core's `holder.member`

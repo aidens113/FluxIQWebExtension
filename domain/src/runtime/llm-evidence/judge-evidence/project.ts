@@ -26,13 +26,24 @@ export const projectWebJudgeEvidence: AutomationStudioJudgeEvidenceProjector = (
     const location = screenedEvidenceUrl(where);
     return { role: "observation", evidence: location === undefined ? { captureOmitted: true } : { location } };
   }
+  if (isJsonRecord(evidence.legacyLook)) {
+    const look = evidence.legacyLook;
+    let found: unknown = look.found;
+    if (typeof found === "string") {
+      try { found = JSON.parse(found) as unknown; } catch { found = undefined; }
+    }
+    const state = isJsonRecord(found) ? webJudgeStateValue(Object.hasOwn(found, "judgeState") ? found.judgeState : found) : undefined;
+    if (state === undefined) return { role: "observation", missing: ["web_judge.look_state_missing"] };
+    const location = typeof look.where === "string" ? screenedEvidenceUrl(look.where) : undefined;
+    return { role: "observation", evidence: { state, ...(location === undefined ? {} : { location }) } };
+  }
   const finding: JsonObject = {};
   const missing: string[] = [];
   const actionRead = webJudgeActionFacts(evidence);
   const action = actionRead.facts;
   if (actionRead.invalid) missing.push("web_judge.action_invalid");
   if (Object.keys(action).length) finding.action = action;
-  const source = isJsonRecord(envelope.source) ? pick(envelope.source, ["callId", "nodeId", "attemptId", "step", "pass"]) : undefined;
+  const source = isJsonRecord(envelope.source) ? pick(envelope.source, ["callId", "nodeId", "attemptId", "step", "pass", "entry"]) : undefined;
   if (source !== undefined && Object.keys(source).length) finding.source = source;
   const rawRead = evidence.read;
   const read = isJsonRecord(rawRead) ? rawRead : evidence;
@@ -72,8 +83,10 @@ export const projectWebJudgeEvidence: AutomationStudioJudgeEvidenceProjector = (
   // unlike a full page view or an arbitrary raw DOM payload.
   if (typeof evidence.found === "string") finding.found = evidence.found;
   if (isJsonRecord(evidence.element)) finding.element = pick(evidence.element, ["tag", "role", "name", "label", "text", "value", "checked", "selectedValue", "marked", "group", "within"]);
-  const hasState = Object.hasOwn(evidence, "judgeState");
-  const state = hasState ? webJudgeStateValue(evidence.judgeState) : undefined;
+  const after = isJsonRecord(envelope.after) ? envelope.after : undefined;
+  const stateHolder = Object.hasOwn(evidence, "judgeState") ? evidence : after;
+  const hasState = stateHolder !== undefined && Object.hasOwn(stateHolder, "judgeState");
+  const state = hasState ? webJudgeStateValue(stateHolder.judgeState) : undefined;
   if (hasState) {
     const parsed = state;
     if (parsed === undefined) missing.push("web_judge.state_invalid");

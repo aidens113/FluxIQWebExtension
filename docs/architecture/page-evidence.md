@@ -79,6 +79,25 @@ additional `shown` field.
 
 ## Passive result checks
 
+The web runtime opts into Core's `judgeEvidenceVersion: 1` semantic judge
+format. Ordinary publication computes one `judgeState` version-1 value from
+the already sanitized capture; passive result observation and declared
+end/witness state retain that same value without another capture. It keeps
+actual named control values, selections, marks and explicit alert/status/log
+or output notices. False and empty values differ from unavailable state.
+Unrelated hidden text and unnamed containers do not become notices or control
+names. Selectors, geometry, arbitrary attributes and rendered full-page text
+are absent from this semantic value; current sensitive-value filtering remains.
+
+The pure web projector recognizes actual read/action results, validates any
+supplied record schema, and supplies source/read metadata beside Core's
+separate execution/failure/effect facts. Allowed rows and complete deterministic
+accounts remain in Core's existing retained row/page evidence. A data role does
+not erase a mixed step's lasting effects. Unknown or invalid semantic state
+remains an explicit repairable gap; intentionally omitting a raw capture from
+complete data is not a gap. An unmatched look with valid versioned semantic
+state retains it, while an opaque legacy look cannot fabricate a state reading.
+
 Candidate-trial and saved-run checks use the web domain's optional Core
 `observeResult` binding. It requests a fresh `capture_snapshot` with
 `includeHidden: true`, runs the existing snapshot sanitizer and publishes the

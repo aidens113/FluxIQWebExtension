@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioActionPermissionDenied, automationStudioResultRunTrail, automationStudioResultSemanticTrail, automationStudioResultTrailStepOfCall } from "fluxiq/automation";
+import { automationStudioActionPermissionDenied, automationStudioFlowLessJudgedSummary, automationStudioJudgeEvidenceCapability, automationStudioLlmEvidenceRuntimeBindingChecked, automationStudioResultRunTrail, automationStudioResultSemanticTrail, automationStudioResultTrailStepOfCall } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime } from "../../tools";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "../../denied-keys";
@@ -23,10 +23,16 @@ test("the actual web runtime binding explicitly supplies its projector and curre
   const binding = runtime();
   assert.equal(binding.deniedEvidenceKeys, WEB_LLM_DENIED_EVIDENCE_KEYS);
   assert.equal(binding.projectJudgeEvidence, projectWebJudgeEvidence);
+  assert.equal(binding.judgeEvidenceVersion, 1);
+  const checked = automationStudioLlmEvidenceRuntimeBindingChecked(binding);
+  assert.equal(checked.judgeEvidenceVersion, 1);
+  assert.deepEqual(checked.deniedEvidenceKeys, WEB_LLM_DENIED_EVIDENCE_KEYS);
+  assert.deepEqual(checked.projectJudgeEvidence!({ source: "state", evidence: { evidence: { judgeState: { version: 1, location: "https://example.test", controls: [], notices: [], marks: [] } } } }).missing, undefined);
   const answer = { kind: "llm_evidence_tool_execution", effectApplied: false, resultCode: "web.inspect.succeeded", recordSchema: schema, evidence: { ok: true, status: "succeeded", page: "RAW_PAGE_SENTINEL", read: { extracted: rows } } };
   const before = structuredClone(answer);
-  const step = automationStudioResultTrailStepOfCall({ callId: "read.1", toolId: "core.run_node", value: { node: "web.output.dom-extract_list", parameters: {} } }, answer, undefined, { projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: binding.deniedEvidenceKeys });
-  const compact = automationStudioResultSemanticTrail(automationStudioResultRunTrail([step], binding.deniedEvidenceKeys).trail, { projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: binding.deniedEvidenceKeys });
+  const options = { ...automationStudioJudgeEvidenceCapability(checked), projectJudgeEvidence: checked.projectJudgeEvidence, deniedEvidenceKeys: checked.deniedEvidenceKeys };
+  const step = automationStudioResultTrailStepOfCall({ callId: "read.1", toolId: "core.run_node", value: { node: "web.output.dom-extract_list", parameters: {} } }, answer, undefined, options);
+  const compact = automationStudioResultSemanticTrail(automationStudioResultRunTrail([step], checked.deniedEvidenceKeys).trail, options);
   const found = compact.trail!.entries[0]!.found as JsonObject;
   const facts = found.evidence as JsonObject;
   assert.deepEqual((facts.read as JsonObject).fields, ["id", "price", "promoted"]);
@@ -40,12 +46,33 @@ test("the actual web runtime binding explicitly supplies its projector and curre
 
 test("a known empty privacy declaration is explicit and an unknown resumed policy fails closed", () => {
   const binding = { ...runtime(), deniedEvidenceKeys: [] as readonly string[] };
-  const step = automationStudioResultTrailStepOfCall({ callId: "action.1", toolId: "core.run_node", value: { node: "web.output.dom-click" } }, { kind: "llm_evidence_tool_execution", effectApplied: true, resultCode: "web.action.succeeded", evidence: { status: "succeeded", changed: ["The selected state changed"], page: "RAW_PAGE_SENTINEL" } }, undefined, { projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: binding.deniedEvidenceKeys });
+  const step = automationStudioResultTrailStepOfCall({ callId: "action.1", toolId: "core.run_node", value: { node: "web.output.dom-click" } }, { kind: "llm_evidence_tool_execution", effectApplied: true, resultCode: "web.action.succeeded", evidence: { status: "succeeded", changed: ["The selected state changed"], page: "RAW_PAGE_SENTINEL" } }, undefined, { ...automationStudioJudgeEvidenceCapability(binding), projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: binding.deniedEvidenceKeys });
   const trail = automationStudioResultRunTrail([step], binding.deniedEvidenceKeys).trail;
   assert.deepEqual(automationStudioResultSemanticTrail(trail, binding).projection.missing, []);
   const unknown = automationStudioResultSemanticTrail(trail, { projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: undefined });
   assert.deepEqual(unknown.projection.missing, [{ source: "trail", codes: ["judge_evidence.denied_keys_missing"] }]);
   assert.doesNotMatch(JSON.stringify(unknown), /RAW_PAGE_SENTINEL|selected state changed/u);
+});
+
+test("the real web projector retains an unmatched valid semantic look and only omits a uniquely represented Core source", () => {
+  const binding = automationStudioLlmEvidenceRuntimeBindingChecked(runtime());
+  const options = { ...automationStudioJudgeEvidenceCapability(binding), projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: binding.deniedEvidenceKeys };
+  const state = { version: 1, location: "https://example.test/settings", controls: [{ tag: "input", name: "Updates", checked: false }, { tag: "input", name: "Comment", value: "" }], notices: [{ tag: "p", role: "status", text: "Preference removed" }], marks: [] };
+  const look = { where: state.location, found: JSON.stringify({ judgeState: state }), callId: "core.look.actual" };
+  const step = automationStudioResultTrailStepOfCall({ callId: look.callId, toolId: "core.run_node", value: { node: "web.output.dom-find" } }, { kind: "llm_evidence_tool_execution", effectApplied: false, evidence: { judgeState: state, page: "RAW_PAGE_SENTINEL" } }, undefined, options);
+  const source = { instructions: "Read the preference state", acts: [], rows: { totalRows: 1, truncated: false, columns: [{ id: "name", label: "Name" }], rows: [{ name: "Original row" }] }, looked: [look] };
+  const unmatched = automationStudioFlowLessJudgedSummary({ ...source, trail: [] }, binding.deniedEvidenceKeys, binding).sent as unknown as JsonObject;
+  assert.deepEqual(((unmatched.looked as JsonObject[])[0]!.evidence as JsonObject).state, state);
+  assert.deepEqual((unmatched.evidenceProjection as JsonObject).missing, []);
+  const unique = automationStudioFlowLessJudgedSummary({ ...source, trail: [step] }, binding.deniedEvidenceKeys, binding).sent as unknown as JsonObject;
+  assert.equal(unique.looked, undefined);
+  assert.deepEqual((unique.evidenceProjection as JsonObject).missing, []);
+  const duplicate = automationStudioFlowLessJudgedSummary({ ...source, trail: [step, { ...step }] }, binding.deniedEvidenceKeys, binding).sent as unknown as JsonObject;
+  assert.equal((duplicate.looked as JsonObject[]).length, 1);
+  assert.deepEqual(((duplicate.looked as JsonObject[])[0]!.evidence as JsonObject).state, state);
+  const opaque = automationStudioFlowLessJudgedSummary({ ...source, trail: [], looked: [{ ...look, found: "UNCLASSIFIED_RAW_CAPTURE_SENTINEL" }] }, binding.deniedEvidenceKeys, binding).sent;
+  assert.deepEqual(opaque.evidenceProjection?.missing, [{ source: "looked.1", codes: ["web_judge.look_state_missing"] }]);
+  assert.doesNotMatch(JSON.stringify([unmatched, unique, duplicate, opaque]), /RAW_PAGE_SENTINEL|UNCLASSIFIED_RAW_CAPTURE_SENTINEL/u);
 });
 
 test("explicitly rejected schema/state metadata cannot fall back to an apparently complete capture", () => {
@@ -83,11 +110,28 @@ test("false, empty and unavailable state remain distinct, and state facts carry 
   ] };
   const facts = webJudgeStateFacts(evidence);
   assert.deepEqual(facts.controls, [{ tag: "input", name: "Updates", checked: false }, { tag: "input", name: "Comment", value: "" }, { tag: "select", name: "Region", selectedValue: "" }, { tag: "button", name: "Saved", marked: true, state: { "aria-pressed": "false" } }]);
-  assert.deepEqual(facts.notices, [{ tag: "p", role: "status", name: "Setting removed", text: "Setting removed" }]);
+  assert.deepEqual(facts.notices, [{ tag: "p", role: "status", text: "Setting removed" }]);
   assert.doesNotMatch(JSON.stringify(facts), /RAW_PAGE_SENTINEL|RAW_ATTRIBUTE_SENTINEL|"target"|"box"|Not captured/u);
   const projected = projectWebJudgeEvidence({ source: "state", phase: "after", evidence: { evidence: { judgeState: facts, page: "RAW_PAGE_SENTINEL" } } });
   assert.deepEqual(projected.missing, undefined);
   assert.deepEqual((projected.evidence as JsonObject).state, facts);
+});
+
+test("unrelated hidden leaves and unnamed container text are excluded while actual hidden alerts and named empty controls survive", () => {
+  const evidence: WebLlmPageEvidence = { schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/settings", truncated: false, elements: [
+    { target: "t1", tag: "p", hidden: true, text: "UNRELATED_HIDDEN_PAGE_SENTINEL", readable: "UNRELATED_HIDDEN_PAGE_SENTINEL", ownText: "UNRELATED_HIDDEN_PAGE_SENTINEL" },
+    { target: "t2", tag: "div", marked: true, readable: "UNNAMED_CONTAINER_SENTINEL", text: "UNNAMED_CONTAINER_SENTINEL" },
+    { target: "t3", tag: "input", name: "Note", value: "", hidden: true },
+    { target: "t4", tag: "div", role: "alert", hidden: true, text: "The setting was removed" },
+    { target: "t5", tag: "p", role: "status", text: "Bearer abcdefghijklmnopqrstuvwxyz123456" }
+  ] };
+  const original = structuredClone(evidence);
+  const facts = webJudgeStateFacts(evidence);
+  assert.deepEqual(facts.controls, [{ tag: "input", name: "Note", value: "", hidden: true }]);
+  assert.deepEqual((facts.marks as JsonObject[])[0], { tag: "div", marked: true });
+  assert.match(JSON.stringify(facts.notices), /The setting was removed/u);
+  assert.doesNotMatch(JSON.stringify(facts), /UNRELATED_HIDDEN_PAGE_SENTINEL|UNNAMED_CONTAINER_SENTINEL|abcdefghijklmnopqrstuvwxyz123456/u);
+  assert.deepEqual(evidence, original);
 });
 
 test("the actual passive binding contributes semantic state from one capture, without additional reads", async () => {

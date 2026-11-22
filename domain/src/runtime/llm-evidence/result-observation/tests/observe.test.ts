@@ -32,7 +32,7 @@ test("publishes hidden ledger state with visibility preserved and no hidden loca
   assert.deepEqual((commands[0] as { parameters: unknown }).parameters, { includeHidden: true });
   const semantic = view.judgeState as JsonObject;
   assert.equal(semantic.version, 1);
-  assert.match(JSON.stringify(semantic.notices), /Ledger: eight available/u);
+  assert.deepEqual(semantic.notices, [], "hidden plain page text stays in the private page, not in semantic notices");
   assert.doesNotMatch(JSON.stringify(semantic), /"page"|"target"|"selector"|"attributes"|"box"|private-marker|hidden-form-marker/u);
 });
 
