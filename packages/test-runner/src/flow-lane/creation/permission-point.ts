@@ -17,23 +17,41 @@
 // person (`person-simulation/`) answers by this same judgement, and the lane
 // reads back what Core recorded of the answer, on the Flow's own thread, rather
 // than taking the Lab's word for it.
+//
+// **A task's own question (Core t976).** Core now asks once, when a task starts, about the classes
+// the person's instruction needs, naming the task rather than a control (its request's action is
+// `core.task_start`), and never mid-build. A person allows that question exactly when it asks for
+// the task's declared class and nothing beyond it: `control: "task"`. One that also asks for a
+// class the task does not declare is refused (`other_classes`), as an ask about the wrong control
+// always was.
 
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import type { CreatedFlowPermissionRequest } from "./build-proposal.js";
 import type { LiveInstructionTask } from "./instruction-task.js";
 
 export type CreatedFlowPermissionStop =
-  | Readonly<{ verdict: "at_declared_point"; consequence: string; control: "matched" | "unnamed" }>
-  | Readonly<{ verdict: "elsewhere"; reason: "no_point_declared" | "class_not_missing" | "control_differs" }>;
+  | Readonly<{ verdict: "at_declared_point"; consequence: string; control: "matched" | "unnamed" | "task" }>
+  | Readonly<{ verdict: "elsewhere"; reason: "no_point_declared" | "class_not_missing" | "control_differs" | "other_classes" }>;
 
-/** What the judgement reads of a request or an ask: the classes it lacked, and the control Core named. */
-export type CreatedFlowPermissionQuestion = Pick<CreatedFlowPermissionRequest, "missing" | "controlName">;
+/**
+ * What the judgement reads of a request or an ask: the classes it lacked, the control Core named, and whether it is
+ * the task's own question when it starts (header), which names no control.
+ */
+export type CreatedFlowPermissionQuestion = Pick<CreatedFlowPermissionRequest, "missing" | "controlName"> & Readonly<{ taskStart?: boolean }>;
+
+/** The action Core's task-start question names (Core `runtime/action-permission-requests/task-start.ts`). */
+export const CORE_TASK_START_ACTION_ID = "core.task_start";
 
 /** How a permission request stands against the task's declared permission point. */
 export function judgeCreatedFlowPermissionStop(task: Pick<LiveInstructionTask, "permissionPoint">, request: CreatedFlowPermissionQuestion): CreatedFlowPermissionStop {
   const point = task.permissionPoint;
   if (!point) return { verdict: "elsewhere", reason: "no_point_declared" };
   if (!request.missing.includes(point.consequence)) return { verdict: "elsewhere", reason: "class_not_missing" };
+  if (request.taskStart === true) {
+    return request.missing.every((consequence) => consequence === point.consequence)
+      ? { verdict: "at_declared_point", consequence: point.consequence, control: "task" }
+      : { verdict: "elsewhere", reason: "other_classes" };
+  }
   if (request.controlName === null) return { verdict: "at_declared_point", consequence: point.consequence, control: "unnamed" };
   return label(request.controlName) === label(point.control)
     ? { verdict: "at_declared_point", consequence: point.consequence, control: "matched" }
@@ -109,7 +127,8 @@ export function permissionQuestionOf(ask: Readonly<Record<string, unknown>>): Cr
   const request = isRecord(ask.permissionRequest) ? ask.permissionRequest : {};
   const missing = Array.isArray(ask.missing) ? ask.missing : Array.isArray(request.missing) ? request.missing : [];
   const named = isRecord(ask.control) ? ask.control.name : isRecord(request.control) ? request.control.name : null;
-  return { missing: missing.filter((entry): entry is string => typeof entry === "string"), controlName: typeof named === "string" ? named : null };
+  const taskStart = isRecord(request.action) && request.action.id === CORE_TASK_START_ACTION_ID;
+  return { missing: missing.filter((entry): entry is string => typeof entry === "string"), controlName: typeof named === "string" ? named : null, taskStart };
 }
 
 /** A control's label as a person reads it: case, surrounding space and runs of space do not make it another control. */

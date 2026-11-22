@@ -716,7 +716,8 @@ async function assertGrantedAtPermissionPoint(
   // A chat build asks in the chat it was started from, which is read as well as the Flow's own thread.
   const asked = await readCreatedFlowPermissionAsks(input.control, { projectId: input.projectId, domainId: input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, flowId: build.flowId, ...(build.conversationId ? { conversationId: build.conversationId } : {}) }, input.request.task, bounds);
   // A grant on a control Core left unnamed is not the person allowing the task's act: nobody could tell it was that act.
-  if (asked.some(({ answer, stop }) => answer === "grant" && stop.verdict === "at_declared_point" && stop.control === "matched")) return;
+  // The task's own question when it starts (Core t976) is about exactly that act, so a grant there is.
+  if (asked.some(({ answer, stop }) => answer === "grant" && stop.verdict === "at_declared_point" && (stop.control === "matched" || stop.control === "task"))) return;
   throw new RunnerFailure("runtime.behavior", "The task's lasting act needs a person's permission, and FluxIQ built a Flow without a person allowing it at the task's permission point", {
     details: {
       permissionPoint: "not_asked",
