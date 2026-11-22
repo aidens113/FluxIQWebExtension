@@ -19,6 +19,8 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **P0 follow-up:** permission worker found saved-Flow preflight could ask twice and repair lost declined classes. Its owned scope now includes flow-run/permission.ts and the flow-stage entry. Tests use one Vitest worker after concurrent runs reduced free memory below 1 GiB. Documentation checkpoints were pushed to both dev branches; product changes still await verification.
 
+**Prepared, not dispatched:** paired task t982 (retain-extraction-data), created by `pnpm task start retain-extraction-data --worktree --core --skip-workspace-build`; Core libraries restored from cache and downstream full build skipped. Its written P1 brief requires an interface proposal before edits. Runtime provides three worker slots, currently occupied by P0; later lanes start as slots free, with dependent edits held until prerequisite integration.
+
 **What happened.** The 2026-11-19/20 live campaign ran each site's hardest task: 37 counted runs, 0 SUCCESS (all four attempts right, and attempts 2-4 with zero model calls), 17 PARTIAL, 20 FAILURE, about $90. The first attempt was right in 17 runs. 10 failures were our own plumbing bugs, since fixed. 7 of the 11 runs that hit the $5 purse failed on the data: wrong or missing columns, a promoted row kept, a summary panel not shaped, an iframe or account never read. 3 failed on replay and 1 on the judge. Judges were 40-45% of the spend on failing tasks. Every one of those 11 runs had climbed the model ladder. The evidence is under "Evidence" below.
 
 **Decided by the user (2026-11-20). These are standing rules; U1-U6 are also in AGENTS.md:**
