@@ -1,15 +1,19 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Approved by the user 2026-11-20 ("yes for everything"); nothing built yet; the next session starts with the three fixes in flight, then five lanes; the day-4 paid round is approved up to $50 absolute max.
+Status detail: Execution resumed 2026-11-22 with three P0 workers in existing paired task trees; changes await verification; subsequent lanes and paid proof remain pending.
 Created: 2026-11-20
-Last updated: 2026-11-20
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: What changes after the 2026-11-19/20 live campaign: extraction keeps every column, one simple data layer dedupes and cleans from that upstream data, the model collects broadly, the framework does the heavy lifting, one model per task, replays that keep their repairs, a cheaper judge, and no paid run before a provider-free proof.
-Paired document: none yet (most of the code is Core's; a Core-side document is owed before the first Core edit)
+Paired document: ../!FluxIQ/docs/working/data-first-simplification-plan.md
 Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 2026-11-20 entries), [framework-heavy-lifting-plan.md](./framework-heavy-lifting-plan.md) (W7: typed fields, marks, row identity), [first-class-data-extraction-plan.md](./first-class-data-extraction-plan.md), [answer-first-plan.md](./answer-first-plan.md); campaign results `C:/Users/osrs_/FluxStuff/fxwork/t959/!FluxIQWebExtension/docs/working/mvp-launch-plan/reports/live-campaign-2026-11-19/results.md`
 
 ## Current State
+
+**Execution resumed 2026-11-22.** The user requested agents and durable progress records. Lead inspected all three paired task trees: t976 has Core and Lab permission edits; t979 has judge/retry edits and fake-judge migrations; t981 has three amendment files started. None is accepted or integrated. Written briefs are in `data-first-simplification-plan/briefs/t976.md`, `t979.md`, and `t981.md`. Three workers resume these isolated trees; their reports live in each downstream tree under `docs/working/data-first-simplification-plan/reports/`. Lead owns verification and git. P1-P7 remain pending. No paid run launched.
+
+**Intake checks:** main downstream checkout is on dev with pre-existing edits in AGENTS.md, .clinerules/fluxiq.md and an untracked debug note; preserve them. Main Core checkout was clean. About 5.4 GiB physical memory was free; no OneDrive process was listed. Heavy validation uses the existing shared slot gate.
 
 **What happened.** The 2026-11-19/20 live campaign ran each site's hardest task: 37 counted runs, 0 SUCCESS (all four attempts right, and attempts 2-4 with zero model calls), 17 PARTIAL, 20 FAILURE, about $90. The first attempt was right in 17 runs. 10 failures were our own plumbing bugs, since fixed. 7 of the 11 runs that hit the $5 purse failed on the data: wrong or missing columns, a promoted row kept, a summary panel not shaped, an iframe or account never read. 3 failed on replay and 1 on the judge. Judges were 40-45% of the spend on failing tasks. Every one of those 11 runs had climbed the model ladder. The evidence is under "Evidence" below.
 
@@ -54,7 +58,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - The fix (option (c), chosen 2026-11-20): the chat's declaration of what the person asked for also names the risky act classes. The one question is asked at the start, with no extra model call, and the answer holds for the chat.
   - State: built in Core and the Lab; the test migration (about 35 answer-first tests) is part done. Left: the four stale `steps-ran-interruption` tests, the runtime repair and the legacy, candidate and project builds still asking mid-Flow, and the Lab's catalog check. The three Lab tests never ran.
 
-**Nothing is running.** Work starts next session with no further approval needed (U7). The day-4 paid round needs credit on the Lab's Claude key (`CLAUDE_API_KEY` in `.env.local`); the user approved it on any budget (U8).
+**Running:** P0 workers assigned 2026-11-22; completion requires lead verification. Paid acceptance follows provider-free proof and available Claude credit, within the $50 absolute campaign ceiling (U8).
 
 **Goal (user, 2026-11-20):** "we seriously NEED this to be working well by next week", so that the rest of the month goes to deploying and other fixes. This document is the plan of record for that week (S7).
 
@@ -197,6 +201,14 @@ Start: read this document's Current State, check memory and OneDrive, and confir
 - **Day 5:** fix forward from day 4 offline, a second small round on what failed, then the full sweep and `main` (S10).
 
 ## Work Ledger
+
+### 2026-11-22 — P0 workers resumed with written briefs
+- Agent: Senior supervisor.
+- Changed: Current State, paired Core record and briefs for t976, t979 and t981.
+- Why: the user requested agents and durable progress; interrupted changes must be verified before the later lanes.
+- Validation: `git status --short` in all three paired task trees -> interrupted Core changes present in all three, Lab changes in t976; prior reports read. No new product acceptance yet.
+- Outcome: Partial.
+- Follow-up: workers complete scoped fixes; lead verifies and integrates, then establishes the stored-row contract.
 
 ### 2026-11-20 — Plan written from the campaign and the user's decisions
 
