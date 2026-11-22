@@ -109,3 +109,7 @@ Validation: final 72-case focused behavior gate, package typecheck, structure au
 Not verified: parent/dev combination after sync; full suites, live provider/browser behavior, P3 data guidance (intentionally outside scope)
 Report: docs/working/data-first-simplification-plan/reports/t983-fixed-model.md
 Notes: No git mutations, paid actions, cap or baseline relaxation. Preserve permission worker's declaredActs additions at integration. Lead owns commits, sync and independent acceptance verification.
+
+## Lead acceptance, 2026-11-22
+
+Permission source and current parent are merged. Lead independently observed **20 files / 140 tests passed in 152.82 s**, covering original-model persistence/concurrency/corruption, actual service continuation/replay, start-only permission, interpretation and all changed model-routing/loop handlers. Package typecheck passed (90,624 ms); structure audit passed (564 warnings, 909 baselined). Exact commands are in paired Core's working ledger. Version is 0.51.0. Final parent sync was documentation-only; library dependency build and paired integration remain. No live/browser/provider/full-sweep acceptance claimed.
