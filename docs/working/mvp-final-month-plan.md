@@ -1,9 +1,9 @@
 # MVP Final Month Plan
 
-Status: Active
-Status detail: Historical A-D creation qualified; instruction-led foundations and focused reliability fixes integrated; structural acceptance, current adaptation/breadth and release qualification remain open.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-05
-Last updated: 2026-10-31
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -12,6 +12,10 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Historical A-D creation qualified; instruction-led foundations and focused reliability fixes integrated; structural acceptance, current adaptation/breadth and release qualification remain open.
+
+## Previous State Snapshot (historical)
 
 **Status reconciliation, 2026-10-31.** The newer [breadth plan](breadth-forty-tasks-plan.md)
 records **15/40 historically accepted** as of 2026-10-29; the dated 12/40 and

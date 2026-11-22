@@ -1,15 +1,17 @@
 # Adaptation Gate And Breadth Sample Plan
 
-Status: Active
-Status detail: Instruction-led work and prerequisites pushed; crossborder repair/reuse passes with P4 hash proof under review, store candidate acceptance failure being debugged.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-13
-Last updated: 2026-10-13
+Last updated: 2026-11-22
 Owner: Senior supervisor agent (planned by a lane lead)
 Scope: Execution plan for the MVP's next two milestones after lanes A-D qualified: the adaptation gate (create, drift, diagnose, repair, verify, persist, resume, reuse on three realistic sites, twice each, later run zero-call) and a first breadth sample of the 68 realistic tasks on sites not yet proven.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/adaptation-and-breadth-plan.md
 Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [live-testing audit](./live-testing-handoff-audit-2026-10-11.md), [MVP final month](./mvp-final-month-plan.md), [state-aware recovery](./state-aware-recovery-plan.md), [testing facility](../architecture/testing-facility.md), [working index](./README.md)
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Instruction-led work and prerequisites pushed; crossborder repair/reuse passes with P4 hash proof under review, store candidate acceptance failure being debugged.
 
 **Launch-ready (2026-10-27, t758 merged: downstream `8551b3f4`, Core `127f7fa9`; no feature freeze).** Prerequisites
 t513/t514/t516/t517 are on dev; t518 (recorded-Flow only, unmerged) is kept for the recording-plus-instructions work, not

@@ -1,15 +1,17 @@
 # Live Testing Handoff Audit — 2026-10-11
 
-Status: Active
-Status detail: t460 pushed; B/D repair replays passed; t461 observations/order independently checked; headed proof passed; t461 bothdev pushed; round-eight B/C/D .25 zero-call readiness underway on frozen sourcepair. B/C/D qualification open.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-11
-Last updated: 2026-10-12
+Last updated: 2026-11-22
 Owner: Codex senior supervisor
 Scope: Reconcile Claude's live testing, saved run verdicts, lane worktrees and working notes, and provide an executable continuation plan.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
 Related: [MVP plan](./mvp-final-month-plan.md), [recovery plan](./state-aware-recovery-plan.md), [working index](./README.md)
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: t460 pushed; B/D repair replays passed; t461 observations/order independently checked; headed proof passed; t461 bothdev pushed; round-eight B/C/D .25 zero-call readiness underway on frozen sourcepair. B/C/D qualification open.
 
 Qualification means two consecutive passing paid builds on one frozen source pair. Each build is followed by a
 separate model-free replay with an unchanged Flow hash and all five counters at zero, and every run is fully

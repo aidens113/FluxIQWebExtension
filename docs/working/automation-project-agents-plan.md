@@ -1,9 +1,9 @@
 # Automation Project Agents Plan
 
-Status: Active
-Status detail: Built, qualified and the product default; the cost gap is closed: `project` passed 10 of 10 on one frozen source at $0.028 a build (pair 8: `project` $0.108, `candidate` $0.067).
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-13
-Last updated: 2026-10-18
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: The browser side of FluxIQ's product-level agent system for building an automation project — a project supervisor agent that owns the task, structure, interfaces, case plan, budget and assembly, and spawns bounded subflow builders, validation and repair. This document owns host-action (tab) ownership, the chat presentation, Lab qualification and the extension wiring; the domain-neutral agent contracts are owned by the Core paired document.
 Paired document: `C:\Users\osrs_\FluxStuff\!FluxIQ\docs\working\automation-project-agents-plan.md`
@@ -12,6 +12,8 @@ Related: [MVP final month plan](./mvp-final-month-plan.md), [state-aware recover
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Built, qualified and the product default; the cost gap is closed: `project` passed 10 of 10 on one frozen source at $0.028 a build (pair 8: `project` $0.108, `candidate` $0.067).
 
 **2026-10-18:** `project` mode ran every live build of the breadth round ([breadth-forty-tasks-plan.md](./breadth-forty-tasks-plan.md)); its project-agent fixes from that round (a builder stopped for repeating may be briefed once more, the supervisor ending in plain words, a reset brief before ending) are merged on local `dev`. The rest of this section is as of 2026-10-17.
 
