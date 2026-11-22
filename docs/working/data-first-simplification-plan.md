@@ -155,34 +155,17 @@ These are the lead's, 2026-11-20. The user's bottom line: "we seriously NEED thi
 
 ## Next Session
 
-Start: read this document's Current State, check memory and OneDrive, and confirm the gate is empty. Then:
+Read Current State and the corresponding task report first; do not restart completed P0 work. Inspect running heavy-slot holders/queue before scheduling checks, and preserve another lane's frozen validation snapshot.
 
-1. **Finish the three fixes in flight first** (P0; the user: "if they are important then obviously fix them first"). Re-dispatch each from its tree and report, with the decisions in Current State:
-   - t981 (worker-heavy): implement the refusals and the rerun ordering, with its tests.
-   - t979 (worker): the remaining items, and take out the model climb.
-   - t976 (worker-heavy): finish option (c) and the test migration.
+1. Confirm paired permission pushes completed. P0 judge/repeat/permission are integrated; fixed-model t983 includes permission source and has 140 passing combined tests plus a passing typecheck. Finish its remaining build/audit and paired integration.
+2. P1 t982 owns retained schema/rows, internal collected/answer paging, migration 0040, private exclusion hashes/readiness/batch receipts and public projection. It includes t984 seam 2c4099965. Complete its focused Core/downstream acceptance, synchronize current parent, verify and integrate before dependent P2 edits.
+3. P2 t984 owns exact field binding and explicit automatic-mode processing/readiness. Independent binder tests/types/audit passed. Synchronize P1/P4/permission before interpretation, task-memory and completion edits; preserve saved legacy process behavior.
+4. P5 t985 has the tested F24 retry-proof subset. F4/F18 regressions pass with permission parent; F23 still needs exact target/semantic-repair reconstruction. Screened artifacts prove all successors loaded predecessor digests and some digests changed: do not repeat the unsupported blanket claim that nothing persisted.
+5. t986 owns recorded model/domain proof, strict scoreboard and real preflight. Public trace-scope wrapper and CLI foundations exist; enforce first-divergence closure and actual starting-state admission. A prefix, scripted model response, missing call count or generic confirm is not full task, zero-call or permission proof.
+6. After P1/P2 interfaces settle, implement P3 generic collection guidance, preserving action-row selection. P6 judge evidence reduction, S3 affected-recording gate, S5 live stage costs, S7 unrelated-plan reconciliation and S8 need/commit-headroom admission remain. Heavy-slot FIFO starvation is recorded; no threshold/priority bypass is authorized.
+7. Paid acceptance remains blocked on the approved provider-free proofs, not on another permission question. Strict SUCCESS is four correct attempts, three predecessor Flow/digest proofs and zero logical model calls on attempts 2-4. Only then launch the supervised approved round within the total $50 ceiling, report spend as it happens, and stop on balance error. Final full sweep/promotion follows coherent completed work, within the twice-daily sweep rule.
 
-   Merge each as it passes its narrow checks.
-2. **Fix one interface before dispatch:** the stored row. It holds every field, each field's typed value, the row's marks and its identity. Lanes 1 and 2 build against it.
-3. **Dispatch the lanes in parallel, partitioned by file:**
-
-   | Lane | Work | Where |
-   | --- | --- | --- |
-   | 1 | P1: reads keep every column, mark, identity and typed value. Check W7 first. | domain and extension reads; Core's stored rows |
-   | 2 | P2: the automatic data stage, against the fixed row interface. | Core result processing |
-   | 3 | P4 and P3: remove the ladder (with t979's climb), then the collect-broadly guidance. | Core model routing, loop decision, build guidance |
-   | 4 | P5: diagnose F23, F24, F4 and F18 from their recorded runs, then fix them. t981's F26 lands first. | Core replay and draft |
-   | 5 | S1, S2 and S6: offline re-run of recorded runs, the ten-task scoreboard, and the per-site preflight. | Lab (`packages/test-runner`, `apps/scenario-lab`) |
-   | Lead | Verification, merges in rounds (S4), this document (S7), the user's questions. | |
-
-4. **Acceptance before any paid run:** the scoreboard's tasks pass offline on their recorded runs, with zero model calls on attempts 2-4.
-
-**The week, cut for parallel lanes.** These are the lead's estimates; the real constraints are named.
-- **Day 1:** P0, the row interface, and lanes 1, 3, 4 and 5 dispatched; lane 2 starts once the interface is fixed. Lanes 3 and 4 touch the same Core areas as t979 and t981, so each starts after its fix merges.
-- **Day 2:** lanes 1-4 land provider-free, and the first offline scoreboard runs. Constraint: two heavy slots on the 12 GB machine.
-- **Day 3:** the six near-passing tasks reach SUCCESS offline, and P6 (the smaller judge) lands.
-- **Day 4:** one small supervised live round on the starting model, about ten tasks. The lead's estimate is under $10 on Haiku, reported as it runs. Approved up to $50 absolute max (U8). Constraint: credit on the Lab's Claude key.
-- **Day 5:** fix forward from day 4 offline, a second small round on what failed, then the full sweep and `main` (S10).
+All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls, full sweeps or browser acceptance have run in this resumed session so far.
 
 ## Work Ledger
 
