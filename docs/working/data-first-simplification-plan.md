@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Execution resumed 2026-11-22 with three P0 workers in existing paired task trees; changes await verification; subsequent lanes and paid proof remain pending.
+Status detail: P0 and fixed-model P4 accepted/integrated; paired P4 push next. Extraction, automatic processing, recorded proof and memory-gate work active. No paid runs.
 Created: 2026-11-20
 Last updated: 2026-11-22
 Owner: Senior supervisor agent
@@ -11,66 +11,40 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 ## Current State
 
-**Execution resumed 2026-11-22.** The user requested agents and durable progress records. Lead inspected all three paired task trees: t976 has Core and Lab permission edits; t979 has judge/retry edits and fake-judge migrations; t981 has three amendment files started. None is accepted or integrated. Written briefs are in `data-first-simplification-plan/briefs/t976.md`, `t979.md`, and `t981.md`. Three workers resume these isolated trees; their reports live in each downstream tree under `docs/working/data-first-simplification-plan/reports/`. Lead owns verification and git. P1-P7 remain pending. No paid run launched.
+**Execution active, 2026-11-22.** User asked to assign agents, execute the approved plan, and keep durable progress. This is the plan of record; the paired Core document holds Core acceptance evidence. Worker reports are claims until lead verification.
 
-**Intake checks:** main downstream checkout is on dev with pre-existing edits in AGENTS.md, .clinerules/fluxiq.md and an untracked debug note; preserve them. Main Core checkout was clean. About 5.4 GiB physical memory was free; no OneDrive process was listed. Heavy validation uses the existing shared slot gate.
+| Unit | Current state | Next action |
+| --- | --- | --- |
+| P0 t979 judge recovery | Accepted, integrated and pushed to both dev branches. Lead: 125/125 tests, package check, audit; merge contract gate 70/70. Same-model unreadable recovery and paid receipt preservation. | Covered by subsequent combined checks. |
+| P0 t981 repeat-safe repair | Accepted and integrated in both repositories. Lead: 281/281 tests in 16 files, package check (87,253 ms), audit; merge contract gate 70/70. Core 0.50.4. Both dev branches are pushed. | P5 can sync and continue. |
+| P0 t976 start-only permission | Worker complete: 170 Core tests, 66 Lab tests, 13 catalog tests, package checks/builds and both audits pass. Lead review fixed gate closure, concurrent startup and plan-refusal abort. Source checkpointed and parent synced; Core 0.50.5; lead 161/161 Core tests, 66/66 Lab tests, 13/13 catalog tests, both package checks, dependency builds and audits passed. Integrated in both repositories; Core merge contract gate 70/70 passed. Paired dev push next. | Paired integration, then fixed-model combined acceptance. |
+| P1 t982 retained extraction | Worker p0_repair. Schema seam stable; 68 record-set tests reported passing. Full field/metadata transport, compatible schema growth and batch retry parity under test. | Complete additive-page/privacy/campaign-shaped tests, checks, lead verification. |
+| P4 t983 fixed task model | Accepted and integrated in both repositories. Lead 140/140 combined tests, typecheck, library build and audit; Core merge contracts 70/70. Core 0.51.0. | Paired dev push; dependent lanes sync before shared edits. |
+| P2 t984 automatic data stage | Worker p0_permission active on a minimal stable retainedRows evaluator seam, then operators/binder. Seam backed up/merged into P1; binder 8/8 worker tests/typecheck/audit pass. Explicit automatic-mode readiness/identity work active; dependent memory/interpretation seams await handoffs. | Validate/commit retainedRows seam and merge into P1; continue operators; sync P1/P4 before dependent edits. |
+| P5 t985 replay continuity | Lead implemented F24 successful-retry proof subset; 12/12 focused completion tests pass. Source/docs checkpointed on task branches; not integrated. F4/F23 diagnosis and F18 revalidation remain. | Sync t981; typecheck/audit and remaining recorded-path diagnosis. |
+| S1/S2/S6 t986 offline proof | Worker p0_judge active. Recorded adapter/scoreboard/CLI foundations implemented; narrow Core public trace wrapper 10 worker tests passed, types pending. Real preflight and admitted prefix composition in progress. | Build runnable real-entry proofs; no classifier/prefix mislabeled as task SUCCESS. |
 
-**Lead source inspection (2026-11-22):** W7 is partly implemented: domain structure packets already carry field types/parsed samples, marks and rowIdentity (column-type.ts, packet.ts, list-items/row-identity.ts). The loss is downstream of detection: plan-resolution/extraction/slot.ts selects authored fields; output-nodes/extract-list/declared-columns.ts intentionally narrows stored fields; Core's answer-first/rows/derived-schema.ts rebuilds types from values and silently slices columns at maxFields. Existing RecordSchema has fields/valueType/primaryKey, and process.columns already separates display from storage. P1 must extend these existing seams, preserve explicit sensitive-field exclusions, and keep every readable discovered column. P2 must address process-rows.ts currently deduping after filtering by displayed/full rows instead of a retained stable identity. Stored-row interface is not yet frozen.
+**Assignments and records:** written briefs and worker reports live under `docs/working/data-first-simplification-plan/{briefs,reports}/`, in the corresponding paired task tree until merged. Trees are `C:/Users/osrs_/FluxStuff/fxwork/t<id>/!FluxIQWebExtension` and sibling `!FluxIQ`. Lead owns integration, shared docs and git. t984 retainedRows seam 2c4099965 passed lead 25/25 tests, preserves source symbols, is backed up and merged into P1; t985's F24 subset is lead-owned.
 
-**P0 follow-up:** permission worker found saved-Flow preflight could ask twice and repair lost declined classes. Its owned scope now includes flow-run/permission.ts and the flow-stage entry. Tests use one Vitest worker after concurrent runs reduced free memory below 1 GiB. Documentation checkpoints were pushed to both dev branches; product changes still await verification.
+**Contract and review decisions:** retained rows reuse JsonObject + RecordSchema/RecordBatch; The Design below fixes semanticType, mark and primaryKey. P1 retains full safe schemas through live/saved/replay paths and reconciles compatible additive schemas explicitly. Identical old-batch retries must preserve ordered rows after schema growth. P2 uses existing processing with one run clock, exact-id/unique-label binding and explicit missing evidence; no guessed filters or second DSL. P4 persists the original model atomically, preserves historical records, and must not treat an invalid stored model as a new task. Shared service/memory/interpreter edits are serialized and synced before acceptance.
 
-**Prepared, not dispatched:** paired task t982 (retain-extraction-data), created by `pnpm task start retain-extraction-data --worktree --core --skip-workspace-build`; Core libraries restored from cache and downstream full build skipped. Its written P1 brief requires an interface proposal before edits. Runtime provides three worker slots, currently occupied by P0; later lanes start as slots free, with dependent edits held until prerequisite integration.
+**New retained-data boundary (2026-11-22):** P2 exposes full qualifying `retainedRows` from the same selected array before display projection; lead will commit that minimal seam and merge it into P1 before dependent edits. P1 internal paging distinguishes collected raw rows and qualifying full rows from public projected views. Migration `0040_run_dataset_exclusions` is reserved to P1 for private excluded-field hashes and an answer_rows_retained marker; old projected rows are never guessed into full records. No user database migration/testing is authorized by the unit tests.
 
-**Next-lane discovery:** paired t983 (fixed-task-model) is also prepared, with no downstream full build. While P0 checks queue, p0_repair may read t982 for a retained-row interface proposal and p0_judge may read t983 for remaining ladder/default-model paths; both are read-only until lead integration/sync. t979's source and architecture note are checkpointed locally as Core 021b1f631 (0.50.3); worker checks include typecheck/audit and 102 final budget/receipt tests, but lead acceptance and parent-sync checks remain pending. Review expanded t979 to fix missing billed-usage receipts on failed harness replies and t981 to cover move/add invalid routing and held-feedback renumbering. No paid calls or full sweeps.
+**Validation and environment:** no paid calls or full sweeps have run. Main downstream pre-existing AGENTS.md, .clinerules/fluxiq.md and the untracked language-driven debug note are preserved. Heavy work uses the machine gate and narrow checks. S8 finding: `position < freeSlots` lets the first two tickets race, repeatedly starving the oldest job when only one fits; strict FIFO plus need/commit-headroom admission remains to build. No thresholds or priority overrides changed. OneDrive was about 33 MiB private memory, not leaking, and was left running. Serial validators now release/requeue between stages.
 
-**What happened.** The 2026-11-19/20 live campaign ran each site's hardest task: 37 counted runs, 0 SUCCESS (all four attempts right, and attempts 2-4 with zero model calls), 17 PARTIAL, 20 FAILURE, about $90. The first attempt was right in 17 runs. 10 failures were our own plumbing bugs, since fixed. 7 of the 11 runs that hit the $5 purse failed on the data: wrong or missing columns, a promoted row kept, a summary panel not shaped, an iframe or account never read. 3 failed on replay and 1 on the judge. Judges were 40-45% of the spend on failing tasks. Every one of those 11 runs had climbed the model ladder. The evidence is under "Evidence" below.
+**User-approved rules (2026-11-20):**
+- U1: no model ladder; a task keeps its starting model.
+- U2: the data layer automatically dedupes and cleans using upstream data where possible, simply.
+- U3: extraction keeps every column; output projection happens in processing.
+- U4: collect broadly, then filter deterministically.
+- U5: the framework does the heavy lifting.
+- U6: the judge stays on that same model.
+- U7: all L1-L9, S1-S10 and P0-P7 below are approved, including Haiku as automation default; finish the three interrupted fixes first.
+- U8: paid round approved, **$50 absolute total ceiling**. Lead's conservative reading covers the round and reruns together. Only launch while billed total plus the task's $5 purse is at most $50; supervise every run and stop on a balance error. Required provider-free proofs and available Claude credit come first.
 
-**Decided by the user (2026-11-20). These are standing rules; U1-U6 are also in AGENTS.md:**
+**Why this plan exists:** the recorded campaign counted 37 runs, 0 strict SUCCESS, 17 PARTIAL and 20 FAILURE, about $90. Strict SUCCESS means four correct attempts, three predecessor-Flow continuation proofs and zero model calls on attempts 2-4. The original campaign, causes and approved phased design follow; historical task diagnoses remain in the task reports and git history.
 
-- **U1. No model ladder.** "We're removing the ... ladder system for going to better models. from now on its just the model we start with."
-- **U2. The data layer dedupes and cleans by itself, simply.** "the data layer should automatically remoe duplicates, and clean data using upstream data WHERE POSSIBLE. it should be kept simple." It restates the 2026-10-06 rule that post-processing dedupes by default, which the campaign shows was not in effect.
-- **U3. Extraction keeps every column.** "we should simply keep all columns data during extraction and have the data processing layer filter out what it needs to. This way we always have the data available."
-- **U4. The model collects broadly.** "encourage model to grab results for stuff that we may use, and tell it the data processing layer can remove bad results later."
-- **U5. The framework does the heavy lifting.** "obviously the framework should be doing as much heavy lifting as possible."
-- **U6. The judge stays on the same model.** "YES judge stays on same model so we dont burn credits."
-- **U7. Everything below is approved.** "yes for everything": the lead's suggestions L1-L9, the systemic changes S1-S10, the lanes and the week. That includes Haiku as the starting model for build and judge (S9; the lead's recommendation, approved). The three fixes in flight go first: "if they are important then obviously fix them first". They are; see below.
-- **U8. The day-4 paid round is approved, up to $50 absolute max.** At first: "and on any budget". Then: "Lets try and limit budget to $50 absolute max though for that."
-  - Lead's reading, the safer one: the $50 covers the week's paid runs together, the day-4 round and the day-5 rerun.
-  - Enforcement (lead): the supervisor starts a task only while the billed spend so far, plus that task's $5 purse, is at most $50. So the round cannot pass $50 even if every task spends its whole purse. Spend is read from the Lab's spend ledger after each run.
-  - The standing rules still hold: each task's purse stays $5 (AGENTS.md, 2026-10-30), an agent supervises every paid run, and the round stops at the first balance error.
-  - The only precondition is credit on the Lab's Claude key.
-
-**Suggested by the lead and approved by the user (2026-11-20; see "Lead's Suggestions"):**
-- L1. Rows keep their marks, identity and typed values.
-- L2. Duplicates are removed by row identity.
-- L3. Conditions are stated once and applied by the framework.
-- L4. Reads that are not lists.
-- L5. Replays keep their repairs.
-- L6. A smaller judge.
-- L7. Spending discipline.
-- L8. The machine's memory gate.
-- L9. Settle the work left in flight.
-
-**Not done.** Nothing in this plan is built. Three campaign fixes were cut off by the 06:57 crash and then stopped by the user on 2026-11-20. They sit uncommitted in their task trees (`C:/Users/osrs_/FluxStuff/fxwork/<task>/`, Core and extension side by side). The minutes the re-dispatched workers ran on 11-20 may have added edits. Each worker report sits in its tree under `docs/working/usable-client-plan/reports/`. All three come first:
-
-- **t981, repaired Flows refused at save (F26). It directly blocks SUCCESS.**
-  - What goes wrong: when the model repairs a broken Flow during a run, the save is refused. The repair dropped a step that a loop still pointed at, or put routing inside a loop. So the next attempt cannot use the repair, and pays to repair again.
-  - The fix: refuse such an edit at the moment it is made, with words that tell the model the way out (`holds_a_repeat`, `span_holds_routing`), plus the rerun ordering fix. Never relax the save.
-  - State: cause traced and design agreed; implementation started (3 Core files). The words, the rerun ordering and the tests remain. The decision and paths are in the report and in `usable-client-plan.md` (2026-11-20).
-- **t979, garbled judge replies (F25). It caused 2 campaign failures.**
-  - What goes wrong: on long answers, the judge's JSON reply comes back broken. Today that counts as "not judged", and the attempt goes round again.
-  - The fix: ask again with a note, in the judge's own simple format, until a readable reply.
-  - State: done in Core with 208/208 targeted tests. Left: one framework test (`build-judge.test.ts`) whose fake judge never replies readably; an accurate log reason on the re-ask (`anthropic/provider.ts`); and a sweep of other fake judges that keep failing. Under U1 and U6, its climb to a stronger model after two unreadable replies (`judgeRungsUp`, `judgeOnDeciderRung`) comes out: the re-ask stays on the same model.
-- **t976, permission asked once, at the chat's start (F21). It breaks a standing rule and the delete task.**
-  - What goes wrong: for a delete, send or money task, the permission question was asked in the middle of the build, and again on every attempt. The standing rule is: once, when a Flow or chat starts, never mid-Flow.
-  - The fix (option (c), chosen 2026-11-20): the chat's declaration of what the person asked for also names the risky act classes. The one question is asked at the start, with no extra model call, and the answer holds for the chat.
-  - State: built in Core and the Lab; the test migration (about 35 answer-first tests) is part done. Left: the four stale `steps-ran-interruption` tests, the runtime repair and the legacy, candidate and project builds still asking mid-Flow, and the Lab's catalog check. The three Lab tests never ran.
-
-**Running:** P0 workers assigned 2026-11-22; completion requires lead verification. Paid acceptance follows provider-free proof and available Claude credit, within the $50 absolute campaign ceiling (U8).
-
-**Goal (user, 2026-11-20):** "we seriously NEED this to be working well by next week", so that the rest of the month goes to deploying and other fixes. This document is the plan of record for that week (S7).
-
-**Next session:** "Next Session" below. That means the three fixes first, then the stored-row interface, five lanes in parallel, and a ten-task scoreboard proven offline before one small paid round. The phases (P0-P7) and the systemic changes (S1-S10) are the content. Every change is proven without a provider before any paid run.
+**Next:** push paired fixed-model integration; complete extraction; execute data processing, replay persistence and recorded offline proof; only then run the approved small supervised round and final full sweep/promotion. Nothing needs a user decision now.
 
 ## Evidence
 
@@ -181,36 +155,35 @@ These are the lead's, 2026-11-20. The user's bottom line: "we seriously NEED thi
 
 ## Next Session
 
-Start: read this document's Current State, check memory and OneDrive, and confirm the gate is empty. Then:
+Read Current State and the corresponding task report first; do not restart completed P0 work. Inspect running heavy-slot holders/queue before scheduling checks, and preserve another lane's frozen validation snapshot.
 
-1. **Finish the three fixes in flight first** (P0; the user: "if they are important then obviously fix them first"). Re-dispatch each from its tree and report, with the decisions in Current State:
-   - t981 (worker-heavy): implement the refusals and the rerun ordering, with its tests.
-   - t979 (worker): the remaining items, and take out the model climb.
-   - t976 (worker-heavy): finish option (c) and the test migration.
+1. P0 judge/repeat/permission are integrated and pushed. Fixed-model t983 is now integrated after 140 passing combined tests, typecheck/build/audit and 70 merge contracts; confirm paired push completed. Do not reopen those completed units.
+2. P1 t982 owns retained schema/rows, internal collected/answer paging, migration 0040, private exclusion hashes/readiness/batch receipts and public projection. It includes t984 seam 2c4099965. Complete its focused Core/downstream acceptance, synchronize current parent, verify and integrate before dependent P2 edits.
+3. P2 t984 owns exact field binding and explicit automatic-mode processing/readiness. Independent binder tests/types/audit passed. Synchronize P1/P4/permission before interpretation, task-memory and completion edits; preserve saved legacy process behavior.
+4. P5 t985 has the tested F24 retry-proof subset. F4/F18 regressions pass with permission parent; F23 still needs exact target/semantic-repair reconstruction. Screened artifacts prove all successors loaded predecessor digests and some digests changed: do not repeat the unsupported blanket claim that nothing persisted.
+5. t986 owns recorded model/domain proof, strict scoreboard and real preflight. Public trace-scope wrapper and CLI foundations exist; enforce first-divergence closure and actual starting-state admission. A prefix, scripted model response, missing call count or generic confirm is not full task, zero-call or permission proof.
+6. After P1/P2 interfaces settle, implement P3 generic collection guidance, preserving action-row selection. P6 judge evidence reduction, S3 affected-recording gate, S5 live stage costs, S7 unrelated-plan reconciliation and S8 need/commit-headroom admission remain. Heavy-slot FIFO starvation is recorded; no threshold/priority bypass is authorized.
+7. Paid acceptance remains blocked on the approved provider-free proofs, not on another permission question. Strict SUCCESS is four correct attempts, three predecessor Flow/digest proofs and zero logical model calls on attempts 2-4. Only then launch the supervised approved round within the total $50 ceiling, report spend as it happens, and stop on balance error. Final full sweep/promotion follows coherent completed work, within the twice-daily sweep rule.
 
-   Merge each as it passes its narrow checks.
-2. **Fix one interface before dispatch:** the stored row. It holds every field, each field's typed value, the row's marks and its identity. Lanes 1 and 2 build against it.
-3. **Dispatch the lanes in parallel, partitioned by file:**
-
-   | Lane | Work | Where |
-   | --- | --- | --- |
-   | 1 | P1: reads keep every column, mark, identity and typed value. Check W7 first. | domain and extension reads; Core's stored rows |
-   | 2 | P2: the automatic data stage, against the fixed row interface. | Core result processing |
-   | 3 | P4 and P3: remove the ladder (with t979's climb), then the collect-broadly guidance. | Core model routing, loop decision, build guidance |
-   | 4 | P5: diagnose F23, F24, F4 and F18 from their recorded runs, then fix them. t981's F26 lands first. | Core replay and draft |
-   | 5 | S1, S2 and S6: offline re-run of recorded runs, the ten-task scoreboard, and the per-site preflight. | Lab (`packages/test-runner`, `apps/scenario-lab`) |
-   | Lead | Verification, merges in rounds (S4), this document (S7), the user's questions. | |
-
-4. **Acceptance before any paid run:** the scoreboard's tasks pass offline on their recorded runs, with zero model calls on attempts 2-4.
-
-**The week, cut for parallel lanes.** These are the lead's estimates; the real constraints are named.
-- **Day 1:** P0, the row interface, and lanes 1, 3, 4 and 5 dispatched; lane 2 starts once the interface is fixed. Lanes 3 and 4 touch the same Core areas as t979 and t981, so each starts after its fix merges.
-- **Day 2:** lanes 1-4 land provider-free, and the first offline scoreboard runs. Constraint: two heavy slots on the 12 GB machine.
-- **Day 3:** the six near-passing tasks reach SUCCESS offline, and P6 (the smaller judge) lands.
-- **Day 4:** one small supervised live round on the starting model, about ten tasks. The lead's estimate is under $10 on Haiku, reported as it runs. Approved up to $50 absolute max (U8). Constraint: credit on the Lab's Claude key.
-- **Day 5:** fix forward from day 4 offline, a second small round on what failed, then the full sweep and `main` (S10).
+All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls, full sweeps or browser acceptance have run in this resumed session so far.
 
 ## Work Ledger
+
+### 2026-11-22 - Repeat repair integrated after lead acceptance
+- Agent: Senior supervisor.
+- Changed: t981 merged in both repositories; Current State rewritten around current assignments and accepted results, removing superseded intake snapshots.
+- Validation: `pnpm task finish t981` downstream -> audit passed, merged and worktree removed. Core `pnpm task finish t981 --skip-checks` -> mandatory contract gate 70/70 passed, merged and branch detached/deleted. Independent 281 tests/typecheck/audit recorded in paired Core ledger.
+- Outcome: Accepted for t981; whole plan remains active. No paid/full-sweep claim.
+- Follow-up: paired dev push, t976 acceptance, P1/P4/P2/P5 and offline proof.
+
+
+### 2026-11-22 - Judge integrated; extraction and fixed-model lanes active
+- Agent: Senior supervisor.
+- Changed: t979 integrated in both repositories; t982 extraction and t983 fixed-model implementation assigned. t981 repair source/report checkpointed and parent-synced for lead acceptance.
+- Validation: `pnpm task finish t979` downstream -> structure audit passed, merged, worktree removed. `pnpm task finish t979 --skip-checks` in Core -> mandatory contract gate 70/70 passed, merged; focused lead tests/typecheck/audit are recorded in the paired Core ledger. No full suite skipped as acceptance: narrow gates are repository policy.
+- Outcome: Partial: judge unit accepted; complete data-first plan still in progress.
+- Follow-up: independently validate repair, resolve permission review, complete P1/P4 and provider-free acceptance infrastructure before paid proof.
+
 
 ### 2026-11-22 — P0 workers resumed with written briefs
 - Agent: Senior supervisor.
