@@ -11,7 +11,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 ## Current State
 
-**Execution resumed (2026-11-22):** user explicitly requested work and subagents again. Three existing workers resumed with written task-local briefs: p0_permission/t984 processing acceptance and producer receipts; p0_repair/t987 judge recovery; p0_judge/t986 offline runner/browser proof. Root fixed the cost-reader discriminated union (validation pending), checkpointed P2 post0706 changes asbc49b850f and merged P6 interfaces as6faae9260, preserving publication and judge metadata through four resolved shared-file conflicts. P2 recovered the prior audit result: six remaining violations, not an unknown pass; corrections are now authorized. Memory gate remains unchanged; currently low physical headroom may delay queued checks. No live browser or paid run yet.
+**Post-reboot execution (2026-11-22):** the user restarted and requested tests and all remaining work. The configured 32 GiB initial / 48 GiB maximum page file is active at 32 GiB. Fresh workers processing/t984, judge/t987 and offline/t986 own written post-reboot briefs. P2 combined publication/restart fixture checkpoint 6dcd8bfa0 and P6 credential fixture bf3787ec7 are preserved locally; t987 and t986 received the shared P2/P6 baseline. Processing is adding authoritative source replacement receipts; judge is implementing exact-source recovery and action/witness correspondence; offline capture now forwards authored task-processing criteria. These new changes are not accepted yet. Root fixed the cost-reader union and contradictory metadata/request classification; tests pending. A stale pre-reboot gate ticket was traced to a PID reused by WebView2 and pruned using process birth/boot evidence. The isolated gate fix passed 47/47 focused tests; full Merit tests and activation pending. No live browser or paid run yet.
 
 **Execution active, 2026-11-22.** User asked to assign agents, execute the approved plan, and keep durable progress. This is the plan of record; the paired Core document holds Core acceptance evidence. Worker reports are claims until lead verification.
 
@@ -184,6 +184,11 @@ Read Current State and the corresponding task report first; do not restart compl
 All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls or browser acceptance; one inadvertently launched Core full check was deliberately interrupted and is not acceptance.
 
 ## Work Ledger
+
+### 2026-11-22 ? resume after user reboot
+- Changed: refreshed worker assignments and task checkpoints above; machine-local queue recovery uses proven process identity rather than killing the unrelated browser process. Memory thresholds and user applications are unchanged.
+- Validation: `heavy-slot.mjs run gate-process-reuse-verify -- node --test tests/heavy-slot.test.mjs` -> 47 passed, 0 failed, 21,859 ms. Durable log is machine-local `.heavy-slots/gate-process-reuse-verify.log`. The prior focused run was 46/47 because missing boot telemetry in an existing mock caused a conversion failure; optional telemetry handling was corrected. A subsequent result was lost, so acceptance was rerun with a durable log.
+- Not verified: new processing/judge/capture work, browser behavior, paid campaign and full Flux sweeps. Earlier pre-reboot queued sessions are not results. Source checkpoints and new documentation remain local pending gated backup.
 
 ### 2026-11-22 - Execution resumed with three workers
 - Assignments: task-local briefs resume-processing.md (t984), resume-judge.md (t987), resume-offline.md (t986). Existing workers explicitly restarted; lead owns git and cost observer. No paid or browser launch authorized by the briefs before required checks and coordination.
