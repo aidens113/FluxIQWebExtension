@@ -1,0 +1,11 @@
+# S7 status reconciliation
+
+2026-11-22, lead-owned paired task t988. The approved data-first plan is now the only Active implementation plan in both indexes. The working-document protocol remains Active as an operational reference; the downstream manual findings inbox remains Active as an inbox. No process was stopped or concurrent session canceled by this metadata change.
+
+Changed19 downstream and27 Core separate plans from Active to Paused, with a dated pointer and their prior status detail preserved. Nothing was marked Complete. Their previous current-state text is explicitly historical and unresolved work remains recorded. Downstream mvp-final-month's former150-line state is preserved under a historical heading so the new current pointer fits its budget.
+
+Five Core plans exceeded document budgets when touched: adaptive-flow-training-roadmap, automation-studio-render-data-separation, automation-studio-scalable-data-architecture, framework-heavy-lifting and ui-ux-upgrade-audit. Their full prior documents are retained in each plan's archive/2026-11-22-prior-plan-and-ledger.md; original relative links were rebased. Existing state summaries remain in the short current documents, with links to all unresolved phases and historical ledgers. A comparison against git's previous file content verified all five archives differ only by that relative-link rebasing.
+
+Validation: node scripts/structure-audit.mjs --rule working-docs --update initially refused downstream Current State152>150 and five Core document-growth violations. After compaction, both commands exit0: downstream baseline unchanged551, Core907 with four obsolete working-docs entries removed and none increased. Active-header scan -> downstream data-first, protocol and inbox; Core data-first and protocol. No product/source change, full suite, browser or provider call.
+
+Outcome: documentation prepared and checked; paired commit/integration pending.

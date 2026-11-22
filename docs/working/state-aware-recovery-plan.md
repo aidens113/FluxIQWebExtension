@@ -1,9 +1,9 @@
 # State-Aware Recovery Plan
 
-Status: Active
-Status detail: Recovery matrix and paid R4a/R4b passed; A qualified; t449 optional-path completion and t450 candidate default integrated and pushed; B/C/D live qualification underway.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-09
-Last updated: 2026-10-11
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: State-aware subflows (Call Subflow, entries, checkpoints), scoped lifecycle handlers (On Start, On Before, On Retry, On Fail, On Before Next), the integrated recovery ladder with safe state routing, smallest-unit repair, and the browser side that serves them (fact checks, interruption facts, in-flight command reconciliation, chat cards, Lab perturbations), with the schedule, acceptance matrix and briefs. The domain-neutral contracts are owned by the Core paired document; this document does not restate them.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/state-aware-recovery-plan.md
@@ -12,6 +12,8 @@ Related: [consultant proposal](./state-aware-recovery-plan/consultant-proposal.m
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Recovery matrix and paid R4a/R4b passed; A qualified; t449 optional-path completion and t450 candidate default integrated and pushed; B/C/D live qualification underway.
 
 **What this is.** The user's consultant proposed state-aware subflows, scoped event handlers and a deterministic
 recovery ladder ([proposal](./state-aware-recovery-plan/consultant-proposal.md)). This plan adopted it with the
