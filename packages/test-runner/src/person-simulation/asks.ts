@@ -34,8 +34,11 @@ export type PendingPersonAsk = Readonly<{
   createdAt: number;
 }> & (
   | Readonly<{ kind: "person_check" }>
-  /** `missing` is the classes the work was not permitted; `controlName` the control Core named, as Core bounded it, or `null` when it named none. */
-  | Readonly<{ kind: "permission"; missing: readonly string[]; controlName: string | null }>
+  /**
+   * `missing` is the classes the work was not permitted; `controlName` the control Core named, as Core bounded it, or `null` when it named none;
+   * `taskStart` whether it is the task's own question when it starts, which names no control (Core t976).
+   */
+  | Readonly<{ kind: "permission"; missing: readonly string[]; controlName: string | null; taskStart?: boolean }>
 );
 
 /** How a person answers a permission ask: allow the act, or refuse it. */
@@ -87,7 +90,7 @@ export async function pendingPersonAsks(control: PersonAskControl, scope: Person
       const raised = { askId: ask.askId, conversationId: thread.conversationId, subject, stage: stageOf(subject), createdAt: typeof ask.createdAt === "number" ? ask.createdAt : Date.now() };
       if (ask.kind === "permission") {
         const question = permissionQuestionOf(ask);
-        asks.push(Object.freeze({ ...raised, kind: "permission" as const, missing: Object.freeze([...question.missing]), controlName: question.controlName }));
+        asks.push(Object.freeze({ ...raised, kind: "permission" as const, missing: Object.freeze([...question.missing]), controlName: question.controlName, taskStart: question.taskStart === true }));
         continue;
       }
       if (ask.kind !== "choice" || !isRecord(ask.control) || ask.control.kind !== PERSON_CHECK_CONTROL_KIND) continue;

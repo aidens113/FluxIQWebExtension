@@ -64,17 +64,22 @@ export type PermissionAnswerInput = {
  * cart and home pages (`run-munzbfbj-2fb8947d`, `run-muo2fscr-7055485a`),
  * where allowing it would have let a money act through at the wrong place.
  *
+ * Core's own question when a task starts (`taskStart`, Core t976) names no
+ * control, since nothing has been pressed yet: it is about the task. It is
+ * allowed when it asks for the task's declared class and nothing beyond it,
+ * and refused otherwise.
+ *
  * A task that says to ask first (`askFirst`) has the build's stop as its only
  * right ending, so the person reads the question and leaves it: Core's own
  * timeout refuses it, exactly as before the Lab answered anything.
  */
 export async function answerPermissionAskAsPerson(input: PermissionAnswerInput, ask: PendingPermissionAsk): Promise<PersonPermissionAnswer> {
-  const stop = judgeCreatedFlowPermissionStop(input.play.point ? { permissionPoint: input.play.point } : {}, { missing: ask.missing, controlName: ask.controlName });
+  const stop = judgeCreatedFlowPermissionStop(input.play.point ? { permissionPoint: input.play.point } : {}, { missing: ask.missing, controlName: ask.controlName, taskStart: ask.taskStart === true });
   const judged = { askId: ask.askId, stage: ask.stage, missing: ask.missing, control: ask.controlName, verdict: stop.verdict, reason: stop.verdict === "elsewhere" ? stop.reason : null };
   if (input.play.point?.askFirst) {
     return Object.freeze({ ...judged, answer: null, secondsWaited: waited(input.now, ask), note: "the task says to ask before this act, so the person leaves the question for Core to time out" });
   }
-  const matched = stop.verdict === "at_declared_point" && stop.control === "matched";
+  const matched = stop.verdict === "at_declared_point" && (stop.control === "matched" || stop.control === "task");
   const decided: PermissionAskAnswer = matched ? "grant" : "deny";
   let answer: PermissionAskAnswer | null = decided;
   let note: string | null = matched
