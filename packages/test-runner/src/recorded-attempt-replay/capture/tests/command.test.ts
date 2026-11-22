@@ -6,6 +6,15 @@ import test from "node:test";
 import type { FluxIQ } from "fluxiq";
 import { runRecordedCaptureCommand } from "../command.js";
 import { registerFluxIQHost } from "../host-module.js";
+import { recordedCaptureRequest } from "../request.js";
+
+test("fresh Company entry serializes the authored criteria without inventing sorting or fallback processing", () => {
+  const input = { projectId: "project.fixture", flowId: "flow.fixture", startLocation: "http://127.0.0.1/company", taskId: "company-website-apprentices" };
+  const request = recordedCaptureRequest(input);
+  assert.deepEqual(JSON.parse(JSON.stringify(request)), { projectId: input.projectId, flowId: input.flowId, evidenceGuided: true, startLocation: input.startLocation, taskProcessing: { process: { where: [{ field: "role", contains: "apprentice" }], columns: ["name", "role", "branch"] } } });
+  assert.notEqual(request.taskProcessing?.process, recordedCaptureRequest(input).taskProcessing?.process);
+  assert.throws(() => recordedCaptureRequest({ ...input, taskId: "undeclared-task" }), /No processing fixture/u);
+});
 
 test("fresh capture refuses output outside the owned ignored run root before loading fixtures or browser", async () => {
   await assert.rejects(() => runRecordedCaptureCommand({ repositoryRoot: path.resolve("missing-repository"), fluxiqRepositoryRoot: path.resolve("missing-core"), scenarioId: "company-website", taskId: "company-website-apprentices", evidenceDirectory: path.resolve("outside-evidence"), source: { core: "fixture", extension: "fixture" } }), /output_scope_refused/u);

@@ -14,6 +14,7 @@ import { captureRecordedStoppedStart } from "./stopped-start.js";
 import { recordedStoreDigest } from "../store-digest.js";
 import { verifyRecordedStartingPosition } from "../position.js";
 import { admitRecordedAttempt } from "../admit.js";
+import { recordedCaptureRequest } from "./request.js";
 
 /** Produces fresh, stopped bootstrap-prefix evidence. It never admits or repairs an old campaign. */
 export async function runRecordedCaptureCommand(input: { repositoryRoot: string; fluxiqRepositoryRoot: string; scenarioId: string; taskId: string; evidenceDirectory: string; source: { core: string; extension: string } }) {
@@ -40,7 +41,7 @@ export async function runRecordedCaptureCommand(input: { repositoryRoot: string;
       if (!topology.restartCore || topology.targetMode !== "isolated") throw new Error("recorded_capture_owned_stop_boundary_missing");
       const flowId = await createBlankCreationFlow(control, { projectId, name: "Fresh recorded bootstrap prefix", authorizationPin });
       await control.automationStudioCall("save-flow-generation-instruction", { projectId, flowId, instruction: task.task.instruction }, {}, "web-automation");
-      request = { projectId, flowId, evidenceGuided: true, startLocation: new URL(scenario.startPath, topology.scenarioOrigin).href };
+      request = recordedCaptureRequest({ projectId, flowId, startLocation: new URL(scenario.startPath, topology.scenarioOrigin).href, taskId: input.taskId });
       originalRoot = topology.allocation.fluxiqRoot;
       await topology.restartCore(async () => {
         snapshot = await captureRecordedStoppedStart({ ...input, rootDir: originalRoot!, work: path.join(input.evidenceDirectory, "starting"), projectId, flowId, oracleDigest, entry: { request, chat: null } }, async () => undefined);

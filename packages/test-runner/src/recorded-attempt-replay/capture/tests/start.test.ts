@@ -7,6 +7,7 @@ import { AutomationStudioGatewayTraceEpisodes, AutomationStudioGatewayTraceInsta
 import { ClientGatewayTraceMemoryStore } from "fluxiq/client-gateway";
 import { openOfflineTrialHost } from "../../../offline-trial-experiment/run/offline-trial/index.js";
 import { captureRecordedStart, recordedStoreDigest, verifyRecordedStartingPosition, type RecordedAttemptArtifact } from "../../index.js";
+import { recordedCaptureRequest } from "../request.js";
 
 test("a closed fixture snapshot gets one actual trace receipt, binding source membership, request and snapshot", async () => {
   const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../..");
@@ -15,7 +16,7 @@ test("a closed fixture snapshot gets one actual trace receipt, binding source me
   const rootDir = path.join(work, "execution");
   await mkdir(rootDir);
   const host = openOfflineTrialHost({ rootDir });
-  const entry = { request: { projectId: "project.fixture", flowId: "flow.fixture" }, chat: null };
+  const entry = { request: recordedCaptureRequest({ projectId: "project.fixture", flowId: "flow.fixture", taskId: "company-website-apprentices", startLocation: "http://127.0.0.1/company" }), chat: null };
   const store = new ClientGatewayTraceMemoryStore();
   const episodes = new AutomationStudioGatewayTraceEpisodes({ enabled: true, storeFor: () => store, now: Date.now, flush: { everyEvents: 100, intervalMs: 60_000 }, contractVersions: {}, gatewayStreams: [] });
   let uninstall: (() => void) | undefined;
@@ -40,6 +41,7 @@ test("a closed fixture snapshot gets one actual trace receipt, binding source me
     const artifact: RecordedAttemptArtifact = { version: 1, provenance: "synthetic-fixture", scenarioId: "company-website", taskId: "company-website-apprentices", oracleDigest: "a".repeat(64), source: { core: "fixture", extension: "fixture" }, startingStore: { copied: true, digest: capture.storeDigest, position: position! }, domainEvidenceDigest: null, exchanges: [] };
     const input = { artifact, manifest, store, entry, projectId: "project.fixture", flowId: "flow.fixture" };
     assert.equal((await verifyRecordedStartingPosition(input)).point, "before_entry");
+    await assert.rejects(() => verifyRecordedStartingPosition({ ...input, entry: { ...entry, request: { ...entry.request, taskProcessing: { process: { columns: ["name"] } } } } }), /binding_changed/u);
     await assert.rejects(() => verifyRecordedStartingPosition({ ...input, entry: { changed: true } }), /binding_changed/u);
     await assert.rejects(() => verifyRecordedStartingPosition({ ...input, artifact: { ...artifact, startingStore: { ...artifact.startingStore, digest: "b".repeat(64) } } }), /binding_changed/u);
     await assert.rejects(() => verifyRecordedStartingPosition({ ...input, manifest: { ...manifest, artifacts: [] } }), /not_in_source/u);
