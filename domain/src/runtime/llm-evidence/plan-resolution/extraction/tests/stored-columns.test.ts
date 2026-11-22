@@ -188,7 +188,12 @@ test("the author's names become the read's columns at submit, so the Flow saves 
   assert.ok(Object.hasOwn(fields, "name") && !Object.hasOwn(fields, NAME), "the name column is kept under the author's name");
   const dispatch = webAutomationExtractListDispatch(matched.parameters);
   assert.equal(dispatch.ok, true);
-  if (dispatch.ok) assert.deepEqual((dispatch.payload.recordOutput as { schema: { fields: { id: string }[] } }).schema.fields.map((field) => field.id), ["name", MUTUAL]);
+  if (dispatch.ok) {
+    const saved = dispatch.payload.recordOutput as JsonObject;
+    assert.deepEqual(Object.keys(fields), COLUMNS.map(([key]) => key === NAME ? "name" : key));
+    assert.deepEqual((saved.schema as { fields: { id: string }[] }).fields.map((field) => field.id), Object.keys(fields));
+    assert.deepEqual((saved.process as JsonObject).columns, ["name", MUTUAL]);
+  }
 });
 
 test("a record output Core's parser refuses as the dispatch builds it is refused at submit with the dispatch's own issue", async () => {

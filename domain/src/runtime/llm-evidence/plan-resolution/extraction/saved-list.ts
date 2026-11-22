@@ -43,16 +43,17 @@ export const WEB_PLAN_EXTRACTION_BINDING_KEY = "extractionBinding";
 
 const LIST_PARAMETER = "extractList";
 
-/** What `value`, a saved read's `extractList`, holds of the list `handle` named, or nothing where it holds nothing readable. */
-export function webPlanSavedExtractionBinding(value: Record<string, unknown>, handle: string): WebLlmExtractionBinding | undefined {
+/** A readable saved binding, undefined for legacy absence/unreadability, or null for explicitly rejected schema metadata. */
+export function webPlanSavedExtractionBinding(value: Record<string, unknown>, handle: string): WebLlmExtractionBinding | undefined | null {
   const saved = value[WEB_PLAN_EXTRACTION_BINDING_KEY];
-  if (!isJsonRecord(saved) || typeof saved.location !== "string" || typeof saved.itemCount !== "number") return undefined;
+  if (!isJsonRecord(saved)) return undefined;
+  const schema = Object.hasOwn(saved, "recordSchema") ? parseAutomationStudioRecordSchema(saved.recordSchema) : undefined;
+  if (schema && !schema.ok) return null;
+  if (typeof saved.location !== "string" || typeof saved.itemCount !== "number") return undefined;
   const list = saved.extractList;
   if (!isJsonRecord(list) || typeof list.item !== "string" || !isJsonRecord(list.fields)) return undefined;
   if (saved.frameId !== undefined && typeof saved.frameId !== "number") return undefined;
   if (saved.frameUrlPath !== undefined && typeof saved.frameUrlPath !== "string") return undefined;
-  const schema = saved.recordSchema === undefined ? undefined : parseAutomationStudioRecordSchema(saved.recordSchema);
-  if (schema && !schema.ok) return undefined;
   return present<WebLlmExtractionBinding>({
     handle,
     location: saved.location,

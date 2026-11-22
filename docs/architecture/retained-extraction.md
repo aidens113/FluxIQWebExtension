@@ -6,6 +6,13 @@ readings. If an alias reads another attribute, the original detected reading is
 also retained under a stable noncolliding key. Duplicate readings written by the
 model still require the existing explicit `sameAs` relation.
 
+An authored `dedupe: true` keeps the original requested-column key, so retaining
+hidden evidence does not widen the rows an existing action iteration selects.
+With no authored column selection it still uses every readable field. Explicit
+`dedupe.by` is unchanged. Conditions may reference a retained hidden field instead
+of repeating its inline read; both test the same original value before row dedupe.
+This explicit read selection is separate from final-answer identity processing.
+
 Structure packets retain field semantics, marks and validated identity in the
 handle's structural `recordSchema`. The binding contains no parsed sample or
 captured row. Saved extraction bindings carry that schema with the item, field
@@ -13,6 +20,10 @@ specifications, frame ID/path and one-record declaration, so reopening does not
 depend on the old handle store. Alias resolution rebases field IDs and identity
 references together. A shared link is never promoted to identity when detection
 validated none.
+
+Saved bindings without the new schema metadata retain the legacy handle fallback
+when unreadable. An explicitly present invalid or null schema refuses at the
+binding; it cannot fall through to another in-memory binding with the same name.
 
 The complete safe schema reaches `recordOutput`; requested columns use
 `process.columns`. Additional fields are optional, so a missing badge or helper

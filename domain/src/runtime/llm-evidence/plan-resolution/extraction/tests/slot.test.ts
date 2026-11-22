@@ -25,7 +25,7 @@ import type { AutomationStudioActionConsequence } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListRequestValue } from "../../../../../actions/extraction";
 import { webAutomationOutputNodeId } from "../../../../../output-nodes";
-import { webAutomationDerivedRecordOutput, webAutomationExtractListIssues } from "../../../../../output-nodes/extract-list";
+import { webAutomationExtractListIssues } from "../../../../../output-nodes/extract-list";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -34,6 +34,7 @@ import {
   type WebLlmRepeatingStructure
 } from "../../..";
 import { CAPTURED_DETECTIONS, type CapturedDetection } from "../../../structure/tests/captured-detections";
+import { assertRetainedResolution } from "./retained-resolution";
 
 const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
@@ -102,17 +103,17 @@ test("a detected list keeps the columns the plan names, under the plan's keys, o
   assert.deepEqual(shown.fields.map((field) => field.key), ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"]);
 
   const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: RENAMED } });
-  assert.deepEqual(resolved, resolvedList({ item: CARD, fields: CARD_FIELDS }));
+  assertRetainedResolution(resolved, resolvedList({ item: CARD, fields: CARD_FIELDS }));
 
   // What runs is a request the page reads as written, saved under the instruction's column names.
   const request = resolved.status === "resolved" ? resolved.parameters.extractList : undefined;
   const read = webAutomationExtractListRequestValue(request);
   assert.notEqual(read, undefined);
   assert.deepEqual(webAutomationExtractListIssues(request), []);
-  assert.equal(webAutomationDerivedRecordOutput(read!).label, "Extracted list: name, price, rating, url");
+  assert.deepEqual((resolved.status === "resolved" ? resolved.parameters.recordOutput as JsonObject : {}).process, { columns: ["name", "price", "rating", "url"] });
 
   // The link column itself is the absolute address; only `@href` is the href as written.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { url: "product-link" } } }),
     resolvedList({ item: CARD, fields: { url: { kind: "link", selector: testId("product-link"), required: false } } })
   );
@@ -128,7 +129,7 @@ test("a column named in the instruction's own words resolves to the detected one
   // guessed CSS that read eight cards and no field. It now resolves to the
   // request the fixture's own recording reads, and a condition written in the
   // same words resolves with it.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, {
       extractList: {
         handle: extraction,
@@ -141,7 +142,7 @@ test("a column named in the instruction's own words resolves to the detected one
       fields: CARD_FIELDS,
       where: [
         { field: "rating", atLeast: 4 },
-        { read: { kind: "text", selector: testId("stock-badge"), required: true }, is: "present" }
+        { field: "stock-badge", is: "present" }
       ]
     })
   );
@@ -149,12 +150,12 @@ test("a column named in the instruction's own words resolves to the detected one
   // A selector written where a column name goes is a name too: Core's normalizer
   // folds `.` with the other separators, so `.product-name` is the `product-name`
   // column spelled differently rather than a guess at one.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: ".product-name" } } }),
     resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name } })
   );
   // A field that names its column by nothing but the key it is kept under.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: extraction } } } }),
     resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name } })
   );
@@ -173,12 +174,12 @@ test("a list of the instruction's column names keeps each column under the name 
   // `product-name`, `product-price` and `product-rating` and an oracle comparing
   // by the instruction's names found none of them
   // (`lane-run-mum06sfc-f1d9403f.md`, cause 2).
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["name", "price", "rating", "url@href"] } }),
     resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name, price: CARD_FIELDS.price, rating: CARD_FIELDS.rating, url: CARD_FIELDS.url } })
   );
   // A name that is the detected key, or that could not be a key itself, keeps the detected key.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", ".product-price"] } }),
     resolvedList({ item: CARD, fields: { "product-name": CARD_FIELDS.name, "product-price": CARD_FIELDS.price } })
   );
@@ -207,17 +208,17 @@ test("the handle keeps every detected column, and the read never carries the det
   // A column may be read twice when the second field says it is meant to be the
   // same value (t975 F23; `./shared-column.test.ts` has the refusal without it),
   // and the plan's bounds still apply.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: { column: "product-name", sameAs: "title" } }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }), {
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: { column: "product-name", sameAs: "title" } }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }), {
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { title: CARD_FIELDS.name, name: CARD_FIELDS.name }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }
   });
 
   // The read opens each kept row's own collapsed text itself by default (t752 C2): the value written is carried, so `false` stops it.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, discloseText: true } }), {
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, discloseText: true } }), {
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { name: CARD_FIELDS.name }, discloseText: true } }
   });
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, discloseText: false } }), {
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, discloseText: false } }), {
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { name: CARD_FIELDS.name }, discloseText: false } }
   });
@@ -243,7 +244,7 @@ test("paginate, maxPages and maxScrolls on a handle are refused at that key, nam
   for (const [extra, position] of written) {
     const extractList: JsonObject = { handle: extraction, fields };
     for (const [key, value] of Object.entries(extra)) extractList[key] = value;
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT, NEXT_PAGE_HINT), JSON.stringify(extra));
+    assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT, NEXT_PAGE_HINT), JSON.stringify(extra));
   }
   // The same over a list detected with no pager, and inside a Run Output payload.
   const capture = structuredClone(CATALOG);
@@ -252,10 +253,10 @@ test("paginate, maxPages and maxScrolls on a handle are refused at that key, nam
   const unpaged = runtimeOver(capture);
   const shown = await detect(unpaged);
   assert.equal(shown.pagination, "none");
-  assert.deepEqual(await resolve(unpaged, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields, paginate: { next: "a.next", maxPages: 5 } } }),
+  assertRetainedResolution(await resolve(unpaged, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields, paginate: { next: "a.next", maxPages: 5 } } }),
     refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT, NEXT_PAGE_HINT));
   assert.equal((await resolve(unpaged, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields } })).status, "resolved");
-  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, maxPages: 3 } } }),
+  assertRetainedResolution(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, maxPages: 3 } } }),
     refusedAt("web.handle.malformed", "parameters.extractList.maxPages", EXTRACTION_HINT, NEXT_PAGE_HINT));
 });
 test("the list may be named with the location its evidence reported, at the item, or at each field", async () => {
@@ -283,14 +284,14 @@ test("the list may be named with the location its evidence reported, at the item
     }
   ];
   for (const extractList of placements) {
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), resolvedList({ item: CARD, fields: CARD_FIELDS }), JSON.stringify(extractList));
+    assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), resolvedList({ item: CARD, fields: CARD_FIELDS }), JSON.stringify(extractList));
   }
   // A bare reference names the column its own key names; an array keeps columns under their detected keys; a field may be made optional.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { "product-price": { handle: extraction }, name: { key: "product-name", required: false } } } }),
     resolvedList({ item: CARD, fields: { "product-price": CARD_FIELDS.price, name: { ...CARD_FIELDS.name, required: false } } })
   );
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", "product-link@href"] } }),
     resolvedList({ item: CARD, fields: { "product-name": CARD_FIELDS.name, "product-link": CARD_FIELDS.url } })
   );
@@ -307,16 +308,16 @@ test("a table's columns may be named by header, and a feed's by attribute", asyn
     ["product", "category", "price", "stock"],
     { product: { handle: rows.extraction }, category: { handle: rows.extraction }, price: { handle: rows.extraction }, stock: { handle: rows.extraction } }
   ] as JsonValue[]) {
-    assert.deepEqual(await resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields } }), resolvedList({ item, fields: inventory }), JSON.stringify(fields));
+    assertRetainedResolution(await resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields } }), resolvedList({ item, fields: inventory }), JSON.stringify(fields));
   }
-  assert.deepEqual(await resolve(table, EXTRACT_LIST_NODE, { extractList: { item: { handle: rows.extraction }, fields: { cheapest: "column:Price" }, maxItems: 1 } }), resolvedList({ item, fields: { cheapest: inventory.price }, maxItems: 1 }));
+  assertRetainedResolution(await resolve(table, EXTRACT_LIST_NODE, { extractList: { item: { handle: rows.extraction }, fields: { cheapest: "column:Price" }, maxItems: 1 } }), resolvedList({ item, fields: { cheapest: inventory.price }, maxItems: 1 }));
   // A table cell has no one element whose attribute could be read.
-  assert.deepEqual(await resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields: { price: "price@title" } } }), refusedAt("web.handle.malformed", "extractList.fields.0", EXTRACTION_HINT));
+  assertRetainedResolution(await resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields: { price: "price@title" } } }), refusedAt("web.handle.malformed", "extractList.fields.0", EXTRACTION_HINT));
 
   const feed = runtimeOver(CAPTURED_DETECTIONS["infinite-feed-largest"]);
   const posts = await detect(feed);
   assert.equal(posts.pagination, "infinite_scroll");
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, fields: { title: "feed-item-title", author: "feed-item-author", published: "feed-item-time@datetime" }, maxItems: 40 } }),
     resolvedList({
       item: testId("feed-item"),
@@ -333,13 +334,13 @@ test("a table's columns may be named by header, and a feed's by attribute", asyn
 test("a Run Output node naming a web output resolves its payload as that output's own node would", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
-  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, fields: RENAMED } }, timeoutMs: 30_000 }), {
+  assertRetainedResolution(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, fields: RENAMED } }, timeoutMs: 30_000 }), {
     status: "resolved",
     parameters: { outputId: "web.dom.extract_list", parameters: { extractList: { item: CARD, fields: CARD_FIELDS } }, timeoutMs: 30_000 }
   });
   // An output that is not the web domain's, or a handle beside the payload, is not.
-  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "other.output", parameters: { extractList: { handle: extraction } } }), refusedAt("web.handle.misplaced", "parameters.extractList", EXTRACTION_HINT));
-  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: {}, recordOutput: { handle: extraction } }), refusedAt("web.handle.misplaced", "recordOutput", EXTRACTION_HINT));
+  assertRetainedResolution(await resolve(runtime, "builtin.policy.action", { outputId: "other.output", parameters: { extractList: { handle: extraction } } }), refusedAt("web.handle.misplaced", "parameters.extractList", EXTRACTION_HINT));
+  assertRetainedResolution(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: {}, recordOutput: { handle: extraction } }), refusedAt("web.handle.misplaced", "recordOutput", EXTRACTION_HINT));
 });
 
 test("what cannot name one detected list or column is refused with where the handle goes and where it went wrong", async () => {
@@ -361,7 +362,7 @@ test("what cannot name one detected list or column is refused with where the han
   ];
   const columns = ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"];
   for (const [extractList, field] of unknownField) {
-    assert.deepEqual(
+    assertRetainedResolution(
       await resolve(runtime, EXTRACT_LIST_NODE, { extractList }),
       { status: "refused", issueCodes: ["web.handle.unknown_field", EXTRACTION_HINT, "web.handle.unknown_field:extractList.fields.0"], issues: [{ code: "web.handle.unknown_field", field, valid: columns }] },
       JSON.stringify(extractList)
@@ -393,14 +394,14 @@ test("what cannot name one detected list or column is refused with where the han
     [{ item: 7, fields: { name: { handle: extraction, key: "product-name" } } }, "extractList.item"]
   ];
   for (const [extractList, position] of malformed) {
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
+    assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
   }
   // Two lists in one request cannot be read as one.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: second, key: "product-name" } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction }, fields: { name: { handle: second } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: second, key: "product-name" } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction }, fields: { name: { handle: second } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
   // A location the handle was not issued at is not this handle; a handle not issued to this Flow is unknown to it.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, location: "http://127.0.0.1:4173/elsewhere" } }), refusedAt("web.handle.unknown", "extractList.location"));
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction } } }, "flow.two"), refusedAt("web.handle.unknown", "extractList.item"));
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, location: "http://127.0.0.1:4173/elsewhere" } }), refusedAt("web.handle.unknown", "extractList.location"));
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction } } }, "flow.two"), refusedAt("web.handle.unknown", "extractList.item"));
   // A handle anywhere else in the request, or of the wrong kind, is misplaced.
   const misplaced: Array<[JsonObject, string]> = [
     [{ extractList: { handle: extraction, paginate: { next: { handle: extraction } } } }, "extractList.paginate.next"],
@@ -410,11 +411,11 @@ test("what cannot name one detected list or column is refused with where the han
     [{ selector: { handle: "t1" } }, "selector"]
   ];
   for (const [parameters, position] of misplaced) {
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, parameters), refusedAt("web.handle.misplaced", position, EXTRACTION_HINT), JSON.stringify(parameters));
+    assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, parameters), refusedAt("web.handle.misplaced", position, EXTRACTION_HINT), JSON.stringify(parameters));
   }
   // An extraction handle on an element node belongs in an extraction node; a target handle on one belongs in its selector.
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: extraction } }), refusedAt("web.handle.misplaced", "selector", EXTRACTION_HINT));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: "#go", text: { handle: "t1" } }), refusedAt("web.handle.misplaced", "text", TARGET_HINT));
+  assertRetainedResolution(await resolve(runtime, CLICK_NODE, { selector: { handle: extraction } }), refusedAt("web.handle.misplaced", "selector", EXTRACTION_HINT));
+  assertRetainedResolution(await resolve(runtime, CLICK_NODE, { selector: "#go", text: { handle: "t1" } }), refusedAt("web.handle.misplaced", "text", TARGET_HINT));
 });
 
 test("a refusal quotes where it went wrong by position, never a key or value the model chose", async () => {
@@ -438,14 +439,14 @@ test("once the Flow was shown a detected list, a literal request is refused as a
   const literal = { item: "li", fields: RENAMED };
   // No detection yet in this Flow: the literal is left exactly as written, as it passed live on the numbered-pages build.
   await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), { status: "unchanged" });
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), { status: "unchanged" });
 
   await detect(runtime);
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), refusedAt("web.handle.extraction_required", "extractList", EXTRACTION_HINT));
-  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: literal } }), refusedAt("web.handle.extraction_required", "parameters.extractList", EXTRACTION_HINT));
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), refusedAt("web.handle.extraction_required", "extractList", EXTRACTION_HINT));
+  assertRetainedResolution(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: literal } }), refusedAt("web.handle.extraction_required", "parameters.extractList", EXTRACTION_HINT));
   // Another Flow was shown nothing, and a node without a request is not a guess.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }, "flow.two"), { status: "unchanged" });
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { timeoutMs: 5_000 }), { status: "unchanged" });
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }, "flow.two"), { status: "unchanged" });
+  assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { timeoutMs: 5_000 }), { status: "unchanged" });
 });
 
 // `dedupe` and `sort` live inside `extractList` (decided 2026-09-28), so the
@@ -461,11 +462,11 @@ test("a detected list may be deduplicated and sorted by the plan's own column ke
   // Forgiving spellings in, canonical out: `true` keys on the whole row (every
   // column the read keeps, Core S1's default identity), and a column named by
   // the plan's key sorts by that column.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "price desc" } }),
     resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["name", "price", "rating", "url"] }, sort: [{ field: "price", order: "desc" }] })
   );
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: ["name"], sort: [{ field: "rating", order: "desc", as: "number" }, "name"] } }),
     resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["name"] }, sort: [{ field: "rating", order: "desc", as: "number" }, { field: "name", order: "asc" }] })
   );
@@ -476,7 +477,7 @@ test("a detected list may be deduplicated and sorted by the plan's own column ke
   assert.deepEqual(webAutomationExtractListRequestValue(request)?.sort, [{ field: "price", order: "desc" }]);
 
   // Off is nothing, not a fault.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: false, sort: [] } }),
     resolvedList({ item: CARD, fields: CARD_FIELDS })
   );
@@ -495,6 +496,6 @@ test("a dedupe that is not one, or a sort key naming no column, is refused where
     [{ handle: extraction, fields: RENAMED, sort: ["price desc, newest"] }, "extractList.sort"]
   ];
   for (const [extractList, position] of refusals) {
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
+    assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
   }
 });
