@@ -14,12 +14,16 @@ import { present } from "../present";
 import type { WebLlmPageEvidence } from "../sanitize";
 import { webLlmPageText } from "./page-text";
 import { WEB_LLM_PAGE_SCHEMA_VERSION } from "./schema-version";
+import { webJudgeStateFacts } from "../judge-evidence/state";
+import type { JsonObject } from "fluxiq/core";
 
 export type WebLlmPublishedPage = Pick<WebLlmPageEvidence,
   "trust" | "location" | "truncated" | "failedTarget" | "failedTargetMissing" | "failedTargetUnknown" | "repairParameters" | "repairCandidates"> & {
   schemaVersion: typeof WEB_LLM_PAGE_SCHEMA_VERSION;
   /** Header lines, a blank line and the element lines, joined by "\n". */
   page: string;
+  /** Optional for old published views; new producers supply versioned passive semantic facts from the same capture. */
+  judgeState?: JsonObject;
 };
 
 /** The page as a model is shown it. */
@@ -34,6 +38,7 @@ export function publishedWebLlmPage(evidence: WebLlmPageEvidence): WebLlmPublish
     failedTargetUnknown: evidence.failedTargetUnknown,
     repairParameters: evidence.repairParameters,
     repairCandidates: evidence.repairCandidates,
-    page: webLlmPageText(evidence)
+    page: webLlmPageText(evidence),
+    judgeState: webJudgeStateFacts(evidence)
   });
 }
