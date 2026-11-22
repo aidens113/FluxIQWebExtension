@@ -12,4 +12,4 @@ Scope: replace the ad-hoc machine heavy-step gate with a tested reusable tool; k
 - Active legacy jobs keep the old code until drained. Prepare/test first; deploy the compatibility launcher only after the old holders AND queue are empty. Do not kill jobs, lower thresholds or set priority to force a switch.
 - Source/validation/history belong in MeritPrompts; machine state/history remains ignored outside repositories. Record the final install path and exact checks in the paired data-first ledger.
 
-Status: branch creation queued; no implementation or active-gate replacement yet.
+Status: shared implementation and 24 focused tests pass on feat/memory-aware-heavy-gate; full Merit suite pending. Existing machine gate remains unchanged until a coordinated quiet switch.

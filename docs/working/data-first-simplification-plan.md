@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: P0 and fixed-model P4 accepted/integrated; paired P4 push next. Extraction, automatic processing, recorded proof and memory-gate work active. No paid runs.
+Status detail: P0 and fixed-model P4 accepted, integrated and pushed in both repositories. Extraction, automatic processing, recorded proof and memory-gate work active. No paid runs.
 Created: 2026-11-20
 Last updated: 2026-11-22
 Owner: Senior supervisor agent
@@ -17,9 +17,9 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 | --- | --- | --- |
 | P0 t979 judge recovery | Accepted, integrated and pushed to both dev branches. Lead: 125/125 tests, package check, audit; merge contract gate 70/70. Same-model unreadable recovery and paid receipt preservation. | Covered by subsequent combined checks. |
 | P0 t981 repeat-safe repair | Accepted and integrated in both repositories. Lead: 281/281 tests in 16 files, package check (87,253 ms), audit; merge contract gate 70/70. Core 0.50.4. Both dev branches are pushed. | P5 can sync and continue. |
-| P0 t976 start-only permission | Worker complete: 170 Core tests, 66 Lab tests, 13 catalog tests, package checks/builds and both audits pass. Lead review fixed gate closure, concurrent startup and plan-refusal abort. Source checkpointed and parent synced; Core 0.50.5; lead 161/161 Core tests, 66/66 Lab tests, 13/13 catalog tests, both package checks, dependency builds and audits passed. Integrated in both repositories; Core merge contract gate 70/70 passed. Paired dev push next. | Paired integration, then fixed-model combined acceptance. |
+| P0 t976 start-only permission | Worker complete: 170 Core tests, 66 Lab tests, 13 catalog tests, package checks/builds and both audits pass. Lead review fixed gate closure, concurrent startup and plan-refusal abort. Source checkpointed and parent synced; Core 0.50.5; lead 161/161 Core tests, 66/66 Lab tests, 13/13 catalog tests, both package checks, dependency builds and audits passed. Integrated in both repositories; Core merge contract gate 70/70 passed. Both dev branches are pushed. | Accepted together with fixed-model combined checks. |
 | P1 t982 retained extraction | Worker p0_repair. Schema seam stable; 68 record-set tests reported passing. Full field/metadata transport, compatible schema growth and batch retry parity under test. | Complete additive-page/privacy/campaign-shaped tests, checks, lead verification. |
-| P4 t983 fixed task model | Accepted and integrated in both repositories. Lead 140/140 combined tests, typecheck, library build and audit; Core merge contracts 70/70. Core 0.51.0. | Paired dev push; dependent lanes sync before shared edits. |
+| P4 t983 fixed task model | Accepted and integrated in both repositories. Lead 140/140 combined tests, typecheck, library build and audit; Core merge contracts 70/70. Core 0.51.0. | P1, P2 and offline-proof lanes synced to accepted permission/P4 parent. |
 | P2 t984 automatic data stage | Worker p0_permission active on a minimal stable retainedRows evaluator seam, then operators/binder. Seam backed up/merged into P1; binder 8/8 worker tests/typecheck/audit pass. Explicit automatic-mode readiness/identity work active; dependent memory/interpretation seams await handoffs. | Validate/commit retainedRows seam and merge into P1; continue operators; sync P1/P4 before dependent edits. |
 | P5 t985 replay continuity | Lead implemented F24 successful-retry proof subset; 12/12 focused completion tests pass. Source/docs checkpointed on task branches; not integrated. F4/F23 diagnosis and F18 revalidation remain. | Sync t981; typecheck/audit and remaining recorded-path diagnosis. |
 | S1/S2/S6 t986 offline proof | Worker p0_judge active. Recorded adapter/scoreboard/CLI foundations implemented; narrow Core public trace wrapper 10 worker tests passed, types pending. Real preflight and admitted prefix composition in progress. | Build runnable real-entry proofs; no classifier/prefix mislabeled as task SUCCESS. |
@@ -44,7 +44,15 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **Why this plan exists:** the recorded campaign counted 37 runs, 0 strict SUCCESS, 17 PARTIAL and 20 FAILURE, about $90. Strict SUCCESS means four correct attempts, three predecessor-Flow continuation proofs and zero model calls on attempts 2-4. The original campaign, causes and approved phased design follow; historical task diagnoses remain in the task reports and git history.
 
-**Next:** push paired fixed-model integration; complete extraction; execute data processing, replay persistence and recorded offline proof; only then run the approved small supervised round and final full sweep/promotion. Nothing needs a user decision now.
+**Next:** fixed-model integration is pushed in both repositories; complete extraction; execute data processing, replay persistence and recorded offline proof; only then run the approved small supervised round and final full sweep/promotion. Nothing needs a user decision now.
+
+### Latest execution checkpoint (2026-11-22)
+
+- Both dev branches pushed: downstream 93cda7b0d and Core 4ddfe98a5. No main promotion or paid run.
+- P1 source checkpointed (Core 3b85dd9d0, downstream ba64bbf1c) and both task trees merged current dev. Worker resumed public schema-parser exports and combined validation; 392 tests in loaded downstream entries passed, but 73/135 entries could not load before that export fix. This is not acceptance.
+- P2 lead validation: `pnpm --filter @fluxiq/contracts exec vitest run src/record-sets/process/tests/process-rows.test.ts src/record-sets/process/tests/automatic-processing.test.ts src/record-sets/process/tests/result-operators.test.ts src/record-sets/process/binding/tests/bind.test.ts --maxWorkers=1 --minWorkers=1 --fileParallelism=false` -> 77/77 passed. Independent declaration provenance is implemented; runtime/store integration waits for P1 handoff.
+- S8 shared gate on MeritPrompts branch `feat/memory-aware-heavy-gate`: `node --test tests/heavy-slot.test.mjs` through the existing gate -> 24/24 passed, 6.72 seconds. Real crash/child-lifetime fixtures now pass; an earlier fixture lost its child on parent exit and was corrected to launch an owned detached child. Full suite pending. No active-gate replacement.
+- Offline proof: worker reports Core wrapper 11 tests, types, audit and library build passing on synced parent; lead acceptance pending. Historical F25 has an open/incomplete trace and missing original-start proof and remains inadmissible for whole-task success. Fresh capture architecture separates source trace archive from pre-entry snapshot.
 
 ## Evidence
 
