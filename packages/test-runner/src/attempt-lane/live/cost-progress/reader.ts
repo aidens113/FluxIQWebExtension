@@ -29,7 +29,10 @@ async function receipt(folder: string): Promise<Receipt> {
     const complete = typeof meta.finishedAt === "string" && Number.isFinite(Date.parse(meta.finishedAt));
     if (meta.provider === undefined && meta.taskKind === undefined) {
       // Tool metadata has no model request. A contradictory pair stays unresolved.
-      try { await access(path.join(folder, "request.json")); return { kind: "unreadable" }; }
+      try {
+        await access(path.join(folder, "request.json"));
+        return { kind: "unreadable" };
+      }
       catch (error) { return missing(error) ? { kind: "other", complete } : { kind: "unreadable" }; }
     }
     if (typeof meta.provider !== "string" || !meta.provider || typeof meta.taskKind !== "string" || !meta.taskKind || !complete) return { kind: "unreadable" };
@@ -37,7 +40,10 @@ async function receipt(folder: string): Promise<Receipt> {
     return { kind: "settled", stage: stage(meta), usd };
   }
   // Only existence is read: request bodies, summaries, URLs and page values never enter this observer.
-  try { await access(path.join(folder, "request.json")); return { kind: "pending" }; }
+  try {
+    await access(path.join(folder, "request.json"));
+    return { kind: "pending" };
+  }
   catch (error) { return missing(error) ? { kind: "other", complete: false } : { kind: "unreadable" }; }
 }
 
