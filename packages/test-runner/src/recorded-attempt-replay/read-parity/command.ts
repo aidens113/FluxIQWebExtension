@@ -24,6 +24,7 @@ export async function runRecordedReadCommand(input: { repositoryRoot: string; sc
   let phase = "source";
   let source: Awaited<ReturnType<typeof readRecordedReadSource>> | undefined;
   let page: ReturnType<typeof openWebSnapshotPage> | undefined;
+  let observedExternalCalls: number | null = null;
   let outcome: Record<string, unknown>;
   try {
     const configuration = JSON.parse(await readFile(input.inputFile, "utf8"));
@@ -38,17 +39,18 @@ export async function runRecordedReadCommand(input: { repositoryRoot: string; sc
     if (evaluation.status === "unavailable") outcome = { parityPassed: false, gaps: [evaluation.reason] };
     else {
       phase = "compare";
+      observedExternalCalls = evaluation.observations.requestsLeaked;
       const answered = webOfflineReadAnsweredResult(evaluation.result, source.recordedResult);
       const nativeResultMatches = webOfflineReadControlReproduced(answered, source.recordedResult);
       const comparison = compareRecordedReadRows({ actual: answered.payload?.extracted, expected: source.expectedRows, ...(source.currentDerivedSchema === undefined ? {} : { currentDerivedSchema: source.currentDerivedSchema }) });
       const sandboxSafe = evaluation.observations.scriptsRan === 0 && evaluation.observations.requestsLeaked === 0;
-      const gaps = [...(!nativeResultMatches ? ["native_gateway_result_changed"] : []), ...(!comparison.rowsMatch ? ["canonical_recorded_rows_changed"] : []), ...(!sandboxSafe ? ["snapshot_sandbox_breached"] : []), ...(comparison.currentSchema === "invalid" ? ["current_derived_schema_invalid"] : [])];
-      outcome = { parityPassed: gaps.length === 0, nativeResultMatches, comparison, sandbox: evaluation.observations, gaps };
+      const gaps = [...(!nativeResultMatches ? ["native_gateway_result_changed"] : []), ...(!comparison.rowsMatch ? ["canonical_recorded_rows_changed"] : []), ...(!sandboxSafe ? ["snapshot_sandbox_breached"] : []), ...(comparison.currentSchema !== "valid" ? [`current_derived_schema_${comparison.currentSchema}`] : [])];
+      outcome = { parityPassed: gaps.length === 0, rawRowsMatch: comparison.rowsMatch, nativeResultMatches, comparison, sandbox: evaluation.observations, gaps };
     }
   } catch (error) {
     outcome = { parityPassed: false, gaps: [error instanceof Error && /^recorded_read_[a-z_]+$/u.test(error.message) ? error.message : "recorded_read_unavailable"] };
   } finally { await page?.close(); }
-  const report = { proof: "original_recorded_read_parity", scenarioId: input.scenarioId, traceOpen: true, sourceVerified: source !== undefined, fullAttemptAccepted: false, wholeTraceAdmitted: false, modelCalls: 0, externalCalls: 0, externalUsd: 0, newDetectionProven: false, newlyRetainedFieldsProven: false, phase, source: source?.receipt ?? null, ...outcome, parityPassed: outcome.parityPassed === true };
+  const report = { proof: "original_recorded_read_parity", scenarioId: input.scenarioId, traceOpen: true, sourceVerified: source !== undefined, fullAttemptAccepted: false, wholeTraceAdmitted: false, modelCalls: 0, providerCalls: 0, providerUsd: 0, externalCalls: observedExternalCalls, externalUsd: observedExternalCalls === 0 ? 0 : null, newDetectionProven: false, newlyRetainedFieldsProven: false, phase, source: source?.receipt ?? null, ...outcome, parityPassed: outcome.parityPassed === true };
   await writeFile(input.outputFile, JSON.stringify(report, null, 2), { flag: "wx" });
   return report;
 }

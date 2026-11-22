@@ -78,7 +78,7 @@ Current hardened runner build ->pass (61,251 ms;2,978 files,8,571,028 bytes). Co
 
 Current named Node owner stage ->73/75 passed (87.77 s). Egress fail-closed, raw HTTP malformed/status, scoreboard/source/continuation refusal, CLI, restart/cancellation/undefined, concurrent/extra native request and first-file preservation all passed. Two failures: Buffer.slice aliased raw bytes (corrected to Uint8Array.from at constructor/return; added source-mutation regression), and capture fixture omitted public workspace setup (added host.fluxiq.setup before closed-copy capture). No browser yet. Direct event/action-result/artifact and detect-proposal correlation runs next as a separate public-host gate; source will freeze after narrow fixes for rerun.
 
-Direct F25 correlation stage ->exit0 (373 events; metadata-only output). Exact original identity is established: outbound event89 includes canonical callId read.results.2, command536a2e58-2af9-4c46-a2f8-dfdb8585565f; inbound action_result96 has that same commandId and references HTML artifact90 digest d8ab29fc26e24489d3cc44a6febbe92e71cf1610a4cc1023a5429ea20855af57. This is direct protocol correlation, not time adjacency. Original extractList is821 bytes, SHA25687eea7f4760167b3cc221e28a2c4c93689287739e4f1d9f5c9636758730b638c. Original canonical read0012 meta says read.results.2 at13:06:13.449–20.751Z. Detection0006 meta says detect.results.1 at13:06:01.570–04.906Z; source detectStructure request77 is command8b3995e0-fdfb-486d-807b-67707313180a. Current proposal.fields[].spec scan found none; legacy response shape vs missing full proposal remains unverified, not declared absent. Ignored metadata: test-runs/t986-tools/f25-direct-correlation.json. No selector/label/cell values printed.
+Direct F25 correlation stage ->exit0 (373 events; metadata-only output). Exact original identity is established: outbound event89 includes canonical callId read.results.2, command536a2e58-2af9-4c46-a2f8-dfdb8585565f; inbound action_result96 has that same commandId and references HTML artifact90 digest d8ab29fc26e24489d3cc44a6febbe92e71cf1610a4cc1023a5429ea20855af57. This is direct protocol correlation, not time adjacency. Original extractList is821 bytes, SHA25687eea7f4760167b3cc221e28a2c4c93689287739e4f1d9f5c9636758730b638c. Original canonical read0012 meta says read.results.2 at13:06:13.449ï¿½20.751Z. Detection0006 meta says detect.results.1 at13:06:01.570ï¿½04.906Z; source detectStructure request77 is command8b3995e0-fdfb-486d-807b-67707313180a. Current proposal.fields[].spec scan found none; legacy response shape vs missing full proposal remains unverified, not declared absent. Ignored metadata: test-runs/t986-tools/f25-direct-correlation.json. No selector/label/cell values printed.
 
 QUIET COMPATIBILITY HOLD: no t986 running or queued heavy jobs; lead requested no new heavy jobs until switch-complete notice. Browser remains held. Current unvalidated changes after73/75 owner run: true cursor Uint8Array copies + input-mutation regression, public setup in capture fixture, ownership-only split of start/stopped-start and supplemental auction constant. Scope/read-parity proposal sent to lead: use existing public operation/delivery/reevaluation request plus domain recorded snapshot reconstruction and existing sandboxed actual content reader; no new Core/private seam. Full trace stays open/inadmissible; any original6-field parity is separate from new28-field detection/read proof and full-task acceptance.
 
@@ -87,3 +87,111 @@ Approved written follow-up briefs/t986-read-parity.md read (main commit06d05d80d
 Worker source ready for shared Down freeze. run-attempt-command.ts explicitly handed to root for S5 forwarding; worker will not edit it further. Root owns attempt-lane/live/cost-progress/** and its integration. No Down validator queued until root declares observer snapshot frozen. Core refresh only stage remains queued. Read-parity standalone command uses original literal action once, public native gateway comparison and strict raw ordered arrays; its shared schema check is explicitly current-dispatch-derived and never replaces compared cells. Whole trace remains open/not admitted and fullAttemptAccepted:false. Planned original-six browser command remains held for successful gates and root announcement.
 
 Shared Down source FROZEN after root S5 implementation: root-owned cost-progress/{reader,format,reporter,index}.ts, tests/progress.test.ts and live-only run-attempt-command.ts forwarding/flush. Worker will include its emitted owning test in named validation and same runner types/audit, without claiming authorship. No additional source edits while these combined validators run. Core wrapper post-sync acceptance remains pending; pre-sync11 tests/types/audit/build are historical snapshot only.
+
+S3 read-only intake complete in reports/s3-recorded-regression-intake.md; no extra heavy job or gate implementation. Existing Core runtime graph omits dynamic imports/assets/foreign repository edges and is not an affected-check API; separate generic Core impact seam proposed with pre/post reach and explicit gaps. Parent approved social process:null adjustment applied with owner expectation updated. Company direct declaration is ready from written task semantics: taskProcessing:{process:{where:[{field:role,contains:apprentice}],columns:[name,role,branch]}}; case-insensitive contains and omitted sort preserve source order. Waiting on public P2 AutomationStudioFlowTaskProcessing seam/type handoff before adding this request field, no casts/private copies. Historical read/recorded replies untouched; all other source remains frozen.
+
+Lead read-parity acceptance review applied in approved subtree: schema validity now gates contractRowsMatch/parityPassed separately from raw rowsMatch; positive coercion/null normalization regression added. Replaced recursive callId search with exact producer metadata.callId/source/domainId/projectId/flowId shape. Original t959 toolMetadata source inspected and confirms same contract. Canonical entry receipt SHA d5f69ffbe88d4f74bc818ccd5841cef148caae2867b193ac05e7ecf941b4f4d6 binds original runId/scenario/task; source validates current fixture task with existing ledgerTask and snapshot loopback scenario startPath. Primary artifact id must be inside the public segment boundary. ProviderCalls/providerUsd zero by construction are distinct from observed browser externalCalls; unobserved/leaked networking leaves externalUsd unknown. Added receipt contradiction/self-declaration/network-unknown regressions. Raw historical bytes unchanged. Only Core library refresh remains queued; no Down validator/browser yet.
+
+Root review findings1-4 and scoped corrections recorded above; owned architecture paragraph now explicitly requires schema validity alongside separate exact raw equality, canonical Lab receipt provenance and observed/unknown network accounting. Worker source REFROZEN after this documentation update. Current read-parity additions, cursor/fixture fixes, social process:null change and root S5 integration have NOT YET run combined types/build/owners/audit. Core refresh remains queued; original pre-sync11-test acceptance is not asserted for synced Core. Company direct taskProcessing waits P2 public runtime handoff. No historical replies changed, browser or paid calls launched.
+
+Core refresh gate failure: t986-synced-core-libraries / exec36240 exited1 before slot acquisition or build launch: EPERM opening shared .heavy-slots/v2/admission.lock. None of contracts/sdk/fluxiq/gateway/ui/cloud build commands ran. This is an admission-lock infrastructure failure, not a library/test verdict. Lead notified with exact failure; no blind requeue/override and no t986 running/queued heavy job. Current0.52 library freshness and all combined downstream validation remain not run. Source/docs remain frozen; browser held.
+
+Gate follow-up: root confirmed no holder and removed failed worker ticket, preserving five other tickets; tracing Windows admission.lock read contention. Worker holds all requeue/new heavy submissions; no lock removal or threshold override. Read-parity now also requires an explicit scenario-matching task id/call id rather than allowing task-loader fallback to a different task. All read-parity fixes remain unvalidated until gate/library refresh succeeds; Core and other sources remain frozen.
+
+## Current frozen source and check contract (hold active, not final acceptance)
+
+Exact downstream unit paths below include the root-handed-off run-attempt-command.ts; root cost-progress files and s5-live-cost report are excluded from worker authorship.
+```text
+Checkpointed source paths are recorded in lead checkpoints 14a645262 and b649e9536; the exact later delta is listed below.
+```
+
+Exact Core wrapper checkpoint paths (d3954767d), unchanged by worker after the pre-sync11-test/types/audit/build snapshot; accepted P1/dev is now merged but not revalidated here:
+```text
+docs/architecture/automation-studio/recorded-trace-session.md
+packages/fluxiq/src/framework/automation-service/public/index.ts
+packages/fluxiq/src/framework/automation-service/public/tests/provider-binding-export.test.ts
+packages/fluxiq/src/framework/automation-service/service/offline-trial/matcher-session.ts
+packages/fluxiq/src/framework/automation-service/service/offline-trial/reader-contracts.ts
+packages/fluxiq/src/framework/automation-service/service/recorded-trace-session/contracts.ts
+packages/fluxiq/src/framework/automation-service/service/recorded-trace-session/index.ts
+packages/fluxiq/src/framework/automation-service/service/recorded-trace-session/lifecycle.ts
+packages/fluxiq/src/framework/automation-service/service/recorded-trace-session/session.ts
+packages/fluxiq/src/framework/automation-service/service/recorded-trace-session/tests/session.test.ts
+```
+
+Required validation after root lifts the hold (each heavy stage releases/requeues; source remains frozen):
+
+- Core library refresh: `node scripts/build-cache/cli.mjs contracts:build sdk:build fluxiq:build client-gateway-websocket:build ui-components:build cloud:build` ï¿½ last submission failed on gate admission.lock before any build ran.
+- Core types: `pnpm --filter fluxiq check` ï¿½ not run after P1/dev sync.
+- Core audit: `node scripts/structure-audit.mjs` ï¿½ not run after sync.
+- Core owners: `pnpm --filter fluxiq exec vitest run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/framework/automation-service/service/recorded-trace-session/tests/session.test.ts src/framework/automation-service/service/offline-trial/tests/provenance.test.ts src/framework/automation-service/public/tests/provider-binding-export.test.ts` ï¿½ not run after sync (pre-sync3files/11tests passed).
+- Downstream types: `pnpm --filter @fluxiq-web-extension/test-runner check` ï¿½ not run for current frozen read-parity/S5/P2-fixture snapshot.
+- Downstream build: `pnpm --filter @fluxiq-web-extension/test-runner build` ï¿½ not run for current snapshot.
+- Downstream audit: `node scripts/structure-audit.mjs` ï¿½ current snapshot not run; no baseline increase permitted.
+- Named Node owners, including root's observer, exact command below ï¿½ current snapshot not run. Previous15-file stage73/75 passed; the two failures were byte aliasing and missing fixture setup, both fixed but not rerun.
+
+```powershell
+node --test --test-concurrency=1 packages/test-runner/dist/recorded-attempt-replay/tests/cursor.test.js packages/test-runner/dist/recorded-attempt-replay/tests/egress.test.js packages/test-runner/dist/recorded-attempt-replay/tests/read-step-logs.test.js packages/test-runner/dist/recorded-attempt-replay/capture/tests/start.test.js packages/test-runner/dist/recorded-attempt-replay/capture/tests/command.test.js packages/test-runner/dist/recorded-attempt-replay/capture/tests/transport.test.js packages/test-runner/dist/recorded-attempt-replay/read-parity/tests/source.test.js packages/test-runner/dist/recorded-attempt-replay/read-parity/tests/command.test.js packages/test-runner/dist/recorded-attempt-replay/read-parity/tests/compare.test.js packages/test-runner/dist/coordinator/tests/restart-core.test.js packages/test-runner/dist/extension-chat-check/tests/realistic-scenario-guard.test.js packages/test-runner/dist/attempt-lane/scoreboard/tests/evaluate.test.js packages/test-runner/dist/attempt-lane/scoreboard/tests/export.test.js packages/test-runner/dist/attempt-lane/preflight/tests/evidence.test.js packages/test-runner/dist/attempt-lane/preflight/tests/probe-graph.test.js packages/test-runner/dist/attempt-lane/scripted-model/tests/model-server.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/social-network-feed-delete-stranger-requests.test.js packages/test-runner/dist/attempt-lane/live/cost-progress/tests/progress.test.js packages/test-runner/dist/tests/commands.test.js scripts/lab/tests/provider-free-run.test.mjs scripts/lab/scenario-guard/tests/lab-scenario-refusal.test.mjs
+```
+
+Public P2 dependency: the new public `AutomationStudioFlowTaskProcessing` must reach `AutomationStudioGenerateFlowBootstrapAdaptationInput` / API `GenerateFlowBootstrapAdaptationRequest`. Company fresh capture waits until that property is actually available; no private import, shadow input or cast is permitted. Its declaration, read from unchanged task semantics, is `taskProcessing: {process: {where: [{field: "role", contains: "apprentice"}], columns: ["name", "role", "branch"]}}`; omitted sort preserves page/capture order. Social action-only preflight now replies `process:null`. Historical recorded replies and original read bytes stay unchanged.
+
+Concise review findings: valid current schema is mandatory for contract acceptance; raw ordered equality independently rejects omitted nulls, coercion, added fields/order changes. Exact metadata.callId/source/domain/project replaces recursive coincidence. Original hashed Lab receipt + current fixture task + loopback path replaces flag-only provenance. Provider calls/cost zero by construction is separated from observed browser-network leakage/unknown. Exact89/96/artifact90 identity is proven; whole trace remains open/inadmissible and fullAttemptAccepted:false. Original28-field detector binding is still unverified, so no newly-retained-field or full-task proof is claimed.
+
+Held browser command after successful owners/audit and root announcement only:
+`node scripts/lab/run-lab.mjs recorded-read everything-store --input test-runs/t986-read-parity/input.json --out test-runs/t986-read-parity/report-original-six.json`
+
+No current browser, paid call or heavy job is running/queued for this worker. Lead owns checkpointing/integration; worker performed no git mutations.
+
+
+## Fresh scripted processing compatibility; downstream refrozen
+
+The gate hold was lifted after the shared fix; the sole Core library refresh was resubmitted as `t986-core-library-refresh-final` (session98502), waiting behind existing tickets. No browser or provider call has run.
+
+Actual inventory: eight task script modules and nine registered task IDs (normal/timed crossborder share one module). Seven data/mixed modules now provide explicit root `process` on every fresh panel interpretation; social action-only retains `process:null`. Unknown tasks never receive an empty/null fallback. Original historical replies, tasks/oracles and decision paths are unchanged. The double-add cart remains an intentional negative fixture.
+
+Criteria: apprentices filter role/apprentice and project name/role/branch in page order; Saturday slots retain Saturday/enabled criteria and date/time ordering; towels retain paper-towel/nonaccessory/Delivery/no-ad/rating>=4.5 criteria and descending rating, preserving prior store tie order; both hub variants retain inclusive price<=10/unconditional free shipping/no-ad criteria and price ordering; cart projects the complete final cart; invitations retain message-present rows in Received order; saved items sort the complete saved dataset by price without a final three-row limit. Data criteria needing ad, fulfillment, shipping, group-heading or disabled concepts depend on retained upstream fields and unambiguous P2 binding; this fixture update alone does not establish those bindings or task acceptance. Core automatic deduplication remains unchanged; no guessed identity or empty-result allowance was introduced.
+
+New owner `processing-declarations.test.ts` checks exact task criteria, every fresh reply across supported forms, unchanged instruction, refusal of unknown/action-only fallback, and independent reply objects. Existing local-classifieds assertion now includes its declared processing. Add every existing script owner plus this owner to the named Node checks after runner build. Checks for this delta are not yet run. Company direct capture remains blocked on actual public P2 taskProcessing type availability; no casts/private copies were added.
+
+Exact uncheckpointed downstream delta (read-only git inventory, including new owned files):
+```text
+docs/architecture/recorded-offline-proof.md
+docs/working/data-first-simplification-plan/reports/t986-offline-proof.md
+packages/test-runner/src/attempt-lane/scripted-model/scripts/bigbox-retail-rated-delivery-towels.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/company-website-apprentices.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/company-website-saturday-certificate.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/crossborder-marketplace-free-hubs-under-ten.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/everything-store-batteries-and-descaler.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/index.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/local-classifieds-save-dining-tables.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/processing-declarations.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/professional-network-accept-messaged-invitations.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/social-network-feed-delete-stranger-requests.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/tests/local-classifieds-save-dining-tables.test.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/tests/processing-declarations.test.ts
+packages/test-runner/src/attempt-lane/scripted-model/scripts/tests/social-network-feed-delete-stranger-requests.test.ts
+packages/test-runner/src/recorded-attempt-replay/read-parity/command.ts
+packages/test-runner/src/recorded-attempt-replay/read-parity/compare.ts
+packages/test-runner/src/recorded-attempt-replay/read-parity/source.ts
+packages/test-runner/src/recorded-attempt-replay/read-parity/tests/command.test.ts
+packages/test-runner/src/recorded-attempt-replay/read-parity/tests/compare.test.ts
+packages/test-runner/src/recorded-attempt-replay/read-parity/tests/source.test.ts
+```
+
+Exact supplemental scripted owner command (after current runner build):
+```powershell
+node --test --test-concurrency=1 packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/bigbox-retail-rated-delivery-towels.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/company-website-apprentices.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/company-website-saturday-certificate.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/crossborder-marketplace-free-hubs-under-ten.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/everything-store-batteries-and-descaler.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/local-classifieds-save-dining-tables.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/processing-declarations.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/professional-network-accept-messaged-invitations.test.js packages/test-runner/dist/attempt-lane/scripted-model/scripts/tests/social-network-feed-delete-stranger-requests.test.js
+```
+
+Queue update: Core library refresh session98502 remains waiting for physical headroom; no build output or behavioral result yet. Down source is refrozen.
+
+Core refresh admitted normally (2.50GiB reservation): contracts:build passed18,280ms and sdk:build passed6,143ms; remaining stages running. This is library preparation, not wrapper/downstream acceptance.
+
+Core dependency refresh completed exit0: contracts18,280ms; SDK6,143ms; fluxiq130,340ms; client-gateway-websocket6,501ms; UI15,730ms; cloud restored516ms. Post-sync Core types submitted as next separate gated stage. New fixture test explicitly narrows panel_command before iteration; downstream source refrozen.
+
+Post-sync Core types: `pnpm --filter fluxiq check` -> exit0, build-cache fluxiq:check69,543ms. Core audit submitted as next separate gated stage; owners/downstream checks remain pending.
+
+Post-sync Core audit: `node scripts/structure-audit.mjs` -> exit0, passed (564 warnings,904 baselined); no baseline edits. Three named Core wrapper/provenance/public-export owner files submitted next as one single-worker Vitest stage.
+
+Post-sync Core owners -> exit0,3 files/11 tests passed83.70s (offline-trial provenance4,strict recorded wrapper5,public exports2). Together with current Core types/audit/library build this validates the synced wrapper snapshot; lead acceptance remains independent. Next separate gated stage is current downstream test-runner types.

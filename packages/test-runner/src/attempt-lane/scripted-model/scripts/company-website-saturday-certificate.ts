@@ -1,3 +1,4 @@
+import { scriptedTaskProcess } from "./processing-declarations.js";
 // `company-website-saturday-certificate`: every free Saturday CP12 slot at Wrenfield across the three weeks the
 // booking calendar shows, read one row per slot (date and time), with nothing booked or paid.
 //
@@ -18,7 +19,7 @@ import { COMPANY_WEBSITE_COVERS } from "./company-website-apprentices.js";
 import { currentPageOf, latestOf, pageLine, pressOf, toolCall } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
 
-const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
+const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("company-website-saturday-certificate") });
 
 /** The weeks the calendar shows. */
 const WEEKS = 3;

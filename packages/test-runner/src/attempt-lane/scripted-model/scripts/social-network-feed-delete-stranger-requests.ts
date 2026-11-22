@@ -5,6 +5,6 @@ export function socialNetworkDeleteStrangerRequestsScript(form?: string): Script
   if (form !== "preflight-permission") throw new Error("This social task fixture proves only preflight-permission; it is not a full task script");
   return {
     taskId: "social-network-feed-delete-stranger-requests",
-    replies: { panel_command: [(request) => ({ do: "flow.createHere", with: { instruction: request.message }, acts: ["delete"] })] },
+    replies: { panel_command: [(request) => ({ do: "flow.createHere", with: { instruction: request.message }, acts: ["delete"], process: null })] },
   };
 }

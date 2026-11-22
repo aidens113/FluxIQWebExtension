@@ -11,6 +11,7 @@ import { BIGBOX_RETAIL_RATED_DELIVERY_TOWELS_SCRIPT } from "./bigbox-retail-rate
 import { socialNetworkDeleteStrangerRequestsScript } from "./social-network-feed-delete-stranger-requests.js";
 
 export { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
+export { scriptedTaskProcess } from "./processing-declarations.js";
 
 /** Which form of a task's script to run (`FLUXIQ_ATTEMPT_SCRIPT_FORM`), where it has more than one: `lab attempt` takes no such option, since a live run has no script. */
 export const SCRIPTED_MODEL_FORM_ENV = "FLUXIQ_ATTEMPT_SCRIPT_FORM";

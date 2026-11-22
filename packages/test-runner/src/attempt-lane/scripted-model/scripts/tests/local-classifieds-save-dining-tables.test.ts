@@ -303,7 +303,7 @@ test("the same words again go to the same command, and there are replies for eve
   const script = scriptedModelScriptFor(TASK, "again-check");
   assert.equal(script.replies.panel_command!.length, 4);
   const message = "Save the tables.";
-  assert.deepEqual(script.replies.panel_command![1]!({ kind: "panel_command", ordinal: 2, model: "m", jsonText: false, message, payload: undefined }), { do: "flow.createHere", with: { instruction: message } });
+  assert.deepEqual(script.replies.panel_command![1]!({ kind: "panel_command", ordinal: 2, model: "m", jsonText: false, message, payload: undefined }), { do: "flow.createHere", with: { instruction: message }, process: { sort: [{ field: "price", order: "asc", as: "number" }], columns: ["title", "price", "status"] } });
   assert.ok(script.replies.loop_verification!.length >= 4);
 });
 

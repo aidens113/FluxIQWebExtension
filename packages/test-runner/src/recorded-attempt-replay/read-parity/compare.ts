@@ -18,5 +18,5 @@ export function compareRecordedReadRows(input: { actual: unknown; expected: unkn
       currentSchema = actual !== undefined && validation.rows.length === actual.length && validation.invalidCount === 0 && !validation.truncated ? "valid" : "invalid";
     }
   }
-  return { rowsMatch, expectedRecords: expected?.length ?? null, actualRecords: actual?.length ?? null, expectedFieldCounts: expected ? [...new Set(expected.map(row => Object.keys(row).length))] : [], actualFieldCounts: actual ? [...new Set(actual.map(row => Object.keys(row).length))] : [], schemaOrigin: "current_dispatch_derived" as const, currentSchema, invalidRecords };
+  return { rowsMatch, contractRowsMatch: rowsMatch && currentSchema === "valid", expectedRecords: expected?.length ?? null, actualRecords: actual?.length ?? null, expectedFieldCounts: expected ? [...new Set(expected.map(row => Object.keys(row).length))] : [], actualFieldCounts: actual ? [...new Set(actual.map(row => Object.keys(row).length))] : [], schemaOrigin: "current_dispatch_derived" as const, currentSchema, invalidRecords };
 }

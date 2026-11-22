@@ -1,56 +1,53 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { clientGatewayTraceRecordedDeliveries, clientGatewayTraceReevaluationRequest, readClientGatewayTraceOperation, type ClientGatewayTraceRecordedOperation, type ClientGatewayTraceRecordedPayload } from "fluxiq/client-gateway";
+import { clientGatewayTraceRecordedDeliveries, clientGatewayTraceReevaluationRequest, readClientGatewayTraceOperation, type ClientGatewayTraceEvent, type ClientGatewayTraceRecordedOperation, type ClientGatewayTraceRecordedPayload } from "fluxiq/client-gateway";
 import type { JsonObject } from "fluxiq/core";
-import { webAutomationActionFromGatewayCommand, webAutomationExtractListDispatch, webOfflineReadGatewayCommand, webOfflineReadRecordedSnapshot } from "@fluxiq-web-extension/domain/node";
+import { WEB_AUTOMATION_DOMAIN_ID, webAutomationActionFromGatewayCommand, webAutomationExtractListDispatch, webOfflineReadGatewayCommand, webOfflineReadRecordedSnapshot } from "@fluxiq-web-extension/domain/node";
 import { openOfflineTrialHost } from "../../offline-trial-experiment/run/offline-trial/index.js";
 import { assertRealisticScenarios } from "../../realistic-scenarios/index.js";
+import { loadCreatedFlowRequest } from "../../flow-lane/index.js";
+import { ledgerTask } from "../../lab-runs/index.js";
+import { resolveLabPaths } from "../../lab-instance/index.js";
+import { loadScenarioManifest } from "../../scenarios.js";
+
+type SourceInput = { repositoryRoot: string; scenarioId: string; taskId: string; sourceRootDir: string; projectId: string; traceId: string; commandSequence: number; resultSequence: number; commandId: string; callId: string; primaryArtifactId: string; primarySha256: string; bindingSha256: string; canonicalResultFile: string; canonicalResultSha256: string; runEntrySha256: string };
+const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
 
 /** Admits this exact read segment, never the open trace or its whole task. Raw values stay in memory. */
-export async function readRecordedReadSource(input: { repositoryRoot: string; scenarioId: string; sourceRootDir: string; projectId: string; traceId: string; commandSequence: number; resultSequence: number; commandId: string; callId: string; primaryArtifactId: string; primarySha256: string; bindingSha256: string; canonicalResultFile: string; canonicalResultSha256: string }) {
+export async function readRecordedReadSource(input: SourceInput) {
   assertRealisticScenarios([input.scenarioId], "Recorded read parity");
-  const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
-  for (const value of [input.primarySha256, input.bindingSha256, input.canonicalResultSha256]) if (!/^[a-f0-9]{64}$/u.test(value)) throw new Error("recorded_read_digest_required");
+  if (typeof input.taskId !== "string" || !input.taskId.startsWith(`${input.scenarioId}-`) || typeof input.callId !== "string" || !input.callId) throw new Error("recorded_read_identity_required");
+  for (const value of [input.primarySha256, input.bindingSha256, input.canonicalResultSha256, input.runEntrySha256]) if (!/^[a-f0-9]{64}$/u.test(value)) throw new Error("recorded_read_digest_required");
   const [allowed, root] = await Promise.all([realpath(path.join(input.repositoryRoot, "test-runs")), realpath(input.sourceRootDir)]);
   const relative = path.relative(allowed, root);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("recorded_read_owned_copy_required");
-  if (path.basename(input.canonicalResultFile) !== "result.json" || !/^\d+-tool-core\.run_node$/u.test(path.basename(path.dirname(input.canonicalResultFile)))) throw new Error("recorded_read_canonical_tool_result_required");
-  const [canonicalBytes, metadataText] = await Promise.all([readFile(input.canonicalResultFile), readFile(path.join(path.dirname(input.canonicalResultFile), "meta.json"), "utf8")]);
-  if (digest(canonicalBytes) !== input.canonicalResultSha256) throw new Error("recorded_read_canonical_result_changed");
-  const canonical = JSON.parse(canonicalBytes.toString("utf8"));
-  const metadata = JSON.parse(metadataText);
-  if (metadata.kind !== "tool" || metadata.toolId !== "core.run_node" || metadata.callId !== input.callId || !Array.isArray(canonical.read?.extracted) || !canonical.read.extracted.length) throw new Error("recorded_read_canonical_identity_unproved");
+  const canonical = await canonicalEvidence(input);
   const host = openOfflineTrialHost({ rootDir: root });
   try {
     const store = host.traceStore(input.projectId);
     const manifest = await store.readManifest(input.traceId);
     if (!manifest || manifest.origin.kind !== "live") throw new Error("recorded_read_live_source_required");
     const events = await store.readEventRange(input.traceId, 1, Number.MAX_SAFE_INTEGER);
-    const operations: ClientGatewayTraceRecordedOperation[] = [];
-    for (const event of events) {
-      if (event.kind !== "outbound" || event.messageType !== "server.execute_action" || event.payload.encoding !== "json") continue;
-      const envelope = event.payload.value as Record<string, unknown>;
-      const payload = envelope?.payload as ClientGatewayTraceRecordedPayload | undefined;
-      if (!payload || typeof payload.commandId !== "string") continue;
-      operations.push({ ...readClientGatewayTraceOperation(payload), sequence: event.sequence, logicalMs: event.time.logicalMs, commandId: payload.commandId, session: event.session ?? undefined, redacted: event.redactions.length > 0 });
-    }
+    const operations = recordedOperations(events);
     const cursor = operations.findIndex(operation => operation.sequence === input.commandSequence && operation.commandId === input.commandId);
     const recorded = operations[cursor];
     const event = events.find(event => event.sequence === input.commandSequence);
     if (!recorded || !event || event.payload.encoding !== "json" || recorded.redacted || recorded.actionType !== "web.dom.extract_list") throw new Error("recorded_read_original_command_missing");
     const command = (event.payload.value as { payload: ClientGatewayTraceRecordedPayload }).payload;
-    const hasCallId = (value: unknown): boolean => value === input.callId || Boolean(value && typeof value === "object" && Object.values(value).some(hasCallId));
-    if (!hasCallId(command.metadata)) throw new Error("recorded_read_original_call_id_missing");
+    const metadata = command.metadata as Record<string, unknown> | undefined;
+    if (!metadata || metadata.callId !== input.callId || metadata.source !== "llm-evidence-runtime" || metadata.projectId !== input.projectId || metadata.domainId !== WEB_AUTOMATION_DOMAIN_ID || typeof metadata.flowId !== "string" || !metadata.flowId) throw new Error("recorded_read_original_call_id_missing");
     const parameters = command.parameters as Record<string, unknown> | undefined;
     if (!parameters?.extractList || digest(JSON.stringify(parameters.extractList)) !== input.bindingSha256) throw new Error("recorded_read_original_binding_changed");
     const deliveries = clientGatewayTraceRecordedDeliveries(events, operations, recorded.session ?? null);
     const scoped = await clientGatewayTraceReevaluationRequest({ store, traceId: input.traceId, manifest, operations, cursor, segment: deliveries.segments[cursor] ?? [], command, operation: recorded, fields: [] });
     if (!scoped || scoped.replaced.event.sequence !== input.resultSequence) throw new Error("recorded_read_single_result_unproved");
     const snapshot = await webOfflineReadRecordedSnapshot(scoped.request);
-    const descriptor = manifest.artifacts.find(artifact => artifact.id === input.primaryArtifactId && artifact.sha256 === input.primarySha256);
+    const descriptor = scoped.request.artifacts.find(artifact => artifact.id === input.primaryArtifactId && artifact.sha256 === input.primarySha256);
     if (!snapshot || !descriptor || snapshot.primary.sha256 !== descriptor.sha256) throw new Error("recorded_read_primary_identity_unproved");
     for (const part of [snapshot.primary, ...snapshot.resources]) if (digest(part.bytes) !== part.sha256) throw new Error("recorded_read_snapshot_integrity_failed");
+    const url = new URL(snapshot.url);
+    if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.username || url.password || !url.pathname.startsWith(canonical.startPath)) throw new Error("recorded_read_fixture_url_unproved");
     const gatewayCommand = webOfflineReadGatewayCommand(command);
     if (!gatewayCommand) throw new Error("recorded_read_command_invalid");
     const action = webAutomationActionFromGatewayCommand(gatewayCommand);
@@ -58,6 +55,37 @@ export async function readRecordedReadSource(input: { repositoryRoot: string; sc
     const dispatch = webAutomationExtractListDispatch({ extractList: parameters.extractList as JsonObject });
     const output = dispatch.ok ? dispatch.payload.recordOutput : undefined;
     const currentDerivedSchema = output && typeof output === "object" && !Array.isArray(output) ? output.schema : undefined;
-    return { snapshot, action, recordedResult: scoped.request.recordedResult, expectedRows: canonical.read.extracted as unknown, currentDerivedSchema, receipt: { traceId: input.traceId, traceOpen: manifest.closedAt === null, wholeTraceAdmitted: false as const, commandSequence: recorded.sequence, resultSequence: scoped.replaced.event.sequence, commandId: input.commandId, callId: input.callId, primarySha256: descriptor.sha256, bindingSha256: input.bindingSha256, canonicalResultSha256: input.canonicalResultSha256, snapshotUnavailableParts: snapshot.unavailable } };
+    return { snapshot, action, recordedResult: scoped.request.recordedResult, expectedRows: canonical.rows, currentDerivedSchema, receipt: { ...canonical.receipt, traceId: input.traceId, traceOpen: manifest.closedAt === null, wholeTraceAdmitted: false as const, commandSequence: recorded.sequence, resultSequence: scoped.replaced.event.sequence, commandId: input.commandId, callId: input.callId, primarySha256: descriptor.sha256, bindingSha256: input.bindingSha256, canonicalResultSha256: input.canonicalResultSha256, snapshotUnavailableParts: snapshot.unavailable } };
   } finally { await host.close(); }
+}
+
+async function canonicalEvidence(input: SourceInput) {
+  const step = path.dirname(input.canonicalResultFile);
+  if (path.basename(input.canonicalResultFile) !== "result.json" || !/^\d+-tool-core\.run_node$/u.test(path.basename(step)) || path.basename(path.dirname(step)) !== "steps") throw new Error("recorded_read_canonical_tool_result_required");
+  const run = path.dirname(path.dirname(step));
+  const [bytes, metadataBytes, entryBytes] = await Promise.all([readFile(input.canonicalResultFile), readFile(path.join(step, "meta.json")), readFile(path.join(run, "entry.json"))]);
+  if (digest(bytes) !== input.canonicalResultSha256) throw new Error("recorded_read_canonical_result_changed");
+  if (digest(entryBytes) !== input.runEntrySha256) throw new Error("recorded_read_run_receipt_changed");
+  const result = JSON.parse(bytes.toString("utf8"));
+  const metadata = JSON.parse(metadataBytes.toString("utf8"));
+  const entry = JSON.parse(entryBytes.toString("utf8"));
+  if (metadata.kind !== "tool" || metadata.toolId !== "core.run_node" || metadata.callId !== input.callId || !Array.isArray(result.read?.extracted) || !result.read.extracted.length) throw new Error("recorded_read_canonical_identity_unproved");
+  if (entry.runId !== path.basename(run) || entry.scenarioId !== input.scenarioId) throw new Error("recorded_read_fixture_receipt_mismatch");
+  const paths = resolveLabPaths(input.repositoryRoot);
+  const scenario = await loadScenarioManifest(input.repositoryRoot, input.scenarioId, paths.scenarioLabDist);
+  const task = await loadCreatedFlowRequest({ repositoryRoot: input.repositoryRoot, scenarioLabDist: paths.scenarioLabDist, scenarioId: input.scenarioId, taskId: input.taskId });
+  const selected = ledgerTask({ scenarioId: input.scenarioId, work: task.task.id, workflowId: task.workflowId, variantId: task.variantId });
+  if (entry.task !== selected) throw new Error("recorded_read_fixture_task_changed");
+  return { rows: result.read.extracted as unknown, startPath: scenario.startPath, receipt: { runId: entry.runId as string, scenarioId: input.scenarioId, taskId: task.task.id, runEntrySha256: input.runEntrySha256, currentTaskSha256: digest(JSON.stringify(task.task)) } };
+}
+
+function recordedOperations(events: readonly ClientGatewayTraceEvent[]): ClientGatewayTraceRecordedOperation[] {
+  const operations: ClientGatewayTraceRecordedOperation[] = [];
+  for (const event of events) {
+    if (event.kind !== "outbound" || event.messageType !== "server.execute_action" || event.payload.encoding !== "json") continue;
+    const envelope = event.payload.value as Record<string, unknown>;
+    const payload = envelope?.payload as ClientGatewayTraceRecordedPayload | undefined;
+    if (payload && typeof payload.commandId === "string") operations.push({ ...readClientGatewayTraceOperation(payload), sequence: event.sequence, logicalMs: event.time.logicalMs, commandId: payload.commandId, session: event.session ?? undefined, redacted: event.redactions.length > 0 });
+  }
+  return operations;
 }

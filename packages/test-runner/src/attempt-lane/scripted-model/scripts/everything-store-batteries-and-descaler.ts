@@ -1,3 +1,4 @@
+import { scriptedTaskProcess } from "./processing-declarations.js";
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, pageLine, pressOf, toolCall } from "./evidence.js";
@@ -11,7 +12,7 @@ import { scriptedJudgement } from "./judgement.js";
  * The presses declare nothing, which is the record's disclosed limit (plan D6): a press that declared nothing cannot
  * be told from one that only opens a page, so it is never refused, and the double-act oracle is what catches it.
  */
-const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
+const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("everything-store-batteries-and-descaler") });
 
 const DESCALER = "Tidewell Kettle Descaler";
 const BATTERIES = "Brightaisle Basics AA";
