@@ -33,3 +33,36 @@ Validation: read-only inspection of named task wrappers, graph APIs, scoreboard 
 Not verified: actual impact selection or admitted recorded-regression execution.
 Report: docs/working/data-first-simplification-plan/reports/s3-recorded-regression-intake.md
 Notes: Main t986 implementation/validation remains active; no source or paid action from this intake.
+
+
+## S3 concrete API and mandatory-gate brief (proposal only)
+Role: bounded Core impact-tool worker and downstream gate worker, serial at the public interface; no implementation authorized by this intake.
+Goal: before parent merge, select and execute only applicable admitted provider-free recorded regressions, with auditable zero-selection or blocking gaps.
+Core proposed owner: scripts/task/affected-checks/{index,plan,snapshot,resolve,contracts}.mjs and owning tests; preserve existing evaluation/cycle graph semantics.
+Down proposed owner: scripts/lab/recorded-regression/{registry,admit,run,receipt,index}.mjs, owning tests, and minimal scripts/task/finish.mjs delegation after narrow checks.
+Public API: await planAffectedChecks({ repositories, roots, assetEdges }) -> { sourceBasis, changes, selected, unaffected, gaps, graphComplete, planDigest }.
+repositories: [{ id, root, before:{head}, after:{head,dirtyDigest}, linkedPackages:{[publicPackageName]:repositoryId} }]; reject unknown heads, stale dirty digests or ambiguous package ownership.
+roots: [{ id, repositoryId, entries:string[] }]; assetEdges: [{ repositoryId, owner, asset }]; ids/paths are normalized and repository-contained.
+Engine reads immutable before git objects and hash-verified candidate working content; sourceBasis binds both paired heads, file status/content digests and dirty fingerprints.
+Build independent before/after import graphs; union reverse impact so removed imports, deleted roots and renames cannot disappear from selection.
+Resolve actual package.json public exports and source entry targets in BOTH paired snapshots, including barrels, literal dynamic imports and declared prompt/model assets.
+Each selected row carries changed path -> import/export/asset chain -> root evidence with before/after side; gaps name unresolved relevant edges without exposing content.
+Nonliteral dynamic import, unresolved paired export, unreadable changed asset or absent required root yields graphComplete:false and blocking gap, never unaffected.
+Down registry row: {id,rootIds,scenarioId,taskId,taskDigest,oracleDigest,requiredProof,artifactId,artifactManifestDigest}; roots must be real executable boundaries.
+Proof classes: raw_transport, original_read, recorded_build, four_attempt_task; each has its own minimum admission contract and may not substitute for a stronger class.
+Raw transport needs complete exact request/reply bytes/status/MIME/correlation; original_read needs exact command/result/artifact/binding identity, raw-row equality and valid public schema.
+Recorded_build additionally needs completed live domain trace, authentic pre-entry starting snapshot/position and strict public runtime composition; open/stopped prefixes are diagnostic only.
+four_attempt_task additionally needs unchanged task/oracle, complete result acceptance and three saved-Flow continuation proofs with explicit calls/costs; unknown is not zero.
+An absent capture is an explicit registry state {artifactId,state:"absent",reason}; selection produces blocked_missing_capture, not a skip, fabricated fixture or removed row.
+Other admission gaps (incomplete trace, missing start, unmatched request, historical process divergence) remain exact blocking reasons for the required class.
+Finish order: integrate candidate dev/Core currency -> existing narrow checks -> verified affected plan -> selected admission/replay -> receipt verification -> parent merge.
+Mandatory semantics: --skip-checks and --full-check do not bypass this gate; there is no success override or automatic paid fallback.
+Only graphComplete:true with zero applicable rows may skip replay successfully; emit unaffected receipt with changed basis, examined roots and planDigest.
+Any applicable absent/invalid evidence, unregistered relevant replay root, unresolved reach or failed replay exits nonzero before merge; report distance reached and first gap.
+Cache reuse requires identical paired sourceBasis, planDigest, registry/task/oracle/artifact digests, proof class and replay implementation fingerprint; otherwise rerun.
+Keep proof outputs per fixture; downstream receipt names observed class/result/continuation and measured provider-free egress, with fullAttemptAccepted:false for every prefix.
+Prompt/model asset impact also selects required supervised fixed-model smoke; missing current approved smoke receipt blocks its own gate, never spends automatically.
+Acceptance owners: deletion/rename, barrel/export retarget, paired public dependency, literal dynamic import, declared asset, unresolved reach, unrelated leaf and stale snapshot.
+Down owners: missing artifact selected vs unrelated, weaker-proof refusal, zero-selection receipt, --skip-checks nonbypass, stale cache and first divergence/no network fallback.
+No ten-task full suite by default; no synthetic replacement of historical captures; F25 remains only original-read candidate until that actual reader proof passes.
+Validation for this follow-up: read-only reasoning from existing intake; no extra graph execution, heavy job, product edit, browser or provider call.

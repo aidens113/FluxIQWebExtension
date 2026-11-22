@@ -10,6 +10,7 @@ import { loadCreatedFlowRequest } from "../../flow-lane/index.js";
 import { ledgerTask } from "../../lab-runs/index.js";
 import { resolveLabPaths } from "../../lab-instance/index.js";
 import { loadScenarioManifest } from "../../scenarios.js";
+import { recordedReadFixtureUrlMatches } from "./fixture-url.js";
 
 type SourceInput = { repositoryRoot: string; scenarioId: string; taskId: string; sourceRootDir: string; projectId: string; traceId: string; commandSequence: number; resultSequence: number; commandId: string; callId: string; primaryArtifactId: string; primarySha256: string; bindingSha256: string; canonicalResultFile: string; canonicalResultSha256: string; runEntrySha256: string };
 const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
@@ -46,8 +47,7 @@ export async function readRecordedReadSource(input: SourceInput) {
     const descriptor = scoped.request.artifacts.find(artifact => artifact.id === input.primaryArtifactId && artifact.sha256 === input.primarySha256);
     if (!snapshot || !descriptor || snapshot.primary.sha256 !== descriptor.sha256) throw new Error("recorded_read_primary_identity_unproved");
     for (const part of [snapshot.primary, ...snapshot.resources]) if (digest(part.bytes) !== part.sha256) throw new Error("recorded_read_snapshot_integrity_failed");
-    const url = new URL(snapshot.url);
-    if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.username || url.password || !url.pathname.startsWith(canonical.startPath)) throw new Error("recorded_read_fixture_url_unproved");
+    if (!recordedReadFixtureUrlMatches(snapshot.url, canonical.startPath)) throw new Error("recorded_read_fixture_url_unproved");
     const gatewayCommand = webOfflineReadGatewayCommand(command);
     if (!gatewayCommand) throw new Error("recorded_read_command_invalid");
     const action = webAutomationActionFromGatewayCommand(gatewayCommand);
