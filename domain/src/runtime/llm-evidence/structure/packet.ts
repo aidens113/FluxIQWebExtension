@@ -366,7 +366,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
   // A primary proposal of one item with no way to continue is a record by
   // construction: a list needs a run of three or a record pair, so only the
   // label/value receipt and a lone record are sent with one item.
-  const binding = boundList(input, input.handle, proposal, readable, paginate, proposal.itemCount === 1 && paginate === undefined);
+  const binding = boundList(input, input.handle, proposal, readable, paginate, proposal.itemCount === 1 && paginate === undefined, rows.rowIdentity);
   return { packet, binding, recordBinding, cellsBinding: cells?.binding };
 }
 
@@ -433,8 +433,10 @@ function boundList(
   proposal: WebAutomationExtractionProposal,
   readable: ReadableField[],
   paginate: WebAutomationExtractListPagination | undefined,
-  oneRecord: boolean
+  oneRecord: boolean,
+  rowIdentity?: readonly string[]
 ): WebLlmExtractionBinding {
+  const labels = new Set<string>();
   return present<WebLlmExtractionBinding>({
     handle,
     location: input.location,
@@ -460,6 +462,25 @@ function boundList(
       now: undefined
     }),
     itemCount: proposal.itemCount,
+    recordSchema: present<NonNullable<WebLlmExtractionBinding["recordSchema"]>>({
+      schemaVersion: "0.1",
+      fields: readable.map((field) => {
+        const preferred = field.shown.label.slice(0, 200);
+        let label = preferred;
+        for (let suffix = 2; labels.has(label); suffix += 1) label = `${preferred.slice(0, 80)} (${field.key} ${suffix})`;
+        labels.add(label);
+        return present<NonNullable<WebLlmExtractionBinding["recordSchema"]>["fields"][number]>({
+          id: field.key,
+          label,
+          valueType: "string",
+          semanticType: field.shown.type,
+          mark: field.spec.mark,
+          required: undefined,
+          handling: undefined
+        });
+      }),
+      primaryKey: rowIdentity?.length ? [...rowIdentity] : undefined
+    }),
     oneRecord: oneRecord ? true : undefined
   });
 }

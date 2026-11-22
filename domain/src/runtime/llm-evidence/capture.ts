@@ -59,6 +59,8 @@ export type WebLlmEvidenceToolExecution = {
   kind: "llm_evidence_tool_execution";
   evidence: JsonValue;
   effectApplied: boolean;
+  /** Validated host schema for real rows; null means rejected metadata without changing execution facts. */
+  recordSchema?: import("fluxiq/automation").AutomationStudioRecordSchema | null;
   /** CONTROL only: projected before any raw result serializer can observe it. */
   failure?: AutomationStudioFailureRecord;
   actionability?: AutomationStudioTargetActionabilityRecord;
@@ -388,7 +390,7 @@ type WebLlmEvidenceToolCallFacts = {
  * until then every replayed list read would be refused whole.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "failure", "actionability", "targetsUnchanged", "resultCode", "resultReason", "diagnostic", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "outputs", "draft"
+  "kind", "evidence", "effectApplied", "failure", "actionability", "targetsUnchanged", "resultCode", "resultReason", "diagnostic", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "outputs", "draft", "recordSchema"
 ];
 
 export function toolExecution(
@@ -405,6 +407,7 @@ export function toolExecution(
     kind: "llm_evidence_tool_execution",
     evidence,
     effectApplied,
+    recordSchema: undefined,
     failure: projectAutomationStudioFailureControlRecord(failure),
     actionability: parseAutomationStudioTargetActionabilityRecord(actionability),
     targetsUnchanged,

@@ -58,6 +58,7 @@ import { webExtractionMatchedColumn } from "../../../../output-nodes";
 import type { WebPlanValuePath } from "../handle-tokens";
 import { webPlanBoundedIssues, type WebPlanRefusalIssue } from "./refusal-issues";
 import { webPlanUnknownColumnIssues } from "./unknown-column-issues";
+import { webExtractionColumnReading } from "./column-reading";
 
 /**
  * A name that found its column by something other than the key verbatim: what
@@ -96,7 +97,7 @@ export type WebExtractionColumnIssue = "web.handle.malformed" | "web.handle.ambi
 export const WEB_EXTRACTION_SAME_AS_HINT = "web.handle.expected.extract_list.same_as";
 
 export type WebExtractionColumns =
-  | { ok: true; fields: Record<string, WebAutomationExtractField>; assumed: WebExtractionColumnAssumption[] }
+  | { ok: true; fields: Record<string, WebAutomationExtractField>; assumed: WebExtractionColumnAssumption[]; sources: Record<string, string>; requested?: string[] }
   /**
    * `issues` for a name no column answers to: the name, the read's columns, and whether the items changed since the
    * detection (`./unknown-column-issues.ts`, t502); and for a field reading another field's column: the field, the
@@ -145,7 +146,7 @@ type Entry = { at: WebPlanValuePath; entry: unknown; ownKey: string | undefined;
 /** The columns `fields` keeps, every detected one when it is absent. `path` is where `fields` itself is. */
 export function keptWebExtractionColumns(fields: unknown, measured: Detected, path: WebPlanValuePath): WebExtractionColumns {
   const detected = unrequired(measured);
-  if (fields === undefined) return { ok: true, fields: structuredClone(detected), assumed: [] };
+  if (fields === undefined) return { ok: true, fields: structuredClone(detected), assumed: [], sources: Object.fromEntries(Object.keys(detected).map((key) => [key, key])) };
   const entries = writtenEntries(fields, path);
   if (!Array.isArray(entries)) return entries;
 
@@ -173,6 +174,7 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
   }
 
   const kept: Record<string, WebAutomationExtractField> = {};
+  const sources: Record<string, string> = {};
   const keptUnder: string[] = [];
   const assumed: WebExtractionColumnAssumption[] = [];
   for (const written of entries) {
@@ -188,12 +190,22 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
     if (!isWebAutomationExtractFieldKey(under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     if (Object.hasOwn(kept, under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     kept[under] = column.field;
+    sources[under] = column.key;
     keptUnder.push(under);
     if (column.assumed !== undefined) assumed.push(column.assumed);
   }
   const shared = sharedColumn(entries, keptUnder, kept, detected);
   if (shared !== undefined) return shared;
-  return { ok: true, fields: kept, assumed };
+  // Requested columns are a view. Keep every other detected reading too,
+  // including the original reading when an alias requested another attribute.
+  for (const [key, field] of Object.entries(detected)) {
+    if (keptUnder.some((under) => sources[under] === key && webExtractionColumnReading(kept[under]!) === webExtractionColumnReading(field))) continue;
+    let under = key;
+    for (let suffix = 2; Object.hasOwn(kept, under); suffix += 1) under = `${key.slice(0, 90)}_${suffix}`;
+    kept[under] = field;
+    sources[under] = key;
+  }
+  return { ok: true, fields: kept, assumed, sources, requested: [...keptUnder] };
 }
 
 /**

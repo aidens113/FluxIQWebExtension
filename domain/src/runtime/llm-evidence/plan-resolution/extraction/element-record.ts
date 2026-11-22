@@ -88,6 +88,7 @@ export function webPlanElementRecord(
     frameId: bound.frameId,
     frameUrlPath: bound.frameUrlPath,
     extractList: { item: bound.selector, fields: elementColumns(bound.element) },
+    recordSchema: undefined,
     itemCount: 1,
     oneRecord: true
   }));

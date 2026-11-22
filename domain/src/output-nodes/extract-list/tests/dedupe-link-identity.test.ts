@@ -11,11 +11,16 @@ const OUTPUT: JsonObject = { datasetId: "entries", writeMode: "append", schema: 
   { id: "url", label: "URL", valueType: "url" }
 ] }, process: { dedupe: { by: ["identity"] }, columns: ["title", "url"] } };
 
-test("only the explicitly deduped excluded link helper opts in, while displayed URLs remain exact", () => {
-  const read = webAutomationDedupeLinkIdentity(OUTPUT, REQUEST);
+test("only an explicitly deduped hidden included helper opts in, while exclusions refuse and displayed URLs remain exact", () => {
+  assert.equal(webAutomationDedupeLinkIdentity(OUTPUT, REQUEST), REQUEST);
+  assert.equal(webAutomationExtractListDispatch({ extractList: REQUEST as unknown as JsonObject, recordOutput: OUTPUT }).ok, false);
+  const included: JsonObject = structuredClone(OUTPUT);
+  const field = ((included.schema as JsonObject).fields as JsonObject[])[1]!;
+  delete field.handling;
+  const read = webAutomationDedupeLinkIdentity(included, REQUEST);
   assert.deepEqual(read.fields.identity, { kind: "link", selector: "a.time", identity: "tracking-free" });
   assert.deepEqual(read.fields.url, REQUEST.fields.url);
-  const dispatch = webAutomationExtractListDispatch({ extractList: REQUEST as unknown as JsonObject, recordOutput: OUTPUT });
+  const dispatch = webAutomationExtractListDispatch({ extractList: REQUEST as unknown as JsonObject, recordOutput: included });
   assert.equal(dispatch.ok, true, JSON.stringify(dispatch));
   if (!dispatch.ok) return;
   const parameters = dispatch.payload.parameters as JsonObject;

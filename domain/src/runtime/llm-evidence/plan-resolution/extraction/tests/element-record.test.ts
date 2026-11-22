@@ -58,6 +58,8 @@ test("Extract List reads one element named by its own handle as a one-row table 
   // The rows come back as rows, under the read's rows key, an array of one.
   const rows = ((read.evidence as JsonObject).read as JsonObject | undefined)?.extracted;
   assert.deepEqual(rows, [{ saved: WORDS }]);
+  assert.equal(read.recordSchema?.fields.find((field) => field.id === "saved")?.valueType, "string");
+  assert.equal(read.recordSchema?.fields.length, 1);
 
   // The step keeps the list's handle and what it stands for, never the `tN`, so it runs again with no memory.
   const kept = (read.draft?.ranWith?.parameters as JsonObject | undefined)?.extractList as JsonObject | undefined;
