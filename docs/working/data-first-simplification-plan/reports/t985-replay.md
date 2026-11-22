@@ -4,4 +4,4 @@
 
 Lead implemented the independent F24 subset in two Core completion files plus saved-flow-defects architecture documentation. Historical step_retried remains readable; new decisions no longer emit it. Failed/incomplete/repaired/rerouted/shape-changed/unproven cases keep their independent checks. Added successful retry completion tests for counts 1 and 3 and retained negative failure/incomplete assertions.
 
-Validation: `git diff --check` -> exit 0. Focused tests, package typecheck, audit and parent sync are pending. No acceptance claimed. No paid calls, browser run or full suite. Remaining P5 diagnosis/repair persistence is not implemented.
+Validation: `git diff --check` -> exit 0. `pnpm --filter fluxiq exec vitest run src/framework/automation-service/service/answer-first/completion/tests/replay-on-record.test.ts --maxWorkers=1 --minWorkers=1 --fileParallelism=false` -> 1 file, 12/12 tests passed, 51.93 seconds. Package typecheck, audit and parent sync are pending. No acceptance claimed. No paid calls, browser run or full suite. Remaining P5 diagnosis/repair persistence is not implemented.
