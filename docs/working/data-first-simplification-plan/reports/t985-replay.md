@@ -25,3 +25,9 @@ Canonical decision/result JSON files exist even though failed Flow-step folders 
 Subsequent metadata shows a new detection, a repeat refusal, successful reads, and repeated already_answered responses. Existing request.ts/replacement.ts explicitly distinguish ordinary amendments from executed reruns and replace a step only after a proposable result, preserving routing and source references. Accepted t981 covers the rebind-before-withdrawal correction. No raw page text, selector, row values or handles were emitted or copied into tracked evidence. The original failed-click target mapping remains missing; do not invent a persistence patch from the misleading zero applied count.
 
 Validation: read-only structural inspection of 0509 decision, 0510 amendment result, 0511 call/result and 0512-0529 metadata; no browser or model call. F23 exact recorded root cause remains unverified.
+
+## Post-reboot integration of the bounded F24 fix
+
+This task's product change is the successful-unchanged-retry completion fix only. It is a coherent validated increment, not completion of P5's historical diagnosis or live four-attempt acceptance. F23 remains explicitly open in the plan and record above.
+
+Both task parents were synced to current dev including accepted P1 retained extraction. Core package patch version is0.52.1. Lead reran the same five replay/continuation/person-clearance owners ->55/55 passed,97.42s, exit0; durable ignored log `.heavy-slots/t985-replay-parent-tests.log`. Corrected-parent package check and structure audit are pending. No new browser/provider call.
