@@ -2,7 +2,7 @@ import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 type Stage = "decisions" | "repairs" | "judge" | "chat" | "other";
-type Receipt = { kind: "settled"; stage: Stage; usd: number | null } | { kind: "pending" | "unreadable" } | { kind: "other"; complete: boolean };
+type Receipt = { kind: "settled"; stage: Stage; usd: number | null } | { kind: "pending" } | { kind: "unreadable" } | { kind: "other"; complete: boolean };
 type Total = { calls: number; knownUsd: number; unknownCosts: number };
 type Attempt = { ordinal: number; settled: Total; stages: Record<Stage, Total>; pendingCalls: number; unreadableRecords: number };
 
@@ -27,7 +27,11 @@ async function receipt(folder: string): Promise<Receipt> {
   catch (error) { if (!missing(error)) return { kind: "unreadable" }; }
   if (meta) {
     const complete = typeof meta.finishedAt === "string" && Number.isFinite(Date.parse(meta.finishedAt));
-    if (meta.provider === undefined && meta.taskKind === undefined) return { kind: "other", complete };
+    if (meta.provider === undefined && meta.taskKind === undefined) {
+      // Tool metadata has no model request. A contradictory pair stays unresolved.
+      try { await access(path.join(folder, "request.json")); return { kind: "unreadable" }; }
+      catch (error) { return missing(error) ? { kind: "other", complete } : { kind: "unreadable" }; }
+    }
     if (typeof meta.provider !== "string" || !meta.provider || typeof meta.taskKind !== "string" || !meta.taskKind || !complete) return { kind: "unreadable" };
     const usd = typeof meta.costUsd === "number" && Number.isFinite(meta.costUsd) && meta.costUsd >= 0 ? meta.costUsd : null;
     return { kind: "settled", stage: stage(meta), usd };

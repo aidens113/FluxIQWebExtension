@@ -97,6 +97,7 @@ test("reporter flushes the last call, avoids duplicate output and does not inven
 test("only completed metadata is cached; source step folders need no contiguous ordinal", async (context) => {
   const world = await fixture(context);
   const tool = await world.step("0002-tool-read", { kind: "tool", finishedAt: "2026-11-22T00:00:00Z" });
+  await rm(path.join(tool, "request.json"));
   const model = await world.step("0010-decide", paid(0.00000001));
   const reader = new AttemptCostProgress(world.root);
   const first = await reader.read(1);
@@ -105,4 +106,20 @@ test("only completed metadata is cached; source step folders need no contiguous 
   await rm(path.join(tool, "meta.json"));
   await rm(path.join(model, "meta.json"));
   assert.deepEqual(await reader.read(1), first);
+});
+
+
+test("model request beside identifierless metadata remains unknown and can settle later", async (context) => {
+  const world = await fixture(context);
+  const folder = await world.step("0001-decide", { finishedAt: "2026-11-22T00:00:00Z" });
+  const reader = new AttemptCostProgress(world.root);
+  const first = await reader.read(1);
+  assert.equal(first.attempts[0]?.unreadableRecords, 1);
+  assert.equal(first.attempts[0]?.settled.calls, 0);
+  assert.match(formatAttemptCostProgress(first)[0]!, /total incomplete/u);
+  await writeFile(path.join(folder, "meta.json"), JSON.stringify(paid(0.02)));
+  const settled = await reader.read(2);
+  assert.equal(settled.attempts[0]?.ordinal, 1);
+  assert.equal(settled.attempts[0]?.settled.knownUsd, 0.02);
+  assert.equal(settled.attempts[0]?.unreadableRecords, 0);
 });
