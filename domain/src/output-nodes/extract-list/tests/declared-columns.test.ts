@@ -1,6 +1,6 @@
 // A declared record schema decides which columns the answer shows, and nothing
 // about which items are read. A column a condition, an ordering or the authored
-// `process` reads is stored and hidden (t975, F3); a column nothing reads leaves.
+// `process` reads is stored and hidden (t975, F3); every other safe field also stays.
 //
 // The first case is live run 11's read (`debugs/run-muq66ff9-cb3767a1.md`,
 // cause 8): six fields, two of them -- `plus` and `ad` -- kept only to filter
@@ -129,15 +129,15 @@ test("a helper an ordering names is stored and not shown", () => {
   assert.deepEqual((sent.recordOutput.process as JsonObject).columns, ["name", "price", "rating", "url"]);
 });
 
-test("a helper nothing reads leaves the read and the schema, and is named as dropped", () => {
+test("a helper no current operation reads remains available in storage and hidden from the requested view", () => {
   const unread = { ...extractList, where: extractList.where.slice(2) };
   const sent = dispatched({ extractList: unread, recordOutput });
-  assert.deepEqual(Object.keys(sent.extractList.fields), ["name", "price", "rating", "url"]);
-  assert.deepEqual(storedColumns(sent.recordOutput, sixColumnRow), ["name", "price", "rating", "url"]);
-  // Nothing hidden is stored, so the answer needs no columns of its own.
-  assert.deepEqual(sent.recordOutput.process, { dedupe: extractList.dedupe, minRows: 0 });
+  assert.deepEqual(Object.keys(sent.extractList.fields), ["name", "price", "rating", "url", "plus", "ad"]);
+  assert.deepEqual(storedColumns(sent.recordOutput, sixColumnRow), ["name", "price", "rating", "url", "plus"]);
+  assert.ok(schemaIds(sent.recordOutput).some(([id]) => id === "ad"), "an absent optional value does not erase its retained field");
+  assert.deepEqual(sent.recordOutput.process, { dedupe: extractList.dedupe, minRows: 0, columns: ["name", "price", "rating", "url"] });
   const dispatch = webAutomationExtractListDispatch({ extractList: unread, recordOutput });
-  assert.deepEqual(dispatch.ok ? dispatch.droppedColumns : undefined, ["plus", "ad"]);
+  assert.deepEqual(dispatch.ok ? dispatch.droppedColumns ?? [] : undefined, []);
 });
 
 test("no declared schema, a schema naming a column the read does not take, or one naming no column hides nothing", () => {
@@ -233,24 +233,22 @@ test("t510: a schema of the declared columns and a process.sort on a helper stor
   assert.deepEqual(sent.extractList.where, [{ field: "archived", is: "absent" }]);
 });
 
-test("t510: helpers the schema marks exclude are stored, and the author's columns hide them", () => {
+test("explicitly excluded fields cannot be silently restored to support an authored sort", () => {
   const recordOutput = {
     datasetId: "tasks",
     writeMode: "append",
     schema: { schemaVersion: "0.1", fields: [...taskSchema("title", "owner", "status").fields, excludedTaskField("due"), excludedTaskField("archived")] },
     process: { sort: [{ field: "due", order: "desc" }], columns: ["title", "owner", "status"] }
   };
-  const sent = dispatched({ extractList: tasks, recordOutput });
-  assert.deepEqual(schemaIds(sent.recordOutput), ALL_TASK_COLUMNS.map((id) => [id, null]));
-  assert.deepEqual(sent.recordOutput.process, recordOutput.process);
-  assert.deepEqual(Object.keys(sent.extractList.fields), ALL_TASK_COLUMNS);
-  assert.deepEqual(storedColumns(sent.recordOutput, { title: "t", owner: "o", status: "s", due: "d" }), ["title", "owner", "status", "due"]);
+  assert.equal(webAutomationExtractListDispatch({ extractList: tasks, recordOutput }).ok, false);
+  const declared = webAutomationDeclaredColumnsRead(recordOutput, webAutomationExtractListRequestValue(tasks)!);
+  assert.equal((declared?.request.fields.due as JsonObject).handling, "exclude");
+  assert.equal((declared?.request.fields.archived as JsonObject).handling, "exclude");
 });
 
 test("t510: a helper a process.dedupe or process.where names is stored, and t970: no helper is shown", () => {
   const deduped = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { dedupe: { by: ["due"] } } } });
-  // `status` is read by nothing, so it leaves; `archived` is read by the read's own condition.
-  assert.deepEqual(schemaIds(deduped.recordOutput).map(([id]) => id), ["title", "owner", "due", "archived"]);
+  assert.deepEqual(schemaIds(deduped.recordOutput).map(([id]) => id), ALL_TASK_COLUMNS);
   assert.deepEqual((deduped.recordOutput.process as JsonObject).columns, ["title", "owner"]);
   const filtered = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { where: [{ field: "status", contains: "open" }], sort: [{ field: "due", order: "asc" }] } } });
   assert.deepEqual(schemaIds(filtered.recordOutput).map(([id]) => id), ALL_TASK_COLUMNS);
@@ -271,7 +269,7 @@ test("t970: a helper Core's anyOf, compare or derive reads is stored and not sho
   assert.deepEqual(schemaIds(sent.recordOutput).map(([id]) => id), ALL_TASK_COLUMNS);
   assert.deepEqual((sent.recordOutput.process as JsonObject).columns, ["title", "owner"]);
   const derived = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { derive: [{ id: "year", from: "due", pattern: "([0-9]{4})", as: "number" }], where: [{ field: "year", atLeast: 2026 }] } } });
-  assert.deepEqual(schemaIds(derived.recordOutput).map(([id]) => id), ["title", "owner", "due", "archived"]);
+  assert.deepEqual(schemaIds(derived.recordOutput).map(([id]) => id), ALL_TASK_COLUMNS);
 });
 
 test("t510: a helper the read's own sort names is stored and not shown", () => {
@@ -303,9 +301,9 @@ const auctionRead = {
 };
 
 /** Steps 0022 and 0024 of that run: every helper marked exclude, the sort on one of them, the answer's columns in process. */
-function auctionRecordOutput(sortField: string): JsonObject {
+function auctionRecordOutput(sortField: string, exclude = true): JsonObject {
   const kept = ["title", "price", "bids", "postage"].map((id) => ({ id, label: id, valueType: "string" }));
-  const helpers = ["condition", "ends", "endsAt", "pounds", "bin", "ad"].map((id) => ({ id, label: id, valueType: "string", handling: "exclude" }));
+  const helpers = ["condition", "ends", "endsAt", "pounds", "bin", "ad"].map((id) => ({ id, label: id, valueType: "string", ...(exclude ? { handling: "exclude" } : {}) }));
   return {
     datasetId: "kestrel35auctions",
     writeMode: "replace",
@@ -314,10 +312,11 @@ function auctionRecordOutput(sortField: string): JsonObject {
   };
 }
 
-test("t510: the auction run's 0022 and 0024 record outputs are accepted, the sort key and the conditions' columns stored and hidden, the other helpers not stored", () => {
+test("campaign-shaped output cannot restore excluded sort fields; safe helpers all stay when only the display excludes them", () => {
   for (const sortField of ["endsAt", "ends"]) {
-    const sent = dispatched({ extractList: auctionRead, recordOutput: auctionRecordOutput(sortField) });
-    const stored = ["title", "price", "bids", "postage", sortField, "pounds", "ad"];
+    assert.equal(webAutomationExtractListDispatch({ extractList: auctionRead, recordOutput: auctionRecordOutput(sortField) }).ok, false);
+    const sent = dispatched({ extractList: auctionRead, recordOutput: auctionRecordOutput(sortField, false) });
+    const stored = Object.keys(auctionRead.fields);
     assert.deepEqual(schemaIds(sent.recordOutput), stored.map((id) => [id, null]), sortField);
     assert.deepEqual(sent.recordOutput.process, { sort: [{ field: sortField, order: "asc" }], columns: ["title", "price", "bids", "postage"], minRows: 0 }, sortField);
     assert.deepEqual(Object.keys(sent.extractList.fields), stored, sortField);
@@ -333,7 +332,7 @@ test("t510: the auction run's 0022 and 0024 record outputs are accepted, the sor
 
 test("t510: the record output the dispatch runs, dispatched again, runs unchanged", () => {
   const cases: Array<[JsonObject, JsonObject]> = [
-    [auctionRead, auctionRecordOutput("endsAt")],
+    [auctionRead, auctionRecordOutput("endsAt", false)],
     [tasks, { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { sort: [{ field: "due", order: "asc" }] } }],
     [extractList, recordOutput]
   ];
@@ -360,14 +359,14 @@ const listings = {
 };
 const listingsRead = () => webAutomationExtractListRequestValue(listings)!;
 
-test("t877: a narrowing that drops a written column nothing uses names it, and stores the column a condition reads, hidden", () => {
+test("a narrow requested view retains both unused and condition fields without dropping either", () => {
   const declared = webAutomationDeclaredColumnsRead({ datasetId: "listings", writeMode: "append", schema: taskSchema("title") }, listingsRead());
-  assert.deepEqual(declared?.dropped, ["price"]);
-  assert.deepEqual(declared?.hidden, ["sponsored"]);
+  assert.deepEqual(declared?.dropped, []);
+  assert.deepEqual(declared?.hidden, ["price", "sponsored"]);
   // No widening of the answer: it shows the declared column.
   assert.deepEqual(declared?.shown, ["title"]);
-  assert.deepEqual(Object.keys(declared!.request.fields), ["title", "sponsored"]);
-  assert.deepEqual([...declared!.columns], ["title", "sponsored"]);
+  assert.deepEqual(Object.keys(declared!.request.fields), ["title", "price", "sponsored"]);
+  assert.deepEqual([...declared!.columns], ["title", "price", "sponsored"]);
 });
 
 test("t877: a narrowing that keeps every column something reads names none", () => {

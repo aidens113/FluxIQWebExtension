@@ -1,9 +1,9 @@
 # Automated FluxIQ Web Testing Facility Plan
 
-Status: Active
-Status detail: The facility is structurally intact and is the live substrate every MVP lane runs on, and the repository gates pass today (3,928 tests, 0 failures). The 2026-09-28 audit found the document badly stale rather than the code rotted, plus seven open defects: CI has been red on every run since it began firing and would not pass even once configured, the extension e2e suite runs in no automated gate at all, the evidence policy the document states is no longer what the code does, the Phase 8 safeguard enforces nothing at runtime, two lanes launch a browser with no network guard, the Phase 7 gate is unsatisfiable as written, and the `existing` and `clone` lanes have still never run.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-09-04
-Last updated: 2026-09-28
+Last updated: 2026-11-22
 Owner: Senior supervisor agent (the original `Execute Plan With Subagents` mode and its rotated phase subagents are retired; the 2026-09-28 audit was run by six workers whose reports are under `automated-testing-facility-plan/reports/`)
 Scope: Automated Playwright testing facility for the FluxIQ web extension in `F:\!FluxIQWebExtension`: Scenario Lab fixtures, real-extension fixture, isolated/existing/clone/persistent-isolated FluxIQ topologies, evidence bundles, matrix/CI, bounded improvement agents, persisted-Flow execution, and the persistent self-recording demo scripts.
 Paired document: none authored, though the document records Core-side changes (Flow representation metadata, the PIN-authorized legacy migration endpoint, Router/Subflow runtime entry) at lines 67-75 of the archived design record and at 455-464 here, and the audit found two open Core defects; a Core-side document is owed if that work continues.
@@ -12,6 +12,8 @@ Related: [repository layout and commands](../architecture/repository-layout.md),
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: The facility is structurally intact and is the live substrate every MVP lane runs on, and the repository gates pass today (3,928 tests, 0 failures). The 2026-09-28 audit found the document badly stale rather than the code rotted, plus seven open defects: CI has been red on every run since it began firing and would not pass even once configured, the extension e2e suite runs in no automated gate at all, the evidence policy the document states is no longer what the code does, the Phase 8 safeguard enforces nothing at runtime, two lanes launch a browser with no network guard, the Phase 7 gate is unsatisfiable as written, and the `existing` and `clone` lanes have still never run.
 
 Audited end to end on 2026-09-28 by six workers, with the repository gates run
 directly. **The facility is sound; the document was stale.** Nothing rotted —

@@ -1,9 +1,9 @@
 # MVP Launch
 
-Status: Active
-Status detail: Plan written 2026-11-10 for about one month to go-live; five workstreams, W1 already running, W2-W5 dispatched the same day.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-11-10
-Last updated: 2026-11-12
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: Everything between today and a launchable MVP: data scraping and task execution (W1), a humanness setting from the extension slider down to Core and FluxNodes (W2), FluxNode developer overrides and docs (W3), the extension's brand and UI (W4), the Core web panel as a hosted product (W5), and pluggable person-needed handlers and extension add-ons (W6). It does not change a standing rule in either AGENTS.md.
 Paired document: Core `docs/working/fluxnode-plan.md` (W3), Core `docs/working/hosted-production-plan.md` and this repository's `hosted-production-plan.md` (W5).
@@ -12,6 +12,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Plan written 2026-11-10 for about one month to go-live; five workstreams, W1 already running, W2-W5 dispatched the same day.
 
 **Managed hosts integrated (2026-11-12).** t907 is merged into both dev branches: downstream 01a01946a and Core a47f7dcf0. Final-source Chromium proof 25764f49-644e-4974-9763-7dae7a3112d3 returned ten exact four-row results, with eight predecessor-Flow replays at zero engine/scripted calls and all fourteen lifecycle/isolation/accounting checks passed. Its 27 scripted calls were exploratory; paid/billed 0. Lead passed Core 43, SDK 9, web 17, extension connection 303, web-session 15, host/script 44 and guard 31 tests plus affected package checks and audits. Core merge passed 70 mandatory contracts. t905 exact-source/compiler-input/call-identity work passed 109 independent tests; final audit/error-path closure and remaining input/effect proof remain. t893 script correction passed 18 independent tests, awaiting t905 integration before browser rerun. Local-only t902 receipt/recovery work continues and is not pushed; t885 browser acceptance, P2c/P3b and simulation work remain open. No full sweep or main promotion.
 

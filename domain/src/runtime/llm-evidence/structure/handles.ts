@@ -100,6 +100,8 @@ export type WebLlmExtractionBinding = {
    * from it, without its bound (`plan-resolution/next-page-slot.ts`).
    */
   extractList: WebAutomationExtractListRequest;
+  /** Safe structural field metadata and validated identity; never column samples or captured rows. */
+  recordSchema?: import("fluxiq/automation").AutomationStudioRecordSchema;
   /** How many items the structure held when it was detected. */
   itemCount: number;
   /**
@@ -265,6 +267,7 @@ function withoutHandle(binding: Omit<WebLlmExtractionBinding, "handle">): Omit<W
     frameId: binding.frameId,
     frameUrlPath: binding.frameUrlPath,
     extractList: binding.extractList,
+    recordSchema: binding.recordSchema,
     itemCount: binding.itemCount,
     oneRecord: binding.oneRecord
   });
@@ -282,6 +285,7 @@ function copyBinding(binding: WebLlmExtractionBindingRetained): WebLlmExtraction
     frameId: binding.frameId,
     frameUrlPath: binding.frameUrlPath,
     extractList: structuredClone(binding.extractList),
+    recordSchema: binding.recordSchema === undefined ? undefined : structuredClone(binding.recordSchema),
     itemCount: binding.itemCount,
     oneRecord: binding.oneRecord,
     container: binding.container,

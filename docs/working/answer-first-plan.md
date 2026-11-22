@@ -1,9 +1,9 @@
 # Answer First
 
-Status: Active
-Status detail: The two-attempt Lab, Run again and the live lanes' first fixes are on dev; four live lanes run on their own branches. Live round about $9 of $160 credit.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-11-03
-Last updated: 2026-11-06
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: The extension and Lab side of Answer First: the chat experience the person sees, the Lab's two scores, a same-workspace second attempt, a double-act oracle, and the Lab's default build path. Core's plan owns the idea, the design, the lanes and the open questions.
 Paired document: `C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/answer-first-plan.md`
@@ -12,6 +12,8 @@ Related: [testing facility](../architecture/testing-facility.md), [extension cli
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: The two-attempt Lab, Run again and the live lanes' first fixes are on dev; four live lanes run on their own branches. Live round about $9 of $160 credit.
 
 **State (2026-11-06).** Core's paired plan holds the user's words, the full state, the live results, the open defects with their owners, and the questions waiting on the user. The user has made the extension and `@fluxiq/ui-components` the focus for now; the web panel waits until they reopen it.
 

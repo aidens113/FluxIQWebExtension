@@ -1,9 +1,9 @@
 # Node Catalog Plan
 
-Status: Active
-Status detail: Four audits reconciled; three shared blockers integrated/verified, tab/landing/navigation slice integrated; broader catalog qualification pending.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-10-07
-Last updated: 2026-10-07
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: A full audit of the web extension's node catalog — every existing node's contract, implementation, tests and live failures — then fixes and extensions so each node is robust, and new nodes for what the realistic sites need. It does not cover the general tools (script, request; `structural-agent-plan.md` stage 1) except where a node would replace a script use the Lab reports.
 Paired document: none (web domain and extension; Core control nodes are referenced, not owned)
@@ -12,6 +12,8 @@ Related: [structural agent plan](./structural-agent-plan.md), [week report](./mv
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Four audits reconciled; three shared blockers integrated/verified, tab/landing/navigation slice integrated; broader catalog qualification pending.
 
 User's order (2026-10-07): a full audit of the node catalog; robust nodes with proper logic; every existing node improved or fixed; many more nodes planned. Model-written JS is a last resort and each Lab use of it is a node-building work item (memory `js-last-resort-requests-off-by-default`).
 

@@ -21,5 +21,6 @@ export { webPlanElementRecord, type WebPlanBoundRecordElement, type WebPlanEleme
 export { webPlanStoredColumns, webPlanUndispatchable, type WebPlanUndispatchable } from "./stored-columns";
 // The record output the step saves: the one its dispatch runs (t510).
 export { webPlanRunRecordOutput } from "./run-record-output";
+export { webPlanRetainedRecordOutput } from "./retained-output";
 // What a refusal says beside its codes: the field and the names it can use (t489, t497).
 export { type WebPlanRefusalIssue } from "./refusal-issues";

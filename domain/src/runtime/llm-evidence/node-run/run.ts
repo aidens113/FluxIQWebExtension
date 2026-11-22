@@ -86,7 +86,7 @@ import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRe
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
-import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused } from "./list-read";
+import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused, webListReadRecordSchema } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNodeWithHandleShape } from "./handle-shape";
 import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
@@ -646,7 +646,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       actionability
     ), current, after));
     timing.record("compose", composing, Date.now());
-    return answered;
+    return webListReadRecordSchema(node.definitionId, ran, answered);
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
       // Only a refusal the page caused carries the page, and only the page the

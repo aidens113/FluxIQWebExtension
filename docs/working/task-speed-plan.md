@@ -1,9 +1,9 @@
 # Task Speed
 
-Status: Active
-Status detail: Plan written 2026-11-10 from a measured breakdown of 44 live runs; Phase A starts alongside the FluxNode and panel work.
+Status: Paused
+Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-11-10
-Last updated: 2026-11-10
+Last updated: 2026-11-22
 Owner: Senior supervisor agent
 Scope: Making a live task attempt fast, by removing the causes of time found in measured runs: model thinking that a step does not need, per-step browser overhead, one model call per read-only look, a slow judge, a replay that pays for interpretation, and builds that take too many steps. It does not change what a task must achieve, its oracle, its retries, or any standing rule.
 Paired document: none yet; the Core changes are listed here by file and get a Core-side document if they grow beyond these lanes.
@@ -12,6 +12,8 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 ---
 
 ## Current State
+
+**Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Plan written 2026-11-10 from a measured breakdown of 44 live runs; Phase A starts alongside the FluxNode and panel work.
 
 **State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. The first four-attempt run (t889) measured each replay at 2 model calls (interpretation and judge) and 46-48 s for 18 steps; see S6 and the new S9. **Top priority (user, 2026-11-10):** "the actual node execution times are very slow right now... it takes a long time for a click or any other action to actually register... it should be basically instant". S10 rounds 1-3 have landed (t890-t892).
 

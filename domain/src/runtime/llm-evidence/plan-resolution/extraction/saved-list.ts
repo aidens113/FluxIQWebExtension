@@ -31,6 +31,7 @@
 // attempt to repair them, on its purse. Nothing reads one as a failed task.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { parseAutomationStudioRecordSchema } from "fluxiq/components/automation";
 import type { WebLlmExtractionBinding, WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
@@ -42,10 +43,13 @@ export const WEB_PLAN_EXTRACTION_BINDING_KEY = "extractionBinding";
 
 const LIST_PARAMETER = "extractList";
 
-/** What `value`, a saved read's `extractList`, holds of the list `handle` named, or nothing where it holds nothing readable. */
-export function webPlanSavedExtractionBinding(value: Record<string, unknown>, handle: string): WebLlmExtractionBinding | undefined {
+/** A readable saved binding, undefined for legacy absence/unreadability, or null for explicitly rejected schema metadata. */
+export function webPlanSavedExtractionBinding(value: Record<string, unknown>, handle: string): WebLlmExtractionBinding | undefined | null {
   const saved = value[WEB_PLAN_EXTRACTION_BINDING_KEY];
-  if (!isJsonRecord(saved) || typeof saved.location !== "string" || typeof saved.itemCount !== "number") return undefined;
+  if (!isJsonRecord(saved)) return undefined;
+  const schema = Object.hasOwn(saved, "recordSchema") ? parseAutomationStudioRecordSchema(saved.recordSchema) : undefined;
+  if (schema && !schema.ok) return null;
+  if (typeof saved.location !== "string" || typeof saved.itemCount !== "number") return undefined;
   const list = saved.extractList;
   if (!isJsonRecord(list) || typeof list.item !== "string" || !isJsonRecord(list.fields)) return undefined;
   if (saved.frameId !== undefined && typeof saved.frameId !== "number") return undefined;
@@ -56,6 +60,7 @@ export function webPlanSavedExtractionBinding(value: Record<string, unknown>, ha
     frameId: saved.frameId,
     frameUrlPath: saved.frameUrlPath,
     extractList: structuredClone(list) as unknown as WebLlmExtractionBinding["extractList"],
+    recordSchema: schema?.ok ? schema.schema : undefined,
     itemCount: saved.itemCount,
     oneRecord: saved.oneRecord === true ? true : undefined
   });
@@ -75,7 +80,7 @@ export function webPlanWithExtractionBinding(parameters: JsonObject, scope: WebL
   const found = extractions.resolve(scope, handle);
   if (!found.ok) return parameters;
   const { binding } = found;
-  const held = present<Omit<WebLlmExtractionBinding, "handle">>({ location: binding.location, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, extractList: binding.extractList, itemCount: binding.itemCount, oneRecord: binding.oneRecord });
+  const held = present<Omit<WebLlmExtractionBinding, "handle">>({ location: binding.location, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, extractList: binding.extractList, recordSchema: binding.recordSchema, itemCount: binding.itemCount, oneRecord: binding.oneRecord });
   const saved = structuredClone(parameters);
   const savedList = saved[LIST_PARAMETER] as JsonObject;
   if (record !== undefined) {

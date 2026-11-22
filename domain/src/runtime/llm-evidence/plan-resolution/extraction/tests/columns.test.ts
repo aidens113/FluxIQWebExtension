@@ -33,13 +33,16 @@ test("an explicitly marked link keeps identity through required-field mapping, w
 test("a column the detection saw on every item is not required by the read that names it", () => {
   assert.deepEqual(keptWebExtractionColumns({ name: "name", confirm: "Confirm", href: "profile@href", badge: "badge" }, DETECTED, ["fields"]), {
     ok: true,
+    requested: ["name", "confirm", "href", "badge"],
+    sources: { name: "name", confirm: "confirm", href: "profile", badge: "badge", profile: "profile" },
     // `Confirm` found its column in another case: the one assumption, and still not required.
     assumed: [{ path: ["fields", "confirm"], written: "Confirm", field: "confirm", how: "normalized", score: 1, among: "detected" }],
     fields: {
       name: { kind: "text", selector: ".card > a", required: false },
       confirm: { kind: "text", selector: ".card > .actions > div", required: false },
       href: { kind: "attribute", selector: ".card > a", attribute: "href", required: false },
-      badge: { kind: "text", selector: ".card > .badge", required: false }
+      badge: { kind: "text", selector: ".card > .badge", required: false },
+      profile: { kind: "link", selector: ".card > a", required: false }
     }
   });
 });
@@ -54,9 +57,13 @@ test("a column the read itself marks required stays required, and only that one"
   assert.deepEqual(keptWebExtractionColumns({ name: { key: "name", required: true }, confirm: { key: "confirm" } }, DETECTED, ["fields"]), {
     ok: true,
     assumed: [],
+    requested: ["name", "confirm"],
+    sources: { name: "name", confirm: "confirm", profile: "profile", badge: "badge" },
     fields: {
       name: { kind: "text", selector: ".card > a", required: true },
-      confirm: { kind: "text", selector: ".card > .actions > div", required: false }
+      confirm: { kind: "text", selector: ".card > .actions > div", required: false },
+      profile: { kind: "link", selector: ".card > a", required: false },
+      badge: { kind: "text", selector: ".card > .badge", required: false }
     }
   });
 });
