@@ -393,3 +393,62 @@ All runs went through the heavy gate, provider-free, in visible browsers, each t
 Step 3 changes: `packages/test-runner/src/recorded-attempt-replay/read-parity/command.ts` (headed sandbox), `packages/test-runner/src/attempt-lane/preflight/save-probe.ts`, the new `packages/test-runner/src/attempt-lane/preflight/tests/save-probe.test.ts`, and `docs/architecture/recorded-offline-proof.md`. Logs are in `test-runs/t986-resume-1123/` (`read-rerun2.log`, `company-capture-v2.log`, `social-preflight-v1.log`, `probe-*.log`, `social-preflight-v2.log`).
 
 Not verified after step 3: replaying the fresh Company capture; whole-task, four-attempt or scoreboard acceptance; the 30-file owner sweep after the latest edits; Firefox.
+
+### Round 3 (after a9e601d68): owner sweep, Company replay, nine-site preflight
+
+**1. The lane's 30-file owner command** (exact list in "Exact remaining validation" above), run through the gate on the a9e601d68 build -> exit 0, 206/206 pass (153,710 ms). Log: `test-runs/t986-resume-1123/owners-30.log`. Nothing failed, so nothing was changed.
+
+**2. Replay of the fresh Company capture.**
+- **Workspace.** The replay opens a host on its starting store and runs a build in it, so pointing it at `t986-fresh-capture-company-v2` would have changed that evidence. `starting/`, `source-archive/` and `artifact.json` were copied into the new `test-runs/t986-replay-company-v1/`; `diff -rq` showed the copies identical. Only the paths in `replay-input.json` changed: `artifact`, `rootDir`, `sourceRootDir` and `allowedWorkRoot`.
+- **Same entry.** The copied `request` deep-equals `capture-entry.json`'s bound `entry.request`.
+- **Command:** `node scripts/lab/run-lab.mjs recorded-replay --input test-runs/t986-replay-company-v1/replay-input.json --out test-runs/t986-replay-company-v1/replay-report.json` -> exit 1, `proof: recorded_build_prefix`, `fullAttemptAccepted: false`.
+- **Result fields:**
+  - `position.point: before_entry`, with the source trace id and receipt sha.
+  - `session.status: refused`, `reasonCode: incomplete_capture`, detail "the trace's events do not say which session they belong to: some of its events name their session and others do not".
+  - `model.logicalCalls: 0`, `model.divergence: null`, `model.externalUsd: 0`, `historicalUsd: 0`.
+- **Entry proof.** `verifyRecordedStartingPosition` ran before the session. It requires the in-trace receipt's `entryDigest` to equal the digest of `{request, chat: null}` that replay enters with, and it passed. So replay was admitted with exactly the bound entry. The service build itself never started: Core's recorded-trace session refused first, with 0 model calls.
+- **Cause.** Diagnostic: `company-diag/session-refs.mjs`, run on the replay copy, prints counts only; log `session-refs.log`.
+  - Every gateway event is session-referenced: artifact 2, disposition 8, inbound 8, lifecycle `session.claimed` 1, outbound 3.
+  - Exactly one session-bound event has no session reference: the producer receipt artifact on the control stream (`recorded.start`).
+  - Core's `client-gateway/trace-replay/session-references/evaluation.ts` treats every `artifact` event as session-bound (`bound-kinds.ts`) and refuses a trace where some session-bound events have a reference and others do not.
+  - The trace contract (`client-gateway/trace/types.ts`: `session` "Absent when the event belongs to no one session") and Core's own `open-episode.ts recordControl`, which records control-stream artifacts with no session, both say a control-stream artifact belongs to no session.
+  - So any trace carrying a control-stream artifact is refused by replay. This is a Core replay-admission defect, not a downstream one. Giving the receipt a session would invent ownership it does not have.
+- **What is missing.** A Core fix outside this lane's paths, as the coordinator directed. In `session-references/evaluation.ts` and `attached.ts`, events on the Automation Studio control stream, which by contract belong to no session, should be neither counted as session-bound nor given `session-1`. This needs a Core owner, a Core test (a trace with a sessionless control artifact among referenced gateway events must evaluate as `recorded`), and the user alert for crossing the repository boundary. The replay can then be rerun on a fresh copy (`t986-replay-company-v2`). Nothing was worked around, and no downstream mechanism was added.
+
+**3. Provider-free preflight on the other nine realistic sites**, one per site with that site's fixed scoreboard task (`attempt-lane/scoreboard/fixed-tasks.ts`). Each ran through the gate as `node scripts/lab/run-lab.mjs offline-preflight <site> --task <task> --evidence test-runs/t986-preflight-<site>-v1`, in a visible Chrome. All nine exited 0 with `protocolPassed: true`, `gaps: []` and `runtimeFailure: null`; none needed a v2.
+
+| Site | Task | Stages passed | Permission | Site challenge |
+| --- | --- | --- | --- | --- |
+| everything-store | everything-store-plus-earbuds-under-50 | pairing, person_answer, read, chat_start | not_applicable | not_run |
+| crossborder-marketplace | crossborder-marketplace-free-hubs-under-ten | same four | not_applicable | not_run |
+| bigbox-retail | bigbox-retail-new-store-cheapest-towels | same four | not_applicable | not_run |
+| job-board | job-board-halvard-careers-roles | same four | not_applicable | not_declared |
+| local-classifieds | local-classifieds-bikes-within-alex-price | same four | not_applicable | not_declared |
+| auction-marketplace | auction-marketplace-lens-hood-seller-shop | same four | not_applicable | not_declared |
+| photo-social | photo-social-august-over-1300 | same four | not_applicable | not_declared |
+| company-website | company-website-apprentices | same four | not_applicable | not_run |
+| professional-network | professional-network-netherlands-data-engineers | same four | not_applicable | not_declared |
+
+What each stage shows:
+- Generic probe: the chat started `run.execute`, the person granted the confirmation, and the probe run succeeded with a `read-page` action.
+- Task start: the unchanged instruction created a Flow and the chat `became: build`, with `applied: false`.
+- Permission is not applicable: these nine tasks declare no permission point or permits, which the evidence records with the task digest. The social site (`t986-preflight-social-v2`) remains the only consequential, permission-exercised preflight.
+- Site challenge:
+  - `not_run` (everything-store, crossborder, bigbox, company-website): the site declares person-check modules, and this preflight does not exercise them. That is a stated gap, not a pass; a generic confirmation is not the site's own challenge.
+  - `not_declared` on the other five.
+- Calls and cost: no provider calls; the chat-check Core has no model key. External calls and cost are not observed by this command. `preflight.json` writes them as constant 0, so read them as null.
+
+Logs are `test-runs/t986-resume-1123/preflight-<site>-v1.log`.
+
+Round 3 changed no source and made no git mutations. New outputs:
+- `test-runs/t986-replay-company-v1/` (copied inputs plus `replay-report.json`);
+- `test-runs/t986-preflight-<site>-v1/` for the nine sites;
+- the diagnostic `test-runs/t986-resume-1123/company-diag/session-refs.mjs` and its log.
+
+The campaign's recorded-run acceptance was not started; it waits for the P2 data stage.
+
+Not verified in round 3:
+- A replay past the Core session gate. It is blocked on the Core fix described in item 2.
+- Site-declared person challenges on the four `not_run` sites.
+- Whole-task or scoreboard acceptance.
+- Browser network observation in preflights.
