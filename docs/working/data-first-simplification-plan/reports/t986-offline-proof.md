@@ -301,3 +301,59 @@ Exact structural diagnosis, no raw recorded values emitted: historical native ga
 Owning lineage found: domain/src/runtime/llm-evidence/node-run/rejected-rows.ts:151 creates webNodeReadLinks(payload.url), then shown-rows/account.ts:18 writes model-visible read.extracted using shown-rows/links.ts:37. That production writer deliberately emits same-origin links as root-relative paths and states origin once. Canonical step result.json is a model-visible tool result; historical native gateway payload is raw. Provider-free source-only call through actual current webNodeReadWithRejectedRows(recordedNativePayload).read.extracted is deep-strict equal to original canonical20 rows and states exact snapshot origin. Native raw vs canonical remains unequal. Durable diagnostics: canonical-structural-diagnosis, canonical-cell-diagnosis, canonical-origin-diagnosis and canonical-projection-lineage JSON/log files under ignored validation root. No oracle, comparator, historical artifact, or source was changed to obtain this finding. Existing reports remain failed; proposed correct proof has explicit raw-native equality and actual-owner projected-canonical equality, never one substituted for the other.
 
 Root is taking the independently authorized fresh Company capture in its new evidence directory while worker finishes lineage diagnosis; worker source remains frozen. No job running/queued for worker, no paid run. Parent currentness stays root-owned.
+
+## 2026-11-23 resume
+
+Brief: `briefs/finish-offline-proof.md`. Trees: downstream 93b22640d, Core 69a35f617 (lead-synced). Steps 1 and 2 done; step 3 (browser) not started, waiting for the lead's synced-trees message. Source edits are downstream only; Core is unchanged. Logs are under ignored `test-runs/t986-resume-1123/`.
+
+### Outcome
+Partial: steps 1 and 2 are done and ready for browser runs. The checkpoint compiles and its owners pass. The cause of the Company capture failure is proven and fixed in the code. No browser, Lab, provider or paid run happened.
+
+### Step 1: the read-parity checkpoint (4e364886d)
+- Audit defect: `offline-reads/model-result.ts` reached into `llm-evidence/node-run/rejected-rows`. Fixed by exporting `webNodeReadWithRejectedRows` (and its type) from the `node-run` barrel and importing the directory. No cycle: nothing under `llm-evidence` imports `offline-reads`.
+- Compile defect: `read-parity/command.ts(45,176) TS2322 unknown -> JsonObject`, because `source.ts` returned `command.parameters` (typed unknown). It now returns the `parameters` object that `source.ts` already proved holds `extractList` and that came from a `json`-encoded trace event.
+- `model-result.test.ts` was rewritten from top-level asserts to `node:test` cases with the same assertions: projected origin and relative link, raw frozen payload unchanged, and no payload projects to nothing.
+- The comparison logic in `boundaries.ts` and `command.ts` is unchanged. Raw native rows are compared with recorded native rows, and production-projected rows with canonical rows, plus origin/URL context. Neither substitutes for the other. The recorded-read paragraph in `docs/architecture/recorded-offline-proof.md` now describes this split.
+
+### Step 2: Company capture `native_request_not_captured`, cause and fix
+Evidence was read from copies only; nothing in `test-runs/t986-fresh-capture-company-v1` was opened for writing. The scripts are under `test-runs/t986-resume-1123/company-diag/` and print names and counts only.
+- The IAM audit in `source-archive` shows `studio:GenerateFlowBootstrapAdaptation` allowed exactly once after the restart (`audit-actions.log`). The HTTP build call therefore reached Core's handler.
+- `project.sqlite` in both `starting` and `source-archive` has no `client_gateway_traces` table (`tables.log`). No build trace episode was ever opened or closed, so the service build never started. This held even though tracing is on in every Lab Core (`FLUXIQ_CLIENT_GATEWAY_TRACE=1`).
+- Code shows a deterministic mismatch. The receipt's `entryDigest` covered the posted `CreatedFlowBuildRequest` (`{projectId, flowId, evidenceGuided, startLocation, taskProcessing}`). The host wrapper compared that digest with the *service* request. Core's route (`flow-bootstrap-requests/generate.ts:131-160`) always builds that request with `caller` (required by `generation/request.ts:66`), `permittedConsequences: []` and `permissionAskTimeoutMs`, so the digests can never match. The wrapper threw `recorded_capture_actual_entry_changed` before `generate`. The route turned that into its generic failure sentence, and `proof`'s empty `catch` swallowed it, which left only `native_request_not_captured`.
+- The same defect would have broken replay: `replay-input.json` carried the posted request without `caller`, and the service refuses a request without one.
+
+The fix binds the actual service entry and never predicts it:
+- `stopped-start.ts` records only the closed store's facts (store digest, copy time).
+- The new `receipt.ts` builds the unchanged receipt shape from those facts plus an entry.
+- The runner writes `{facts, declared, wireFile}`.
+- In Core, `entry-binding.ts` and `service-entry.ts` require every declared field to reach the service deep-equal, else `recorded_capture_actual_entry_changed`. They then bind the routed request whole, with one change: `caller.actorSessionId`, a live session credential (`identity-access validateSession`), is replaced by a fixed marker, and `actorUserId` is kept. The host writes the entry and receipt for the runner (`capture-entry.json` in the evidence), attaches the receipt at the first native request, and runs `generate(boundEntry.request)`.
+- Replay's `request` is the same bound entry, so capture and replay enter the service identically. `capturedAt` is still the store-copy time, so `before_entry` holds.
+- A host refusal is written as a code, reported as `hostRefusal`, and listed as a gap.
+- The runner checks receipt consistency (`storeDigest`, and `entryDigest` = digest(entry)).
+- `start.ts` keeps its API by binding its caller-supplied entry at once.
+- Nothing was normalized. The route's `permittedConsequences` and ask wait are kept exactly as Core wrote them, and no timeout or wait changed.
+- Report honesty: `capture-report.json` hard-coded `externalCalls: 0, externalUsd: 0` without observing browser network. It now reports `providerCalls: 0, providerUsd: 0` (no network by construction) and `externalCalls: null, externalUsd: null`.
+
+### Commands run and observed results
+All heavy commands ran through `heavy-slot.mjs run <label> --`.
+- `DOMAIN_TEST_BUILD_LABEL=t986-offline-reads node scripts/test-domain.mjs runtime/offline-reads/tests/model-result runtime/llm-evidence/node-run/tests/rejected-rows` (domain) -> 15/15 pass.
+- `pnpm --filter @fluxiq-web-extension/test-runner check`:
+  - first run -> exit 2, TS2322 at `read-parity/command.ts(45,176)` (domain rebuilt 48,088 ms);
+  - after the `source.ts` fix -> exit 0;
+  - after the capture fix -> exit 2, TS2322 on the host wrapper's generic return;
+  - after making the entry binding generic over the routed input -> exit 0, and exit 0 again after the test edits.
+- `pnpm --filter @fluxiq-web-extension/test-runner build` -> exit 0 (103,124 ms; rebuilt twice more after later edits, both exit 0).
+- `pnpm --filter @fluxiq-web-extension/domain check` -> exit 0 (33,961 ms, src and test configurations).
+- `node scripts/structure-audit.mjs`:
+  - first run -> exit 1 with 3 violations in my new tests (`as never` x3, a fixed `os.tmpdir()/elsewhere` path);
+  - after replacing them with typed JSON-parsed stubs and a `mkdtemp` directory -> exit 0, "passed (258 warning(s), 551 baselined)". The checkpoint's barrel violation is gone and the baseline is unchanged.
+- `node --test --test-concurrency=1` on the 5 capture owners (service-entry, entry-binding, start, command, transport) and the 5 read-parity owners (boundaries, source, command, compare, fixture-url) -> 26/26 pass (62,587 ms). Logs: `owners-final.log`, `read-parity-owners.log` (13/13 earlier).
+- Diagnostic scripts (`node --no-warnings test-runs/t986-resume-1123/company-diag/{trace-episodes,tables,audit,audit-actions}.mjs test-runs/t986-fresh-capture-company-v1`) -> outputs as summarised above.
+
+### Not verified
+- No browser run. The fix is proven by unit owners and evidence reasoning, not by a new capture. The new capture may still stop at a later boundary that was never reached before, for example the attachment's exploration-episode check or trace completeness.
+- The 30-file owner sweep and the extension build were not rerun. The Everything Store rerun, the Company capture and the social preflight have not run.
+
+### Open questions
+- Binding the routed entry, with only the session credential replaced, is a design choice (recorded in `docs/architecture/recorded-offline-proof.md`). The alternative, predicting Core's route mapping in the Lab, would copy Core internals, and its ask-wait constant is not public.
+- Ready for step 3 once the lead confirms both t986 trees are synced. The browser commands will write new outputs: `report-original-six-rerun2.json`, `t986-fresh-capture-company-v2`, `t986-preflight-social-v1`.

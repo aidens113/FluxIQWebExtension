@@ -15,6 +15,8 @@ import { recordedStoreDigest } from "../store-digest.js";
 import { verifyRecordedStartingPosition } from "../position.js";
 import { admitRecordedAttempt } from "../admit.js";
 import { recordedCaptureRequest } from "./request.js";
+import { RECORDED_CAPTURE_FILES } from "./files.js";
+import { recordedRequestDigest } from "../request-digest.js";
 
 /** Produces fresh, stopped bootstrap-prefix evidence. It never admits or repairs an old campaign. */
 export async function runRecordedCaptureCommand(input: { repositoryRoot: string; fluxiqRepositoryRoot: string; scenarioId: string; taskId: string; evidenceDirectory: string; source: { core: string; extension: string } }) {
@@ -34,6 +36,8 @@ export async function runRecordedCaptureCommand(input: { repositoryRoot: string;
   let originalRoot: string | undefined;
   let wireRecorded = false;
   let extraNativeRequests = 0;
+  let bound: { entry: { request: CreatedFlowBuildRequest & { caller: unknown }; chat: null }; receipt: { entryDigest: string; storeDigest: string } } | undefined;
+  let hostRefusal: string | undefined;
   const wireFile = path.join(input.evidenceDirectory, "capture-wire.json");
   const result = await runExtensionChatCheck({ ...input, browser: "chrome", pagePath: scenario.startPath, ask: false,
     hostModulePath: fileURLToPath(new URL("./host-module.js", import.meta.url)),
@@ -44,9 +48,10 @@ export async function runRecordedCaptureCommand(input: { repositoryRoot: string;
       request = recordedCaptureRequest({ projectId, flowId, startLocation: new URL(scenario.startPath, topology.scenarioOrigin).href, taskId: input.taskId });
       originalRoot = topology.allocation.fluxiqRoot;
       await topology.restartCore(async () => {
-        snapshot = await captureRecordedStoppedStart({ ...input, rootDir: originalRoot!, work: path.join(input.evidenceDirectory, "starting"), projectId, flowId, oracleDigest, entry: { request, chat: null } }, async () => undefined);
-        // The child is genuinely stopped by its owner here; the receipt bytes come only from this capture.
-        await writeFile(path.join(originalRoot!, ".recorded-capture.json"), JSON.stringify({ receipt: snapshot.receipt, receiptBase64: snapshot.receiptBytes.toString("base64"), wireFile: path.join(originalRoot!, ".recorded-capture-wire.json") }));
+        snapshot = await captureRecordedStoppedStart({ ...input, rootDir: originalRoot!, work: path.join(input.evidenceDirectory, "starting"), projectId, flowId, oracleDigest }, async () => undefined);
+        // The child is genuinely stopped by its owner here. The host binds these store facts to the
+        // entry its service actually receives (`./entry-binding.ts`); `request` is what must reach it.
+        await writeFile(path.join(originalRoot!, RECORDED_CAPTURE_FILES.configuration), JSON.stringify({ facts: snapshot.facts, declared: request, wireFile: path.join(originalRoot!, RECORDED_CAPTURE_FILES.wire) }));
       });
     },
     proof: async ({ topology, control }) => {
@@ -60,12 +65,22 @@ export async function runRecordedCaptureCommand(input: { repositoryRoot: string;
           archive = await freshStoreCopy({ sourceFluxiqDir: path.join(topology.allocation.fluxiqRoot, ".fluxiq"), work: path.join(input.evidenceDirectory, "source-archive") });
           const root = topology.allocation.fluxiqRoot;
           try {
-            await writeFile(wireFile, await readFile(path.join(root, ".recorded-capture-wire.json")));
+            await writeFile(wireFile, await readFile(path.join(root, RECORDED_CAPTURE_FILES.wire)));
             wireRecorded = true;
           } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
           }
-          for (const name of (await readdir(root)).filter((name) => name.startsWith(".recorded-capture-wire.json.extra-"))) {
+          const entryBytes = await readFile(path.join(root, RECORDED_CAPTURE_FILES.entry)).catch(absent);
+          if (entryBytes) {
+            await writeFile(path.join(input.evidenceDirectory, "capture-entry.json"), entryBytes);
+            bound = JSON.parse(entryBytes.toString("utf8"));
+          }
+          const refusal = await readFile(path.join(root, RECORDED_CAPTURE_FILES.refusal), "utf8").catch(absent);
+          if (refusal) {
+            const code: unknown = JSON.parse(refusal).code;
+            hostRefusal = typeof code === "string" && /^recorded_capture_[a-z_]+$/u.test(code) ? code : "recorded_capture_refusal_unreadable";
+          }
+          for (const name of (await readdir(root)).filter((name) => name.startsWith(`${RECORDED_CAPTURE_FILES.wire}.extra-`))) {
             extraNativeRequests += 1;
             await writeFile(path.join(input.evidenceDirectory, name.slice(1)), await readFile(path.join(root, name)));
           }
@@ -77,8 +92,12 @@ export async function runRecordedCaptureCommand(input: { repositoryRoot: string;
   if (extraNativeRequests) gaps.push("unmatched_extra_native_requests");
   let traceId: string | null = null;
   if (!request || !snapshot || !archive || !originalRoot) gaps.push("capture_did_not_reach_archive");
+  else if (hostRefusal) gaps.push(hostRefusal);
+  else if (!bound) gaps.push("capture_entry_not_bound");
+  else if (bound.receipt.storeDigest !== snapshot.storeDigest || bound.receipt.entryDigest !== recordedRequestDigest(JSON.stringify(bound.entry))) gaps.push("capture_receipt_inconsistent");
   else if (!wireRecorded) gaps.push("native_request_not_captured");
   else {
+    const entry = bound.entry;
     const wire = JSON.parse(await readFile(wireFile, "utf8"));
     traceId = wire.position.sourceTraceId;
     const host = openOfflineTrialHost({ rootDir: archive.rootDir });
@@ -102,16 +121,23 @@ export async function runRecordedCaptureCommand(input: { repositoryRoot: string;
         const admission = admitRecordedAttempt(decoded, true);
         if (!admission.admitted) gaps.push("capture_artifact_not_admitted");
         else {
-          await verifyRecordedStartingPosition({ artifact: decoded, manifest, store, entry: { request, chat: null }, projectId: request.projectId, flowId: request.flowId });
+          await verifyRecordedStartingPosition({ artifact: decoded, manifest, store, entry, projectId: request.projectId, flowId: request.flowId });
           await writeFile(artifactFile, JSON.stringify(artifact));
-          await writeFile(path.join(input.evidenceDirectory, "replay-input.json"), JSON.stringify({ artifact: artifactFile, rootDir: snapshot.snapshot.rootDir, sourceRootDir: archive.rootDir, originalRoot, allowedWorkRoot: input.evidenceDirectory, snapshotMethod: "closed-store-copy", traceId, stream: "build", request }));
+          await writeFile(path.join(input.evidenceDirectory, "replay-input.json"), JSON.stringify({ artifact: artifactFile, rootDir: snapshot.snapshot.rootDir, sourceRootDir: archive.rootDir, originalRoot, allowedWorkRoot: input.evidenceDirectory, snapshotMethod: "closed-store-copy", traceId, stream: "build", request: entry.request }));
         }
       }
     } finally { await host.close(); }
     if (await recordedStoreDigest(snapshot.snapshot.fluxiqDir) !== snapshot.storeDigest) gaps.push("starting_snapshot_changed");
   }
   if (result.failure) gaps.push("browser_capture_failed");
-  const report = { proof: "fresh_stopped_bootstrap_prefix", fullAttemptAccepted: false, conversationBuildProven: false, externalCalls: 0, externalUsd: 0, extraNativeRequests, traceId, complete: gaps.length === 0, gaps, stage: result.stage };
+  // The native transport has no network, so provider traffic is zero by construction; browser
+  // network is not observed by this command, so it is reported unknown rather than zero.
+  const report = { proof: "fresh_stopped_bootstrap_prefix", fullAttemptAccepted: false, conversationBuildProven: false, providerCalls: 0, providerUsd: 0, externalCalls: null, externalUsd: null, extraNativeRequests, hostRefusal: hostRefusal ?? null, traceId, complete: gaps.length === 0, gaps, stage: result.stage };
   await writeFile(path.join(input.evidenceDirectory, "capture-report.json"), JSON.stringify(report, null, 2));
   return report;
+}
+
+function absent(error: NodeJS.ErrnoException): undefined {
+  if (error.code === "ENOENT") return undefined;
+  throw error;
 }

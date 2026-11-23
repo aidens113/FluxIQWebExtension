@@ -55,7 +55,7 @@ export async function readRecordedReadSource(input: SourceInput) {
     const dispatch = webAutomationExtractListDispatch({ extractList: parameters.extractList as JsonObject });
     const output = dispatch.ok ? dispatch.payload.recordOutput : undefined;
     const currentDerivedSchema = output && typeof output === "object" && !Array.isArray(output) ? output.schema : undefined;
-    return { snapshot, action, recordedResult: scoped.request.recordedResult, expectedRows: canonical.rows, canonicalRead: canonical.read, projectionParameters: command.parameters, currentDerivedSchema, receipt: { ...canonical.receipt, traceId: input.traceId, traceOpen: manifest.closedAt === null, wholeTraceAdmitted: false as const, commandSequence: recorded.sequence, resultSequence: scoped.replaced.event.sequence, commandId: input.commandId, callId: input.callId, primarySha256: descriptor.sha256, bindingSha256: input.bindingSha256, canonicalResultSha256: input.canonicalResultSha256, snapshotUnavailableParts: snapshot.unavailable } };
+    return { snapshot, action, recordedResult: scoped.request.recordedResult, expectedRows: canonical.rows, canonicalRead: canonical.read, projectionParameters: parameters as JsonObject,currentDerivedSchema, receipt: { ...canonical.receipt, traceId: input.traceId, traceOpen: manifest.closedAt === null, wholeTraceAdmitted: false as const, commandSequence: recorded.sequence, resultSequence: scoped.replaced.event.sequence, commandId: input.commandId, callId: input.callId, primarySha256: descriptor.sha256, bindingSha256: input.bindingSha256, canonicalResultSha256: input.canonicalResultSha256, snapshotUnavailableParts: snapshot.unavailable } };
   } finally { await host.close(); }
 }
 
