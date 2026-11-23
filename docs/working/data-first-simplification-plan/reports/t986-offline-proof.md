@@ -515,3 +515,54 @@ Not verified in round 4:
 - The full Core suites.
 - The pre-existing Core check and audit failures.
 - Live model behaviour after removing `commandId`.
+
+### Round 5 (synced trees: Core 9a39d1bf9 with 0.53.0, downstream after the lead's merge)
+
+**1. The remaining Core users now use the session-bound predicate.**
+- `client-gateway/trace-replay/walk/walk.ts`:
+  - `drive` now gaps an unreferenced event only when `clientGatewayTraceEventSessionBound(event)` holds.
+  - An `artifact` on a stream the tap does not write is no longer fed to the gateway as a client upload. It was never gateway traffic, so nothing is fed.
+- `client-gateway/trace-matcher/trace-admission.ts`: `servedSession` counts sessions only over session-bound events, so a host's control artifact never reads as a second, undefined session.
+- No user of `CLIENT_GATEWAY_TRACE_SESSION_BOUND_KINDS` remains outside `session-references/`.
+- New `trace-replay/tests/replay-host-stream.test.ts`:
+  - A recorded trace plus a sessionless control-stream artifact replays as `recorded`.
+  - No divergence carries the lost-session gap.
+  - Every other entry and divergence equals the replay of the same trace without that artifact, so nothing was uploaded in its name.
+  - A client upload that lost its session is still refused ("some of its events name their session and others do not").
+- New `trace-matcher/tests/admission-host-stream.test.ts`:
+  - An operation-free trace (state update and session records) plus a control artifact is admitted with no refusal and with the trace's one session as `sessionRef`. With the old set this would have been `null`.
+  - A gateway event that lost its reference is still refused as `incomplete_capture`.
+- Both fixtures declare `control` in the manifest's streams, as Automation Studio's episodes do. Without that, admission correctly refused `undeclared_stream`.
+- Not asserted, and outside these files: how the parity report classifies the control-stream artifact's own entry. `comparison/parity-report.ts` marks only `kind === "control"` as `outside`. A control-stream artifact should probably be `outside` too; that is a small Core follow-up.
+
+**2. Checks on the synced trees.** All heavy commands went through the gate; Vitest ran with 1 worker.
+
+| Tree | Check | Result |
+| --- | --- | --- |
+| Core | the 2 new test files | 4/4 pass (first run: 1 fail, the undeclared fixture stream, fixed in the fixture) |
+| Core | `src/client-gateway/trace-replay` + `src/client-gateway/trace-matcher` (includes session-references) | 14 files, 66/66 pass |
+| Core | `pnpm --filter fluxiq check` | exit 0, 0 errors (the earlier 10 are gone with dev's P2/P6 versions) |
+| Core | `node scripts/structure-audit.mjs` | exit 0, "passed (569 warning(s), 903 baselined)" |
+| Core | library rebuild (`contracts:build sdk:build fluxiq:build client-gateway-websocket:build ui-components:build`) | exit 0 (fluxiq and ui-components rebuilt) |
+| Downstream | domain check | exit 0 |
+| Downstream | domain node-run + offline-reads tests | 320/320 pass |
+| Downstream | test-runner check and build | exit 0, exit 0 |
+| Downstream | 30-file owners | 206/206 pass |
+| Downstream | structure audit | exit 0, "passed (258 warning(s), 551 baselined)" |
+
+**3. Fresh capture v4 and replay v5.**
+- Capture: `node scripts/lab/run-lab.mjs recorded-capture company-website --task company-website-apprentices --evidence test-runs/t986-fresh-capture-company-v4` -> exit 0, `complete: true`, `gaps: []`, `hostRefusal: null`, `extraNativeRequests: 0`. Provider calls and USD 0; external calls and cost null (not observed). The prelude staleness checks ran and refused nothing. The recorded first request mentions `commandId` 0 times.
+- Replay workspace: `starting/`, `source-archive/` and `artifact.json` copied into the new `test-runs/t986-replay-company-v5/` (identical by `diff -rq`); `replay-input.json` request deep-equals the bound entry.
+- Replay: `node scripts/lab/run-lab.mjs recorded-replay --input test-runs/t986-replay-company-v5/replay-input.json --out test-runs/t986-replay-company-v5/replay-report.json` -> exit 0.
+  - **Before-entry check:** passed (`position.point: before_entry`), so replay entered with exactly the bound entry.
+  - **Session:** `status: ran`, `sessionView: recorded`, `normalizations: []`.
+  - **Matched operations:** 3 of 3 recorded, all `answeredFrom: recorded`; no gaps, no refused deliveries.
+  - **Model and provider calls:** recorded request 1 matched by digest and its recorded reply was served from the artifact (`logicalCalls: 1`). Provider calls 0, `externalUsd: 0`, `historicalUsd: 0`.
+  - **Where it stopped:** build request 2 -> `exhausted_stream`, `buildStatus: prefix_diverged`. The fresh stopped bootstrap prefix records exactly one native exchange, so this is the designed end of the recording, not a defect. `fullAttemptAccepted: false`.
+
+Round 5 source changes: Core `walk/walk.ts`, `trace-matcher/trace-admission.ts`, and the two new test files. Downstream source is unchanged; only this report was appended.
+
+Not verified:
+- How the parity report classifies a control-stream artifact's entry (the follow-up above).
+- A replay beyond one recorded exchange, which needs a longer capture producer.
+- The full Core and downstream suites.
