@@ -11,6 +11,8 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 ## Current State
 
+**Week focus (user, 2026-11-23):** "for now we'll only focus this week on getting the core product 100% working". Hosted and cloud work stays paused until this plan's proofs and paid round show the core product working. That includes the web remote viewer the user asked for the same day, recorded as unit HC-V in [hosted-platform-launch-plan.md](./hosted-platform-launch-plan.md).
+
 **Handover to Claude Code (2026-11-23).** The user handed the Codex session's work to a Claude Code lead. Codex stopped about 13:40 on 11-22 with no process left running.
 - **Committed at handover:** Codex's final status notes on both dev branches. Its uncommitted lane work went onto each task branch as unverified checkpoints: t984 Core 4c4868428 (FluxNode fixtures, never run) and t986 Down 4e364886d (split raw/projected read parity, never compiled).
 - **Recovered result Codex never recorded:** t984's 17-file Answer First compatibility batch finished with 95/104 passed and 9 failed in 7 files.

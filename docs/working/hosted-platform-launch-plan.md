@@ -3,13 +3,33 @@
 Status: Paused
 Status detail: Paused as a separate workstream during the approved data-first execution week; unresolved work and historical evidence are retained below.
 Created: 2026-11-14
-Last updated: 2026-11-22
+Last updated: 2026-11-23
 Owner: Senior supervisor agent
 Scope: Hosted panel, coordinated releases, managed web cloud, local FluxNodes, marketplace and self-hosting.
 Paired document: ../!FluxIQ/docs/working/hosted-platform-launch-plan.md
 Related: [Hosted production](./hosted-production-plan.md), [MVP seal](./mvp-seal-plan.md)
 
 ## Current State
+
+**User direction, 2026-11-23:** "for now we'll only focus this week on getting the core product 100% working". This plan stays paused until the core product is proven (the data-first plan's recorded-run proofs and supervised paid round). The web viewer below is to be recorded here, not built this week.
+
+**Cloud browsers since the 2026-11-17 snapshot (lead, from dev history 2026-11-23):**
+- Merged into dev 11-18 and 11-19:
+  - t943: a dedicated browser enrols only into its own tenant.
+  - t948: checkout plans by quantity; admission counts dedicated browsers.
+  - t953: hosted dedicated browsers on local Docker. This covers the panel's environments API (create, list, start, stop and change), a Docker environment driver, the `deploy/runner/Dockerfile` runner image, and the browser host's runner mode, which takes its enrolment ticket on stdin and serves one browser for its own workspace only.
+- The earlier managed browser host (t907, 11-12) is proven locally on Chromium.
+- All of this runs only in local Docker. No real VM fleet, no shared compute, no deployment.
+- So the 11-17 "not built" items "environment controller", "tenant-bound enrolment" and "Linux runner image" now exist in local form. "A remote viewer" still has no code: a 2026-11-23 search for noVNC, websockify, x11vnc, screencast and viewer code in Core `apps/web`, `packages/fluxiq` and downstream `browser-host`/`deploy` found none.
+
+**HC-V. Web remote viewer and takeover (planned unit; user asked 2026-11-23 for "a way for user to see whats goin on via vnc type viewer", "web based ofc").** Lead's design, recommended to the user on 2026-11-23:
+- **Display.** The runner container draws its headed Chromium on a virtual display (Xvfb), with a VNC server attached to that display only. The panel shows it through noVNC in an ordinary page; the user installs nothing. A full display is chosen over Chrome's page screencast because a person taking over needs the browser chrome, the extension's side panel, native dialogs and file pickers, which a page-only screencast cannot show.
+- **Access.** The VNC socket is never published. Core proxies it as a WebSocket behind the signed-in panel session. Only the environment's owning tenant can open it, under an IAM action of its own (for example `environments:View` and `environments:TakeControl`). Each view and takeover is written to the audit log.
+- **Modes.** Watch-only by default. "Take control" grants input, and automation on that environment waits: the running Flow parks as a person-needed ask, never a failure. Handing back resumes it from where it waited, with the person's changes treated as the new page state. Lasting acts already done are never repeated.
+- **Use.** The same viewer serves the takeover requests that login, MFA and person checks raise (Phase 3), and the run page links to the live view of the environment running it.
+- **Acceptance.** Tenant A can never open tenant B's view. A revoked session closes an open view. Watch-only sends no input. A takeover parks and resumes one realistic task with its Flow intact. No VNC port is reachable from outside the container network. It works in Chrome and Firefox panels.
+- **Owners.** Downstream `deploy/runner` (display, VNC) and `browser-host` runner mode. Core panel route, proxy, IAM action and viewer page (paired Core plan).
+- **Schedule.** After the core product is proven. Slots into Phase 3 (VM runner and remote viewer on staging, 12-04 in the critical path above).
 
 **Priority reconciliation, 2026-11-22:** [Data-first simplification](./data-first-simplification-plan.md) is the current implementation plan of record (approved S7). This pauses this separate plan, does not mark its remaining work complete, and does not cancel another running session. The earlier snapshot below is historical; its code and acceptance were not revalidated by this documentation change. Prior status detail: Hosted-cloud lane (2026-11-17): t914 reconciled, dated schedule to launch 2026-12-10, units HC1-HC5a starting; nothing deployed.
 
@@ -449,7 +469,7 @@ Implementation authorized; paired task t914 preserves experimental branches. Use
 - Downstream: browser-host, product/domain packaging and deploy composition. Core container/TLS/discovery changes use separate briefs.
 - Pin Chromium/extension/domain, Linux libraries, sandbox/non-root execution, persistent profiles/cleanup; build on clean Linux CI.
 - Scoped remote enrollment/heartbeat/health/lease routing. Idempotent VM create/status/start/stop/resize/delete with partial-failure reconciliation.
-- Authenticated remote viewing/takeover for login/MFA/person-needed, no public debugging. Protect private networks/metadata; prove profile/secret ownership through recovery.
+- Authenticated remote viewing/takeover for login/MFA/person-needed, no public debugging. Built as unit HC-V (Current State): a web noVNC viewer of the runner's Xvfb display, proxied through Core behind the panel session, watch-only by default, and a "Take control" that parks the Flow and resumes it on hand-back. Protect private networks/metadata; prove profile/secret ownership through recovery.
 - IaC, staging/production TLS, mail, secret delivery, readiness/monitoring, encrypted backup/restore; alert stalled work, cleanup, disk, lease, mail and cost failures.
 - Exit: fresh Linux deploy, actual gateway/SSE/enrollment, login persistence/takeover, restart, failed-allocation cleanup and decryptable restore with disposable tenants. Health endpoint alone is insufficient.
 
