@@ -55,7 +55,7 @@ export async function readRecordedReadSource(input: SourceInput) {
     const dispatch = webAutomationExtractListDispatch({ extractList: parameters.extractList as JsonObject });
     const output = dispatch.ok ? dispatch.payload.recordOutput : undefined;
     const currentDerivedSchema = output && typeof output === "object" && !Array.isArray(output) ? output.schema : undefined;
-    return { snapshot, action, recordedResult: scoped.request.recordedResult, expectedRows: canonical.rows, currentDerivedSchema, receipt: { ...canonical.receipt, traceId: input.traceId, traceOpen: manifest.closedAt === null, wholeTraceAdmitted: false as const, commandSequence: recorded.sequence, resultSequence: scoped.replaced.event.sequence, commandId: input.commandId, callId: input.callId, primarySha256: descriptor.sha256, bindingSha256: input.bindingSha256, canonicalResultSha256: input.canonicalResultSha256, snapshotUnavailableParts: snapshot.unavailable } };
+    return { snapshot, action, recordedResult: scoped.request.recordedResult, expectedRows: canonical.rows, canonicalRead: canonical.read, projectionParameters: command.parameters, currentDerivedSchema, receipt: { ...canonical.receipt, traceId: input.traceId, traceOpen: manifest.closedAt === null, wholeTraceAdmitted: false as const, commandSequence: recorded.sequence, resultSequence: scoped.replaced.event.sequence, commandId: input.commandId, callId: input.callId, primarySha256: descriptor.sha256, bindingSha256: input.bindingSha256, canonicalResultSha256: input.canonicalResultSha256, snapshotUnavailableParts: snapshot.unavailable } };
   } finally { await host.close(); }
 }
 
@@ -76,7 +76,7 @@ async function canonicalEvidence(input: SourceInput) {
   const task = await loadCreatedFlowRequest({ repositoryRoot: input.repositoryRoot, scenarioLabDist: paths.scenarioLabDist, scenarioId: input.scenarioId, taskId: input.taskId });
   const selected = ledgerTask({ scenarioId: input.scenarioId, work: task.task.id, workflowId: task.workflowId, variantId: task.variantId });
   if (entry.task !== selected) throw new Error("recorded_read_fixture_task_changed");
-  return { rows: result.read.extracted as unknown, startPath: scenario.startPath, receipt: { runId: entry.runId as string, scenarioId: input.scenarioId, taskId: task.task.id, runEntrySha256: input.runEntrySha256, currentTaskSha256: digest(JSON.stringify(task.task)) } };
+  return { rows: result.read.extracted as unknown, read: result.read as unknown, startPath: scenario.startPath, receipt: { runId: entry.runId as string, scenarioId: input.scenarioId, taskId: task.task.id, runEntrySha256: input.runEntrySha256, currentTaskSha256: digest(JSON.stringify(task.task)) } };
 }
 
 function recordedOperations(events: readonly ClientGatewayTraceEvent[]): ClientGatewayTraceRecordedOperation[] {

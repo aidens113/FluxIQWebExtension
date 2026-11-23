@@ -4,7 +4,7 @@ import { webOfflineReadAnsweredResult, webOfflineReadControlReproduced } from "@
 import { loadExtensionContentCode, openWebSnapshotPage } from "../../offline-snapshot-page/index.js";
 import { assertRealisticScenarios } from "../../realistic-scenarios/index.js";
 import { readRecordedReadSource } from "./source.js";
-import { compareRecordedReadRows } from "./compare.js";
+import { compareRecordedReadBoundaries } from "./boundaries.js";
 
 /** Actual content-reader parity for one recorded operation; always separate from task acceptance. */
 export async function runRecordedReadCommand(input: { repositoryRoot: string; scenarioId: string; inputFile: string; outputFile: string }) {
@@ -42,10 +42,10 @@ export async function runRecordedReadCommand(input: { repositoryRoot: string; sc
       observedExternalCalls = evaluation.observations.requestsLeaked;
       const answered = webOfflineReadAnsweredResult(evaluation.result, source.recordedResult);
       const nativeResultMatches = webOfflineReadControlReproduced(answered, source.recordedResult);
-      const comparison = compareRecordedReadRows({ actual: answered.payload?.extracted, expected: source.expectedRows, ...(source.currentDerivedSchema === undefined ? {} : { currentDerivedSchema: source.currentDerivedSchema }) });
+      const comparison = compareRecordedReadBoundaries({ actualPayload: answered.payload, originalPayload: source.recordedResult.payload, canonicalRead: source.canonicalRead, parameters: source.projectionParameters, recordedUrl: source.snapshot.url, ...(source.currentDerivedSchema === undefined ? {} : { currentDerivedSchema: source.currentDerivedSchema }) });
       const sandboxSafe = evaluation.observations.scriptsRan === 0 && evaluation.observations.requestsLeaked === 0;
-      const gaps = [...(!nativeResultMatches ? ["native_gateway_result_changed"] : []), ...(!comparison.rowsMatch ? ["canonical_recorded_rows_changed"] : []), ...(!sandboxSafe ? ["snapshot_sandbox_breached"] : []), ...(comparison.currentSchema !== "valid" ? [`current_derived_schema_${comparison.currentSchema}`] : [])];
-      outcome = { parityPassed: gaps.length === 0, rawRowsMatch: comparison.rowsMatch, nativeResultMatches, comparison, sandbox: evaluation.observations, gaps };
+      const gaps = [...(!nativeResultMatches ? ["native_gateway_result_changed"] : []), ...(!comparison.rawNativeRowsMatch ? ["original_native_rows_changed"] : []), ...(!comparison.modelProjectedRowsMatch ? ["canonical_model_projected_rows_changed"] : []), ...(comparison.projectionContextMatches === null ? ["projection_context_unavailable"] : comparison.projectionContextMatches ? [] : ["projection_context_changed"]), ...(!sandboxSafe ? ["snapshot_sandbox_breached"] : []), ...(comparison.rawComparison.currentSchema !== "valid" ? [`current_derived_schema_${comparison.rawComparison.currentSchema}`] : [])];
+      outcome = { parityPassed: gaps.length === 0, rawNativeRowsMatch: comparison.rawNativeRowsMatch, modelProjectedRowsMatch: comparison.modelProjectedRowsMatch, projectionContextMatches: comparison.projectionContextMatches, nativeResultMatches, comparison, sandbox: evaluation.observations, gaps };
     }
   } catch (error) {
     outcome = { parityPassed: false, gaps: [error instanceof Error && /^recorded_read_[a-z_]+$/u.test(error.message) ? error.message : "recorded_read_unavailable"] };
