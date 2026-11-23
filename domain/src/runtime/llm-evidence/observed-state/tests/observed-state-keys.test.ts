@@ -6,7 +6,7 @@ import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "../../denied-keys";
 import { WEB_LLM_OBSERVED_STATE_KEYS } from "../observed-state-keys";
 
 test("names the page in both of its forms, and nothing a step said", () => {
-  assert.deepEqual([...WEB_LLM_OBSERVED_STATE_KEYS], ["elements", "dialogs", "blockedBy", "page"]);
+  assert.deepEqual([...WEB_LLM_OBSERVED_STATE_KEYS], ["elements", "dialogs", "blockedBy", "page", "judgeState"]);
   for (const kept of ["location", "ok", "status", "pageChanged", "control", "read", "detail", "inFlow"]) {
     assert.equal(WEB_LLM_OBSERVED_STATE_KEYS.includes(kept), false, kept);
   }

@@ -57,6 +57,7 @@ import {
   webAutomationRecoveryHarnessOptionBundle
 } from "./harness-options";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
+import { projectWebJudgeEvidence } from "./judge-evidence";
 import { WEB_LLM_VIEW_KEYS } from "./observed-state";
 import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "./script-examples";
@@ -227,6 +228,8 @@ export function createWebAutomationLlmEvidenceRuntime(
     // Declared once, in `./denied-keys.ts`, because what a reading node read
     // is held to the same list before it is ever returned.
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,
+    projectJudgeEvidence: projectWebJudgeEvidence,
+    judgeEvidenceVersion: 1,
     // The page and a read's rows, each replaced only by a newer one of its kind (`./observed-state/`).
     observedStateKeys: WEB_LLM_VIEW_KEYS,
     // A live read's kept rows, so a repair's rerun of a blamed read is compared
