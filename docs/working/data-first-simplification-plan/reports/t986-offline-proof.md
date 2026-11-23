@@ -452,3 +452,66 @@ Not verified in round 3:
 - Site-declared person challenges on the four `not_run` sites.
 - Whole-task or scoreboard acceptance.
 - Browser network observation in preflights.
+
+### Round 4: Core session-reference fix, replay to the end of the recorded prefix
+
+**Core fix** (authorized; in `!FluxIQ/packages/fluxiq/src/client-gateway/trace-replay/session-references/`).
+- Users of `CLIENT_GATEWAY_TRACE_SESSION_BOUND_KINDS`: `evaluation.ts` and `attached.ts` (owned), plus `walk/walk.ts:113` and `trace-matcher/trace-admission.ts:87` (not owned, left unchanged). The recording tap does not use the set, so what gets recorded is unchanged.
+- New `session-bound.ts` exports `clientGatewayTraceEventSessionBound(event)`. An event is session-bound only when its kind is in the set and its stream is one the gateway tap writes (`CLIENT_GATEWAY_TRACE_TAP_STREAMS`: `gateway` and `artifact`, which date from capture P2, before session references in P3). An event a host records on its own stream, such as Automation Studio's `control` stream and its artifacts, belongs to no session, as the trace contract says of an event without `session`.
+- `evaluation.ts` and `attached.ts` now use that predicate, the barrel exports it, and the `bound-kinds.ts` note explains why kind alone does not decide.
+- Tests (`tests/evaluation.test.ts`):
+  - a sessionless control-stream artifact among referenced gateway events evaluates as `recorded`;
+  - a sessionless upload on the tap's `artifact` stream is still refused ("some of its events name their session and others do not");
+  - attaching gives `session-1` to an unreferenced upload and not to a control artifact.
+  - Every existing refusal test is unchanged and passes.
+- Not owned, so reported rather than changed: `walk.ts:113` would still log a gap for a sessionless control artifact, and would feed any `artifact` event as a client upload. `trace-admission.ts` `servedSession` counts control artifacts among the sessions. Neither was hit in this replay, because Core's recorded trace session answers operations through the matcher (3/3 matched, no gaps). Both should switch to `clientGatewayTraceEventSessionBound` in a Core follow-up.
+
+**Core checks:**
+- One worker, gated: `node node_modules/vitest/vitest.mjs run src/client-gateway/trace-replay/session-references --maxWorkers=1 --minWorkers=1 --fileParallelism=false` -> 1 file, 11/11 pass.
+- Same flags on `src/client-gateway/trace-replay` and `src/client-gateway/trace-matcher` -> 12 files, 62/62 pass.
+- `pnpm --filter fluxiq check` -> exit 2, 10 TS errors, none in `client-gateway`. Files: `answer-first/attempt-store/tests/judge-checkpoint.test.ts` (3), `judge-issue.test.ts` (2), `runtime/llm/node-tools/replay/tests/observation.test.ts` (1), `runtime/result-verification/flow-less/tests/semantic-window.test.ts` (4).
+- `node scripts/structure-audit.mjs` (Core) -> exit 1, 18 violations, none in `client-gateway`: imports in answer-first and result-verification, failure-as-empty, `file-lines` on `service.ts`, and statement-packing in those same tests.
+- Both failures sit only in files from the synced Core dev that I did not touch (the answer-first and result-verification lanes). I did not fix them; they need their owners.
+- `node scripts/build-cache/cli.mjs contracts:build sdk:build fluxiq:build client-gateway-websocket:build ui-components:build` -> exit 0 (fluxiq rebuilt in 172,489 ms, ui-components rebuilt, the rest reused).
+
+**Replay v2** (`test-runs/t986-replay-company-v2`, a fresh copy of capture v2; its request deep-equals the bound entry):
+- Command: `node scripts/lab/run-lab.mjs recorded-replay --input test-runs/t986-replay-company-v2/replay-input.json --out test-runs/t986-replay-company-v2/replay-report.json`.
+- The session check now passes: `session.status: ran`, `sessionView: recorded`, `normalizations: []`, matcher 3/3 operations matched, no gaps.
+- The first model request then diverged (`request_changed`, ordinal 1), with 0 replies served and 0 provider calls.
+
+**Next cause, traced:**
+- `recorded-replay` now keeps the first diverged request in an ignored file next to its report (`diverged-request.json`), written once and never sent. Changes: `product-runtime.ts` (`divergedRequestFile`) and `command.ts`.
+- Replay v3 (`test-runs/t986-replay-company-v3`, fresh copy) diverged the same way with a different digest, so the content changes on every run.
+- `company-diag/request-diff.mjs` and `request-key.mjs` print paths, types, lengths and masked shapes only. Exactly one difference: `messages[0].content[2].text`, the `core.run_node` result, key `value.read.commandId`, the same length but a different UUID.
+- Why: the trace matcher translates recorded command ids to the replay's newly issued ids (`trace-matcher/matcher.ts` `feed.translate`), which the protocol needs. The domain's model-visible read showed the dispatch's `commandId`, so the model saw a run-specific random id. Core already treats `commandId` as a per-run key that is not a finding (`runtime/llm/decision-handlers/rerun-result.ts` `PER_RUN_KEYS`).
+
+**Fix** (downstream domain, owned):
+- `domain/src/runtime/llm-evidence/node-run/page-record.ts` adds `commandId` to the keys kept out of what the model is shown, next to `humanness`.
+- The step files and the replay's recorded payload keep it.
+- Tests: `tests/press-raw-read.test.ts` checks a press read carries no `commandId`, and a new test checks the same answer under two command ids shows identically.
+- This is a small product change: live model evidence loses one meaningless field. No guard or comparison was weakened.
+
+**Downstream checks:**
+- Domain tests (`DOMAIN_TEST_BUILD_LABEL=t986-node-run node scripts/test-domain.mjs runtime/llm-evidence/node-run/tests runtime/offline-reads/tests`) -> 320/320 pass, including the new test.
+- Domain check -> exit 0. Test-runner check -> exit 0.
+- Downstream audit -> exit 0, "passed (258 warning(s), 551 baselined)".
+
+**Fresh capture v3** (`node scripts/lab/run-lab.mjs recorded-capture company-website --task company-website-apprentices --evidence test-runs/t986-fresh-capture-company-v3`) -> exit 0, `complete: true`, `gaps: []`, `hostRefusal: null`, provider calls 0, external calls and cost null. Its recorded first request mentions `commandId` 0 times; v2's mentioned it once.
+
+**Replay v4** (`test-runs/t986-replay-company-v4`, a fresh copy of capture v3; its request deep-equals the v3 bound entry):
+- Command: `node scripts/lab/run-lab.mjs recorded-replay --input test-runs/t986-replay-company-v4/replay-input.json --out test-runs/t986-replay-company-v4/replay-report.json` -> exit 0.
+- Entry and session: `position: before_entry`, so replay entered with exactly the bound entry. `session: ran`, `sessionView: recorded`, `normalizations: []`, matcher 3/3 operations, no gaps, no refused deliveries.
+- Model stream:
+  - Recorded request 1 matched byte-for-byte by digest, and its recorded reply was served (`logicalCalls: 1`, from the artifact; 0 provider calls, 0 USD, `historicalUsd: 0`).
+  - The build then made request 2: `exhausted_stream` at ordinal 2.
+  - That is the designed end of a fresh stopped bootstrap prefix. The capture records one native exchange, answers it with malformed bytes and stops, so the recording holds nothing after it.
+- `buildStatus: prefix_diverged`, `fullAttemptAccepted: false`. The whole recorded prefix replayed deterministically with no provider call; nothing beyond the recording is claimed.
+
+The coordinator's stop-before-replay message arrived after replay v4 had already finished, so it is reported here rather than withheld. After the lead merges the new dev (Core 0.53.0), rerun capture and replay on fresh outputs (`t986-fresh-capture-company-v4`, `t986-replay-company-v5`).
+
+Not verified in round 4:
+- A replay past one recorded exchange; that needs a longer capture, which is not this producer's scope.
+- The two unowned Core users of the session-bound set.
+- The full Core suites.
+- The pre-existing Core check and audit failures.
+- Live model behaviour after removing `commandId`.

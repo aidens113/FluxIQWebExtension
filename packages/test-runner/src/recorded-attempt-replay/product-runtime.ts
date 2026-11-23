@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { realpath } from "node:fs/promises";
+import { realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createAutomationStudioAnthropicPanelCommandModel, createAutomationStudioAnthropicProvider, isAutomationStudioAnthropicModel, runAutomationStudioRecordedTraceSession, type AutomationStudioService } from "fluxiq/automation";
 import { openOfflineTrialHost, type OfflineTrialHost } from "../offline-trial-experiment/run/offline-trial/index.js";
@@ -21,6 +21,8 @@ export async function reproduceRecordedBuild(input: {
   stream: string;
   request: Parameters<AutomationStudioService["generateFlowBootstrapAdaptation"]>[0];
   chat?: Parameters<AutomationStudioService["conversations"]["respondToPersonTurn"]>[0];
+  /** Where the first request that left the recording is kept, so its difference can be traced; ignored run scope only. */
+  divergedRequestFile?: string;
 }) {
   const admission = admitRecordedAttempt(input.artifact, true);
   if (!admission.admitted) throw new Error(`recorded_build_not_admitted:${admission.gaps.join(",")}`);
@@ -62,6 +64,8 @@ export async function reproduceRecordedBuild(input: {
       const reply = cursor.take(input.stream, typeof init?.body === "string" ? init.body : "");
       if (!reply) {
         host.service.buildCancellation.cancel(input.request.projectId, input.request.flowId);
+        // The digest says only that it changed; the request itself says what changed. Kept once, never sent anywhere.
+        if (input.divergedRequestFile && typeof init?.body === "string") await writeFile(input.divergedRequestFile, init.body, { flag: "wx" }).catch(keptOnce);
         throw new DOMException("Recorded request diverged", "AbortError");
       }
       return new Response([204, 205, 304].includes(reply.status!) ? null : Buffer.from(reply.response!), { status: reply.status!, headers: { "content-type": reply.contentType! } });
@@ -92,4 +96,9 @@ export async function reproduceRecordedBuild(input: {
   } finally {
     try { await targetHost?.close(); } finally { await sourceHost.close(); }
   }
+}
+
+/** A later divergence never replaces the first one kept. */
+function keptOnce(error: NodeJS.ErrnoException): void {
+  if (error.code !== "EEXIST") throw error;
 }

@@ -14,8 +14,9 @@ export async function runRecordedReplayCommand(input: { repositoryRoot: string; 
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("recorded_output_outside_test_runs");
   }
   const artifact = await readRecordedArtifact(configuration.artifact);
-  const report = await reproduceRecordedBuild({ ...configuration, artifact });
   await mkdir(path.dirname(input.outputFile), { recursive: true });
+  const divergedRequestFile = path.join(path.dirname(path.resolve(input.outputFile)), "diverged-request.json");
+  const report = await reproduceRecordedBuild({ ...configuration, artifact, divergedRequestFile });
   await writeFile(input.outputFile, JSON.stringify(report, null, 2));
   return { proof: report.proof, fullAttemptAccepted: false as const, externalUsd: 0 as const, status: report.session.status, divergence: report.model.divergence, report: input.outputFile };
 }
