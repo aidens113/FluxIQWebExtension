@@ -1,5 +1,6 @@
 import type {
   AutomationStudioActionPermissionCheck,
+  AutomationStudioJudgeEvidenceProjector,
   AutomationStudioExplorationStopReason,
   AutomationStudioHarnessOptionBundle,
   AutomationStudioFlowScriptExamples,
@@ -35,6 +36,9 @@ export type WebAutomationLlmEvidenceRuntime = {
   }): Promise<{ state: JsonObject; differs: string[]; location?: string; lines?: { gone: string[]; added: string[] }; items?: string[]; subjects?: string[]; scope?: string; resource?: string; collections?: Array<{ scope: string; group: string; subjects: string[]; states: Record<string, string> }>; controls?: Record<string, Record<string, number>>; values?: Record<string, string> } | undefined>;
   /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
   deniedEvidenceKeys: readonly string[];
+  /** Pure semantic facts for judging; raw captures remain private, row values stay in their existing stores. */
+  projectJudgeEvidence?: AutomationStudioJudgeEvidenceProjector;
+  judgeEvidenceVersion?: 1;
   observedStateKeys: readonly string[];
   /**
    * Where a live list read's answer holds its kept rows, as Core's `holder.member`

@@ -10,5 +10,8 @@ export const WEB_LLM_OBSERVED_STATE_KEYS: readonly string[] = Object.freeze([
   "dialogs",
   "blockedBy",
   // `web-llm-page.v3`: the page as one text.
-  "page"
+  "page",
+  // Passive semantic state must accompany the view through Core's end/witness
+  // projection; it contains no handles, selectors, geometry or page text.
+  "judgeState"
 ]);
