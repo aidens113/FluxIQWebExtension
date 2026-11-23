@@ -3,6 +3,7 @@ import test from "node:test";
 import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import { observeWebLlmResult } from "..";
 import { captureEvidence, selectSession, type WebLlmEvidenceGateway } from "../../capture";
+import type { JsonObject } from "fluxiq/core";
 
 const capture = (gateway: WebLlmEvidenceGateway) => (request: Parameters<typeof observeWebLlmResult>[1]) => captureEvidence(
   gateway, selectSession(gateway.eligibleSessionIds()), { ...request, toolId: "passive", value: {} }, request.signal, undefined, { includeHidden: true });
@@ -29,6 +30,35 @@ test("publishes hidden ledger state with visibility preserved and no hidden loca
   assert.doesNotMatch(passive, /"target"|"selector"|"attributes"|\bt\d+\b/u);
   assert.equal(commands.length, 1);
   assert.deepEqual((commands[0] as { parameters: unknown }).parameters, { includeHidden: true });
+  const semantic = view.judgeState as JsonObject;
+  assert.equal(semantic.version, 1);
+  assert.deepEqual(semantic.notices, [], "hidden plain page text stays in the private page, not in semantic notices");
+  assert.doesNotMatch(JSON.stringify(semantic), /"page"|"target"|"selector"|"attributes"|"box"|private-marker|hidden-form-marker/u);
+});
+
+test("the same passive capture supplies full named values, selection, marks and notices without page text or geometry", async () => {
+  let calls = 0;
+  const gateway: WebLlmEvidenceGateway = { eligibleSessionIds: () => ["session"], executeAction: async () => {
+    calls += 1;
+    return { status: "succeeded", payload: { snapshot: { url: "https://example.test/settings", title: "Settings", interactiveElements: [
+      { tagName: "input", selector: "#name", accessibleName: "Display name", value: "A complete original value", attributes: { "aria-label": "Display name" }, box: { x: 1, y: 2, width: 90, height: 20 } },
+      { tagName: "input", selector: "#choice", accessibleName: "Updates", inputType: "checkbox", checked: false, attributes: { "aria-label": "Updates", type: "checkbox" } },
+      { tagName: "select", selector: "#region", accessibleName: "Region", selectedValue: "north", options: [{ value: "north", label: "North" }, { value: "south", label: "South" }], attributes: { "aria-label": "Region" } },
+      { tagName: "button", selector: "#saved", accessibleName: "Saved", attributes: { "aria-label": "Saved", "aria-pressed": "true", "data-private-layout": "RAW_ATTRIBUTE_SENTINEL" } },
+      { tagName: "p", selector: "#notice", role: "status", visibleText: "Settings saved successfully" },
+      { tagName: "div", selector: "#unrelated", visibleText: "RAW_PAGE_SENTINEL" }
+    ] } } };
+  } };
+  const view = await observeWebLlmResult(capture(gateway), request);
+  const state = view.judgeState as JsonObject;
+  const serialized = JSON.stringify(state);
+  assert.match(serialized, /A complete original value/u);
+  assert.match(serialized, /"checked":false/u);
+  assert.match(serialized, /north/u);
+  assert.match(serialized, /aria-pressed/u);
+  assert.match(serialized, /Settings saved successfully/u);
+  assert.doesNotMatch(serialized, /RAW_PAGE_SENTINEL|RAW_ATTRIBUTE_SENTINEL|#name|#notice|"page"|"box"|"target"|"attributes"/u);
+  assert.equal(calls, 1);
 });
 
 test("an aborted passive read dispatches nothing and malformed or unreadable captures remain errors", async () => {

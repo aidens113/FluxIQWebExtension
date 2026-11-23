@@ -18,3 +18,4 @@ export { webNodeActVerb } from "./act-verb";
 // proof (`../../offline-reads/model-result.ts`) projects a reproduced read
 // through this same owner rather than a copy of it.
 export { webNodeReadWithRejectedRows, type WebNodeReadWithRejectedRows } from "./rejected-rows";
+export { webNodeReadResult } from "./read-result";
