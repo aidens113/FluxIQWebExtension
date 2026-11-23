@@ -37,6 +37,7 @@ test("the grammar leads with the handle form, and says how to keep, rename and r
   for (const term of ['handle: "extraction.N"', 'fields?: {yourKey: "colKey"|"colKey@href"}', "absolute URL", "raw href"]) {
     assert.equal(grammar.includes(term), true, `the grammar does not say ${term}`);
   }
+  assert.match(grammar, /All safe fields are retained; fields selects a view/u);
   // Only the handle form (t432): the literal request named its item and columns by selectors, which a model is never shown.
   assert.equal(/css|selector|item:/iu.test(grammar), false, "the grammar offers no literal request");
   assert.match(grammar, /minItems \(default 1, 0 = none\), maxItems/u);
@@ -50,7 +51,7 @@ test("the grammar says filtering is optional before it says how to filter", () =
   // Creation writes the least it needs; the repair narrows it later.
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
   assert.equal(grammar.includes("where is optional"), true, "the grammar says filtering is optional");
-  assert.match(grammar, /omit it, keep every item, narrow later/u);
+  assert.match(grammar, /omit it for data/u);
   assert.equal(
     grammar.indexOf("where is optional") < grammar.indexOf("atMost"),
     true,
@@ -95,8 +96,8 @@ test("the grammar says the rows a later step acts on are narrowed by where, not 
   // filtered at the end of the run, which never changes the rows a repeat presses,
   // and confirmed all eight friend requests where four were asked.
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
-  assert.match(grammar, /rows a later step acts on \(a repeat over\) are narrowed here, by where/u);
-  assert.equal(grammar.indexOf("narrow later") < grammar.indexOf("rows a later step acts on"), true, "the exception follows the default it qualifies");
+  assert.match(grammar, /narrow action rows here before a repeat/u);
+  assert.equal(grammar.indexOf("omit it for data") < grammar.indexOf("narrow action rows"), true, "the exception follows the default it qualifies");
   assert.equal(grammar.length <= 700, true, `${grammar.length} characters`);
 });
 
@@ -146,5 +147,5 @@ test("the read's catalog text says nothing of paging, and its tags name none", (
     "Read the rows of a list or table on this page, or one record, into the dataset. Detect the list first and name it by its handle. One element is a one-row table: handle tN, fields {yourKey: \"text\"}. It saves its rows itself: no save step."
   );
   // dedupe, sort and maxItems now work over every row the read collects in the run.
-  assert.match(WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR, /every row it collects in the run: dedupe\?: true\|key, sort\?: "key desc", minItems/u);
+  assert.match(WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR, /Across collected rows: dedupe\?: true\|key, sort\?: "key desc", minItems/u);
 });

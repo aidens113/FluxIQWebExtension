@@ -41,7 +41,7 @@ test("it teaches no realistic fixture", () => {
 
 test("the version is one Core's seam accepts, and names the web-only text", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-13");
+  assert.equal(version, "web-14");
 });
 
 // FluxIQ declines optional cookies by default (user, 2026-10-18): a consent
@@ -111,11 +111,13 @@ test("every page of a list is a loop: read, Next page on the same list, and repe
 // result pages before writing its Flow and ran out of budget. One page read plus
 // one Next page is enough evidence while exploring. How a draft or a written
 // Flow states the repeat is Core's sentence since web-12.
-test("exploring a paged list reads one page and one Next page", () => {
+test("live tasks execute the paging loop now while build-only requests may defer execution", () => {
   const lists = text.split("\n").find((line) => line.startsWith("Lists."));
   assert.ok(lists, "the Lists line is there");
-  assert.ok(lists.includes("Exploring needs one page read and one Next page to know the loop works"));
-  assert.ok(lists.includes("the loop reads the other pages when the Flow runs, so do not read every page while exploring"));
+  assert.ok(lists.includes("One page and one Next page establish the loop"));
+  assert.match(lists, /live task must then run it forward now to collect every required page before completing/u);
+  assert.match(lists, /only a build-only request may leave execution for later/u);
+  assert.doesNotMatch(lists, /do not read every page while exploring/u);
 });
 
 // web-13 (t885, `run-mwaknxf9-7549d126`): told to "say that one blocks you",

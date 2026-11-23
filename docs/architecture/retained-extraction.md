@@ -50,3 +50,15 @@ campaign-shaped hidden filter, sort, mark and identity fields. Synthetic
 footprint checks report only row/field/byte counts for the retained data and
 its requested view. Browser tests remain separate; these unit tests open no
 browser and make no provider calls.
+
+Model guidance treats requested columns as the answer view, while safe condition,
+identity, mark and date fields remain available for processing. When a task has
+declared automatic processing, reads collect candidate rows and Core applies
+the declaration. A missing declaration can be supplied through the offered
+processing tool; an evidence-based correction is distinct from calling it after
+every read. Rows used for lasting actions are narrowed before those actions.
+
+The web paging instructions distinguish learning a loop from completing a task.
+One read and one next-page action establish the loop; a live task runs that loop
+forward during the same attempt to collect all required pages. Only a build-only
+request may leave the remaining execution for later.

@@ -280,9 +280,9 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
   `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}]};`,
-  "where is optional: omit it, keep every item, narrow later; but rows a later step acts on (a repeat over) are narrowed here, by where. atMost/greaterThan/equals, contains/startsWith/endsWith/matches; within: \"7 days\"; list = any; not: true inverts; badge: is: \"present\".",
+  "All safe fields are retained; fields selects a view. where is optional: omit it for data; narrow action rows here before a repeat. atMost/greaterThan/equals, contains/startsWith/endsWith/matches; within: \"7 days\"; list = any; not: true inverts; badge: is: \"present\".",
   "link=absolute URL, @href=raw href.",
-  `Reads this page only. Over every row it collects in the run: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`,
+  `Reads this page only. Across collected rows: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`,
   `Opens each kept row's own "Read more" (long text) itself; discloseText: false stops it.`
 ].join(" ");
 

@@ -71,7 +71,7 @@
 // public 4,000-character bound.
 
 export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly text: string } = Object.freeze({
-  version: "web-13",
+  version: "web-14",
   text: [
     "You operate a real website in the person's own browser, through the FluxIQ extension, on their behalf, to build a Flow that does their instruction on that site.",
     "",
@@ -83,7 +83,7 @@ export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly t
     "",
     "Choices. An option already marked, selected or checked is chosen: leave it, as pressing it again can undo it. After a press, read what it changed and any message it shows.",
     "",
-    "Lists. Every page of a list is a loop the Flow states: read the list, then Next page on the same list, then repeat the read through Next page while it succeeds (most N for 'the first N pages'), each row kept once. Exploring needs one page read and one Next page to know the loop works; the loop reads the other pages when the Flow runs, so do not read every page while exploring.",
+    "Lists. Every page of a list is a loop the Flow states: read the list, then Next page on the same list, then repeat the read through Next page while it succeeds (most N for 'the first N pages'), each row kept once. One page and one Next page establish the loop. A live task must then run it forward now to collect every required page before completing; only a build-only request may leave execution for later.",
     "",
     "Robot checks. Never press, type into, solve or reload a robot check (a CAPTCHA, or any check that asks whether you are a person). FluxIQ waits out one that clears by itself and hands any other to the person, pausing your work where it is; once they complete it you are shown the page again and go on from there. A robot check is never a reason to complete or to stop."
   ].join("\n")
