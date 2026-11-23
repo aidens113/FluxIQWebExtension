@@ -124,12 +124,27 @@ test("a saved binding with rejected metadata never falls through to another bind
   const handles = createWebLlmExtractionHandles();
   handles.retain(scope, binding);
   const saved = webPlanWithExtractionBinding({ extractList: { handle: binding.handle, fields: ["title"] } }, scope, handles);
-  const list = saved.extractList as JsonObject;
-  const held = list.extractionBinding as JsonObject;
-  ((held.recordSchema as JsonObject).fields as JsonObject[])[0]!.semanticType = "unrecognized";
-  const slot = resolveWebExtractionSlot(list, scope, handles, true);
-  assert.equal(slot.status, "refused");
-  if (slot.status === "refused") assert.deepEqual(slot.path, ["extractionBinding"]);
+  const invalid = structuredClone(binding.recordSchema) as unknown as JsonObject;
+  (invalid.fields as JsonObject[])[0]!.semanticType = "unrecognized";
+  for (const recordSchema of [null, invalid]) {
+    const list = structuredClone(saved.extractList) as JsonObject;
+    const held = list.extractionBinding as JsonObject;
+    held.recordSchema = recordSchema;
+    const slot = resolveWebExtractionSlot(list, scope, handles, true);
+    assert.equal(slot.status, "refused");
+    if (slot.status === "refused") {
+      assert.equal(slot.issue, "web.handle.malformed");
+      assert.deepEqual(slot.path, ["extractionBinding"]);
+    }
+  }
+});
+
+test("an unreadable legacy binding without schema metadata keeps the existing handle fallback", () => {
+  const handles = createWebLlmExtractionHandles();
+  handles.retain(scope, binding);
+  const list = { handle: binding.handle, fields: ["title"], extractionBinding: { extractList: "not a request" } };
+  assert.equal(resolveWebExtractionSlot(list, scope, handles, true).status, "resolved");
+  assert.deepEqual(resolveWebExtractionSlot(list, scope, createWebLlmExtractionHandles(), true), { status: "refused", issue: "web.handle.unknown", path: [] });
 });
 
 test("retained campaign-shaped rows report their storage overhead using counts only", () => {
@@ -158,7 +173,7 @@ test("retained campaign-shaped rows report their storage overhead using counts o
     retained.recordSchema = recordSchema;
     const { output } = resolve({ handle: retained.handle, fields: displayed }, retained);
     const schema = output.schema as unknown as NonNullable<WebLlmExtractionBinding["recordSchema"]>;
-    const rows = Array.from({ length: count }, (_, index) => ({ ...sample, url: `${sample.url}/${index}` }));
+    const rows: JsonObject[] = Array.from({ length: count }, (_, index) => ({ ...sample, url: `${sample.url}/${index}` }));
     const full = validateAutomationStudioRecords(rows, schema).rows;
     const shown = full.map((row) => Object.fromEntries(displayed.map((id) => [id, row[id]])));
     const bytes = Buffer.byteLength(JSON.stringify(full), "utf8");

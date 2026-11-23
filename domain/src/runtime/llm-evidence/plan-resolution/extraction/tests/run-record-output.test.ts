@@ -4,9 +4,8 @@
 // sorted by a column the answer must not show, marked every helper `handling:
 // "exclude"`, and listed the answer's columns in `process.columns`. Submit
 // checked the record output as written, so Core refused the sort on an excluded
-// field; the dispatch would have replaced the schema and run it. Two readers of
-// one value again. Now the resolver writes the dispatch's own record output into
-// the step, so Core checks, and the Flow saves, exactly what runs.
+// field. Both resolution and dispatch now preserve that explicit privacy policy:
+// hidden included helpers may sort, while excluded helpers remain unread.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -69,9 +68,11 @@ const auctionList = (handle: string): JsonObject => ({
 });
 
 /** Steps 0022 and 0024: every helper marked exclude, the sort on one of them, the answer's columns in process. */
-function auctionRecordOutput(sortField: string): JsonObject {
+function auctionRecordOutput(sortField: string, includeUsed = false): JsonObject {
   const kept = ["title", "price", "bids", "postage"].map((id) => ({ id, label: id, valueType: "string" }));
-  const helpers = ["condition", "ends", "endsAt", "pounds", "bin", "ad"].map((id) => ({ id, label: id, valueType: "string", handling: "exclude" }));
+  const helpers = ["condition", "ends", "endsAt", "pounds", "bin", "ad"].map((id) => includeUsed && [sortField, "pounds", "ad"].includes(id)
+    ? { id, label: id, valueType: "string" }
+    : { id, label: id, valueType: "string", handling: "exclude" });
   return {
     datasetId: "kestrel35auctions",
     writeMode: "replace",
@@ -102,13 +103,16 @@ test("resolved extraction preserves explicit intermediate purpose without derivi
   if (ordinary.status === "resolved") assert.equal(Object.hasOwn(ordinary.parameters.recordOutput as object, "purpose"), false);
 });
 
-test("the auction run's 0022 and 0024 resolve at submit with the record output the dispatch runs, which Core accepts", async () => {
+test("the auction run's excluded sort helpers refuse, while included hidden helpers resolve identically at submit and dispatch", async () => {
   const { runtime: shown, handle } = await detected();
   for (const sortField of ["endsAt", "ends"]) {
     const authored = auctionRecordOutput(sortField);
     // The value as the model wrote it is what Core refused at submit.
     assert.deepEqual(automationStudioFlowBootstrapRecordOutputIssues(DEFINITION, authored), ["record_output.process_excluded_field"]);
-    const answer = await resolve(shown, { extractList: auctionList(handle), recordOutput: authored });
+    const excluded = await resolve(shown, { extractList: auctionList(handle), recordOutput: authored });
+    assert.equal(excluded.status, "refused", JSON.stringify(excluded));
+    if (excluded.status === "refused") assert.ok(excluded.issueCodes.includes("record_output.process_excluded_field"));
+    const answer = await resolve(shown, { extractList: auctionList(handle), recordOutput: auctionRecordOutput(sortField, true) });
     assert.equal(answer.status, "resolved", JSON.stringify(answer));
     if (answer.status !== "resolved") continue;
     const saved = answer.parameters.recordOutput as JsonObject;
@@ -117,9 +121,10 @@ test("the auction run's 0022 and 0024 resolve at submit with the record output t
     assert.equal(dispatch.ok, true, JSON.stringify(dispatch));
     if (dispatch.ok) assert.deepEqual(dispatch.payload.recordOutput, saved);
     assert.deepEqual(automationStudioFlowBootstrapRecordOutputIssues(DEFINITION, saved), []);
-    // The sort key and the columns the conditions read are stored and hidden; the helpers nothing reads are not stored (t975).
+    // Every safe included reading is stored; explicitly excluded helpers remain excluded.
     const fields = (saved.schema as { fields: { id: string; handling?: string }[] }).fields;
-    assert.deepEqual(fields.map((field) => [field.id, field.handling ?? null]), [["title", null], ["price", null], ["bids", null], ["postage", null], [sortField, null], ["pounds", null], ["ad", null]]);
+    assert.deepEqual(fields.map((field) => field.id), [...COLUMNS]);
+    assert.deepEqual(fields.filter((field) => field.handling === "exclude").map((field) => field.id), ["condition", "ends", "endsAt", "bin"].filter((id) => id !== sortField));
     assert.deepEqual((saved.process as JsonObject).sort, [{ field: sortField, order: "asc" }]);
     assert.deepEqual((saved.process as JsonObject).columns, ["title", "price", "bids", "postage"]);
   }

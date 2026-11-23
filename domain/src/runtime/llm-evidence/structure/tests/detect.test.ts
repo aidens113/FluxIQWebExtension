@@ -21,6 +21,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { parseAutomationStudioRecordSchema } from "fluxiq/components/automation";
 import { webAutomationExtractListRequestValue, WEB_AUTOMATION_EXTRACT_MAX_PAGES, type WebAutomationExtractFieldSpec } from "../../../../actions/extraction";
 import { webAutomationStructureDetectionValue, type WebAutomationStructureDetection } from "../../../../extraction";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../../../capabilities";
@@ -259,7 +260,14 @@ test("every real detection becomes a selector-free packet and a handle that reso
     const item = detection.proposal.item;
     const fields = Object.fromEntries(detection.proposal.fields.map((field) => [field.key, readableSpec(field.spec)]));
     const expected = expectedPaginate === undefined ? { item, fields } : { item, fields, paginate: expectedPaginate };
-    assert.deepEqual(resolved.binding, { handle: packet.extraction, location: page.url, extractList: expected, itemCount: detection.proposal.itemCount, listKey: webLlmExtractionListKey({ extractList: expected }) }, name);
+    const { recordSchema, ...bound } = resolved.binding;
+    assert.deepEqual(bound, { handle: packet.extraction, location: page.url, extractList: expected, itemCount: detection.proposal.itemCount, listKey: webLlmExtractionListKey({ extractList: expected }) }, name);
+    assert.equal(parseAutomationStudioRecordSchema(recordSchema).ok, true, name);
+    assert.deepEqual(recordSchema?.fields.map((field) => field.id), detection.proposal.fields.map((field) => field.key), name);
+    assert.ok(recordSchema?.fields.every((field) => field.valueType === "string"), name);
+    for (const [index, shown] of packet.fields.entries()) {
+      assert.equal(recordSchema?.fields[index]?.semanticType, shown.type, `${name} ${shown.key}`);
+    }
     // Executable as it stands: the reader the parameter lift refuses a Flow by takes it unchanged.
     assert.deepEqual(webAutomationExtractListRequestValue(resolved.binding.extractList), resolved.binding.extractList, name);
   }

@@ -29,6 +29,7 @@ import {
 } from "../../..";
 import { CAPTURED_DETECTIONS } from "../../../structure/tests/captured-detections";
 import { keptWebExtractionConditions } from "../conditions";
+import { assertRetainedResolution } from "./retained-resolution";
 
 const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
@@ -38,7 +39,6 @@ const HINT = "web.handle.expected.extract_list.handle_fields";
 const NAME = { kind: "text", selector: '[data-testid="product-name"]', required: true } satisfies JsonObject;
 const BADGE = { kind: "text", selector: '[data-testid="stock-badge"]', required: true } satisfies JsonObject;
 const PRICE = { kind: "text", selector: '[data-testid="product-price"]', required: true } satisfies JsonObject;
-const LINK = { kind: "link", selector: '[data-testid="product-link"]', required: true } satisfies JsonObject;
 /** A detected column as a read keeps it: the detection's coverage-derived `required` is not carried (`../columns.ts`, `unrequired`). A condition's own read keeps the detected spec. */
 const asKept = (spec: JsonObject): JsonObject => ({ ...spec, required: false });
 
@@ -90,16 +90,15 @@ test("a condition names a detected column and becomes the column's own read, so 
   const instance = runtime();
   const { extraction } = await detect(instance);
 
-  // The mark is a column the table does not keep: a Flow that leaves the
-  // out-of-stock cards out wants no stock column in its answer.
+  // The hidden mark remains collected, while the table still shows only name.
   const resolved = await resolve(instance, {
     handle: extraction,
     fields: { name: "product-name" },
     where: [{ field: "stock-badge", is: "absent" }]
   });
-  assert.deepEqual(resolved, {
+  assertRetainedResolution(resolved, {
     status: "resolved",
-    parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: [{ read: BADGE, is: "absent" }] } }
+    parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: [{ field: "stock-badge", is: "absent" }] } }
   });
 
   // And it is a request the page reads as written, with no issue to repair.
@@ -113,21 +112,21 @@ test("a condition may be written every way a column may be named, on its own or 
   const { extraction } = await detect(instance);
   const rows: Array<[JsonValue, JsonObject[]]> = [
     // The four keys that name a column, and a key in another case.
-    [[{ field: "stock-badge", is: "absent" }], [{ read: BADGE, is: "absent" }]],
-    [[{ key: "stock-badge" }], [{ read: BADGE }]],
-    [[{ column: "STOCK-BADGE" }], [{ read: BADGE }]],
-    [[{ read: "stock-badge", is: "present" }], [{ read: BADGE, is: "present" }]],
+    [[{ field: "stock-badge", is: "absent" }], [{ field: "stock-badge", is: "absent" }]],
+    [[{ key: "stock-badge" }], [{ field: "stock-badge" }]],
+    [[{ column: "STOCK-BADGE" }], [{ field: "stock-badge" }]],
+    [[{ read: "stock-badge", is: "present" }], [{ field: "stock-badge", is: "present" }]],
     // One condition written on its own, rather than as a list of one.
-    [{ field: "stock-badge", is: "absent" }, [{ read: BADGE, is: "absent" }]],
+    [{ field: "stock-badge", is: "absent" }, [{ field: "stock-badge", is: "absent" }]],
     // Bounds on the number in the column, and several conditions at once.
-    [[{ field: "product-price", lessThan: 50 }], [{ read: PRICE, lessThan: 50 }]],
+    [[{ field: "product-price", lessThan: 50 }], [{ field: "product-price", lessThan: 50 }]],
     [
       [{ field: "product-price", atLeast: 10, atMost: 50 }, { field: "stock-badge", is: "absent" }],
-      [{ read: PRICE, atLeast: 10, atMost: 50 }, { read: BADGE, is: "absent" }]
+      [{ field: "product-price", atLeast: 10, atMost: 50 }, { field: "stock-badge", is: "absent" }]
     ]
   ];
   for (const [where, expected] of rows) {
-    assert.deepEqual(
+    assertRetainedResolution(
       await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where }),
       { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: expected } } },
       JSON.stringify(where)
@@ -143,8 +142,8 @@ test("an empty clause resolves to no conditions, because filtering is optional",
   // than a refusal it has to spend a repair on. `where: []` was refused until
   // 2026-09-24.
   const plain = { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) } } } };
-  assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where: [] }), plain);
-  assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" } }), plain);
+  assertRetainedResolution(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where: [] }), plain);
+  assertRetainedResolution(await resolve(instance, { handle: extraction, fields: { name: "product-name" } }), plain);
 });
 
 test("a condition may say of a detected column everything the dispatch reader accepts, in the same words", async () => {
@@ -156,10 +155,10 @@ test("a condition may say of a detected column everything the dispatch reader ac
     // and the accessories sold beside the thing asked for.
     [[{ field: "product-name", contains: ["ear tips", "charging case"], not: true }], [{ field: "name", contains: ["ear tips", "charging case"], not: true }]],
     [[{ field: "product-name", matches: "^Acme" }], [{ field: "name", matches: ["^Acme"] }]],
-    [[{ field: "stock-badge", equals: "In stock" }], [{ read: BADGE, equals: ["In stock"] }]],
+    [[{ field: "stock-badge", equals: "In stock" }], [{ field: "stock-badge", equals: ["In stock"] }]],
     [[{ field: "product-name", startsWith: "Acme", endsWith: "Black" }], [{ field: "name", startsWith: ["Acme"], endsWith: ["Black"] }]],
     // Written under another name, and read as the phrase it means.
-    [[{ field: "product-price", lt: 50 }], [{ read: PRICE, lessThan: 50 }]],
+    [[{ field: "product-price", lt: 50 }], [{ field: "product-price", lessThan: 50 }]],
     [[{ field: "product-name", regex: "^Acme" }], [{ field: "name", matches: ["^Acme"] }]],
     // The whole instruction, as four conditions on one node.
     [
@@ -169,15 +168,15 @@ test("a condition may say of a detected column everything the dispatch reader ac
         { field: "product-name", contains: "charging case", not: true }
       ],
       [
-        { read: BADGE, is: "absent" },
-        { read: PRICE, lessThan: 50 },
+        { field: "stock-badge", is: "absent" },
+        { field: "product-price", lessThan: 50 },
         { field: "name", contains: ["charging case"], not: true }
       ]
     ]
   ];
   for (const [where, expected] of rows) {
     const resolved = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where });
-    assert.deepEqual(
+    assertRetainedResolution(
       resolved,
       { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: expected } } },
       JSON.stringify(where)
@@ -211,7 +210,7 @@ test("a comparison the page could not run is refused where it was written", asyn
   }
   // "The value is not there" and "its text contains a case" cannot both have
   // been meant, and no one key explains it, so the condition is refused whole.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(instance, {
       handle: extraction,
       fields: { name: "product-name" },
@@ -231,7 +230,7 @@ test("a condition may name a column by the key this plan keeps it under, which i
   // the only condition that ever survived a live build was the one over a
   // column the plan did not keep and therefore did not rename -- the
   // advertisement mark (`run-mudwci8d-de88aa32`, `run-mudw1ktb-0557816b`).
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(instance, {
       handle: extraction,
       fields: { title: "product-name", cost: "product-price" },
@@ -243,10 +242,8 @@ test("a condition may name a column by the key this plan keeps it under, which i
         extractList: {
           item: CARD,
           fields: { title: asKept(NAME), cost: asKept(PRICE) },
-          // A kept column is named by the key it is kept under, so the stored
-          // step says what the plan said; the column the table does not keep
-          // carries its own read.
-          where: [{ field: "cost", lessThan: 50 }, { read: BADGE, is: "absent" }]
+          // Conditions keep the authored aliases and refer to retained hidden readings.
+          where: [{ field: "cost", lessThan: 50 }, { field: "stock-badge", is: "absent" }]
         }
       }
     }
@@ -256,13 +253,13 @@ test("a condition may name a column by the key this plan keeps it under, which i
   // something to the detection goes on meaning it, whatever the plan calls its
   // own columns. Here `stock-badge` is both a detected key and this plan's key
   // for the price, and it resolves to the column the detection showed.
-  assert.deepEqual(
+  assertRetainedResolution(
     await resolve(instance, {
       handle: extraction,
       fields: { "stock-badge": "product-price" },
       where: [{ field: "stock-badge", is: "absent" }]
     }),
-    { status: "resolved", parameters: { extractList: { item: CARD, fields: { "stock-badge": asKept(PRICE) }, where: [{ read: BADGE, is: "absent" }] } } }
+    { status: "resolved", parameters: { extractList: { item: CARD, fields: { "stock-badge": asKept(PRICE) }, where: [{ field: "stock-badge_2", is: "absent" }] } } }
   );
 });
 
@@ -364,10 +361,9 @@ test("a condition over a kept column is stored by the key the plan keeps it unde
       // the same column, since a condition asks only whether the item has it.
       { field: "product-price", lessThan: 50 },
       { field: "cost", atLeast: 10 },
-      // The link column, kept as its `href` attribute: a different value from
-      // the link the detection reads, so no kept key holds it.
+      // The raw href alias and retained canonical link remain distinct readings.
       { field: "product-link", is: "present" },
-      // A column the table does not keep.
+      // A retained column the table does not display.
       { field: "stock-badge", is: "absent" }
     ]
   });
@@ -376,8 +372,8 @@ test("a condition over a kept column is stored by the key the plan keeps it unde
   assert.deepEqual(stored.where, [
     { field: "cost", lessThan: 50 },
     { field: "cost", atLeast: 10 },
-    { read: LINK, is: "present" },
-    { read: BADGE, is: "absent" }
+    { field: "product-link", is: "present" },
+    { field: "stock-badge", is: "absent" }
   ]);
 
   // The dispatch reader reads the stored step as written, so a rerun patch
@@ -401,15 +397,16 @@ test("a condition by key over a column the declared schema leaves out of the ans
     fields: { title: "product-name", stock: "stock-badge" },
     where: [{ field: "stock", is: "absent" }]
   });
-  assert.deepEqual(resolved, {
+  assertRetainedResolution(resolved, {
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { title: asKept(NAME), stock: asKept(BADGE) }, where: [{ field: "stock", is: "absent" }] } }
   });
   const request = webAutomationExtractListRequestValue(resolved.status === "resolved" ? resolved.parameters.extractList : undefined);
   assert.notEqual(request, undefined);
   const declared = webAutomationDeclaredColumnsRead({ schema: { fields: [{ id: "title" }] } }, request!);
-  assert.deepEqual(declared?.request.fields, { title: asKept(NAME), stock: asKept(BADGE) });
+  assert.deepEqual(declared?.request.fields, request!.fields);
+  assert.deepEqual(Object.keys(declared!.request.fields), ["title", "stock", "product-image_src", "product-image_alt", "product-link", "product-price", "product-rating"]);
   assert.deepEqual(declared?.request.where, [{ field: "stock", is: "absent" }]);
-  assert.deepEqual([...declared!.columns], ["title", "stock"]);
+  assert.deepEqual([...declared!.columns], Object.keys(request!.fields));
   assert.deepEqual(declared?.shown, ["title"]);
 });

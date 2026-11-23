@@ -19,10 +19,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractList } from "../list-reader";
-import type { RefusedPageHost } from "../pagination";
-import type { ExtractionCheckpoint } from "../../../shared/extraction-continuation";
-import type { WebAutomationExtractListRequest } from "../../types";
+import { extractList } from "../../../list-reader";
+import type { RefusedPageHost } from "../../../pagination";
+import type { ExtractionCheckpoint } from "../../../../../shared/extraction-continuation";
+import type { WebAutomationExtractListRequest } from "../../../../types";
 
 /** One card: it answers `getAttribute` for `data-<key>` and has no ancestor. */
 function card(values: Record<string, string>): Element {
