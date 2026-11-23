@@ -357,3 +357,39 @@ All heavy commands ran through `heavy-slot.mjs run <label> --`.
 ### Open questions
 - Binding the routed entry, with only the session credential replaced, is a design choice (recorded in `docs/architecture/recorded-offline-proof.md`). The alternative, predicting Core's route mapping in the Lab, would copy Core internals, and its ask-wait constant is not public.
 - Ready for step 3 once the lead confirms both t986 trees are synced. The browser commands will write new outputs: `report-original-six-rerun2.json`, `t986-fresh-capture-company-v2`, `t986-preflight-social-v1`.
+
+### Step 3: browser runs (after the lead's go; trees Core 085114005 and downstream 3181a6bbe, both 0 behind dev)
+All runs went through the heavy gate, provider-free, in visible browsers, each to a new output. The Lab prelude ran core-staleness and repository-staleness every time and refused nothing.
+
+1. **Everything Store recorded read**: `node scripts/lab/run-lab.mjs recorded-read everything-store --input test-runs/t986-read-parity/input.json --out test-runs/t986-read-parity/report-original-six-rerun2.json` -> exit 0, `parityPassed: true`, `gaps: []`.
+   - `nativeResultMatches`, `rawNativeRowsMatch`, `modelProjectedRowsMatch` and `projectionContextMatches` are all true.
+   - 20/20 rows, 6 fields each; current derived schema valid with 0 invalid rows.
+   - Sandbox: `scriptsRan 0`, `requestsLeaked 0`, `requestsRefused 0`, `navigationsHeld 0`.
+   - Model and provider calls 0 by construction. External calls and cost were observed as 0 (`requestsLeaked 0`).
+   - Source admission: command and result sequences 89/96, `wholeTraceAdmitted: false`, `fullAttemptAccepted: false`.
+   - Change before the run: the snapshot sandbox was hard-coded headless, so `read-parity/command.ts` now opens it headed (`headless: false`) under the visible-browser rule. Scripts and network stay disabled. The prelude rebuilt the extension, browser-host and test-runner.
+2. **Fresh Company capture**: `node scripts/lab/run-lab.mjs recorded-capture company-website --task company-website-apprentices --evidence test-runs/t986-fresh-capture-company-v2` -> exit 0, `complete: true`, `gaps: []`, `hostRefusal: null`, `extraNativeRequests: 0`, one source trace id.
+   - Evidence: `capture-entry.json`, `capture-wire.json`, `artifact.json`, `replay-input.json`, `starting/` and `source-archive/`.
+   - The bound entry and `replay-input.json` both carry `actorSessionId: "recorded-capture-no-session"`, the route's `permittedConsequences: []`, `permissionAskTimeoutMs: 120000` and the declared processing (role contains apprentice).
+   - The entry fix therefore held, and the later checks passed: exploration-episode attachment, live complete trace, artifact admission and before-entry position.
+   - Provider calls 0 and USD 0 (no network by construction); external calls and cost null (not observed).
+   - This is a fresh stopped bootstrap prefix only, not a conversation build or task acceptance. The replay of this capture (`lab recorded-replay`) was not run.
+3. **Social preflight, first run**: `node scripts/lab/run-lab.mjs offline-preflight social-network-feed --task social-network-feed-delete-stranger-requests --evidence test-runs/t986-preflight-social-v1` -> `protocolPassed: false`, gaps `unproved_chat_start`, `unproved_person_answer`, `unproved_read`, `runtimeFailure: "additional protocol proof"`.
+   - Pairing passed. The permission stage passed: real start gate, `delete` denied in the panel, cancellation requested while active, no lasting act, 0 decision calls.
+   - Cause, from `result-chrome.json`: the generic read probe timed out waiting for its confirmation, because the chat's run of the probe Flow ended "Write active instructions in this automation's Instructions before running or building it."
+   - Core's run authority (`instruction-led/authority.ts`, asserted on every run) requires an active, written, flow-scoped task instruction on the parent Flow. `save-probe.ts` built the probe graph without one, so Core refused to run the probe.
+   - Fix: `save-probe.ts` saves one generic task instruction ("Confirm with the person, then read this isolated fixture page.") through the public `save-flow-generation-instruction` route, without the PIN that route rejects as an unsupported field, and refuses with `preflight_probe_instruction_inactive` unless Core reports it active.
+   - The probe's control parameter is narrowed to `Pick<..., "automationStudioCall">`. A new owner, `tests/save-probe.test.ts`, checks that the instruction is saved before the graph, carries exactly projectId/flowId/instruction, and that an inactive one is refused.
+   - Checks: runner check exit 0; runner build exit 0; owners save-probe, probe-graph, evidence and read-parity command -> 7/7, then save-probe, probe-graph and evidence -> 5/5 after one audit fix; structure audit first exit 1 (statement-packing in the new test), then exit 0 "passed (258 warning(s), 551 baselined)".
+   - Architecture doc updated (probe instruction; visible sandbox).
+4. **Social preflight, second run**: `node scripts/lab/run-lab.mjs offline-preflight social-network-feed --task social-network-feed-delete-stranger-requests --evidence test-runs/t986-preflight-social-v2` -> exit 0, `protocolPassed: true`, `gaps: []`, `runtimeFailure: null`.
+   - Every stage passed: pairing, person_answer, read, chat_start and permission_answer.
+   - Generic probe: chat started `run.execute`, the person granted the confirmation, and the probe run succeeded with a `read-page` action.
+   - Task start: the unchanged deletion instruction created a Flow and the chat `became: build`; nothing was applied.
+   - Permission: unchanged from the first run (denied in the panel, no lasting act, 0 decision calls). It used 1 logical call to the loopback scripted model server, not a provider.
+   - Site challenge `not_declared`.
+   - `preflight.json` writes `externalCalls: 0, externalUsd: 0` as constants. This command does not observe browser network, so read them as unobserved (null). I did not change that schema, because the scoreboard reads it.
+
+Step 3 changes: `packages/test-runner/src/recorded-attempt-replay/read-parity/command.ts` (headed sandbox), `packages/test-runner/src/attempt-lane/preflight/save-probe.ts`, the new `packages/test-runner/src/attempt-lane/preflight/tests/save-probe.test.ts`, and `docs/architecture/recorded-offline-proof.md`. Logs are in `test-runs/t986-resume-1123/` (`read-rerun2.log`, `company-capture-v2.log`, `social-preflight-v1.log`, `probe-*.log`, `social-preflight-v2.log`).
+
+Not verified after step 3: replaying the fresh Company capture; whole-task, four-attempt or scoreboard acceptance; the 30-file owner sweep after the latest edits; Firefox.

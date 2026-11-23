@@ -33,7 +33,8 @@ export async function runRecordedReadCommand(input: { repositoryRoot: string; sc
     if (!source.receipt.traceOpen) throw new Error("recorded_read_expected_open_source_changed");
     phase = "content_code";
     const content = await loadExtensionContentCode({ extensionDir: path.join(input.repositoryRoot, "apps", "extension") });
-    page = openWebSnapshotPage({ content, channel: "chrome", headless: true });
+    // Lab browsers are visible (user rule); the sandbox still disables page scripts and network.
+    page = openWebSnapshotPage({ content, channel: "chrome", headless: false });
     phase = "browser_read";
     const evaluation = await page.evaluate(source.snapshot, source.action);
     if (evaluation.status === "unavailable") outcome = { parityPassed: false, gaps: [evaluation.reason] };
