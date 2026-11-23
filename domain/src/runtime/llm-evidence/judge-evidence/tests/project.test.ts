@@ -6,6 +6,8 @@ import { createWebAutomationLlmEvidenceRuntime } from "../../tools";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "../../denied-keys";
 import { projectWebJudgeEvidence, webJudgeStateFacts } from "..";
 import type { WebLlmPageEvidence } from "../../sanitize";
+import { present } from "../../present";
+import { webObservationNodeId } from "../../node-run";
 
 const schema: JsonObject = { schemaVersion: "0.1", fields: [
   { id: "id", label: "Id", valueType: "string", semanticType: "id" },
@@ -14,6 +16,14 @@ const schema: JsonObject = { schemaVersion: "0.1", fields: [
   { id: "private", label: "Private", valueType: "string", handling: "exclude" }
 ], primaryKey: ["id"] };
 const rows = [{ id: "Original item", price: "$12.50", promoted: false, private: "EXCLUDED_CELL_SENTINEL" }];
+
+type SemanticOptions = NonNullable<Parameters<typeof automationStudioResultTrailStepOfCall>[3]>;
+type DeclaredBinding = { judgeEvidenceVersion?: 1 | undefined; projectJudgeEvidence?: SemanticOptions["projectJudgeEvidence"]; deniedEvidenceKeys: readonly string[] };
+
+/** Core's semantic options from an actual binding's declarations, every key written by name. */
+function semanticOptions(binding: DeclaredBinding): SemanticOptions {
+  return present<SemanticOptions>({ projectJudgeEvidence: binding.projectJudgeEvidence, judgeEvidenceVersion: binding.judgeEvidenceVersion, deniedEvidenceKeys: binding.deniedEvidenceKeys, legacySource: undefined, alreadyProjected: undefined, invalidFormat: undefined, resultEvidence: undefined });
+}
 
 function runtime() {
   return createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => ["session"], executeAction: async () => { throw new Error("this unit binding must not dispatch a capture or action"); } });
@@ -26,11 +36,12 @@ test("the actual web runtime binding explicitly supplies its projector and curre
   assert.equal(binding.judgeEvidenceVersion, 1);
   const checked = automationStudioLlmEvidenceRuntimeBindingChecked(binding);
   assert.equal(checked.judgeEvidenceVersion, 1);
+  assert.deepEqual(automationStudioJudgeEvidenceCapability(checked), { judgeEvidenceVersion: 1 });
   assert.deepEqual(checked.deniedEvidenceKeys, WEB_LLM_DENIED_EVIDENCE_KEYS);
   assert.deepEqual(checked.projectJudgeEvidence!({ source: "state", evidence: { evidence: { judgeState: { version: 1, location: "https://example.test", controls: [], notices: [], marks: [] } } } }).missing, undefined);
   const answer = { kind: "llm_evidence_tool_execution", effectApplied: false, resultCode: "web.inspect.succeeded", recordSchema: schema, evidence: { ok: true, status: "succeeded", page: "RAW_PAGE_SENTINEL", read: { extracted: rows } } };
   const before = structuredClone(answer);
-  const options = { ...automationStudioJudgeEvidenceCapability(checked), projectJudgeEvidence: checked.projectJudgeEvidence, deniedEvidenceKeys: checked.deniedEvidenceKeys };
+  const options = semanticOptions(checked);
   const step = automationStudioResultTrailStepOfCall({ callId: "read.1", toolId: "core.run_node", value: { node: "web.output.dom-extract_list", parameters: {} } }, answer, undefined, options);
   const compact = automationStudioResultSemanticTrail(automationStudioResultRunTrail([step], checked.deniedEvidenceKeys).trail, options);
   const found = compact.trail!.entries[0]!.found as JsonObject;
@@ -45,8 +56,9 @@ test("the actual web runtime binding explicitly supplies its projector and curre
 });
 
 test("a known empty privacy declaration is explicit and an unknown resumed policy fails closed", () => {
-  const binding = { ...runtime(), deniedEvidenceKeys: [] as readonly string[] };
-  const step = automationStudioResultTrailStepOfCall({ callId: "action.1", toolId: "core.run_node", value: { node: "web.output.dom-click" } }, { kind: "llm_evidence_tool_execution", effectApplied: true, resultCode: "web.action.succeeded", evidence: { status: "succeeded", changed: ["The selected state changed"], page: "RAW_PAGE_SENTINEL" } }, undefined, { ...automationStudioJudgeEvidenceCapability(binding), projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: binding.deniedEvidenceKeys });
+  const actual = runtime();
+  const binding = { ...actual, deniedEvidenceKeys: [] as readonly string[] };
+  const step = automationStudioResultTrailStepOfCall({ callId: "action.1", toolId: "core.run_node", value: { node: "web.output.dom-click" } }, { kind: "llm_evidence_tool_execution", effectApplied: true, resultCode: "web.action.succeeded", evidence: { status: "succeeded", changed: ["The selected state changed"], page: "RAW_PAGE_SENTINEL" } }, undefined, semanticOptions(binding));
   const trail = automationStudioResultRunTrail([step], binding.deniedEvidenceKeys).trail;
   assert.deepEqual(automationStudioResultSemanticTrail(trail, binding).projection.missing, []);
   const unknown = automationStudioResultSemanticTrail(trail, { projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: undefined });
@@ -56,10 +68,10 @@ test("a known empty privacy declaration is explicit and an unknown resumed polic
 
 test("the real web projector retains an unmatched valid semantic look and only omits a uniquely represented Core source", () => {
   const binding = automationStudioLlmEvidenceRuntimeBindingChecked(runtime());
-  const options = { ...automationStudioJudgeEvidenceCapability(binding), projectJudgeEvidence: binding.projectJudgeEvidence, deniedEvidenceKeys: binding.deniedEvidenceKeys };
+  const options = semanticOptions(binding);
   const state = { version: 1, location: "https://example.test/settings", controls: [{ tag: "input", name: "Updates", checked: false }, { tag: "input", name: "Comment", value: "" }], notices: [{ tag: "p", role: "status", text: "Preference removed" }], marks: [] };
   const look = { where: state.location, found: JSON.stringify({ judgeState: state }), callId: "core.look.actual" };
-  const step = automationStudioResultTrailStepOfCall({ callId: look.callId, toolId: "core.run_node", value: { node: "web.output.dom-find" } }, { kind: "llm_evidence_tool_execution", effectApplied: false, evidence: { judgeState: state, page: "RAW_PAGE_SENTINEL" } }, undefined, options);
+  const step = automationStudioResultTrailStepOfCall({ callId: look.callId, toolId: "core.run_node", value: { node: webObservationNodeId()! } }, { kind: "llm_evidence_tool_execution", effectApplied: false, evidence: { judgeState: state, page: "RAW_PAGE_SENTINEL" } }, undefined, options);
   const source = { instructions: "Read the preference state", acts: [], rows: { totalRows: 1, truncated: false, columns: [{ id: "name", label: "Name" }], rows: [{ name: "Original row" }] }, looked: [look] };
   const unmatched = automationStudioFlowLessJudgedSummary({ ...source, trail: [] }, binding.deniedEvidenceKeys, binding).sent as unknown as JsonObject;
   assert.deepEqual(((unmatched.looked as JsonObject[])[0]!.evidence as JsonObject).state, state);

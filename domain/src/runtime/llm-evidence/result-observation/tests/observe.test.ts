@@ -43,7 +43,7 @@ test("the same passive capture supplies full named values, selection, marks and 
     return { status: "succeeded", payload: { snapshot: { url: "https://example.test/settings", title: "Settings", interactiveElements: [
       { tagName: "input", selector: "#name", accessibleName: "Display name", value: "A complete original value", attributes: { "aria-label": "Display name" }, box: { x: 1, y: 2, width: 90, height: 20 } },
       { tagName: "input", selector: "#choice", accessibleName: "Updates", inputType: "checkbox", checked: false, attributes: { "aria-label": "Updates", type: "checkbox" } },
-      { tagName: "select", selector: "#region", accessibleName: "Region", selectedValue: "north", attributes: { "aria-label": "Region" } },
+      { tagName: "select", selector: "#region", accessibleName: "Region", selectedValue: "north", options: [{ value: "north", label: "North" }, { value: "south", label: "South" }], attributes: { "aria-label": "Region" } },
       { tagName: "button", selector: "#saved", accessibleName: "Saved", attributes: { "aria-label": "Saved", "aria-pressed": "true", "data-private-layout": "RAW_ATTRIBUTE_SENTINEL" } },
       { tagName: "p", selector: "#notice", role: "status", visibleText: "Settings saved successfully" },
       { tagName: "div", selector: "#unrelated", visibleText: "RAW_PAGE_SENTINEL" }

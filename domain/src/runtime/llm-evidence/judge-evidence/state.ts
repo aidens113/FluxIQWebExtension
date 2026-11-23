@@ -2,6 +2,10 @@ import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence } from "../sanitize";
 import { webNodeReadResult } from "../node-run/read-result";
+import { present } from "../present";
+
+/** The versioned semantic state `./state-value.ts` reads back; every key written by name. */
+type WebJudgeStateFacts = { version: 1; location: string; controls: JsonObject[]; notices: JsonObject[]; marks: JsonObject[]; title?: string; truncated?: true };
 
 const STATES = new Set(["aria-checked", "aria-selected", "aria-pressed", "aria-expanded", "aria-disabled", "disabled"]);
 
@@ -26,7 +30,7 @@ export function webJudgeStateFacts(evidence: WebLlmPageEvidence): JsonObject {
   }
   // Reuse the domain's existing unlimited value/credential/denied-key screen.
   // The Core request builder screens this again using the current declaration.
-  return webNodeReadResult({ version: 1, location: evidence.location, controls, notices, marks, ...(evidence.title === undefined ? {} : { title: evidence.title }), ...(evidence.captureTruncated === true || evidence.truncated ? { truncated: true } : {}) }) as JsonObject;
+  return webNodeReadResult(present<WebJudgeStateFacts>({ version: 1, location: evidence.location, controls, notices, marks, title: evidence.title, truncated: evidence.captureTruncated === true || evidence.truncated ? true : undefined })) as JsonObject;
 }
 
 function facts(element: WebLlmEvidenceElement, stated: Array<[string, string]>): JsonObject {

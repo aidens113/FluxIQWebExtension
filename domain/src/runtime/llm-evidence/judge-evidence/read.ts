@@ -1,5 +1,9 @@
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationExtractionSummaryValue } from "../../../actions/extraction";
+import { present } from "../present";
+
+/** The condition counts a judge reads; kept values and samples stay in their own stores. */
+type WebJudgeConditionFacts = { applied: number; kept: number; rejected: number[]; unfiltered: boolean; alone?: number[] };
 
 /** Read counts/structure only. Full cells and comparison/removal evidence reuse their existing source-page store. */
 export function webJudgeReadFacts(read: JsonObject): { facts: JsonObject; invalid: boolean } {
@@ -21,7 +25,7 @@ export function webJudgeReadFacts(read: JsonObject): { facts: JsonObject; invali
     else {
       const summary: JsonObject = { recordCount: parsed.recordCount, pagesRead: parsed.pagesRead, truncated: parsed.truncated };
       for (const key of ["itemsSeen", "emptyRecords", "notRenderedItems", "earlierPageRepeats", "disclosedRows", "paginationStop", "listPresence"] as const) if (parsed[key] !== undefined) summary[key] = parsed[key];
-      if (parsed.conditions !== undefined) summary.conditions = { applied: parsed.conditions.applied, kept: parsed.conditions.kept, rejected: [...parsed.conditions.rejected], unfiltered: parsed.conditions.unfiltered, ...(parsed.conditions.alone === undefined ? {} : { alone: [...parsed.conditions.alone] }) };
+      if (parsed.conditions !== undefined) summary.conditions = present<WebJudgeConditionFacts>({ applied: parsed.conditions.applied, kept: parsed.conditions.kept, rejected: [...parsed.conditions.rejected], unfiltered: parsed.conditions.unfiltered, alone: parsed.conditions.alone === undefined ? undefined : [...parsed.conditions.alone] });
       if (parsed.order !== undefined) summary.order = { ...parsed.order };
       if (parsed.listContinues !== undefined) summary.listContinues = { ...parsed.listContinues };
       if (parsed.place !== undefined) summary.place = { ...parsed.place };

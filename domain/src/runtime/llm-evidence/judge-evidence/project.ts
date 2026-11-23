@@ -1,13 +1,18 @@
 import type { AutomationStudioJudgeEvidenceProjector } from "fluxiq/automation";
 import { parseAutomationStudioRecordSchema } from "fluxiq/components/automation";
 import type { JsonObject } from "fluxiq/core";
-import { webNodeReadResult } from "../node-run/read-result";
+import { webNodeReadResult, webRunnableNode } from "../node-run";
 import { isJsonRecord } from "../untrusted-json";
 import { webJudgeActionFacts } from "./action";
 import { webJudgeReadFacts } from "./read";
 import { webJudgeStateValue } from "./state-value";
-import { webRunnableNode } from "../node-run/catalog";
 import { screenedEvidenceUrl } from "../location";
+import { present } from "../present";
+
+/** Core's projector result, written key by key so a renamed contract field fails to compile here. */
+type WebJudgeProjection = ReturnType<AutomationStudioJudgeEvidenceProjector>;
+/** A legacy look's checked semantic state and, when it screens, where it was read. */
+type WebJudgeLookFacts = { state: JsonObject; location?: string };
 
 /** Web-owned semantic projection. Raw captures and row copies never enter its durable findings. */
 export const projectWebJudgeEvidence: AutomationStudioJudgeEvidenceProjector = (input) => {
@@ -35,7 +40,7 @@ export const projectWebJudgeEvidence: AutomationStudioJudgeEvidenceProjector = (
     const state = isJsonRecord(found) ? webJudgeStateValue(Object.hasOwn(found, "judgeState") ? found.judgeState : found) : undefined;
     if (state === undefined) return { role: "observation", missing: ["web_judge.look_state_missing"] };
     const location = typeof look.where === "string" ? screenedEvidenceUrl(look.where) : undefined;
-    return { role: "observation", evidence: { state, ...(location === undefined ? {} : { location }) } };
+    return { role: "observation", evidence: present<WebJudgeLookFacts>({ state, location }) };
   }
   const finding: JsonObject = {};
   const missing: string[] = [];
@@ -101,7 +106,7 @@ export const projectWebJudgeEvidence: AutomationStudioJudgeEvidenceProjector = (
   // succeeded status or empty semantic state is promoted to proof of effect.
   const node = input.definitionId === undefined ? undefined : webRunnableNode(input.definitionId);
   const acted = node?.effect === "mutate" || action.changed !== undefined || action.notice !== undefined || action.effectUncertain !== undefined || action.control !== undefined;
-  return { role: data ? "data" : acted ? "action" : "observation", evidence: webNodeReadResult(finding) ?? {}, ...(missing.length ? { missing } : {}) };
+  return present<WebJudgeProjection>({ role: data ? "data" : acted ? "action" : "observation", evidence: webNodeReadResult(finding) ?? {}, missing: missing.length ? missing : undefined });
 };
 
 function pick(value: JsonObject, keys: readonly string[]): JsonObject {
