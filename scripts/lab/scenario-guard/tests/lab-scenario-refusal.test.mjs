@@ -55,7 +55,7 @@ test("run-lab.mjs refuses `run basic-form --flow` before the live-run guards, th
   try {
     // Every place a started run would write is under `root`; a refusal leaves it empty.
     const env = { ...process.env, FLUXIQ_TEST_RUNS_DIR: path.join(root, "runs"), FLUXIQ_LAB_INSTANCE: "scenario-guard-test", FLUXIQ_CORE_ROOT: path.join(root, "no-core") };
-    for (const args of [["run", "basic-form", "--flow"], ["run", "product-catalog", "--live-llm", "--llm-task", "create-flow"], ["interactive", "basic-form"]]) {
+    for (const args of [["run", "basic-form", "--flow"], ["run", "product-catalog", "--live-llm", "--llm-task", "create-flow"], ["interactive", "basic-form"], ["offline-preflight", "basic-form", "--task", "x"]]) {
       const result = await spawnNode([RUN_LAB, ...args], env);
       assert.equal(result.code, 1, result.stderr);
       assert.match(result.stderr, RULE);
@@ -65,6 +65,14 @@ test("run-lab.mjs refuses `run basic-form --flow` before the live-run guards, th
     assert.deepEqual(await readdir(root), []);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("offline proof commands refuse live providers and preflight requires a realistic site before setup", () => {
+  assert.equal(labScenarioRefusal(["offline-preflight", "company-website", "--task", "x"]), null);
+  assert.match(labScenarioRefusal(["offline-preflight"]), /takes its scenario right after/u);
+  for (const command of ["recorded-replay", "offline-preflight"]) {
+    assert.match(labScenarioRefusal([command, "company-website", "--live-llm"]), /refuses --live-llm/u);
   }
 });
 
@@ -96,4 +104,16 @@ test("managed-host proofs require one explicit realistic scenario and refuse amb
     assert.match(labScenarioRefusal(["fluxnode-host", ...args]), /exactly one --scenario/u);
   }
   assert.match(labScenarioRefusal(["fluxnode-host", "--scenario", "company-website", "--live-llm"]), /refuses --live-llm/u);
+});
+
+test("fresh capture is scrubbed and refused outside realistic scenarios before setup", () => {
+  assert.match(labScenarioRefusal(["recorded-capture", "basic-form", "--task", "x"]), RULE);
+  assert.equal(labScenarioRefusal(["recorded-capture", "company-website", "--task", "x"]), null);
+  assert.match(labScenarioRefusal(["recorded-capture", "company-website", "--live-llm"]), /refuses --live-llm/u);
+});
+
+test("recorded reader is held to the same realistic-site/provider-free launch boundary", () => {
+  assert.match(labScenarioRefusal(["recorded-read", "basic-form", "--input", "x", "--out", "y"]), RULE);
+  assert.match(labScenarioRefusal(["recorded-read", "everything-store", "--live-llm"]), /refuses --live-llm/u);
+  assert.equal(labScenarioRefusal(["recorded-read", "everything-store", "--input", "x", "--out", "y"]), null);
 });

@@ -5,6 +5,22 @@ import { installSandboxRuntimeStub, type SandboxDelivery } from "../sandbox-runt
 type Stubbed = { chrome?: { runtime?: { sendMessage(message: unknown): Promise<unknown>; onMessage: { addListener(listener: unknown): void } } } } & Record<string, unknown>;
 const harness = (scope: Stubbed) => scope["__sandbox"] as { sent: unknown[]; deliver(message: unknown): Promise<SandboxDelivery> };
 
+test("only the production own-page address query receives the sandbox's truthful independent response", async () => {
+  const scope: Stubbed = {};
+  installSandboxRuntimeStub("__sandbox", scope);
+  const query = { type: "fluxiq.ownPageAddresses" };
+  const first = await scope.chrome?.runtime?.sendMessage(query) as { ok: boolean; addresses: string[] };
+  assert.equal(first.ok, true);
+  assert.equal(first.addresses.length, 0);
+  first.addresses.push("http://mutated.invalid");
+  first.ok = false;
+  assert.deepEqual(await scope.chrome?.runtime?.sendMessage(query), { ok: true, addresses: [] });
+  for (const message of [null, undefined, [], "fluxiq.ownPageAddresses", { type: null }, { type: 1 }, { type: "unknown" }]) {
+    assert.equal(await scope.chrome?.runtime?.sendMessage(message), undefined);
+  }
+  assert.deepEqual(harness(scope).sent.slice(0, 2), [query, query]);
+});
+
 test("what the content code sends is kept as a copy taken when it was sent", async () => {
   const scope: Stubbed = {};
   installSandboxRuntimeStub("__sandbox", scope);

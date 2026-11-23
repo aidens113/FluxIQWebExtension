@@ -39,11 +39,22 @@
 // covered press was refused, and is not once the runtime clears a dismissible
 // cover first (`./layer/runtime-clears.ts`). So it is removed here; the layer's
 // kind, the allow-list word and the two names stay.
+//
+// **The dispatch's own id goes with them** (t986). `commandId` names the one
+// gateway dispatch that carried the command: a fresh random id on every run of
+// the same step, which says nothing about what the node did or read and which
+// no tool takes back. Shown to the model, it made every request after a read
+// unique to that run: a recorded attempt replayed on its own recorded answers
+// sends the same command under a new id (the trace replay translates ids, as
+// the protocol needs), so its first model request could never match the
+// recording (`test-runs/t986-replay-company-v3`). Core already reads it as a
+// per-run key, not a finding (`runtime/llm/decision-handlers/rerun-result.ts`).
+// The step files and the replay's record keep it.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 
-/** The payload keys that hold the extension's record of the page rather than the node's answer; `humanness` is how the press was made (level, aim, misclick), kept in the step files and never shown to the model. */
-const PAGE_RECORD_KEYS: ReadonlySet<string> = new Set(["snapshot", "element", "visualTarget", "resolution", "structure", "humanness"]);
+/** The payload keys that hold the extension's record of the page rather than the node's answer; `humanness` is how the press was made (level, aim, misclick), kept in the step files and never shown to the model; `commandId` is the dispatch's id, not the node's answer. */
+const PAGE_RECORD_KEYS: ReadonlySet<string> = new Set(["snapshot", "element", "visualTarget", "resolution", "structure", "humanness", "commandId"]);
 
 /** The payload key listing what the runtime cleared, and the member of each entry that is the page's record. */
 const CLEARED_LAYERS_KEY = "clearedLayers";

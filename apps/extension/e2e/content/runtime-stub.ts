@@ -22,8 +22,11 @@ export function installRuntimeStub(globalName: string): void {
   const sender = { id: "fluxiq-content-harness" };
   const runtime = {
     id: sender.id,
-    sendMessage(message: unknown): Promise<undefined> {
+    sendMessage(message: unknown): Promise<unknown> {
       sent.push(copy(message));
+      // This isolated harness runs no Core panel or gateway. Answer the real
+      // background protocol so the content's own-document guard can decide.
+      if (message !== null && typeof message === "object" && !Array.isArray(message) && (message as { type?: unknown }).type === "fluxiq.ownPageAddresses") return Promise.resolve({ ok: true, addresses: [] });
       return Promise.resolve(undefined);
     },
     onMessage: {

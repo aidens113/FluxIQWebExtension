@@ -14,6 +14,7 @@
     "./panel-golden-path": "./dist/panel-golden-path/index.js",
     "./realistic-scenarios": "./src/realistic-scenarios/index.ts",
     "./target-config": "./dist/target-config.js",
+    "./offline-scoreboard": "./dist/attempt-lane/scoreboard/index.js",
     "./ui-e2e": "./dist/ui-e2e/index.js",
     "./windows-acl": "./dist/windows-acl.js"
   },

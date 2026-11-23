@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_LLM_MODEL, llmProviderForModel, resolveScenarioWorkflow, type AttemptStandIn } from "@fluxiq-web-extension/test-contracts";
@@ -26,9 +26,12 @@ import { attemptCanGoOn } from "./can-go-on.js";
 import { liveAttemptDriver, type LiveAttemptEnded } from "./live-driver.js";
 import { attemptResultLine } from "./result-line.js";
 import { readAttemptOverhead } from "../overhead/index.js";
+import { offlineSourceFingerprint } from "../scoreboard/index.js";
+import { readRecordedArtifact, recordedModelSide, type ReplayDivergence } from "../../recorded-attempt-replay/index.js";
 import { awaitPanelAnswerTurn } from "./panel-answer-port.js";
 import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
 import { writeUnscoredAttemptEvidence, type ScoredAttempt } from "./unscored-attempt-evidence.js";
+import { AttemptCostReporter } from "./cost-progress/index.js";
 
 type AttemptCommand = Extract<LabCommand, { command: "attempt" }>;
 
@@ -65,6 +68,8 @@ type ModelSide = {
   authorize: (session: Parameters<Parameters<typeof openLiveAttemptSession>[0]["authorize"]>[0], control: Parameters<Parameters<typeof openLiveAttemptSession>[0]["authorize"]>[1]) => Promise<void>;
   server?: ScriptedModelServer;
   live?: LiveLlmRun;
+  configuredModel?: string;
+  replay?: () => { divergence: ReplayDivergence | null; logicalCalls: number; externalUsd: 0; complete: boolean };
 };
 
 async function scriptedSide(input: AttemptCommandInput, evidence: string, log: (line: string) => void): Promise<ModelSide> {
@@ -77,7 +82,7 @@ async function scriptedSide(input: AttemptCommandInput, evidence: string, log: (
   });
   const model = DEFAULT_LLM_MODEL;
   return {
-    server, standIns: SCRIPTED_MODEL_STAND_INS,
+    server, standIns: SCRIPTED_MODEL_STAND_INS, configuredModel: model,
     environment: scriptedModelChildEnvironment(input.environment, server.origin),
     args: ["--authoring-mode", input.command.authoringMode, "--llm-max-cost-usd", SCRIPTED_BUDGET_USD, "--llm-model", model],
     authorize: async (topology, control) => {
@@ -162,6 +167,10 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   const request: CreatedFlowRequest = await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: paths.scenarioLabDist, scenarioId: command.scenarioId, taskId: command.taskId });
   const workflow = resolveScenarioWorkflow(scenario, { ...(request.workflowId === undefined ? {} : { workflowId: request.workflowId }), ...(request.variantId === undefined ? {} : { variantId: request.variantId }) });
   if (command.model.kind === "scripted") scriptedModelScriptFor(command.taskId, input.environment[SCRIPTED_MODEL_FORM_ENV]);
+  if (command.model.kind === "recorded") {
+    const admitted = await readRecordedArtifact(command.model.artifact);
+    if (admitted.taskId !== command.taskId || admitted.scenarioId !== command.scenarioId) throw new Error("recorded_task_identity_changed");
+  }
   const planned = command.model.kind === "live" ? await liveSide(input, command.model.llm) : undefined;
   if (command.dryRun) {
     process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "attempt", entry: "chat", task: request.task.id, attempts: command.attempts, restartBetween: command.restartBetween === true, model: command.model.kind, authoringMode: command.authoringMode, live: planned?.live?.describe() ?? null })}\n`);
@@ -171,11 +180,15 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   const runId = attemptRunId(Date.now());
   const evidence = path.join(paths.runsDirectory, "attempts", runId);
   await mkdir(evidence, { recursive: true });
-  const side = planned ?? await scriptedSide(input, evidence, log);
-  const modelRecord = attemptModelRecord(side.live);
+  const [coreSource, extensionSource] = await Promise.all([offlineSourceFingerprint(fluxiqRepositoryRoot), offlineSourceFingerprint(repositoryRoot)]);
+  await writeFile(path.join(evidence, "source.json"), JSON.stringify({ core: coreSource, extension: extensionSource }, null, 2));
+  await writeFile(path.join(evidence, "oracle.json"), JSON.stringify({ taskId: request.task.id, digest: createHash("sha256").update(JSON.stringify({ request, expected: workflow.expected })).digest("hex") }, null, 2));
+  const side: ModelSide = planned ?? (command.model.kind === "recorded" ? await recordedModelSide({ artifact: command.model.artifact, taskId: command.taskId, scenarioId: command.scenarioId, environment: input.environment, authoringMode: command.authoringMode }) : await scriptedSide(input, evidence, log));
+  const modelRecord = { ...(side.replay ? { provider: "recorded" } : attemptModelRecord(side.live)), ...(side.configuredModel ? { configuredModel: side.configuredModel } : {}) };
   const labRun = side.live ? await LabRunRecord.open({ environment: input.environment, runId, startedAt, scenarioId: scenario.id, work: request.task.id, workflowId: request.workflowId, variantId: request.variantId, bundlePath: path.resolve(paths.runsDirectory, runId), repositoryRoot }) : undefined;
   if (side.live && labRun?.stepsDirectory) side.live.readStepLogFrom(labRun.stepsDirectory);
   const stepsDirectory = labRun?.stepsDirectory ?? path.join(evidence, "steps");
+  const costs = side.live ? new AttemptCostReporter(stepsDirectory, log) : undefined;
   let session: LiveAttemptSession | undefined;
   const kept = new Map<number, AttemptKept>();
   const scored = new Map<number, ScoredAttempt>();
@@ -214,6 +227,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       },
       send: opened.send,
       progress: async () => {
+        await costs?.poll();
         if (person.answerFailure) {
           personAnswerFailure = person.answerFailure;
           throw personAnswerFailure;
@@ -226,6 +240,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       log,
       ...(input.environment[SCRIPTED_MODEL_FORM_ENV] === RUN_AGAIN_FORM ? { later: "run_again" as const } : {}),
       onEnded: async (attempt) => {
+        await costs?.finish(attempt.ordinal);
         const folder = command.attempts === 1 ? evidence : path.join(evidence, `attempt-${attempt.ordinal}`);
         await mkdir(folder, { recursive: true });
         // Kept first: a picture that fails must not lose what the attempt was and what it spent.
@@ -322,9 +337,14 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     process.stdout.write(`${JSON.stringify({ status: "not_judged", task: command.taskId, why: personFailed ? "LabPersonAnswerFailed" : error instanceof Error ? error.name : "Error", evidence })}\n`);
     if (session) await captureBrowserWindows(session.browser.browser, session.browser.profileDir).then((taken) => (taken.bytes ? writeFile(path.join(evidence, "stopped.jpg"), taken.bytes) : undefined)).catch(/* best-effort: a picture never decides the run */ () => undefined);
   } finally {
-    await session?.close();
-    await side.server?.close();
-    await labRun?.close({ verdict }).catch(/* best-effort: the run's own bundle is already written */ () => undefined);
+    try {
+      await session?.close();
+      if (side.replay) await writeFile(path.join(evidence, "recorded-replay.json"), JSON.stringify({ proof: "recorded_model_fixture_runtime", ...side.replay(), domainEvidenceReplayed: false, fullAttemptAccepted: false }, null, 2));
+    } finally {
+      await side.server?.close();
+      await costs?.poll();
+      await labRun?.close({ verdict }).catch(/* best-effort: the run's own bundle is already written */ () => undefined);
+    }
   }
   return exitCode;
 }

@@ -129,7 +129,7 @@ test("a click whose payload carries the raw snapshot returns no snapshot, elemen
 
   assert.equal(pressed.resultCode, "web.action.succeeded");
   const packet = pressed.evidence as Packet;
-  for (const key of ["snapshot", "element", "resolution", "visualTarget", "structure"]) {
+  for (const key of ["snapshot", "element", "resolution", "visualTarget", "structure", "commandId"]) {
     assert.equal(packet.read !== undefined && Object.hasOwn(packet.read, key), false, `read carries no ${key}`);
   }
   // Nowhere in what the model is shown, not just not under `read`.
@@ -203,4 +203,11 @@ test("a press's humanness record (its level, aim and misclick) is the page's rec
   const humanness = { level: 80, aimed: true, misclick: { x: 12, y: 40 } };
   assert.deepEqual(webNodeWithoutPageRecord({ ...answer, humanness }), answer);
   assert.equal(webNodeWithoutPageRecord({ humanness }), undefined);
+});
+
+test("the dispatch's command id is never shown, so the same answer reads the same on every run", () => {
+  const answer = { actionType: "web.browser.navigate", status: "succeeded", validation: VALIDATION, url: HOME };
+  assert.deepEqual(webNodeWithoutPageRecord({ commandId: "command.first-run", ...answer }), answer);
+  assert.deepEqual(webNodeWithoutPageRecord({ commandId: "command.first-run", ...answer }), webNodeWithoutPageRecord({ commandId: "command.replayed", ...answer }));
+  assert.equal(webNodeWithoutPageRecord({ commandId: "command.only" }), undefined);
 });

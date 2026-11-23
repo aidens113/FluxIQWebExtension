@@ -1,3 +1,4 @@
+import { scriptedTaskProcess } from "./processing-declarations.js";
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
@@ -24,7 +25,7 @@ type DraftStep = {
   input?: { parameters?: { recordOutput?: { purpose?: string } }; recordOutput?: { purpose?: string } };
 };
 
-const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
+const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("professional-network-accept-messaged-invitations") });
 
 /** A finished thought: what the model decides when there is nothing left to call. */
 const finish = (summary: string): Record<string, unknown> => ({ kind: "evidence_tool_decision", summary, decision: { kind: "complete", result: { summary } } });

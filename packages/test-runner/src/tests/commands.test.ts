@@ -357,3 +357,23 @@ test("--no-tracing takes no value, may come before the scenario, and is given on
   assert.throws(() => parseLabCommand([...tracedReplay, "--no-tracing", "--no-tracing"]), /--no-tracing may only be specified once/);
   assert.throws(() => parseLabCommand(["run", "everything-store", "--no-tracing"]), /Unknown option: --no-tracing/);
 });
+
+test("recorded replay and preflight commands keep their own provider-free arguments", () => {
+  assert.deepEqual(parseLabCommand(["recorded-replay", "--input", "test-runs/input.json", "--out", "test-runs/report.json"]), { command: "recorded-replay", inputFile: "test-runs/input.json", outputFile: "test-runs/report.json" });
+  const recorded = parseLabCommand(["attempt", "company-website", "--task", "company-website-apprentices", "--authoring-mode", "answer-first", "--recorded-model", "test-runs/recording.json", "--attempts", "1"]);
+  assert.equal(recorded.command, "attempt");
+  if (recorded.command !== "attempt") throw new Error("wrong command");
+  assert.deepEqual(recorded.model, { kind: "recorded", artifact: "test-runs/recording.json" });
+  assert.throws(() => parseLabCommand(["attempt", "company-website", "--task", "company-website-apprentices", "--authoring-mode", "answer-first", "--recorded-model", "test-runs/recording.json", "--scripted-model"]), /exactly one/u);
+  assert.throws(() => parseLabCommand(["recorded-replay", "--input", "test-runs/input.json", "--live-llm"]), /Unknown|unknown/u);
+});
+
+test("fresh capture is a separate provider-free bootstrap diagnosis command", () => {
+  assert.deepEqual(parseLabCommand(["recorded-capture", "company-website", "--task", "company-website-apprentices", "--evidence", "test-runs/fresh"]), { command: "recorded-capture", scenarioId: "company-website", taskId: "company-website-apprentices", evidenceDirectory: "test-runs/fresh" });
+  assert.throws(() => parseLabCommand(["recorded-capture", "company-website", "--task", "company-website-apprentices", "--evidence", "test-runs/fresh", "--live-llm"]), /Unknown|unknown/u);
+});
+
+test("recorded-read has explicit scenario and file boundaries and no live mode", () => {
+  assert.deepEqual(parseLabCommand(["recorded-read", "everything-store", "--input", "test-runs/read/input.json", "--out", "test-runs/read/report.json"]), { command: "recorded-read", scenarioId: "everything-store", inputFile: "test-runs/read/input.json", outputFile: "test-runs/read/report.json" });
+  assert.throws(() => parseLabCommand(["recorded-read", "everything-store", "--input", "x", "--out", "y", "--live-llm"]), /Unknown|unknown/u);
+});

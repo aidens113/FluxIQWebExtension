@@ -1,9 +1,10 @@
+import { scriptedTaskProcess } from "./processing-declarations.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
 
 /** The chat turn: what a model decides of the person's message, which is to start the attempt. Core saves the person's own words as the instruction. */
-const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
+const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("company-website-apprentices") });
 
 /** What stands over the page on a first visit, in the order a person clears it, each only while it shows. */
 export const COMPANY_WEBSITE_COVERS: readonly { summary: string; callId: string; words: RegExp }[] = [

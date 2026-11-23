@@ -1,4 +1,7 @@
 import os from "node:os";
+import { runRecordedReplayCommand, runRecordedCaptureCommand, runRecordedReadCommand } from "./recorded-attempt-replay/index.js";
+import { runOfflinePreflight, classifyPreflight } from "./attempt-lane/preflight/index.js";
+import { offlineSourceFingerprint } from "./attempt-lane/scoreboard/index.js";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runAttemptCommand } from "./attempt-lane/live/index.js";
@@ -25,7 +28,7 @@ import { loadTestEnvironment, resolveAuthScopeConfiguration, resolveCloneCacheSc
 
 export async function runCli(argv: string[], given: NodeJS.ProcessEnv = process.env): Promise<number> {
   // A scripted attempt is provider-free before anything is read: no key, and no env file of this checkout.
-  const env = argv[0] === "fluxnode-host" || argv[0] === "attempt" && argv.includes("--scripted-model") ? providerFreeEnvironment(given) : given;
+  const env = ["fluxnode-host", "recorded-replay", "recorded-capture", "recorded-read", "offline-preflight"].includes(argv[0] ?? "") || argv[0] === "attempt" && (argv.includes("--scripted-model") || argv.includes("--recorded-model")) ? providerFreeEnvironment(given) : given;
   const repositoryRoot = path.resolve(env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
   try {
     const resolvedEnvironment = await loadTestEnvironment(repositoryRoot, env);
@@ -35,8 +38,33 @@ export async function runCli(argv: string[], given: NodeJS.ProcessEnv = process.
     const command = parseLabCommand(argv);
     // Before anything the command does: a Lab run opens only the ten realistic scenarios (`realistic-scenarios/index.ts`).
     // `matrix --all` runs the realistic ones; a bench is held to its corpus's scenarios once the corpus is known.
-    if (command.command === "run" || command.command === "interactive" || command.command === "replay" || command.command === "attempt" || command.command === "fluxnode-host") assertRealisticScenarios([command.scenarioId], `lab ${command.command}`);
+    if (command.command === "run" || command.command === "interactive" || command.command === "replay" || command.command === "attempt" || command.command === "fluxnode-host" || command.command === "offline-preflight" || command.command === "recorded-capture" || command.command === "recorded-read") assertRealisticScenarios([command.scenarioId], `lab ${command.command}`);
     if (command.command === "matrix" && command.scenarioIds) assertRealisticScenarios(command.scenarioIds, "lab matrix");
+    if (command.command === "recorded-replay") {
+      const report = await runRecordedReplayCommand({ ...command, repositoryRoot });
+      process.stdout.write(`${JSON.stringify(report)}\n`);
+      return report.status === "ran" ? 0 : 1;
+    }
+    if (command.command === "recorded-read") {
+      const report = await runRecordedReadCommand({ ...command, repositoryRoot });
+      process.stdout.write(`${JSON.stringify(report)}\n`);
+      return report.parityPassed ? 0 : 1;
+    }
+    if (command.command === "recorded-capture") {
+      const [core, extension] = await Promise.all([offlineSourceFingerprint(fluxiqRepositoryRoot), offlineSourceFingerprint(repositoryRoot)]);
+      const report = await runRecordedCaptureCommand({ ...command, repositoryRoot, fluxiqRepositoryRoot, evidenceDirectory: path.resolve(command.evidenceDirectory), source: { core, extension } });
+      process.stdout.write(`${JSON.stringify(report)}\n`);
+      return report.complete ? 0 : 1;
+    }
+    if (command.command === "offline-preflight") {
+      const relative = path.relative(path.join(repositoryRoot, "test-runs"), path.resolve(command.evidenceDirectory));
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Preflight evidence must be run-scoped under test-runs");
+      const [core, extension] = await Promise.all([offlineSourceFingerprint(fluxiqRepositoryRoot), offlineSourceFingerprint(repositoryRoot)]);
+      const evidence = await runOfflinePreflight({ repositoryRoot, fluxiqRepositoryRoot, scenarioId: command.scenarioId, taskId: command.taskId, evidenceDirectory: path.resolve(command.evidenceDirectory), source: { core, extension } });
+      const classification = classifyPreflight(evidence);
+      process.stdout.write(`${JSON.stringify({ ...classification, externalUsd: 0, evidence: command.evidenceDirectory })}\n`);
+      return classification.protocolPassed ? 0 : 1;
+    }
     if (command.command === "interactive") {
       const target = resolveInteractiveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
       if (target.mode === "clone") throw new Error("interactive mode does not support clone targets");

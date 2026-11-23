@@ -1,3 +1,4 @@
+import { scriptedTaskProcess } from "./processing-declarations.js";
 // Provider-free honest path for the unchanged realistic towels task. All row values come from browser reads.
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import type { ScriptedModelRequest } from "../wire-request.js";
@@ -79,7 +80,7 @@ const decide: ScriptedReply = (request) => {
   return { kind: "evidence_tool_decision", summary: "The requested rows are held from every page.", decision: { kind: "complete", result: { summary: "Read every qualifying pack in the store's Highest rating order." } } };
 };
 
-const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
+const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("bigbox-retail-rated-delivery-towels") });
 const judge: ScriptedReply = (request) => scriptedJudgement(request, { answersRequest: "yes", summary: "The kept rows answer the request; the unchanged fixture oracle verifies every record." });
 
 export const BIGBOX_RETAIL_RATED_DELIVERY_TOWELS_SCRIPT: ScriptedModelScript = Object.freeze({

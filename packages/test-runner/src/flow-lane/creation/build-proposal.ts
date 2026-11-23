@@ -1,7 +1,7 @@
 import { assertCreatedFlowVerificationReady, createdFlowTrialsCandidates, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
 import { createdFlowCandidateDraft } from "./candidate-draft.js";
 import { createdFlowCandidateDraftOutcome, createdFlowFailedCandidateOutcome, readCreatedFlowCandidatePromotion, type CreatedFlowCandidateOutcome } from "./candidate-outcome.js";
-import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringResult } from "fluxiq/automation";
+import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringResult, GenerateFlowBootstrapAdaptationRequest } from "fluxiq/automation";
 // The one paid step of a created-Flow run: give Core the task's instruction,
 // ready the Flow's LLM settings, and ask Core to explore the live page and
 // propose a Flow -- the calls the web panel's "Explore and create proposal"
@@ -76,7 +76,7 @@ export type CreatedFlowBuildControl = {
  * `--llm-permit`, sent only when it permits something.
  */
 /** `authoringMode` is absent from a legacy build, which asks for a proposed adaptation as the baseline did, and `candidate` in a candidate-mode run that `./readiness.ts` admitted. */
-export type CreatedFlowBuildRequest = { projectId: string; flowId: string; evidenceGuided: true; authoringMode?: "candidate"; startLocation?: string; permittedConsequences?: LlmActionConsequence[] };
+export type CreatedFlowBuildRequest = { projectId: string; flowId: string; evidenceGuided: true; authoringMode?: "candidate"; startLocation?: string; permittedConsequences?: LlmActionConsequence[] } & Pick<GenerateFlowBootstrapAdaptationRequest, "taskProcessing">;
 
 /** What readying a Flow for its build answers with: the consequences the operator permitted it (`--llm-permit`), empty for none. */
 export type CreatedFlowBuildLlm = { permittedConsequences: readonly LlmActionConsequence[] };

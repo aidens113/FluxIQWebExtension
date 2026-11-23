@@ -1,3 +1,4 @@
+import { scriptedTaskProcess } from "./processing-declarations.js";
 // `crossborder-marketplace-free-hubs-under-ten`: a filtered, sorted read, and the one task whose honest path meets
 // a check only a person may pass. The model clears what covers the first page, searches for the hubs, narrows
 // the results to free shipping and a ceiling of 10 euros with the site's own filters, sorts them cheapest
@@ -37,7 +38,7 @@ const CEILING = 10;
 
 type Field = { key: string; sample?: string; label?: string; kind?: string; type?: string; coverage?: number };
 
-const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
+const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("crossborder-marketplace-free-hubs-under-ten") });
 const finish = (summary: string): Record<string, unknown> => ({ kind: "evidence_tool_decision", summary, decision: { kind: "complete", result: { summary } } });
 const callsMade = (request: ScriptedModelRequest): ReadonlySet<string> => new Set(evidenceOf(request).map((entry) => entry.callId));
 

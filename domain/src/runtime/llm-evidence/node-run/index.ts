@@ -14,4 +14,8 @@ export { webLlmCallWords, type WebLlmCallWords } from "./call-words";
 export { webNodeNamedControlShown } from "./named-control-shown";
 export { webListReadCode } from "./list-read";
 export { webNodeActVerb } from "./act-verb";
+// The read a model is shown, from the payload a read answered: the offline read
+// proof (`../../offline-reads/model-result.ts`) projects a reproduced read
+// through this same owner rather than a copy of it.
+export { webNodeReadWithRejectedRows, type WebNodeReadWithRejectedRows } from "./rejected-rows";
 export { webNodeReadResult } from "./read-result";

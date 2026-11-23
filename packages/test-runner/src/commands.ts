@@ -35,8 +35,12 @@ export type LabCommand =
   // `tracing: false` (`--no-tracing`) starts Core with client gateway tracing off, for the off-versus-on overhead measurement; absent, it is on as for every Lab Core.
   | { command: "replay"; scenarioId: string; workspace: string; flowId: string; projectId?: string; instructionTaskId?: string; variantId?: string; seed?: number; tracing?: false }
   // One attempt at a task from the real extension chat, scored on its answer: `lab attempt` (`attempt-lane/live/`). `model` is a scripted server (provider-free) or a live provider run.
-  | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "live"; llm: LlmExecutionProfile }; attempts: number; restartBetween?: true; humanness?: number; dryRun?: true }
+  | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "recorded"; artifact: string } | { kind: "live"; llm: LlmExecutionProfile }; attempts: number; restartBetween?: true; humanness?: number; dryRun?: true }
   // The state-aware recovery plan's provider-free acceptance matrix: `lab recovery-matrix` (`recovery-matrix/command.ts`).
+  | { command: "recorded-replay"; inputFile: string; outputFile: string }
+  | { command: "recorded-read"; scenarioId: string; inputFile: string; outputFile: string }
+  | { command: "recorded-capture"; scenarioId: string; taskId: string; evidenceDirectory: string }
+  | { command: "offline-preflight"; scenarioId: string; taskId: string; evidenceDirectory: string }
   | RecoveryMatrixCommand
   | FluxNodeHostProofCommand;
 
@@ -45,6 +49,26 @@ const COMPARE_USAGE = "Usage: lab compare <baseline-report> <candidate-report> [
 
 export function parseLabCommand(argv: string[]): LabCommand {
   const [command, ...args] = argv;
+  if (command === "recorded-read") {
+    rejectUnknownOptions(args, ["--input", "--out"]);
+    const scenarioId = positional(args, 0, "scenario ID");
+    const inputFile = option(args, "--input");
+    const outputFile = option(args, "--out");
+    if (!inputFile || !outputFile) throw new Error("lab recorded-read requires SCENARIO --input FILE --out FILE");
+    return { command, scenarioId, inputFile, outputFile };
+  }
+  if (command === "recorded-replay") {
+    rejectUnknownOptions(args, ["--input", "--out"]);
+    const inputFile = option(args, "--input"), outputFile = option(args, "--out");
+    if (!inputFile || !outputFile) throw new Error("lab recorded-replay requires --input FILE --out FILE");
+    return { command, inputFile, outputFile };
+  }
+  if (command === "offline-preflight" || command === "recorded-capture") {
+    rejectUnknownOptions(args, ["--task", "--evidence"]);
+    const scenarioId = positional(args, 0, "scenario ID"), taskId = option(args, "--task"), evidenceDirectory = option(args, "--evidence");
+    if (!taskId || !KEBAB_ID.test(taskId) || !evidenceDirectory) throw new Error(`lab ${command} requires SCENARIO --task TASK --evidence DIRECTORY`);
+    return { command, scenarioId, taskId, evidenceDirectory };
+  }
   if (command === "fluxnode-host") return parseFluxNodeHostProofCommand(args);
   if (command === "interactive") {
     rejectUnknownOptions(argv.slice(1), ["--seed", "--target", "--workspace", "--fresh-login", "--no-live-panel"]);
@@ -177,7 +201,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
 export const DEFAULT_ATTEMPTS = 4;
 
 function parseAttemptCommand(args: string[]): Extract<LabCommand, { command: "attempt" }> {
-  rejectUnknownOptions(args, ["--task", "--scripted-model", "--dry-run", "--attempts", "--restart-between", "--humanness", ...llmOptionNames]);
+  rejectUnknownOptions(args, ["--task", "--scripted-model", "--recorded-model", "--dry-run", "--attempts", "--restart-between", "--humanness", ...llmOptionNames]);
   const humannessGiven = option(args, "--humanness");
   if (humannessGiven !== undefined && !/^(0|[1-9][0-9]?|100)$/u.test(humannessGiven)) throw new Error("lab attempt --humanness takes a whole number from 0 to 100: how human the extension acts in this run (0 is the extension's default, no human timing)");
   const humanness = humannessGiven === undefined ? {} : { humanness: Number(humannessGiven) };
@@ -188,8 +212,11 @@ function parseAttemptCommand(args: string[]): Extract<LabCommand, { command: "at
   if (restartBetween && attempts < 2) throw new Error("lab attempt --restart-between restarts Core before each later attempt, so it needs --attempts 2 or more");
   const { dryRun, rest: withoutDryRun } = dryRunOption(withoutRestart);
   const { present: scripted, rest: withoutScripted } = flagOption(withoutDryRun, "--scripted-model");
-  const attemptsAt = withoutScripted.indexOf("--attempts");
-  const withoutAttempts = attemptsAt < 0 ? withoutScripted : [...withoutScripted.slice(0, attemptsAt), ...withoutScripted.slice(attemptsAt + 2)];
+  const recorded = option(withoutScripted, "--recorded-model");
+  const recordedAt = withoutScripted.indexOf("--recorded-model");
+  const withoutRecorded = recordedAt < 0 ? withoutScripted : [...withoutScripted.slice(0, recordedAt), ...withoutScripted.slice(recordedAt + 2)];
+  const attemptsAt = withoutRecorded.indexOf("--attempts");
+  const withoutAttempts = attemptsAt < 0 ? withoutRecorded : [...withoutRecorded.slice(0, attemptsAt), ...withoutRecorded.slice(attemptsAt + 2)];
   const humannessAt = withoutAttempts.indexOf("--humanness");
   const rest = humannessAt < 0 ? withoutAttempts : [...withoutAttempts.slice(0, humannessAt), ...withoutAttempts.slice(humannessAt + 2)];
   const scenarioId = positional(rest, 0, "scenario ID");
@@ -198,7 +225,11 @@ function parseAttemptCommand(args: string[]): Extract<LabCommand, { command: "at
   const authoringMode = option(rest, LAB_AUTHORING_MODE_FLAG);
   if (!labAuthorsAnswerFirst(authoringMode)) throw new Error(`lab attempt drives the answer-first attempt, so it needs ${LAB_AUTHORING_MODE_FLAG} ${LAB_ANSWER_FIRST_AUTHORING_MODE}`);
   const live = rest.includes("--live-llm");
-  if (scripted === live) throw new Error("lab attempt takes exactly one of --scripted-model or --live-llm --llm-max-cost-usd N");
+  if (Number(scripted) + Number(recorded !== undefined) + Number(live) !== 1) throw new Error("lab attempt takes exactly one of --scripted-model, --recorded-model FILE or --live-llm --llm-max-cost-usd N");
+  if (recorded !== undefined) {
+    if (llmOptionNames.some((name) => name !== LAB_AUTHORING_MODE_FLAG && rest.includes(name))) throw new Error("--recorded-model takes no live LLM options");
+    return { command: "attempt", scenarioId, taskId, authoringMode: authoringMode!, model: { kind: "recorded", artifact: recorded }, attempts, ...(restartBetween ? { restartBetween: true as const } : {}), ...humanness, ...(dryRun ? { dryRun: true as const } : {}) };
+  }
   if (scripted) {
     const present = llmOptionNames.filter((name) => name !== LAB_AUTHORING_MODE_FLAG && rest.includes(name));
     if (present.length > 0) throw new Error(`--scripted-model takes no LLM options, and ${present.join(", ")} is one`);

@@ -1,3 +1,4 @@
+import { scriptedTaskProcess } from "./processing-declarations.js";
 // `local-classifieds-save-dining-tables`: a lasting act per row on a site where a second press undoes
 // the first (Save toggles). The model searches, narrows to five miles and sorts, reads the three
 // cheapest real tables, opens the first by its own address and saves it by hand, then repeats the
@@ -62,7 +63,7 @@ const CHECK_NODE = "web.output.dom-check";
 type Field = { key: string; sample?: string; label?: string; kind?: string; type?: string; coverage?: number };
 type DraftStep = { step: number; actionId: string; disposition?: string; written?: boolean; does?: { target?: string }; input?: { parameters?: { url?: string } } };
 
-const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
+const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("local-classifieds-save-dining-tables") });
 const finish = (summary: string): Record<string, unknown> => ({ kind: "evidence_tool_decision", summary, decision: { kind: "complete", result: { summary } } });
 const callsMade = (request: ScriptedModelRequest): ReadonlySet<string> => new Set(evidenceOf(request).map((entry) => entry.callId));
 
