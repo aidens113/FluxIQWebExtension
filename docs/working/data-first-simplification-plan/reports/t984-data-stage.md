@@ -804,3 +804,80 @@ node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-af-com
 ```
 
 `$t984AnswerFirstOwners` is the explicit16-path AF table above, each prefixed `src/framework/automation-service/service/`, plus the automatic-service path just named. No glob/discovery broadened the run. Root's opening source is frozen; judge may edit only the disjoint FluxNode fixtures/library-lane, which this AF batch does not import. No t984 package-wide validator may run until both lanes freeze. No executable result is claimed yet.
+
+## 2026-11-23 resume
+
+Worker: Claude Code worker-heavy, brief `briefs/finish-data-stage.md`. Trees: Core t984 head e9ee95577 (merge of dev), downstream t984 head e18bd7e8d. All heavy commands ran one at a time through `heavy-slot.mjs`, one Vitest worker, file parallelism off, named files only. No provider, paid, browser or full-suite run; no git mutation. Logs are in ignored Core `node_modules/.cache/t984-acceptance/`.
+
+### Outcome
+
+P2 compatibility accepted on its owner checks: the full independent compatibility set (the 35 files above plus the two endings files the lead added) passes 195/195, the 24-file combined owner command passes 192/192, contracts and fluxiq typechecks pass. The Core structure audit still fails 16 violations, every one in a P6 (judge, t987) file the lead said t987 already fixed in cb1aa1d0d; none is in a P2 file. The source-receipt contract was not touched.
+
+### The nine Answer First failures: causes and fixes
+
+Diagnosed with a temporary diagnostic test file (deleted) that printed what each refused completion was told.
+
+1. caller-seams (person-ask), replay-over-done-act, acts-with-no-row: **invalid fixture**. The previous session wrote `taskProcessing: { process: null }`, which the transport kept as a *data* declaration with null criteria that no schema can bind, so every completion was refused and the script ran out (`stopped_by_person`). The chat's interpreter (`runtime/conversations/instructions/processing.ts`) and `core.set_result_processing` both read `process: null` as action-only. Fixtures now pass the canonical `taskProcessing: null` (also the passing `later-attempt` "another task" case). **Product fix too:** `readAutomationStudioFlowTaskProcessing` now reads `{ process: null }` as `null`, so no caller can create a declaration that can never become ready (new owner `runtime/flow-authoring/draft/result-processing/tests/task.test.ts`).
+2. later-attempt "a memory that fails": **P4 product regression, not P2.** With the store failing, `task-model/resolve.ts` threw on `memory.get`, the resolver failed and the attempt answered `setup_needed` ("No model is available"). Same code on dev, so dev fails this test too. Fix: unscoped task memory is best effort in model resolution, as the opening already reads it: an unreadable or unwritable store resolves the request's routed model and writes nothing; scoped execution stays strict. The store's deliberate refusals of an invalid stored model or processing declaration now throw a typed `AutomationStudioAnswerFirstTaskMemoryIntegrityError` (`task-memory/integrity-error.ts`), which still stops the task, so the existing "refuses an invalid persisted model" test holds. New resolve owner case covers both.
+3. later-attempt "a forward run short of the last step" and skipped-rows "a model that keeps away": **invalid fixtures under the data contract.** Both tasks ask to list loans; the completing round read nothing into the result (`readLoans("again", {})` not added; presses only), so the data stage correctly refused an answer with no rows. The rounds now add their read to the result (`readLoans("again")`, `readLoans("list")`). The path stays `run_flow_then_explore` (the saved card step was never reached, `attempt/path.ts`), and the skipped-row and act-count assertions are unchanged.
+4. saved-on-every-ending (budget at the judge, provider failing at the end): **P2 product regression.** `withResultProcessing` wrote an automatic declaration into a `recordOutput` parameter even on a read step that had none, so a node with no record-output parameter (the plain fake library's) made the saved steps unassemblable (`notes_only`, `not_assembled`). Every data task reading through such a node lost its saved Flow. Fix in `result-processing/processing.ts`: an automatic declaration is written only into a record output the step already has; the task keeps the declaration in its memory and the feed applies it. Legacy model-set processing is unchanged. Regression added to `result-processing/tests/retained-schema.test.ts`.
+5. interrupted "a saved Flow's run cut off mid-press": **P2 product gap.** A saved Flow's run told the result its read pages only once the run ended, and its row was written only when its first step went out, so a Core that died mid-press lost the read's page provenance; carrying on (which must not reread) then had no source evidence and the data stage refused. Fix: `flow-run/live-pages.ts` tells each record batch to the result as it is captured, through the graph the run selected (`runAutomationStudioDetachedCandidate` gained an optional `selected` callback, told a copy of the same graph it returns, before its first node runs); `stepped` is now awaited before a call goes out, and `attempt/flow-stage.ts` writes the row before any later step once a page arrived since the last write. Page mapping is identical to the end-of-run mapping; a run that never selects a graph pages nothing, as before. New detached-execution owner case.
+
+### The FluxNode fixtures from 4c4868428
+
+First run of the 17 files: 28/72 failed. Causes and fixes:
+
+- `library-lane.ts` declared data criteria *before* any read; `core.set_result_processing` correctly refuses an amendment with no captured schema. Data criteria are now declared after the script's reads, just before its first completion; action-only N/A still goes first. `managed-hosts` moved its own `declareTitle` after the read for the same reason.
+- secret-inputs, secret-invariant, pipeline-secrets bound `$input: title` where `title` is a **secret** input; processing criteria cannot bind a secret ("Required processing input title is missing"). These declare only the columns; the read node is still bound to the secret.
+- pin-act-scope and source-continuation declared `contains` with an empty title, an invalid condition (`record_output.process_invalid_condition`); the all-loans source declares only the columns.
+- fluxnode-registry: `explore` mode runs under its own task key (`caller-key.ts`), so the fresh run must declare again; it now does.
+- fluxnode-runs type and check tests: the previous rewrite changed their scenarios and reason text. Restored the original scripts, reason and assertions, declaring only the columns so the wrong rows reach the type and the program's check that these tests are about.
+- model-routing and repair-routing "no models": P4 makes the role router name the starting model on every request (`claude-haiku-5-5` unless a default is named), so the priced lane's `lane-default` placeholder was unreachable. `LANE_DEFAULT_MODEL` now follows the router's rule.
+- pinning: **product bug.** `pin/pins.ts` seeded the pinned task's memory with the pinned Flow but not the learned task's data declaration, so the pinned replay read as a legacy task and its stamped criteria failed (`process_invalid_condition`, one model call). The pinned task now inherits the learned task's declaration when it has none.
+- act-scope "two-rounds" and idempotency "owns its resume": P2 adds one model call (the FluxNode's own N/A declaration). Traced in `runtime/llm/loop-budget.ts`: with uniform call prices, a declaration then a press always leaves the press as the wrap-up decision, which withholds every tool, so the original partial-act boundary was unreachable. The lane now takes an opt-in `declarationUsd` (a one-line declaration is a cheaper call); these two tests price it at $0.0001 with a $0.0011 purse, so declaration and press land and the completion is unpaid. Every original assertion stands, including `resumed.asked` 0 and the act counts.
+
+### Additional owners from the lead (t987)
+
+`endings/tests/judge.test.ts` (6/6 failed) and `saved-shapes.test.ts` (3/4 failed), all from missing declarations. Each scripted attempt now declares truthfully (`{ process: {} }` for list tasks, `null` for the card task). One oracle changed and **needs lead review**: judge "a completion that says it cannot be done" asserted the give-up reached the judge (`judged_no`, `timesChecked: 2`). Under P2 the data stage refuses a data task's completion with nothing read before any judge is asked, so it now asserts the data-stage refusal code, that no judge verdict was on it, one judge call and `timesChecked: 1`. Keep-going and 3-row result assertions are unchanged.
+
+### Structure audit corrections
+
+`service.ts` was 4305 lines against 4304: t984 held two import lines from `runtime/llm/index.ts` that t987 had merged into one. Applied the same one-line merge; the file is now identical to t987's apart from line endings, so the later merge is clean.
+
+### Commands run and observed results
+
+```text
+# Core packages/fluxiq unless noted; each: node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run <label> -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false <files>
+t984-af-nine        the 7 failing AF files + task/resolve/retained-schema owners -> 10 files, 76/77, interrupted failing
+t984-live-pages     detached-execution, interrupted, flow-run, saved-flow-road, row-shape, trail, row-url-repeat, repaired-read-conditions, same-words, saved-read-restart, automatic-service, publication-restart -> 12 files, 120/120, exit 0
+t984-fluxnode-owners    17 FluxNode files (15 + processing, processing-options) -> 28 failed / 44 passed of 72 (baseline after merge)
+t984-fluxnode-owners-2  same 17 -> 16 failed / 56 passed
+t984-fluxnode-owners-3  same 17 + endings judge, saved-shapes -> all 17 FluxNode files pass; judge 6/6 and saved-shapes 3/4 failed
+t984-endings-judge  judge, saved-shapes -> 9/10, then the oracle update above
+t984-compatibility-independent  the 35-file inventory + endings judge + saved-shapes -> 37 files, 195/195 passed, 647.67 s, log compatibility-resume.log
+t984-resume-combined  the 22-file owner command + observation + replacements owners -> 24 files, 192/192 passed, 186.25 s, log resume-combined.log
+# Core root
+t984-resume-contracts  pnpm --filter @fluxiq/contracts check -> exit 0
+t984-resume-types      pnpm --filter fluxiq check -> exit 0 (75,543 ms compile)
+t984-resume-structure  node scripts/structure-audit.mjs -> exit 1, 16 violations across 3 rules, all P6 (below)
+git diff --check -> exit 0
+```
+
+Diagnostic-only runs (temporary instrumentation, removed before the final runs): t984-diag-1, t984-diag-2, t984-fluxnode-diag through -diag-7.
+
+Remaining audit violations, all owned by the P6 judge lane (t987), and per the lead already fixed in t987 cb1aa1d0d:
+- failure-as-empty: `runtime/result-verification/judge-evidence/stored-finding.ts:10`, `runtime/result-verification/run-trail/checkpoint/read.ts:28`.
+- imports (barrel bypass): `answer-first/attempt-store/store.ts:34` (`../trail/source-owner.ts`), `attempt-store/tests/judge-checkpoint.test.ts:11`, `carry-on/carried-opening.ts:14` and `trail/held.ts:15` (both `../attempt-store/judge-evidence-issue.ts`, added by P6 607deb863; t987 imports the barrel), `runtime/result-verification/contracts/run-trail.ts:2`, `run-trail/checkpoint/make.ts` (4), `run-trail/checkpoint/read.ts:2`, `run-trail/checkpoint/types.ts:2`, `run-trail/tests/fitting.test.ts:4`, `run-trail/trail.ts:16`.
+- statement-packing: `attempt-store/tests/judge-checkpoint.test.ts:25`, `attempt-store/tests/judge-issue.test.ts:18`, `runtime/result-verification/flow-less/tests/semantic-discriminator.test.ts:10`, `runtime/result-verification/judge-evidence/tests/summary.test.ts:101,123`.
+
+### Not verified
+
+- Downstream: no downstream source changed (only this report), so the domain check and downstream audit were not run.
+- No browser, provider-backed or four-attempt live acceptance. The live-pages row writes run before each saved-Flow step that follows a new page; publications are fingerprint-deduplicated, but the cost in a long repeat was not measured.
+- The combined t984 + t987 tree has not been tested together; the lead merges t987 next.
+
+### Open questions for the lead
+
+- `task-model/resolve.ts` (P4) and `fluxnode/pin/pins.ts` are fixed here because their regressions blocked P2's compatibility owners. The same `later-attempt` memory-failure test fails on dev today.
+- The judge-test oracle update above.
+- A saved Flow whose steps carry a stamped declaration, replayed under a task with no kept declaration (an exported Flow imported elsewhere, say), still reads as legacy and refuses its own criteria. The pin path is fixed; whether a Flow should carry its declaration on its own is a P2/P6 design question.
