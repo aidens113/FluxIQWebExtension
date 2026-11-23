@@ -3,13 +3,21 @@
 Status: Active
 Status detail: P0, retained extraction P1 and fixed-model P4 integrated/pushed. P3 guidance and bounded F24 replay checks pass; integration pending. P2 compatibility and P6 structural corrections active. Provider-free browser proofs underway; no paid runs.
 Created: 2026-11-20
-Last updated: 2026-11-22
+Last updated: 2026-11-23
 Owner: Senior supervisor agent
 Scope: What changes after the 2026-11-19/20 live campaign: extraction keeps every column, one simple data layer dedupes and cleans from that upstream data, the model collects broadly, the framework does the heavy lifting, one model per task, replays that keep their repairs, a cheaper judge, and no paid run before a provider-free proof.
 Paired document: ../!FluxIQ/docs/working/data-first-simplification-plan.md
 Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 2026-11-20 entries), [framework-heavy-lifting-plan.md](./framework-heavy-lifting-plan.md) (W7: typed fields, marks, row identity), [first-class-data-extraction-plan.md](./first-class-data-extraction-plan.md), [answer-first-plan.md](./answer-first-plan.md); campaign results `C:/Users/osrs_/FluxStuff/fxwork/t959/!FluxIQWebExtension/docs/working/mvp-launch-plan/reports/live-campaign-2026-11-19/results.md`
 
 ## Current State
+
+**Handover to Claude Code (2026-11-23).** The user handed the Codex session's work to a Claude Code lead. Codex stopped about 13:40 on 11-22 with no process left running.
+- **Committed at handover:** Codex's final status notes on both dev branches. Its uncommitted lane work went onto each task branch as unverified checkpoints: t984 Core 4c4868428 (FluxNode fixtures, never run) and t986 Down 4e364886d (split raw/projected read parity, never compiled).
+- **Recovered result Codex never recorded:** t984's 17-file Answer First compatibility batch finished with 95/104 passed and 9 failed in 7 files.
+- **Branches still unpushed:** the pre-push structure audit refuses t984 Core, t987 Down and t986 Down. Each lane's worker owns its violations.
+- **Dispatched:** after merging dev into t984, t987 and t986 (both sides, no conflicts), three worker-heavy agents took written briefs: `briefs/finish-data-stage.md`, `briefs/finish-judge.md` and `briefs/finish-offline-proof.md` in each task tree. t986 browser commands wait for the lead's sync message.
+- **P2 and P6 integrate as one unit (lead's decision, 2026-11-23):** t984 and t987 have merged each other repeatedly. They share 242 changed Core files, and t987 lacks only 8 t984 commits. The judge-file audit violations on t984 (stored-finding, checkpoint/read, the store's source-owner import) were already fixed in t987 cb1aa1d0d, so the t984 worker leaves them alone. Once t987 passes acceptance, the lead merges t987 into t984, reruns the combined narrow checks, and finishes t984 and then t987.
+- **Integration in progress:** the lead is re-verifying t985 (F24) and t989 (collection guidance) on current dev before integrating them. t985 owners: 55/55 passed on current dev (lead, 138 s). The t989 Core set adds five owners that pin the changed wording: prompt-text, stage registry, authored-draft, the run-mwohvt8n continuation and recorded chat requests.
 
 **Post-reboot execution (2026-11-22):** the user restarted and requested tests and all remaining work. The configured 32 GiB initial / 48 GiB maximum page file is active at 32 GiB. Fresh workers processing/t984, judge/t987 and offline/t986 own written post-reboot briefs. P2 combined publication/restart fixture checkpoint 6dcd8bfa0 and P6 credential fixture bf3787ec7 are preserved locally; t987 and t986 received the shared P2/P6 baseline. Processing is adding authoritative source replacement receipts; judge is implementing exact-source recovery and action/witness correspondence; offline capture now forwards authored task-processing criteria. These new changes are not accepted yet. Root fixed the cost-reader union and contradictory metadata/request classification; independent six-owner tests and runner types pass. A stale pre-reboot gate ticket was traced to a PID reused by WebView2 and pruned using process birth/boot evidence. The isolated gate fix passed 47/47 focused tests and 99/99 full tests. Pagefile-aware admission passed 100/100 full tests before and after merge; Merit dev c8a64a1/version0.3.2 is installed and pushed. Product checks resumed normally. One isolated provider-free browser proof reached snapshot evaluation but failed snapshot_unavailable; no browser acceptance or paid run yet.
 
