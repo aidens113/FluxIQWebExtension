@@ -2,9 +2,13 @@
 
 Worker: p0_permission. Discovery began while t976 validation waited; t976 is now complete and frozen in its own tree. No git mutations, paid calls, browser runs or full suites.
 
-Lead approved the proposal in principle: minimal declaration/source/binding metadata, no second DSL or workflow engine, and preserve legacy saved processing without manufacturing criteria. Interpretation/forwarding, task-memory/attempt and processed-rows additions are approved only after the t976/P1/P4 handoff and sync. Send the exact completion path before any completion edit. The retained-row seam is committed and handed to P1; bounded independent binder/operator implementation is now authorized and underway in t984.
+Current work: the automatic runtime/publication recovery, source-replacement producer, strict optional parser, successful-restore forwarding and read-only source proof are implemented/checkpointed. Receipt68/68, proof/replay16/16 and corrected package check passed. The independent compatibility baseline finished77pass/108fail; root fixed the demonstrated unscoped processing-cache write regression (9/9). P2 corrected its16 AF fixture owners with explicit task intent plus a no-default typed helper; their17-owner run is active. Judge owns15 disjoint FluxNode fixture owners/library-lane in t984; root owns opening/act-scope. Lead owns all git and paired integration.
 
-## Stable retained-row seam ready for handoff
+Current observed checks: contracts 5 files / 50 tests plus package typecheck passed; affected semantic/static owners 3 files / 34 tests passed; real SQL/reference/FluxNode owners and source-provenance tests have observed passes recorded below. Publication restart recovery and explicit unavailable tracking both passed on real reopened Core. The canonical writer regression and chat/FluxNode first+three saved continuations passed 3 files / 8 tests, preserving full retained fields and zero-call proven repeats. Earlier failing baselines and their exact causes remain recorded; their failed totals are not represented as passes.
+
+Current gate: `t984-af-compatibility-intent` is admitted on frozen owned sources (checkpoint153d0df0b plus root opening fix);17 owners are the16 AF failed files plus automatic-service real entry acceptance. Earlier independent baseline77/185 passed with108 failures is fully recorded below; its two corruption owners now pass12/12. P2 holds package-wide checks/audits/builds until both fixture lanes freeze. Still required: corrected AF results/fix loop, judge's FluxNode compatibility, final shared checks/build and lead verification. No paid/provider/browser or full-suite run. The sections below retain checkpoint history; the latest observations are at the end.
+
+## Historical stable retained-row seam (accepted)
 
 Lead narrowed the first implementation to **exactly two Core files**: `packages/contracts/src/record-sets/process/process-rows.ts` and its existing `tests/process-rows.test.ts`. No other P2 source edits have occurred.
 
@@ -481,3 +485,322 @@ Diff-check exited 0 (normal LF/CRLF notice). Source/tests are frozen for replace
 # Working directory: C:/Users/osrs_/FluxStuff/fxwork/t984/!FluxIQ/packages/fluxiq
 node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-runtime-unit-association -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/runtime/conversations/instructions/tests/processing.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/automatic.test.ts src/framework/automation-service/service/answer-first/rows/tests/session.test.ts src/framework/automation-service/service/answer-first/rows/tests/copied-rows.test.ts src/framework/automation-service/service/answer-first/rows/tests/superseded-publication.test.ts src/framework/automation-service/service/answer-first/completion/tests/processing-readiness.test.ts src/framework/automation-service/service/answer-first/completion/tests/empty-readiness.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/read-evidence.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/source-readiness.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/empty-carry.test.ts src/framework/automation-service/service/answer-first/result-processing/tests/retained-schema.test.ts src/framework/automation-service/service/answer-first/result-processing/tests/inputs.test.ts src/runtime/llm/tests/processing-declaration-input.test.ts src/runtime/flow-authoring/bootstrap/authoring/tests/processing-input.test.ts src/runtime/flow-authoring/bootstrap/plan/tests/processing-input.test.ts src/components/automation/tests/processing-inputs.test.ts src/engine/automation/parameter-refresh/tests/inputs.test.ts src/runtime/llm/node-tools/replay/tests/processing-input.test.ts src/framework/automation-service/service/fluxnode/outputs/tests/required-rows.test.ts src/framework/automation-service/service/fluxnode/tests/processing-options.test.ts src/framework/automation-service/service/answer-first/attempt/tests/processing-input.test.ts src/framework/automation-service/service/answer-first/attempt/tests/processing-context.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/invalid-source.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/validation-restore.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/collection-replacement.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/collection-forward.test.ts src/runtime/result-verification/result-evidence/tests/from-batches.test.ts src/runtime/llm/node-tools/run/tests/collection-receipt.test.ts src/runtime/flow-authoring/draft/tests/binding-forms.test.ts src/runtime/flow-authoring/bootstrap/authoring/tests/script-binding.test.ts src/runtime/flow-authoring/bootstrap/authoring/tests/draft-bindings.test.ts src/framework/automation-service/service/answer-first/flow-run/tests/input-bound-steps.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/source-association.test.ts
 ```
+
+
+### Observed runtime baseline and focused corrections
+
+`t984-runtime-unit-association` admitted naturally after the earlier ticket cleared. Exact command above completed **33 files: 31 passed / 2 failed; 216 tests: 214 passed / 2 failed**, exit 1, **161.73 s** (148.33 s collection, 728 ms test bodies). All selected owners ran. Actual forward-walk/feed replacement, invalid-source readiness, aggregate reconciliation, two-copy named-dataset restore, crossed tuple/unknown association, strict provenance, current-input guards, zero-row and publication unit owners passed. This was an observed runtime baseline, not a claimed full acceptance.
+
+Two failures were traced. The semantic input resolver sent an authored own declaration stamp into the neutral runtime resolver first, producing a schema-required diagnostic before the existing framework-owned refusal. It now refuses the authored stamp explicitly before resolution; internal restored canonical templates retain the neutral runtime path. The static plan fixture used an invalid router shape, so structural parsing returned before its bound parameter contract ever ran; the fixture now uses the typed real router/fallback shape and actual read fields. The same static example owner also assigned __proto__ onto a plain object and lost that example; safe own-property definition now preserves it, covered alongside constructor/prototype and lexical parity.
+
+Only four files changed for this correction: `result-processing/inputs.ts`, its owning test, `bootstrap/plan/record-output-contract.ts`, and its owning processing-input test. Diff-check exited 0. The exact affected-owner rerun below **passed 3 files / 34 tests**, exit 0, **51.52 s**. No broader unit rerun is claimed yet.
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-runtime-unit-fixes -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/framework/automation-service/service/answer-first/result-feed/tests/automatic.test.ts src/framework/automation-service/service/answer-first/result-processing/tests/inputs.test.ts src/runtime/flow-authoring/bootstrap/plan/tests/processing-input.test.ts
+```
+
+The exact contracts boundary command below then **passed 5 files / 50 tests**, exit 0, **3.41 s**: identifier 17, goal 12, interface 4, existing type-schema 12, unchanged secret-input policy 5. This proves the lexical helper did not impose its grammar on arbitrary schema keys or broaden secrets.
+
+```powershell
+# Core packages/contracts
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-input-identifier-contracts -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/fluxnode/flow/tests/input-identifier.test.ts src/fluxnode/spec/tests/goal.test.ts src/fluxnode/flow/tests/interface.test.ts src/fluxnode/type-schema/tests/parse.test.ts src/fluxnode/spec/tests/secret-inputs.test.ts
+```
+
+Still required: private publication tracking/restart recovery described above, persistence/service/FluxNode acceptance, impacted existing compatibility owners, package typechecks/builds and structure/catalog checks. No paid/provider/browser/full-suite run or worker git mutation occurred.
+
+
+### Persistence baseline and required publication recovery in progress
+
+Contracts typecheck passed through the exact command below, exit 0; contracts:check stamp **10,117 ms**:
+
+```powershell
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-input-identifier-types -- pnpm --filter @fluxiq/contracts check
+```
+
+The prepared seven-file persistence command above then completed **7 files / 53 tests: 50 passed, 3 failed**, exit 1, **99.57 s**. Existing SQL store 34/34, real FluxNode 4/4 (both latest_date and LatestDate each first + three zero-call restarts), interpretation 2/2 and reference-time 2/2 passed. The pending-binding real service carry-on case passed without rereading the site and preserved actual segment timestamps. The fixture-size owner measured **120 records, 3 pages; raw rows 14,105 bytes; evidence 15,152 bytes; record 17,186 bytes; one latest checkpoint copy after three saves**.
+
+Failures were fixture-boundary errors, not accepted passes: the SQL replay fixture bypassed the upstream validator and inserted an explicitly excluded secret key (the store correctly refused it); the corrupt-file fixture addressed attempts at the envelope root instead of ProgramJsonStore data.attempts; and the service assertion expected hidden due in a display-only public preview. The SQL fixture now uses actual validateAutomationStudioRecords and checks exclusion/input immutability. The corruption fixture keeps the envelope valid and corrupts its actual clock field. The service keeps the intentional public title-only preview and now checks retained:'answer' full due cells/schema plus separate title displayColumns on EVERY initial/replay result. Public preview ownership is runtime/answer-first/result/preview.ts and contracts/task-attempts/task-result.ts; it is not the full retained evidence API.
+
+The exact affected persistence rerun below completed **3 files / 11 tests: 10 passed, 1 failed**, exit 1, **67.94 s**. SQL 5/5 and private provenance 3/3 passed. The service progressed through its first ready retained-full-row assertion and replay, then a test diagnostic called includes on JSON.stringify(undefined) for a request that legitimately has no evidence-loop slot. That optional diagnostic guard was corrected; the final first+three service loop is not yet claimed passed.
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-runtime-persistence-fixes -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/framework/persistence/automation/project/tests/run-dataset-automatic.test.ts src/framework/automation-service/service/answer-first/attempt-store/tests/processing-provenance.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/automatic-service.test.ts
+```
+
+After the required observed baseline, publication recovery was implemented only in existing owned paths plus focused tests. Sink publicationState returns its exact tracked IDs with version 1 and complete; successful removals leave the map only after retirement succeeds. Private attempt publications stores that snapshot at keep and ending, including budget/Stop with failed retirement, and forwards through carried-opening. Malformed optional publication metadata decodes to explicit {version:1,knownDatasetIds:[],complete:false}, preserving the task/result, processing declaration/reference and full source bundle; an empty known subset with complete:false never claims no outstanding publications. No new public schema, migration, graph provenance or namespace scan was added.
+
+CopyRows has an optional success observer, called only AFTER recordBatch succeeds, reporting actual fromRunId/fromDatasetId -> datasetId. Carry registers only exact stored publication IDs (or the existing truthful shown-result identity) that those actual receipts copied. User-named raw datasets, including names starting step., are never inferred to be publications. An incomplete tracking snapshot stays explicit in the sink and existing feed readiness, withholds answer publication/completion, preserves originals, and cannot be erased by an arbitrary new read or processing amendment. No terminal outcome or retry cap was introduced.
+
+Authored, not yet observed: partial retirement/snapshot retry; success-only copy receipts with partial write failure; optional malformed metadata preserving all actual fields; unknown tracking surviving read/amendment; real stopped ending -> closed/reopened Core -> actual copy receipt -> successful retirement/repair with no site reread; and real reopened unknown tracking refusing completion while retaining source/clock. Existing same-process retirement and public preview contracts remain.
+
+Current source/tests are frozen for **seven explicit publication/affected owners**, ticket t984-publication-recovery, exec session 15120. Initial gate output said telemetry stale/future; no validator had started at submission. Exact command:
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-publication-recovery -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/framework/automation-service/service/answer-first/rows/tests/superseded-publication.test.ts src/framework/automation-service/service/answer-first/rows/tests/copied-rows.test.ts src/framework/automation-service/service/answer-first/attempt-store/tests/publications.test.ts src/framework/automation-service/service/answer-first/attempt-store/tests/store.test.ts src/framework/automation-service/service/answer-first/attempt/tests/keep.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/publication-restart.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/automatic-service.test.ts
+```
+
+All publication-recovery source/test edits and the three persistence fixture corrections await lead verification/commit. No worker git mutation, paid/provider/browser/full-suite run occurred. Remaining acceptance still includes impacted existing compatibility owners, fluxiq typecheck/build, and structure/catalog checks.
+
+### Observed publication, saved-writer and mechanical gate follow-up
+
+The seven-file publication command above completed **38 tests: 35 passed, 3 failed; 4/7 files passed**, exit 1, **89.34 s**. Exact receipt mapping 8/8, zero/nonempty copy 8/8, strict optional-publication metadata 11/11, existing private store 5/5 and the actual unavailable-tracking restart case passed. The three failures reached real runtime behavior: the restart fixture attempted an invalid field amendment, so production correctly refused it and retained readiness; the historical keep fixture omitted the new data declaration; and saved service replay used one judge call instead of the required zero. No failure was relabeled as a pass.
+
+The restart fixture now uses a valid but mistaken date bound producing an empty/unready selection, followed by an explicit correction removing that unrequested condition. The keep fixture forwards its truthful all-loans process:{} at its one public generate call. The exact affected rerun below completed **6 tests: 5 passed, 1 failed; 2/3 files passed**, exit 1, **74.19 s**. Both real publication restart cases and keep passed; the zero-call service failure remained and was traced to the actual canonical writer.
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-publication-recovery-fixes -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/framework/automation-service/service/answer-first/attempt/tests/keep.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/publication-restart.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/automatic-service.test.ts
+```
+
+Root cause: automatic processing/schema was only overlaid in step.input, but the real draft writer prefers ranWith.parameters and then step.settings. It therefore repeatedly wrote the older projected schema/processing. Saved and latest Flow digests differed, preventing proven replay and causing the judge call. The owned automatic result-processing overlay now also writes canonical recordOutput into step.settings; raw ranWith/trail and legacy behavior are preserved. A regression invokes the actual draft writer and checks its final parameter entry. No judge or replay-stands policy was changed.
+
+The exact canonical-writer rerun **passed 3 files / 8 tests**, exit 0, **82.52 s**. It includes actual initial + three saved continuations with strict zero judge/model calls and full safe retained cells/schema, as well as real same-key FluxNode latest_date and LatestDate input changes.
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-canonical-writer -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/framework/automation-service/service/answer-first/result-processing/tests/retained-schema.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/automatic-service.test.ts src/framework/automation-service/service/fluxnode/tests/processing.test.ts
+```
+
+Package typecheck then failed after actually compiling the current tree: **11 diagnostics**, underlying TypeScript exit 2 / gate exit 1, **67,687 ms**. Ten were owning fixture types (required iteration, executable graph shape, optional schema/count fields and optional test writer entries); those were corrected. One dependency remains: t984 FlowLessJudgeInput still requires deniedEvidenceKeys while run-attempt intentionally preserves optional unknown. P6 has the approved optional-unknown/unsure-before-provider interface, but it has not been synced here; no ??[] or unsafe cast was introduced.
+
+```powershell
+# Core root
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-runtime-types -- pnpm --filter fluxiq check
+```
+
+The first structure audit failed **31 violations across 5 rules**, exit 1. These were new directory file counts, statement packing, four boundary imports, the clock reader's catch returning undefined, and the evidence decision parser at 807 lines. No baseline was raised. Related owning tests were grouped under attempt/tests/processing, authoring/tests/bindings, plan/tests/record-output, llm/tests/processing and project/tests/run-dataset. The shared identifier now has its own narrow input-identifier barrel, keeping the goal reader independent of the broad Flow/type-schema barrel cycle. Components use the neutral contracts/records export. Authored amendment processing validation moved into its existing result-processing owner, leaving P3 prose untouched. Clock parsing now returns an explicit success/unavailable union and the SQL owner preserves atomic invalidation without throwing or substituting current time. Those mechanical corrections require the next actual audit/test output; they are not yet claimed accepted.
+
+```powershell
+# Core root
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-runtime-structure -- node scripts/structure-audit.mjs
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-runtime-structure-fixes -- node scripts/structure-audit.mjs
+```
+
+The corrected audit is pending in exec session 21451, initially waiting for physical headroom. Source/tests are frozen during that check. No other worker heavy job is queued/running. Remaining acceptance: corrected mechanical owners, the explicit historical compatibility inventory, P6 interface sync, package check/build and catalog checks. All post-0706d1d97 source/report changes remain uncommitted for the lead; the worker performed no git mutations.
+
+### Resumed execution: recovered audit output and checkpoint freeze
+
+On resume, polling the original worker exec session 21451 recovered its completed output: corrected audit **exit 1, 6 violations across 2 rules**. It admitted naturally after the earlier memory wait. No standalone full-output log had been created by that invocation; this is the durable recovered failure excerpt, not a claim that the warnings/traces were archived in full. Exact command remains t984-runtime-structure-fixes above.
+
+```text
+FAIL [as-never] packages/fluxiq/src/framework/persistence/automation/project/tests/run-dataset/store.test.ts: 2 casts, lines 338, 339.
+FAIL [test-placement] packages/fluxiq/src/framework/automation-service/service/answer-first/attempt/tests/processing/: 2 test files.
+FAIL [test-placement] packages/fluxiq/src/framework/persistence/automation/project/tests/run-dataset/: 2 test files.
+FAIL [test-placement] packages/fluxiq/src/runtime/flow-authoring/bootstrap/authoring/tests/bindings/: 3 test files.
+FAIL [test-placement] packages/fluxiq/src/runtime/flow-authoring/bootstrap/plan/tests/record-output/: 2 test files.
+FAIL [test-placement] packages/fluxiq/src/runtime/llm/tests/processing/: 1 test file.
+structure-audit: 6 violation(s) across 2 rule(s).
+```
+
+The prior 31-violation snapshot therefore progressed to six, not a pass. The test-placement rule requires each immediate test parent to be named tests; the attempted nested grouping did not satisfy that rule. Moving the existing SQL owner also exposed two historical invalid-input fixtures using as never. These are required layout/typed-fixture corrections, not grounds to increase a baseline. Source is unchanged while the lead checkpoints the exclusive prior P2 dirty inventory and syncs P6's optional-unknown judge interface. Down dirty state comprises this worker report plus the lead-authored resume-processing brief. No worker heavy job remains queued/running.
+
+The lead checkpointed prior P2 dirty scope as bc49b850f and merged P6 as 6faae9260, preserving publication tracking and independent judge metadata in shared persistence/keep/carry owners. P6's optional deniedEvidenceKeys/unsure-before-provider interface is now present; no unknown-to-empty fallback was introduced. After release, the six owning corrections were made: grouped tests now have an immediate tests parent (the same layout as existing project/tests/cleanup/tests); SQL invalid enum tests use checked intentional TypeScript errors instead of as never. The new combined publication regression exercises rejected same-revision and stale older judge metadata saves, exact publication IDs, task/result/clock/source preservation, reopen, publication retirement and carry.
+
+Source/tests are frozen for this exact **22-file** corrected/combined owner command, exec session 94105. Initial output is FIFO waiting behind the earlier ticket; no executable result yet. Full captured stdout/stderr is in ignored Core node_modules/.cache/t984-acceptance/resume-owners.log. No paid/browser/full-suite run is included.
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-resume-owners -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/components/automation/tests/processing-inputs.test.ts src/engine/automation/parameter-refresh/tests/inputs.test.ts src/framework/automation-service/service/answer-first/attempt-store/tests/publications.test.ts src/framework/automation-service/service/answer-first/attempt-store/tests/judge-issue.test.ts src/framework/automation-service/service/answer-first/attempt-store/tests/judge-checkpoint.test.ts src/framework/automation-service/service/answer-first/attempt-store/tests/store.test.ts src/framework/automation-service/service/answer-first/attempt/tests/keep.test.ts src/framework/automation-service/service/answer-first/attempt/tests/processing/tests/context.test.ts src/framework/automation-service/service/answer-first/attempt/tests/processing/tests/input.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/publication-restart.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/automatic-service.test.ts src/framework/automation-service/service/answer-first/result-processing/tests/retained-schema.test.ts src/framework/automation-service/service/fluxnode/tests/processing.test.ts src/framework/persistence/automation/project/tests/run-dataset/tests/automatic.test.ts src/framework/persistence/automation/project/tests/run-dataset/tests/store.test.ts src/framework/persistence/automation/project/run-dataset-answer/tests/reference-time.test.ts src/runtime/flow-authoring/bootstrap/authoring/tests/bindings/tests/processing-input.test.ts src/runtime/flow-authoring/bootstrap/authoring/tests/bindings/tests/script-binding.test.ts src/runtime/flow-authoring/bootstrap/authoring/tests/bindings/tests/draft-bindings.test.ts src/runtime/flow-authoring/bootstrap/plan/tests/record-output/tests/processing-input.test.ts src/runtime/flow-authoring/bootstrap/plan/tests/record-output/tests/contract.test.ts src/runtime/llm/tests/processing/tests/declaration-input.test.ts
+```
+
+### Post-reboot source-replacement producer snapshot (not yet executed)
+
+Root checkpointed the prior test-layout/typed-fixture/publication corrections as **6dcd8bfa0**, then released producer edits while repairing the reboot-stale heavy queue. The approved exact optional contract is `resultEvidence.sourceReplacements?: {version:1,receipts:{kind:'page'|'collection',from:SourceRef[],to:SourceRef[]}[]} | null`, with `SourceRef={source,step,version,datasetId?}`. The runtime result-evidence barrel now exports both strict reference and receipt readers from `result-evidence/replacement/`.
+
+Producer changes are frozen in t984, awaiting executable acceptance. The feed retains actual source identities, emits page receipts only for a unique same-step/read/place replacement with a real retained schema and known zero original rejection count, and emits collection receipts only after the existing actual-forward, fresh-occurrence, full-schema, first-page and pagination-end checks. Ready-to-ready replacements are included. Reused indistinguishable tuples, ambiguous associations, unknown counts, missing schemas and unrelated pages confer no new authority. Exact receipt chains reject duplicate/conflicting origins and cycles. No URL, position or storage-chunk identity is guessed.
+
+Malformed optional receipts become `null` without discarding valid pages, processing/account facts, clock or task. Receipts copy through existing private record/carry data; the successful `run-attempt.ts` restoration call now forwards the optional metadata even when source restoration succeeds. The new persistence owner covers save/reopen/carry/full-page restore and corrupt optional receipt preservation. No historical recordings or model replies changed.
+
+P6 requested two read-only origin seams. `feed.sourceRefs(source)` returns exact current contributing-page tuples under strict source equality. The optional constructor observer `sourceRecorded(refs, call?)` runs after actual page recording; live and forward paths pass the actual `called` object (retained through `passed`), while batches/restored omit it. Consumers must retain zero/multiple matches as unknown, and may not attach a later reused call ID to an older unstamped event. P6 owns journal/consumer composition after root sync; P2 made only the approved successful-restore forwarding edit in the shared caller.
+
+The exact prior 22-file command above was resubmitted with label **t984-post-reboot-owners**, single Vitest worker and full output capture in ignored `node_modules/.cache/t984-acceptance/post-reboot-owners.log`. It reached FIFO waiting only. At root's instruction it was withdrawn normally with Ctrl+C before admission; **no executable test result exists**. Gate status then showed no holder and no t984 queue entry. Root is correcting the scheduler's newly available commit-capacity accounting while keeping FIFO, physical floor and two slots. No worker changed the scheduler, thresholds or queue files.
+
+`git diff --check` from Core -> **exit 0**, ordinary LF/CRLF notices only. Frozen modified owners are `attempt-store/tests/processing-provenance.test.ts`, `attempt/run-attempt.ts`, `result-feed/{feed,read-evidence,source-state}.ts`, `result-feed/tests/read-evidence.test.ts`, and `runtime/result-verification/result-evidence/{index,types}.ts`. New owners are `result-feed/replacements.ts`, `result-feed/tests/replacements.test.ts`, and `result-evidence/replacement/{source,types,ref,read,index}.ts` plus `replacement/tests/read.test.ts`. Root was given the complete checkpoint scope. Required next checks remain the 22 combined owners, new receipt/persistence owners, corrected audit, 35 existing compatibility owners and affected package checks/builds. No paid/browser/full-suite run or worker git mutation occurred.
+
+Root applied the accessor's current-page-only correction as **61a978799** and synced the first producer snapshot into P6. Read-only review then found that a held replacement could target a previously observed tuple and that duplicate new tuples were checked only after minting. Root released just `result-feed/replacements.ts` and its owner test to correct both guards. They now reject previously observed target tuples and duplicate current targets before minting. Two regressions also pin that a tuple whose contents were indistinguishably reused cannot mint a later replacement within the producer's tracked history. Source is frozen again. P6 was told to retain ambiguity across its durable distinct journal occurrences too; a later occurrence may not inherit an earlier receipt just because its tuple is reused. The shared caller now belongs to P6 for its composition; P2 will not edit it further.
+
+### Receipt acceptance passed; shared replay schema typing correction
+
+Root checkpointed the producer guards as **c55aa99bc** and released normal gated validation after the scheduler correction passed its own full 100/100 tests. The following exact five-owner receipt command **passed 68/68 tests in 5 files, exit 0, 90.60 s**. It proves ready-to-ready and held-source page receipts, actual complete collection coverage, reused target refusal, strict tuple/receipt parsing, malformed optional metadata preservation and real private save/reopen/carry/successful-page restoration. Full stdout/stderr: ignored Core `node_modules/.cache/t984-acceptance/source-replacements.log`.
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-source-replacements -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/runtime/result-verification/result-evidence/replacement/tests/read.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/replacements.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/read-evidence.test.ts src/framework/automation-service/service/answer-first/attempt-store/tests/processing-provenance.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/collection-replacement.test.ts
+```
+
+Root then reported t986's real library build failing TS2379 in replay draft/span calls. Cause: `ParsedToolExecution.recordSchema` used an optional indexed-access type, which includes explicit `undefined`, while the actual parser conditionally omits that property and the shared replay observer correctly accepts only absent/schema/null. With root approval, P2 changed only the internal alias in `runtime/llm/evidence-loop-decision.ts` to `recordSchema?: Exclude<AutomationStudioLlmEvidenceToolExecutionResult['recordSchema'], undefined>`. No runtime behavior, observer contract, null meaning, cast or suppression changed. `git diff --check` -> **exit 0**. Root received the exact one-file checkpoint scope immediately so the dependent offline build can sync it.
+
+The existing real draft/span owner ran through **t984-replay-schema-owner**, log `replay-schema-owner.log`. It contains four tests in both t984 and t987; the P6 eight-case post-reboot pass was the separate projector owner, not this walker owner. P2 initially conflated those two owners in its message to root and corrected that attribution. Package check and the remaining combined/mechanical/compatibility/build acceptance follow serially through the gate.
+
+That existing t984 observation owner completed **4/4 failed, exit 1, 54.62 s**. In both normal draft and repeated span cases the actual walker produced no observation for the target step, so annotated metadata assertions received `undefined` and legacy assertions could not read `resultCode`. This reached the real replay but failed before the target's metadata projection assertion. Root required a cause trace rather than assuming fixture staleness. Exact command:
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-replay-schema-owner -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/runtime/llm/node-tools/replay/tests/observation.test.ts
+```
+
+Trace demonstrated the exact early return: `replay/draft.ts` requires a readable reset with `effectApplied === true` before any target step runs. Both fixtures omitted that reset fact, so the real walker correctly returned no observations. `git diff --no-index` between t984/t987 observation owners -> **exit 0**, source identical. A second setup error was visible in the real repeat contract: the list fixture declared a lasting mutation, so it was only verified and could not produce the real rows a repeated pass consumes. With root approval and P6 coordination, P2 corrected only that owner fixture: actual reset success is explicit, the read list is `observe` with no lasting consequences, and assertions prove one target invocation normally and one per actual list row in the repeat. Existing applied/failure/null/absence/privacy assertions are unchanged. The corrected four-case owner is frozen/queued as **t984-replay-schema-owner-fixed**, log `replay-schema-owner-fixed.log`; no result claimed yet. Root synced P6's compilation-boundary correction as **05e939e8b** before subsequent package check.
+
+The corrected reset/list-declaration snapshot completed **1 passed / 3 failed of 4, exit 1, 76.16 s**. The normal annotated path now reached the target and proved its metadata/privacy assertions. The repeat still fell back to one call, and the legacy wrapper still produced no observation. Follow-up trace proved the remaining fixture-contract error: every structured live execution wrapper requires a boolean `effectApplied` in both its public type and `readToolExecution`; list and legacy wrapper replies omitted it and were therefore unreadable. This is not an older supported successful wrapper contract and did not justify widening the runtime parser.
+
+Root approved truthful `effectApplied:false` for the valid live list/legacy replies, preserving false and absent optional failure/schema assertions. A new direct observation-constructor case separately preserves the genuine supported historical omission assertion (no invented effect/failure/schema fields). This is a corrected fixture-contract assumption, not a product runtime fix. Reset and actual target-count assertions remain, so the repeated case must run both actual list rows.
+
+P6 requested and root approved `feed.sourceProof(): Pick<Bundle,'pages'|'sourceReplacements'>`. It returns only actual current producer pages and existing receipt metadata from `replacements.evidence(baseEvidence(false))`, without historical fallback, `rows()` or automatic processing. Its regression observes zero source-cell reads while ready and proves current fresh pages remain distinct from held historical fallback. Only `result-feed/feed.ts` and its replacement owner test changed for this seam; root received exact frozen file ownership for checkpoint/sync.
+
+The following two-owner check is now queued as **t984-source-proof-replay**, full log `source-proof-replay.log`; no result yet. Source remains frozen.
+
+```powershell
+# Core packages/fluxiq
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-source-proof-replay -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false src/runtime/llm/node-tools/replay/tests/observation.test.ts src/framework/automation-service/service/answer-first/result-feed/tests/replacements.test.ts
+```
+
+The two-owner source-proof/replay check **passed 16/16 tests in 2 files, exit 0, 72.78 s**: replacements/sourceProof 11 and replay observations 5. The actual walker proves successful reset, one normal target call and both actual repeated rows. Supplied true/false facts, failure/null schema, omitted optional fields and privacy assertions all pass. The supported direct historical constructor omits absent facts. Emitted `sourceProof` contains only current producer pages and exact existing receipts, reads zero source cells and does not substitute the held original page. Root received the exact three-file checkpoint-ready scope (feed + replacement owner, replay observation owner).
+
+Next frozen command, queued through **t984-post-reboot-types**, full output `post-reboot-types.log`:
+
+```powershell
+# Core root
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-post-reboot-types -- pnpm --filter fluxiq check
+```
+
+Package check completed **exit 2** after **99,803 ms** of actual compilation, with **11 diagnostics**. The shared replay TS2379 errors are gone after the alias correction; no new replacement producer/parser/sourceProof implementation error was reported. Two diagnostics belong to P2 fixtures: the unknown-count case omitted the modern sink's required `invalidCount`, and the replay step helper omitted required `iteration`. Nine remaining diagnostics belong to P6 fixtures (`judge-checkpoint`, `judge-issue`, `semantic-window`) and were reported to that owner/root for its typed fixes. Full output remains in `post-reboot-types.log`; this failed check is not stamped/passed.
+
+The two P2 fixture corrections are now frozen for root checkpoint/sync. The genuine unknown historical count now enters through the supported `feed.restored` page API, where `read.invalidCount` is optional; the known rejected-count case remains on the strict modern sink API with its required numeric count. Both retain the no-authority and missing-readiness assertions. The replay helper supplies truthful `iteration: position`. No cast, directive, suppression or weakening of a production required field was introduced. `git diff --check` -> **exit 0**, ordinary LF/CRLF notice only. Root received the exact two-file checkpoint scope before any further validator was launched.
+
+### Combined publication/processing acceptance: two P6 fixture failures remain
+
+The original explicit 22-owner command was resubmitted as **t984-post-reboot-combined**, with the two changed fixture owners appended:
+
+```text
+src/runtime/llm/node-tools/replay/tests/observation.test.ts
+src/framework/automation-service/service/answer-first/result-feed/tests/replacements.test.ts
+```
+
+All other arguments/workdir stayed exactly as the 22-file command recorded above: one Vitest worker, file parallelism false, unchanged shared gate. Full stdout/stderr: ignored Core `node_modules/.cache/t984-acceptance/post-reboot-combined.log`.
+
+Observed **189 passed / 2 failed of 191 tests; 22/24 files passed; exit 1; 203.08 s**. The real SQL store, automatic persistence/reference clock, combined publication preservation, restart retirement, canonical writer, automatic service, both corrected producer/replay owners and real FluxNode processing all passed. FluxNode specifically proved the first exploration plus three zero-call replays for action-only classification and both dynamic input spellings (`latest_date`, `LatestDate`), preserving full expected original rows. This does not replace real-browser/provider-backed campaign acceptance.
+
+The only failures occurred before store behavior under test: `judge-checkpoint.test.ts:79` mutates `held.attempts[0].judgeEvidence` and `judge-issue.test.ts:111` mutates `raw.attempts[0].judgeEvidenceIssue`, but the actual ProgramJsonStore envelope is `{version:1,data:{attempts:...}}`. Both therefore throw while reading `[0]` of undefined. P6 independently confirmed the owning storage envelope and is correcting only those fixture accesses to `.data.attempts[0]`, preserving assertions and production storage behavior. Root/P6 received exact failures and the idle pause point. No validator is running or queued; new submissions are held for root to sync P6 fixture typing **16486b770** and envelope corrections together, then run corrected types/failing owners and 35 compatibility owners. This failed combined batch is not reported as a pass.
+
+### Corrected package check passed; independent compatibility owners running next
+
+Root synced P6 fixture typing as **4e5299d48**, then the two guarded actual-envelope corruption fixtures and optional typed test-helper `taskProcessing` forwarding as **780fb7019**. The helper supplies no default; callers must explicitly declare actual data criteria or action-only N/A, and intentionally missing declarations remain missing. The briefly queued `t984-post-reboot-types-corrected` ticket was withdrawn normally before admission at root's request so the small handoff could sync. No compilation ran in that withdrawn job.
+
+The following corrected typecheck then **passed, exit 0, 30,666 ms of actual compilation**; its passing stamp was stored. All prior 11 fixture diagnostics and the shared replay TS2379 are resolved. Full log: ignored Core `node_modules/.cache/t984-acceptance/post-reboot-types-synced.log`.
+
+```powershell
+# Core root
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-post-reboot-types-synced -- pnpm --filter fluxiq check
+```
+
+P6's separate composition batch demonstrated existing `carry-on.test.ts` fixture migration failures; those are outside the 191-case batch above. Root assigned `carry-on.test.ts`, `attempt/tests/carried-before.test.ts` and the minimal optional helper forwarding to P6. P2 will not edit those owners concurrently. Its own next check is an explicit **33-file independent subset** of the 35 existing compatibility inventory above, excluding just `tests/carry-on.test.ts` and `attempt/tests/carried-before.test.ts`, plus the two corrected P6 corruption owners (35 files total). This is not a claim that all original 35 compatibility owners have run. Exact queue label **t984-compatibility-independent**; one Vitest worker and file parallelism false; full log `compatibility-independent.log`; no executable result yet.
+
+```powershell
+# Core packages/fluxiq
+$t984CompatibilityOwners = @(
+'src/framework/automation-service/service/answer-first/attempt/tests/caller-replay.test.ts'
+'src/framework/automation-service/service/answer-first/attempt/tests/assemblable-flow-wins.test.ts'
+'src/framework/automation-service/service/answer-first/attempt/tests/caller-seams.test.ts'
+'src/framework/automation-service/service/answer-first/flow-run/tests/replay-over-done-act.test.ts'
+'src/framework/automation-service/service/answer-first/flow-run/tests/repaired-read-conditions.test.ts'
+'src/framework/automation-service/service/answer-first/attempt/tests/task-humanness.test.ts'
+'src/framework/automation-service/service/answer-first/attempt/tests/run-overrides-press.test.ts'
+'src/framework/automation-service/service/answer-first/flow-run/tests/row-url-repeat.test.ts'
+'src/framework/automation-service/service/answer-first/attempt/tests/flow-stage-person-stop.test.ts'
+'src/framework/automation-service/service/answer-first/tests/acts-with-no-row.test.ts'
+'src/framework/automation-service/service/answer-first/tests/interrupted.test.ts'
+'src/framework/automation-service/service/answer-first/tests/later-attempt.test.ts'
+'src/framework/automation-service/service/answer-first/tests/same-words.test.ts'
+'src/framework/automation-service/service/answer-first/tests/saved-read-restart.test.ts'
+'src/framework/automation-service/service/answer-first/tests/skipped-rows.test.ts'
+'src/framework/automation-service/service/answer-first/tests/endings/tests/saved-on-every-ending.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/fluxnode-registry.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/act-scope.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/fluxnode-runs.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/corrupt-scoped-memory.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/idempotency.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/managed-hosts.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/model-routing.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/pin-act-scope.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/pinning.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/owner-flows-reregister.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/repair-routing.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/secret-inputs.test.ts'
+'src/framework/automation-service/service/fluxnode/tests/secret-invariant.test.ts'
+'src/framework/automation-service/service/fluxnode/pipeline/tests/pipeline-runs.test.ts'
+'src/framework/automation-service/service/fluxnode/pipeline/tests/pipeline-secrets.test.ts'
+'src/framework/automation-service/service/fluxnode/pipeline/tests/source-continuation.test.ts'
+'src/framework/automation-service/service/fluxnode/pipeline/tests/source-secrets.test.ts'
+'src/framework/automation-service/service/answer-first/attempt-store/tests/judge-checkpoint.test.ts'
+'src/framework/automation-service/service/answer-first/attempt-store/tests/judge-issue.test.ts'
+)
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-compatibility-independent -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false @t984CompatibilityOwners
+```
+
+### Compatibility baseline completed; actual regression and disjoint correction lanes
+
+The explicit independent batch completed **77 passed / 108 failed of 185 tests, 31/35 files failed, one unhandled rejection, exit 1, 751.73 s**. The corrected corruption owners both passed 6/6; scoped-memory rejection and owner-flow registration also passed. This is a completed failure baseline, not compatibility acceptance.
+
+The long quiet section was traced rather than blamed on the machine. Read-only inspection of the single owned Vitest worker showed it advancing through `interrupted.test.ts`; it then reported an ordinary **180,000 ms** timeout in the saved-Flow-mid-press fixture. The initial task had not reached its required ready result, so `Run again` was correctly refused as a stopped partial task; the fixture waited for a press that could never start and left the rejection unhandled. No timeout, retry, budget or production loop cap was changed, and the run was allowed to reach its natural endpoint. The ignored diagnostic inspector helper was not committed; the inspected worker exited normally.
+
+Read-only source tracing also found a real P2 regression: `attempt/opening.ts` persisted new processing metadata with an unconditional `await memory.update`, despite the existing unscoped best-effort cache policy. The failed-memory fixture makes both `get` and `update` fail; the new write threw before the actual attempt could run and surfaced as `setup_needed`. Root took exact ownership of `opening.ts` plus its adjacent act-scope regression, retained strict scoped persistence, and reported **9/9 passing** with the in-memory declaration retained. Root checkpoint **81182b7a0** owns this runtime fix. P2 retains the existing full service failed-memory result/warning case and now supplies its truthful list declaration and asserts the kept declaration.
+
+Root synced the verified P6 carry-on/carried-before fixture correction as **83e021c56**. P6 then received the written [FluxNode compatibility brief](../briefs/compatibility-fluxnode.md) for the paired **t984** tree; t987 stays frozen for root's independent P6 acceptance. No package-wide validation may run while either fixture lane edits. Generic helpers retain explicit opt-in metadata, never an inferred or blanket declaration.
+
+Exact failed-owner partition (all paths relative to `packages/fluxiq/src/framework/automation-service/service/`):
+
+| P2 Answer First owner | Failed/total |
+| --- | --- |
+| answer-first/tests/later-attempt.test.ts | 20/24 |
+| answer-first/tests/interrupted.test.ts | 2/11 |
+| answer-first/tests/same-words.test.ts | 6/10 |
+| answer-first/attempt/tests/caller-seams.test.ts | 10/12 |
+| answer-first/attempt/tests/caller-replay.test.ts | 7/8 |
+| answer-first/flow-run/tests/row-url-repeat.test.ts | 1/1 |
+| answer-first/tests/endings/tests/saved-on-every-ending.test.ts | 3/8 |
+| answer-first/tests/skipped-rows.test.ts | 6/6 |
+| answer-first/flow-run/tests/replay-over-done-act.test.ts | 1/1 |
+| answer-first/attempt/tests/task-humanness.test.ts | 4/6 |
+| answer-first/tests/saved-read-restart.test.ts | 3/3 |
+| answer-first/attempt/tests/run-overrides-press.test.ts | 2/4 |
+| answer-first/flow-run/tests/repaired-read-conditions.test.ts | 1/1 |
+| answer-first/attempt/tests/assemblable-flow-wins.test.ts | 2/2 |
+| answer-first/attempt/tests/flow-stage-person-stop.test.ts | 1/2 |
+| answer-first/tests/acts-with-no-row.test.ts | 1/2 |
+
+AF subtotal: **70 failed / 31 passed of 101**. Judge owns these disjoint FluxNode failures plus `fluxnode/tests/library-lane.ts` support:
+
+| Judge FluxNode owner | Failed/total |
+| --- | --- |
+| fluxnode/tests/managed-hosts.test.ts | 4/15 |
+| fluxnode/tests/act-scope.test.ts | 6/6 |
+| fluxnode/tests/pinning.test.ts | 2/2 |
+| fluxnode/pipeline/tests/pipeline-runs.test.ts | 1/5 |
+| fluxnode/tests/fluxnode-runs.test.ts | 4/5 |
+| fluxnode/tests/idempotency.test.ts | 4/7 |
+| fluxnode/pipeline/tests/pipeline-secrets.test.ts | 1/5 |
+| fluxnode/tests/secret-inputs.test.ts | 2/2 |
+| fluxnode/tests/fluxnode-registry.test.ts | 2/5 |
+| fluxnode/tests/pin-act-scope.test.ts | 3/4 |
+| fluxnode/tests/secret-invariant.test.ts | 2/2 |
+| fluxnode/tests/model-routing.test.ts | 3/4 |
+| fluxnode/pipeline/tests/source-secrets.test.ts | 1/2 |
+| fluxnode/tests/repair-routing.test.ts | 2/2 |
+| fluxnode/pipeline/tests/source-continuation.test.ts | 1/1 |
+
+FluxNode inventory subtotal (including its two passed owners): **38 failed / 34 passed of 72**. The corrected corruption owners contribute the remaining **12/12 passed**.
+
+P2 unpacked the exact three producer statement-format findings (`result-feed/feed.ts`, `replacements.ts`, `tests/replacements.test.ts`) with no behavior/type change and gave root a separate checkpoint handoff. Root owns the actual opening fix. P2's other changed support is the approved optional typed own-presence `taskProcessing` passthrough in `answer-first/tests/fake-library.ts`; it supplies no default and preserves genuine omission paths.
+
+The first AF fixture correction snapshot is now frozen. Explicit list-all or mixed acts+list entries declare no extra criteria; action-only renewal entries declare N/A; the row-address fixture declares the requested title/due projection while retaining its hidden URL evidence. The unrelated override-frame fixture now says “by due date, latest first” instead of ambiguous “newest first” and declares the actual descending date sort. Existing result, privacy, replay, saved-state, cost and permission assertions remain; the interrupted replay now also asserts its initial task achieved before waiting for its saved press. No historical recorded reply changed, and no shared helper gained a default. The requested next narrow batch is these16 owners plus the real automatic-service omission-repair/full-originals owner, pending root's shared-tree validation coordination.
+
+Root approved that shared-tree narrow read and checkpointed the16 fixture files plus optional helper as **153d0df0b**. The batch **t984-af-compatibility-intent** is admitted with one Vitest worker, file parallelism false, full log `node_modules/.cache/t984-acceptance/af-compatibility-intent.log`. It uses the16 P2 AF paths in the exact table above plus `src/framework/automation-service/service/answer-first/result-feed/tests/automatic-service.test.ts`; command from Core packages/fluxiq:
+
+```powershell
+node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t984-af-compatibility-intent -- node ../../node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --fileParallelism=false @t984AnswerFirstOwners
+```
+
+`$t984AnswerFirstOwners` is the explicit16-path AF table above, each prefixed `src/framework/automation-service/service/`, plus the automatic-service path just named. No glob/discovery broadened the run. Root's opening source is frozen; judge may edit only the disjoint FluxNode fixtures/library-lane, which this AF batch does not import. No t984 package-wide validator may run until both lanes freeze. No executable result is claimed yet.
