@@ -1,0 +1,21 @@
+# t1022 brief: a read is bound to the list and page it was made for (structural)
+
+Lead: Claude Code. Task t1022. Trees: downstream `C:/Users/osrs_/FluxStuff/fxwork/t1022/!FluxIQWebExtension`, Core `C:/Users/osrs_/FluxStuff/fxwork/t1022/!FluxIQ` (branch `task/t1022-read-bound-to-its-list`). Debugging with an unknown cause. The user's rules: fix the root cause, never cap a symptom; when the same kind of failure keeps coming back in new shapes, build the structural fix rather than another patch; model-facing words never mirror a realistic site or task.
+
+Recordings (read only; never commit their page data), all bigbox "new store, cheapest paper towels for pickup, add one, show the cart as item/quantity/price", Haiku, 2026-11-24, `C:/Users/osrs_/FluxStuff/fxwork/recorded-evidence/t1015-bigbox/`:
+- `run-mwuxd2v9-33928ea3/` (this brief's run; on dev 8b75e450b with t1020). Stopped by the lead at step 219, $2.23: 27 acts, store set, an item added. Judged no 4 times. The judge (step 182) said the pickup listing "was read as only 2 rows from a single page ... though the page listed 8 items". Every list read in the run, the steps the draft names `read.millbrook.pickup...` included, replays as "kept 2 rows from 1 page; 2 items seen", with handles `extraction.1` and `extraction.4`; `extraction.4` looks like the cart's list. Step 199 read while the page was the store's home page. Since step 169 the model said again and again that it would "re-read the pickup listing", never navigated back to it, sent 13 detections and 3 unreadable replies, and loop handling steered 4 times without effect. Its last check said `actsMissing: ["a1.fulfilment"]`.
+- `run-mwuuo3zk-75b482b3/` (t1020's run, debug on dev at `docs/working/language-driven-flow-loop-plan/debugs/run-mwuuo3zk-75b482b3.md`): the model read the wrong handle.
+
+Find, from the steps (call/result/decision/request files, Core log, Core store):
+1. Which list each of `extraction.1` and `extraction.4` was detected on (step, page, target), what each draft read step holds, and on which page each replay ran. Is a saved read replayed on a page other than its list's own, silently reading that page's rows? Does its binding's location or list identity get checked against the page at all?
+2. Why the model never got back to the listing: what it was told after each judged no, after looks were withdrawn, and about the Flow's read reading the wrong list.
+3. Whether `a1.fulfilment` was truly not done (pickup chosen on the site?), or the act record misjudged a press.
+Then the structural fix, where it belongs. The direction the lead expects, to be confirmed or replaced by what you find: **a read, whether run fresh, rerun or replayed, reads only the list its handle was made for, on a page where that list stands.** Otherwise it is refused, with what list it is and where it was made, never kept as rows of another list (cf. t1013 `list_not_on_page` for Next page). Make sure that a step's rows always say which list they came from, so neither model nor judge can take the cart for the listing.
+
+Owned: what the causes need in `domain/src/**`, `apps/extension/src/**` (content script only if the cause is there), Core `packages/fluxiq/src/**` (say so in your report before editing Core); tests beside each change. Must not touch: `scripts/lab/**`, the shared Core `fxwork/!FluxIQ`, `lab-slots/`, any Lab, browser or paid run.
+
+Prove offline: a test of the recorded shape built from synthetic markup (two lists on two pages, a saved read replayed on the wrong page), failing before your fix; plus the recorded calls of run-mwuxd2v9 through the domain's read path where feasible.
+Acceptance (quote outputs): the narrow tests beside each change (`domain/scripts/test-domain.mjs`, `apps/extension/scripts/test-extension.mjs`, Core `vitest-groups` with the `parallel,real-sql` groups); domain and extension checks, and `pnpm --filter fluxiq check` if Core changed; both `node scripts/structure-audit.mjs`. Leave versions alone.
+Write the run's debug: `docs/working/language-driven-flow-loop-plan/debugs/run-mwuxd2v9-33928ea3.md`, following `run-mwuuo3zk-75b482b3.md`.
+
+Report: `docs/working/data-first-simplification-plan/reports/t1022-read-bound-to-its-list.md` (downstream tree). No git. No `node -e`. End with the return contract.
