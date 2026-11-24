@@ -28,6 +28,11 @@ test("an oversized or malformed core code is dropped", async (t) => {
   replyWith(t, { ok: false, code: "failed", coreCode: `x${"y".repeat(80)}`, error: SENTENCE });
   const long = await panelRequest({ type: "x" });
   assert.ok(!long.ok && long.coreCode === undefined);
+});
+
+// A second `replyWith` on one test context captured the first one's stub as "previous" and put it
+// back last, leaving a read-only `chrome` that broke every later test's assignment in the run.
+test("a core code with a space is dropped", async (t) => {
   replyWith(t, { ok: false, code: "failed", coreCode: "Bearer abc def", error: SENTENCE });
   const spaced = await panelRequest({ type: "x" });
   assert.ok(!spaced.ok && spaced.coreCode === undefined);
