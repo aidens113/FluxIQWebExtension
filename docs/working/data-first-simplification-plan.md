@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (downstream ffa67022e, Core 6fb3574a4; fluxiq 0.54.7, contracts 0.23.2):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.9, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -32,6 +32,8 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - t1011: a judged no on `finish_with_best` shows its defects and keeps the repeat refused.
     - t1012: Core's built-in Anthropic default is Haiku.
     - t1010: every Lab run has a run watcher (`scripts/lab/run-watch/`) that alerts on repeating or no progress, and the Lab's default live model is Haiku.
+    - t1013: paging is settled per list from each Next page's `listMove`; a Next page whose list is absent is refused as `list_not_on_page`.
+    - t1014: a later round, and a carried-on attempt's first round, is shown every call the earlier rounds made and what each found (`answer-first/earlier-rounds/`), so a round end never empties the window. The last count endings on the answer-first path (a run of refusals for one reason, a completion refused again, unreadable replies) are loop findings the model decides.
 - **Second full sweep of 11-23** (before t1000): every test passed (Core about 30,000, downstream about 11,700); only `pnpm check` failed in a fresh tree, fixed by t1005.
 - **Paid round of 2026-11-24: halted at $0.80 of $50.** Five launches; no task finished attempt 1.
   - Bigbox looked for about 170 steps without pressing. Cause, from its steps:
@@ -45,11 +47,9 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - every Lab run has the watcher;
     - no arbitrary limit ends or resets a run;
     - fix an obvious shared problem before running more.
-  - Report: `reports/paid-round-1124.md` and the debugs, in the paid lane trees t1001-t1009 (to be committed when those lanes close).
-- **Running:**
-  - **t1013** (lead verification): paging is settled per list from each Next page's `listMove`, and a Next page whose list is absent is refused as `list_not_on_page`.
-  - **t1014** (worker-heavy): a fresh round keeps what the model learned, and unreadable decider replies go to loop detection.
-- **Next:** merge t1013 and t1014. Then **one** watched paid run (bigbox, the run that showed the defect) with the watcher, `--llm-model claude-haiku-5-5` and a fresh lane synced to dev. Only if it presses and progresses do the other nine tasks follow, within the remaining $49.20.
+  - Report: `reports/paid-round-1124.md` with its brief, and the five run debugs in `../language-driven-flow-loop-plan/debugs/` (run-mwufisf0, -mwug2xjw, -mwug3pjo, -mwug6pz3, -mwugbs39).
+- **Running:** nothing paid.
+- **Next:** **one** watched paid run of bigbox (the run that showed the defect) on a fresh lane synced to dev, with the watcher and `--llm-model claude-haiku-5-5`. Only if it presses and progresses do the other nine tasks follow, within the remaining $49.20.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
   - a saved Flow carries its own data declaration;
@@ -339,6 +339,16 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1013 and t1014 integrated (fluxiq 0.54.9); the halted round's report and debugs committed
+- Changed:
+  - t1013 (paging per list, 0.54.8) merged earlier the same day (downstream b222b4ab2, Core 13818c3d4).
+  - t1014 (worker-heavy, sent back once): a later round and a carried-on attempt's first round carry the earlier rounds' calls and findings (`answer-first/earlier-rounds/`, screened, at most a quarter of the input window, oldest summarised). A run of decisions refused for one reason (`core.refusal_run`), a completion refused again over the same draft (`core.completion_check`) and unreadable decider replies are loop findings on the ladder when the caller takes a loop signal. Loops with no signal keep the 2026-10-06 three-in-a-row rule.
+  - The worker put the two count endings on the ladder as findings, not as `stalling()` at the count (which would still end the round at three). The lead accepts this.
+  - The worker found that two endings tests passed only because a count-ended round reset the repeat guard; they were rewritten with the same expectations. Its point about an identical read refused after an unseen page change does not hold on the web domain: `stateDigests` digest the whole sanitized page (`domain/src/runtime/llm-evidence/state-digest/`), so a look that shows a change gives the next read a new page key. Only the fake test site's fixed state key showed it.
+  - The paid round's brief, report and five run debugs were copied from lane trees t1001, t1004, t1006, t1007 and t1009, then those lanes were closed.
+- Validation: lead, on the t1014 tree merged with Core dev 13818c3d4, through the gate: `vitest-groups --groups=parallel,real-sql` over answer-first `attempt`, `earlier-rounds`, `tests/endings`, `loop-signal`, `result-feed` and llm `decision-handlers`, `evidence-loop`, `repeat-guard` -> parallel `Test Files  117 passed (117)`, `Tests  912 passed (912)`; real-sql `Test Files  32 passed (32)`, `Tests  143 passed (143)`; `pnpm --filter fluxiq check` exit 0; `structure-audit: passed (571 warning(s), 903 baselined)`.
+- Follow-up: one watched paid bigbox run.
 
 ### 2026-11-24 - Paid round halted at $0.80; the shared look-loop defect fixed (t1005, t1008, t1010-t1012)
 - Changed:
