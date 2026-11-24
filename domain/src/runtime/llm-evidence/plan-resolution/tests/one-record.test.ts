@@ -85,7 +85,7 @@ test("the record's handle with two of its columns resolves to the card's item an
           fields: [
             { id: "item", label: "span:1", valueType: "string", required: false },
             { id: "price", label: "span:2", valueType: "string", required: false },
-            { id: NOTE, label: "span.x1s0c7au.x1xkdpo7.xdd3vo9", valueType: "string", required: false }
+            { id: NOTE, label: NOTE, valueType: "string", required: false }
           ]
         },
         writeMode: "append",

@@ -122,6 +122,8 @@ import { webLlmCaptureWalk, webLlmFirstItemElements, webLlmFirstItemHandles, web
 import type { WebLlmExtractionBinding } from "./handles";
 import { webLlmItemRow } from "./item-row";
 import { webLlmListItems, type WebLlmStructureItem, type WebLlmStructureMark } from "./list-items";
+import { webLlmStoredColumnLabel } from "./stored-label";
+import { webLlmUniqueStoredLabels } from "./stored-labels";
 
 export const WEB_LLM_STRUCTURE_SCHEMA_VERSION = "web-llm-structure.v1" as const;
 
@@ -175,6 +177,8 @@ export type WebLlmStructureField = {
    * it the same one (`apps/extension/src/content/extraction/badge-name.ts`).
    * Page structure; where that is a generated class path, what the element is
    * and its sample instead (`link: 'Tom Becker'`, `./field-sample.ts`).
+   * That readable label is the model's alone: the handle's stored schema labels
+   * the column by the page's words or its key, never a sample (`./stored-label.ts`, t997).
    */
   label: string;
   kind: WebAutomationExtractFieldKind;
@@ -310,7 +314,8 @@ export type WebLlmStructurePacketInput = {
   firstItem: WebLlmFirstItemPages | undefined;
 };
 
-type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; coverage: number; shown: WebLlmStructureField };
+/** A field a handle may read: `shown` is the model's, `stored` the label its stored schema keeps (`./stored-label.ts`). */
+type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; coverage: number; shown: WebLlmStructureField; stored: string };
 
 /**
  * The packet and the bindings, or `undefined` when no field of the run is left
@@ -409,7 +414,13 @@ function readableFields(proposal: WebAutomationExtractionProposal, firstItem: We
       const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec, lines.get(field.key), firstItem?.detected.evidence.elements);
       const handle = at.get(field.key);
       const typed = webLlmColumnType(field.label, field.spec, column.sample);
-      return { key: field.key, spec: field.spec, coverage: field.coverage, shown: shownField(field.key, column.label, field.spec.kind, field.coverage, handle, controlItem(firstItem, handle), column.sample, typed) };
+      return {
+        key: field.key,
+        spec: field.spec,
+        coverage: field.coverage,
+        shown: shownField(field.key, column.label, field.spec.kind, field.coverage, handle, controlItem(firstItem, handle), column.sample, typed),
+        stored: webLlmStoredColumnLabel(field.key, field.label)
+      };
     });
 }
 
@@ -436,7 +447,8 @@ function boundList(
   oneRecord: boolean,
   rowIdentity?: readonly string[]
 ): WebLlmExtractionBinding {
-  const labels = new Set<string>();
+  // The page's column words or the key, never the readable label the model is shown, which may quote a value (t997).
+  const labels = webLlmUniqueStoredLabels(readable.map((field) => ({ id: field.key, label: field.stored })));
   return present<WebLlmExtractionBinding>({
     handle,
     location: input.location,
@@ -464,21 +476,15 @@ function boundList(
     itemCount: proposal.itemCount,
     recordSchema: present<NonNullable<WebLlmExtractionBinding["recordSchema"]>>({
       schemaVersion: "0.1",
-      fields: readable.map((field) => {
-        const preferred = field.shown.label.slice(0, 200);
-        let label = preferred;
-        for (let suffix = 2; labels.has(label); suffix += 1) label = `${preferred.slice(0, 80)} (${field.key} ${suffix})`;
-        labels.add(label);
-        return present<NonNullable<WebLlmExtractionBinding["recordSchema"]>["fields"][number]>({
-          id: field.key,
-          label,
-          valueType: "string",
-          semanticType: field.shown.type,
-          mark: field.spec.mark,
-          required: undefined,
-          handling: undefined
-        });
-      }),
+      fields: readable.map((field, index) => present<NonNullable<WebLlmExtractionBinding["recordSchema"]>["fields"][number]>({
+        id: field.key,
+        label: labels[index]!,
+        valueType: "string",
+        semanticType: field.shown.type,
+        mark: field.spec.mark,
+        required: undefined,
+        handling: undefined
+      })),
       primaryKey: rowIdentity?.length ? [...rowIdentity] : undefined
     }),
     oneRecord: oneRecord ? true : undefined
