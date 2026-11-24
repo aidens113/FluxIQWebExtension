@@ -39,7 +39,7 @@ test("only --live-llm makes lab attempt a live run: the scripted form and a dry 
   const attempt = ["attempt", "company-website", "--task", "company-website-apprentices", "--authoring-mode", "answer-first"];
   assert.equal(describeLiveLaunch([...attempt, "--scripted-model"], {}), null);
   assert.equal(describeLiveLaunch([...attempt, "--live-llm", "--llm-max-cost-usd", "5", "--dry-run"], {}), null);
-  assert.deepEqual(describeLiveLaunch([...attempt, "--live-llm", "--llm-max-cost-usd", "5"], { FLUXIQ_LAB_INSTANCE: "t869-slot-1" }), { instance: "t869-slot-1", scenarioId: "company-website", task: "company-website/company-website-apprentices", authoringMode: "answer-first", provider: "anthropic", model: "claude-sonnet-5-5" });
+  assert.deepEqual(describeLiveLaunch([...attempt, "--live-llm", "--llm-max-cost-usd", "5"], { FLUXIQ_LAB_INSTANCE: "t869-slot-1" }), { instance: "t869-slot-1", scenarioId: "company-website", task: "company-website/company-website-apprentices", authoringMode: "answer-first", provider: "anthropic", model: "claude-haiku-5-5" });
 });
 
 test("a launch names the provider and exact model it resolves to: the flags, else the provider's Lab default", () => {
@@ -48,9 +48,9 @@ test("a launch names the provider and exact model it resolves to: the flags, els
     const launch = describeLiveLaunch([...args, ...extra], env);
     return [launch?.provider, launch?.model];
   };
-  assert.deepEqual(of([]), ["anthropic", "claude-sonnet-5-5"]);
+  assert.deepEqual(of([]), ["anthropic", "claude-haiku-5-5"]);
   assert.deepEqual(of(["--llm-provider", "deepseek"]), ["deepseek", "deepseek-flash"]);
-  assert.deepEqual(of(["--llm-provider", "anthropic", "--llm-model", "claude-haiku-5-5"]), ["anthropic", "claude-haiku-5-5"]);
+  assert.deepEqual(of(["--llm-provider", "anthropic", "--llm-model", "claude-sonnet-5-5"]), ["anthropic", "claude-sonnet-5-5"]);
   // The Lab's own environment never picks a model.
-  assert.deepEqual(of([], { FLUXIQ_LLM_DEFAULT_MODEL: "deepseek-flash" }), ["anthropic", "claude-sonnet-5-5"]);
+  assert.deepEqual(of([], { FLUXIQ_LLM_DEFAULT_MODEL: "deepseek-flash" }), ["anthropic", "claude-haiku-5-5"]);
 });

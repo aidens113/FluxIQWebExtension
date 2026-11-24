@@ -6,7 +6,7 @@ import { withoutProviderSecrets } from "../../../../scripts/provider-secret-envi
 
 test("every live entry has the same Claude default and provider/model pairing", () => {
   assert.equal(DEFAULT_LLM_PROVIDER, "anthropic");
-  assert.equal(DEFAULT_LLM_MODEL, "claude-sonnet-5-5");
+  assert.equal(DEFAULT_LLM_MODEL, "claude-haiku-5-5");
   assert.equal(LIVE_LLM_DEFAULT_PROVIDER, DEFAULT_LLM_PROVIDER);
   assert.equal(LIVE_LLM_DEFAULT_MODEL, DEFAULT_LLM_MODEL);
   assert.equal(CLAUDE_LIVE_BUILD_COST_USD, 5);
