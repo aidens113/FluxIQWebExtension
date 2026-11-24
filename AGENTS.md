@@ -504,6 +504,17 @@ Flow its predecessor saved (the continuation proof), and its report names its pa
 calls (ideally none), and time. A single attempt is a diagnosis, never a task's acceptance. A later
 attempt that strays from the saved Flow, or spends calls, is a defect to trace to its root.
 
+**Every ongoing live run is overseen, and stopped early only when really needed** (user,
+2026-11-24): "ongoing runs get some sort of oversight. If it keeps just doing the same thing again
+and again and burning tokens it gets stopped early ONLY if really needed". An agent watches each
+live run as it goes: its step logs, its chat and its spend. It stops a run early only when the run
+is plainly stuck repeating itself (the same kind of calls with no act and no new evidence) and the
+product's own loop handling has already tried to steer it without effect, so more steps would
+measure nothing. It never stops a run for being slow, for a hard task that is still making
+progress, or to save money on a run that is still learning. A stopped run gets its debug, is
+reported as a product defect with its cause, and is not relaunched until that cause is fixed and
+proven offline.
+
 **Every node retries automatically** (user, 2026-10-07): the first attempt plus
 3 retries on every path (exploration, mid-build tests, candidate trials,
 playback), waiting for the target first; only a lasting act whose effect is
