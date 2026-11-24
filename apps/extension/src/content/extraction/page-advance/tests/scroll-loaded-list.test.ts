@@ -427,7 +427,7 @@ test("a scroll that exposes only the Load more control presses it before reporti
 });
 
 test("a pager's Next found from a list that carried no way is followed, and a disabled one ends the list, with no scroll", async () => {
-  for (const [number, expected] of [[1, { outcome: "moved", by: "next", page: 2 }], [5, { outcome: "ended", stop: "control_disabled" }]] as const) {
+  for (const [number, expected] of [[1, { outcome: "moved", by: "next", page: 2 }], [5, { outcome: "ended", stop: "control_disabled", page: 5 }]] as const) {
     const shown = storePage(number);
     let scrolled = 0;
     window.scrollTo = () => { scrolled += 1; };

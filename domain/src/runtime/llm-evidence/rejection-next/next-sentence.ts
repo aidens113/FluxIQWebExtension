@@ -31,6 +31,8 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     // Read off the field code in `instead`, so a repeat that passes it back says it again.
     : reason === "incomplete_text" ? incompleteTextNext(instead)
     : reason === "next_leaves_filtered_list" ? FILTERED_LIST_NEXT
+    // Read off the list's handle in `target`, so a repeat that passes it back says it again (t1013).
+    : reason === "list_not_on_page" ? listNotOnPageNext(target)
     // Read off the key codes in `instead`, so a repeat that passes them back says it again.
     : reason === "parameter_not_readable" ? scrollKeysNext(instead)
     // Read off the kind code in `instead`, so a repeat that passes it back says it again.
@@ -38,6 +40,15 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
     : reason === "page_moved_since_packet" || reason === "handle_no_longer_on_page" ? (staleHandleNamed(instead) ? STALE_NEXT_INSTEAD : STALE_NEXT)
     : undefined;
+}
+
+/**
+ * A Next page asked on a page its list is not on (t1013): nothing was pressed, and nothing is said of the list's paging
+ * here. The move is the list's own page, not a pager on this one. `target` is the list's handle where the call wrote one.
+ */
+function listNotOnPageNext(target: string | undefined): string {
+  const list = target === undefined ? "the list this Next page moves" : `the list ${target}`;
+  return `Nothing was pressed: ${list} is not on this page, so this says nothing about whether a page follows it. Go back to the page that shows ${target ?? "that list"}, then run Next page there; a pager or a load-more control on this page is not that list's.`;
 }
 
 /**

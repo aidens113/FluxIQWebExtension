@@ -147,6 +147,21 @@ test("a fault the page decided before any press is reported as no effect, never 
   assert.deepEqual(result.nextPage, { outcome: "failed", stop: "page_fault" });
 });
 
+test("a list not on the page at all, found before any press, fails as its target not found, never as an uncertain move (t1013)", async () => {
+  const { result } = await run({ outcome: "failed", stop: "list_vanished", reason: "No item of the list is on the page.", listAbsent: true });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  assert.equal(result.failure?.effect, "unacted");
+  assert.deepEqual(result.nextPage, { outcome: "failed", stop: "list_vanished" });
+  assert.deepEqual(wire(result).nextPage, { outcome: "failed", stop: "list_vanished" });
+});
+
+test("an end carries the page the pager marks current onto the wire, where it marks one (t1013)", async () => {
+  const { result } = await run({ outcome: "ended", stop: "control_disabled", page: 5 });
+  assert.deepEqual(result.nextPage, { outcome: "ended", stop: "control_disabled", page: 5 });
+  assert.deepEqual(wire(result).nextPage, { outcome: "ended", stop: "control_disabled", page: 5 });
+});
+
 test("a page fault whose Next would drop applied filters carries the count onto the wire, and only that (t626)", async () => {
   const { result } = await run({ outcome: "failed", stop: "page_fault", reason: "leaves out 2 query parameters", filtersDropped: 2 });
   assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);

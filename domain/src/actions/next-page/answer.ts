@@ -26,10 +26,14 @@ export type WebAutomationNextPageEnd = Extract<WebAutomationExtractionPagination
 /** Why the move failed. */
 export type WebAutomationNextPageFault = Extract<WebAutomationExtractionPaginationStop, "list_unchanged" | "rate_limited" | "list_vanished" | "control_not_clickable" | "page_fault">;
 
-/** `web.dom.next_page`'s answer. `page` is the number the pager marks current after the move, when it marks one. */
+/**
+ * `web.dom.next_page`'s answer. `page` is the number the pager marks current after the move, or, on an end, on the
+ * page the end was seen on (t1013), when it marks one: so an end seen past the page a read holds is not taken for that
+ * page's end.
+ */
 export type WebAutomationNextPageAnswer =
   | { outcome: "moved"; by: WebAutomationNextPageBy; page?: number | undefined }
-  | { outcome: "ended"; stop: WebAutomationNextPageEnd }
+  | { outcome: "ended"; stop: WebAutomationNextPageEnd; page?: number | undefined }
   | {
     outcome: "failed";
     stop: WebAutomationNextPageFault;
