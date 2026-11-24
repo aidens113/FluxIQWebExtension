@@ -2,8 +2,9 @@
 // wrong field (t997).
 //
 // Core binds a declaration's field name to an exact field id first, and then to
-// the one field whose label folds to it -- case and runs of whitespace ignored
-// (`bindAutomationStudioRecordProcessing`) -- and its schema reader refuses two
+// the one field whose label folds to it -- case ignored, and `_`, `-` and runs
+// of whitespace read as one space (`automationStudioRecordBindingNameKey`,
+// t999) -- and its schema reader refuses two
 // fields with one label. So a label is taken when it folds to a label already
 // given or to another field's id: `Price` on one field beside a field whose id
 // is `price` would bind `PRICE` to the first and `price` to the second. A taken
@@ -33,7 +34,7 @@ export function webLlmUniqueStoredLabels(fields: readonly { id: string; label: s
   });
 }
 
-/** A name as Core's binding compares it: runs of whitespace one space, ends trimmed, lower case. */
+/** A name as Core's binding compares it: `_`, `-` and runs of whitespace one space, ends trimmed, lower case. */
 function folded(name: string): string {
-  return (pageText(name) ?? "").toLowerCase();
+  return (pageText(name) ?? "").replace(/[_\-\s]+/gu, " ").trim().toLowerCase();
 }

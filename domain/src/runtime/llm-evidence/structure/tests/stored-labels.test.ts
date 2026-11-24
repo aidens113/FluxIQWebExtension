@@ -30,6 +30,13 @@ test("a field may carry its own id as its label", () => {
   assert.deepEqual(webLlmUniqueStoredLabels([{ id: "badge", label: "member_badge" }, { id: "member_badge", label: "Rating" }]), ["member_badge (badge 2)", "Rating"]);
 });
 
+test("labels that differ only by `_`, `-` or spaces are one name to Core, so the second steps aside", () => {
+  // Core's binding reads `unit_price`, `unit-price` and "Unit Price" as one name (t999); two such labels would make every declaration naming them ambiguous.
+  assert.deepEqual(webLlmUniqueStoredLabels([{ id: "a", label: "unit_price" }, { id: "b", label: "Unit Price" }, { id: "c", label: "unit-price" }]), ["unit_price", "Unit Price (b 2)", "unit-price (c 2)"]);
+  // A label folding to another field's id under the same rule steps aside too.
+  assert.deepEqual(webLlmUniqueStoredLabels([{ id: "plus", label: "Brightaisle Plus" }, { id: "brightaisle_plus", label: "Member" }]), ["Brightaisle Plus (plus 2)", "Member"]);
+});
+
 test("labels stay within Core's bound", () => {
   const long = "w".repeat(250);
   const [first, second] = webLlmUniqueStoredLabels([{ id: "a", label: long }, { id: "b", label: long }]);
