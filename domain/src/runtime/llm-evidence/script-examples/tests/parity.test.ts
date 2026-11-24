@@ -13,10 +13,14 @@ import { WEB_FLOW_SCRIPT_GUIDANCE } from "../../script-guidance";
 // `state` re-pinned 2026-11-05: Core's grammar gained two generic lines and nothing else,
 // its part-marking guidance and its row across a call; without them it hashes to the
 // captured 7451 bytes (1f691ad3d071deee2e5271e3fd74679eae754d819282273cfb40fd3c979ba2e4).
+// `loop` re-pinned 2026-11-23: Core t989 (b967bf34f) replaced one generic grammar sentence, the
+// one on rows a Flow reads and `recordOutput.process`, for retained source fields and declared
+// automatic processing. With that sentence put back it hashes to the captured 8977 bytes
+// (206bc7dbe82a408c8a1891bb4a8174cef3e4df50a6525fc761d893dd3f99b817); the web examples are unchanged.
 const pins = {
   format: { bytes: 6154, sha256: "71df264a2c345227a15f9bf5955ed35169619552210336e664f86b06e005ec67" },
   act: { bytes: 3916, sha256: "2290b5399c44fb4100400e88cd40394fe800258eb0484eef2438ef6250626697" },
-  loop: { bytes: 8977, sha256: "206bc7dbe82a408c8a1891bb4a8174cef3e4df50a6525fc761d893dd3f99b817" },
+  loop: { bytes: 9227, sha256: "d478e9807d3cf87298d30399270a15fb8219283cd7e42a6187c2c38e400c58f2" },
   state: { bytes: 8240, sha256: "634576a2df3eb868a292a4a92b5564864a0f469a75ddd704a78f9aad39fde51b" }
 };
 

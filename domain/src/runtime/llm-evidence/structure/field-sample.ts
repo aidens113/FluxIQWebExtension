@@ -22,7 +22,7 @@
 //   never a value the screen withholds; a sensitive control's column is
 //   already dropped from the packet (`./packet.ts`).
 // - a readable `label` where the page's own label is a generated class path
-//   (`generatedLabel`): what the element is -- a link, a button, a heading, an
+//   (`./generated-label.ts`): what the element is -- a link, a button, a heading, an
 //   image, a price, a number, text -- with its sample: `link: 'Tom Becker'`,
 //   `text: '1 mutual friend'`. A label the page wrote in words (a header, a
 //   test id, a badge's name) is kept as it was.
@@ -48,15 +48,12 @@ import { WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR } from "../../../actions/extracti
 import type { WebAutomationExtractionProposalFieldSpec } from "../../../extraction";
 import type { WebLlmEvidenceElement } from "../elements";
 import { webLlmContainerWords } from "./container-words";
+import { webLlmGeneratedLabel } from "./generated-label";
 import { isWithheldText, screenedPageText } from "../withheld";
 
 /** The longest sample a column carries. */
 const MAX_SAMPLE = 40;
 const FORM_CONTROL = /^(?:input|select|textarea|option)$/u;
-/** A class token a build tool generated: letters and digits run together (`x1a4yqcp`, `css-1q2w3e`, `sc-bdVaJa`, `_3xY7z`). */
-const GENERATED_TOKEN = /^(?:css-|sc-|jsx-)|^(?=[\w-]*\d)(?=[\w-]*[a-z])[\w-]{5,}$/iu;
-/** A label that is a class path: tags and classes joined by dots and child combinators. */
-const CLASS_PATH = /^[\w-]+(?:[.:][\w()-]+)+(?:\s*>\s*[\w-]+(?:[.:][\w()-]+)*)*$/u;
 const PRICE = /^[$€£¥]\s?\d|^\d[\d.,\s]*\s?(?:[$€£¥]|USD|EUR|GBP)$/u;
 const NUMBER = /^[\d.,\s%]+$/u;
 
@@ -96,8 +93,7 @@ function linesColumn(label: string, element: WebLlmEvidenceElement | undefined, 
     .map((line) => screenedPageText(line.readable ?? line.text ?? line.name ?? line.ownText))
     .flatMap((line) => line === undefined || isWithheldText(line) || line.trim() === "" ? [] : [line.replace(/\s+/gu, " ").trim()]);
   const sample = bounded(said.join(WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR));
-  const path = label.replace(LABEL_NOTE, "");
-  return { label: sample !== undefined && generatedLabel(path) ? `lines: '${sample.replace(/'/gu, "’")}'` : label, sample };
+  return { label: sample !== undefined && webLlmGeneratedLabel(label) ? `lines: '${sample.replace(/'/gu, "’")}'` : label, sample };
 }
 
 /** The column's value in the first item that has it, or `undefined` when none may be shown. */
@@ -130,16 +126,9 @@ function composedSample(element: WebLlmEvidenceElement | undefined, spec: WebAut
  * label when neither can be told.
  */
 function readableLabel(label: string, element: WebLlmEvidenceElement | undefined, sample: string | undefined): string {
-  if (!generatedLabel(label.replace(LABEL_NOTE, "")) || element === undefined) return label;
+  if (!webLlmGeneratedLabel(label) || element === undefined) return label;
   const what = whatItIs(element, sample);
   return sample === undefined ? what ?? label : `${what ?? "text"}: '${sample.replace(/'/gu, "’")}'`;
-}
-
-/** Whether a label is a class path most of whose class names a build tool generated. */
-function generatedLabel(label: string): boolean {
-  if (!CLASS_PATH.test(label.trim())) return false;
-  const tokens = [...label.matchAll(/\.([\w-]+)/gu)].map((match) => match[1] ?? "");
-  return tokens.length > 0 && tokens.filter((token) => GENERATED_TOKEN.test(token)).length * 2 >= tokens.length;
 }
 
 /** What the element is, in one word a person uses, from its role, tag or the shape of its words. */

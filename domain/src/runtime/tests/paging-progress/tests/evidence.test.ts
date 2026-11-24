@@ -99,7 +99,11 @@ test("trusted paging no-effect retries once and advances exactly one page", asyn
   assert.equal(run.refreshed, 0);
 });
 
-test("four verified paging no-effects exhaust the normal first-plus-three ladder without stale-source refresh", async () => {
+// Since Core t968 (f30024d9c, `target-reacquire/stale-failure.ts`) an act that certainly changed
+// nothing is read as one that may have reached a redrawn copy of its target, so the target is
+// found again from its source step once, immediately before the last attempt, as a lost one is.
+// Here that refresh finds nothing usable, and the ladder still ends after the first attempt plus three.
+test("four verified paging no-effects exhaust the normal first-plus-three ladder after one stale-source refresh before the last", async () => {
   const noEffect = failed(undefined, true, WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT);
   const run = await dispatch([noEffect, noEffect, noEffect, noEffect, noEffect]);
   assert.equal(run.result.attempts, 4);
@@ -108,7 +112,8 @@ test("four verified paging no-effects exhaust the normal first-plus-three ladder
   assert.equal(run.result.failure?.effect, "unacted");
   assert.equal(run.result.failure?.retryable, true);
   assert.equal(run.checked, 0);
-  assert.equal(run.refreshed, 0);
+  assert.equal(run.refreshed, 1);
+  assert.equal(run.result.reacquire, "unavailable");
 });
 
 test("verification-stage output-not-observed stays protected even when a receipt labels it unacted", async () => {

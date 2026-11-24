@@ -13,6 +13,8 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **Week focus (user, 2026-11-23):** "for now we'll only focus this week on getting the core product 100% working". Hosted and cloud work stays paused until this plan's proofs and paid round show the core product working. That includes the web remote viewer the user asked for the same day, recorded as unit HC-V in [hosted-platform-launch-plan.md](./hosted-platform-launch-plan.md).
 
+**Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
+
 **Handover to Claude Code (2026-11-23).** The user handed the Codex session's work to a Claude Code lead. Codex stopped about 13:40 on 11-22 with no process left running.
 - **Committed at handover:** Codex's final status notes on both dev branches. Its uncommitted lane work went onto each task branch as unverified checkpoints: t984 Core 4c4868428 (FluxNode fixtures, never run) and t986 Down 4e364886d (split raw/projected read parity, never compiled).
 - **Recovered result Codex never recorded:** t984's 17-file Answer First compatibility batch finished with 95/104 passed and 9 failed in 7 files.
@@ -38,9 +40,62 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - Core: trace-replay and trace-matcher 15 files 68/68; `pnpm --filter fluxiq check` recompiled, exit 0; audit passed; library rebuild exit 0.
   - Downstream: domain check exit 0; domain `node-run` and `offline-reads` 645/645; runner build and check exit 0; the 30-file runner owners 206/206; audit passed.
   - Finishes: Down audit passed; Core contract gate 70/70.
-- **Running now:**
-  - **t990:** recorded-run oracle acceptance for earbuds, free hubs, Netherlands data engineers, remote easy-apply and August-over-1300 (worker-heavy, `briefs/t990-recorded-oracle.md`). It replays admitted recorded reads through the production reader, applies each task's declaration through Core's data stage, and compares with the oracle's exact table, with 0 model calls.
-  - **Full sweep of dev:** Down c61dbf0fa / Core 2dba34613, in `fxwork/sweep-20261123` (worker-light; Core build and test; Down check, test and build), as the day's first sweep.
+- **t990 (P1-P3 recorded-run acceptance) integrated and pushed in both repositories (Core 0.54.0).** Lead reruns through the gate:
+  - hubs, Netherlands and job board each `"passed":true`, with `matchedRecords` 10/10, 32/32 and 7/7, `modelCalls` 0, `providerCalls` 0 and `externalCalls` 0;
+  - read-oracle, read-parity and commands owners `# pass 64 # fail 0`;
+  - runner build exit 0, and both audits passed.
+
+  Finishes: Down audit passed; Core contract gate `Tests 70 passed (70)`. Four of five tasks reproduce the oracle's exact table from a run's own recorded reads, through today's production reader and Core's own row sink, result feed and automatic data stage, with 0 model calls:
+  - hubs 10/10 (run-mwoq9g4l);
+  - earbuds 13/13 (run-mwow1z18), though that run's reads were already narrowed on the page, so it proves processing, not broad collection;
+  - job board 7/7 on three runs;
+  - Netherlands 32/32 (the saved Flow's four page passes).
+
+  Photo-social is a recording gap: the only surviving store never opened a post. Command: `lab recorded-read SITE --task TASK --input FILE --out FILE` (`read-oracle/`). Core gained a re-export-only subpath, `fluxiq/automation/answer-first-data`. Two admission defects were fixed: equal absent link origin, and a saved Flow's replayed pass admitted on its row labels. Lead decisions on the worker's questions:
+  - stored schema labels must not carry page values, and a model alias must not hide the detected site key (t997);
+  - in automatic mode, a cell the row's read captured but the item does not show is a definite "not shown", not missing evidence (t993);
+  - earbuds' broad collection and photo-social are recording gaps for the paid round to cover.
+- **Full sweep of dev 2026-11-23 (Down c61dbf0fa / Core 2dba34613): failures, being fixed forward.**
+  - Downstream: check 803/805 (Core build list lacks `cloud`); domain 3150/3164; extension 4145/4149; test-runner 2962/2968; every other package passes; build exit 0.
+  - Core: contracts, sdk, cloud, websocket and ui-components all pass. fluxiq `parallel` has 25 failures in 16 files, and `real-sql` has 292 in 69 files, concentrated in Answer First and service bootstrap: 37× a "Run again was refused: you stopped the last run part way" guard, and 19× `stopped_by_person`/`stopped` where `achieved` was expected. apps/web has 2 failures.
+- **t991 and t992 integrated and pushed (downstream dev 5ca1a2cea).** All 20 downstream sweep failures are fixed. The shared Core is synced to Core dev 6318fac88.
+  - **t991, domain:** one real regression (t982 made a client without the definition capability refuse ordinary reads whole; `definition-fields/admission.ts` now leaves out definition columns that are only retained). 13 tests now follow t982, t989, t968 and t983.
+  - **t992:** two test-isolation leaks (a `getComputedStyle` stub and `chrome`), a split panel test, the `--recorded-model` option sentence, and `@fluxiq/cloud` in the full Core build list.
+  - Open: the test file that leaks `chrome` before act-mark's watch test is not yet identified.
+  - Core defect found by t991 and given to t994: `role-routing/judge-model.ts` falls back to Haiku whatever the Flow's provider, so a DeepSeek-only Flow's result check fails.
+- **t993 integrated and pushed (Core 27e8fabc9, contracts 0.23.1, fluxiq 0.54.1).**
+  - In automatic processing, a cell the row's own read captured but the item does not show is a definite "not shown": each row carries its batch's `captured` field list, filled by the feed from the page's stored schema. A field a read never captured is still missing evidence.
+  - The four result-feed sweep failures are fixed, including `completion/check.ts`: an empty result refuses (use take) before "no retained schema".
+  - Lead runs: contracts process 323/323; result-feed and completion 163/163 (parallel) and service 5/5 (real-sql); both checks and both audits pass; job-board proof without a presence test 7/7 with 0 calls.
+  - Remaining: the run-dataset store's end-of-run answer still withholds. Its fix is t998 (migration 0041, per-batch captured fields), on the paid round's critical path.
+- **t995 F23 diagnosed and closed; its fix moved to t994.** The control was really gone: the saved Flow's stepper Next (`main.s4`) was never pressed on replay.
+  - Attempt 1's press answered with a `reads` line, so `act-record/gate/read-answer.ts` called it changed state, and `seed.ts` carried it as `heldOnRepeat` into every later attempt.
+  - `run-acts/run-gate.ts` refuses such a press forever, because a replay can never look.
+  - Fix, in t994's files: for a press held only by `heldOnRepeat`, the gate looks at the page using the node's recorded effect and admits only on `not_seen`. A risen cart count stays refused, keeping the never-repeat-a-lasting-act rule.
+  - The reproduction and report are preserved in `fxwork/recorded-evidence/t995/`. Downstream gained an unbound-refind test (lead 68/68). The campaign note's "calendar control still there" was wrong.
+- **t998 integrated and pushed (Core 143d80419, fluxiq 0.54.2).**
+  - Migration 0041 stores each batch's captured field ids (`run_dataset_batches.captured_fields_json`) from that batch's own schema. The store's end-of-run answer passes them as `captured`, so it agrees with the feed on not-shown cells.
+  - Batches written before 0041 still withhold; nothing is inferred.
+  - Lead runs: run-dataset, answer, migration, feed-agreement and result-feed tests: parallel 102/102, real-sql 54/54. fluxiq check and audit pass.
+- **t997 integrated and pushed (downstream 1485a34c1).**
+  - A stored schema label is now the page's own column words, or the field key for a generated class path, never a first-item value. The model-facing packet is unchanged, and a column the model renames keeps the detected column's stored label.
+  - Lead runs: domain structure and plan-resolution 442/442; domain check; read-oracle 10/10; audit. Earbuds mwocg0zw with the rewrite: ready, kept 11, matched 11/11 collected, 0 calls. It is 11/13 overall because the run never read the other 2 records' pages.
+  - Remaining: a declaration naming a site key (`brightaisle_plus`) does not bind a page-worded label ("Brightaisle Plus"). Labelling renamed columns with raw keys was rejected, since class paths would become answer headers. Instead, t999 makes Core binding treat `_` and `-` as word separators, in binding only.
+- **t996 integrated and pushed (downstream 7b9d9f955).** The S6 preflight now meets each site's own declared person check. The lead reran all four on the dev-synced build, in visible Chrome and provider-free, and each gave `{"protocolPassed":true,"siteChallenge":"passed","gaps":[]}`.
+  - Everything-store's `site-challenge.json`: `armedCheck: type-the-characters`, `askInChat: true`, `did: cleared`, `answer: person_done`, `via: chat`, `readSucceeded: true`.
+  - Bigbox's `press-and-hold` is declared to lift by itself; the product waits it out (`how: waited_out`), which the lead accepts.
+  - Preflight tests 14/14, runner check, audit. Evidence is preserved in `fxwork/recorded-evidence/t996/`.
+- **t999 integrated and pushed (Core b7e1de714, contracts 0.23.2).**
+  - In binding only, `_` and `-` are word separators (`binding/name-key.ts`), so a declaration naming a site key binds the page-worded column. Cell comparisons are unchanged.
+  - The read-oracle hands declarations to Core as written; `model-aliases.ts` is removed.
+  - The lead made downstream `stored-labels.ts` fold names the same way, so labels stay unique to Core.
+  - Lead runs: contracts process 335/335 (again after merging dev); fluxiq and contracts checks; domain structure and extraction 188/188; read-oracle 8/8; runner check; both audits. Earbuds as written: `ready`, kept 11, matched 11/11 collected, 0 calls (2 of 13 are on pages never read).
+- **Running now** (the paid round waits for it; target 2026-11-24 evening):
+  - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure, the judge-model provider default, and F23's run-gate fix. The lead merged Core dev 27e8fabc9 into its branch at its request.
+  - t994 found that a read's own `recordOutput.process` is dropped once a task has a declaration (05d61fea4, the t869 class). The lead's decision: not superseded. The active path must evaluate the same `merged(read process, declaration)` as the legacy path. `result-feed/**` passed to t994 for this fix.
+  - **t996** (worker, with its own Core): the preflight exercises the site-declared person checks on everything-store, crossborder, bigbox and company-website.
+  - **t997** (worker-heavy): stored labels from the page's column words or the field key; a renamed column's id is the model's name and its label the detected key.
+  - t990's finish removed its worktree and the ignored `test-runs/` inputs with it. Lanes that need recorded reads copy them again from the original campaign evidence.
 - **Combined P2+P6 (history):** t984 Core e2b1f2635 (worker results: compatibility 195/195, combined 192/192, both checks; product fixes to the processing overlay, live page hand-off, `{process:null}`, P4 memory tolerance and FluxNode pin) was merged with t987 (clean in Core; downstream kept both post-reboot briefs) and with current dev (clean). The combined Core branch now passes the pre-push audit. A worker-heavy agent runs every owner group on the combined tree (`briefs/combined-p2-p6-acceptance.md`). Lead follow-up: the P4 memory tolerance catches any non-integrity store error; narrow it to store I/O failures. A saved Flow replayed under a task with no declaration still acts as a legacy task (P2/P6 design question).
 
 **Post-reboot execution (2026-11-22):** the user restarted and requested tests and all remaining work. The configured 32 GiB initial / 48 GiB maximum page file is active at 32 GiB. Fresh workers processing/t984, judge/t987 and offline/t986 own written post-reboot briefs. P2 combined publication/restart fixture checkpoint 6dcd8bfa0 and P6 credential fixture bf3787ec7 are preserved locally; t987 and t986 received the shared P2/P6 baseline. Processing is adding authoritative source replacement receipts; judge is implementing exact-source recovery and action/witness correspondence; offline capture now forwards authored task-processing criteria. These new changes are not accepted yet. Root fixed the cost-reader union and contradictory metadata/request classification; independent six-owner tests and runner types pass. A stale pre-reboot gate ticket was traced to a PID reused by WebView2 and pruned using process birth/boot evidence. The isolated gate fix passed 47/47 focused tests and 99/99 full tests. Pagefile-aware admission passed 100/100 full tests before and after merge; Merit dev c8a64a1/version0.3.2 is installed and pushed. Product checks resumed normally. One isolated provider-free browser proof reached snapshot evaluation but failed snapshot_unavailable; no browser acceptance or paid run yet.
@@ -217,6 +272,74 @@ Read Current State and the corresponding task report first; do not restart compl
 All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls or browser acceptance; one inadvertently launched Core full check was deliberately interrupted and is not acceptance.
 
 ## Work Ledger
+
+### 2026-11-23 - t996 and t999 (contracts 0.23.2) integrated
+- Changed:
+  - t996 finished downstream, the preflight's site challenge. Its empty Core branch was abandoned with 0 unmerged.
+  - t999 finished in both repositories. Its Core branch was merged with dev 143d80419 first, after a finish refused it as behind.
+  - The lead added the downstream `stored-labels.ts` fold and its test on t999.
+- Validation: lead runs through the gate:
+  - t996: preflight `# tests 14 # pass 14 # fail 0`; runner check `0` `error TS`; audit passed; four `offline-preflight` runs each `{"protocolPassed":true,"siteChallenge":"passed","gaps":[]}`.
+  - t999: contracts `Tests  335 passed (335)` (before and after the dev merge); contracts, fluxiq, domain and runner checks exit 0; domain `# tests 188 # pass 188 # fail 0`; read-oracle `# pass 8 # fail 0`; Core and Down audits passed; earbuds `"state": "ready"`, `matchedRecords` 11, `modelCalls` 0.
+  - Finishes: Down audits passed; Core `Tests  70 passed (70)`.
+- Follow-up: t994; then the paid round.
+
+### 2026-11-23 - t998 (fluxiq 0.54.2) and t997 integrated; t999 started
+- Changed:
+  - t998 finished in both repositories: migration 0041 and the store's captured fields.
+  - t997 finished downstream: stored labels without page values.
+  - The shared Core was synced to 143d80419 when t997's finish refused on the lagging Core.
+  - t999 was started and handed to the t997 worker. Its downstream tree got dev 1485a34c1.
+  - Both t996 trees got dev.
+- Validation: lead runs through the gate:
+  - t998: vitest-groups parallel `Tests  102 passed (102)` and real-sql `Tests  54 passed (54)`; fluxiq check exit 0; audit passed; Core finish `Tests  70 passed (70)`.
+  - t997: domain `# tests 442 # pass 442 # fail 0`; domain check exit 0; read-oracle `# pass 10 # fail 0`; audit `passed (259 warning(s), 551 baselined)`.
+  - t997 earbuds proof (runterms): `"state": "ready"`, `kept` 11, `matchedRecords` 11, `expectedInCollected` 11, `modelCalls` 0. It exits 1 only because 2 of the 13 expected records are on pages the recording never read.
+- Follow-up: t996 lead preflights; t999; t994; then the paid round.
+
+### 2026-11-23 - t993 integrated (fluxiq 0.54.1); F23 diagnosed; t998 started
+- Changed:
+  - t993 finished in both repositories.
+  - t995 finished downstream (test and report). Its empty Core branch was abandoned with 0 unmerged.
+  - F23's fix was given to t994.
+  - t998 started with a brief and handed to the t993 worker.
+  - Evidence that later lanes need is preserved outside the repositories in `fxwork/recorded-evidence/{t993,t995}/`, because a finish removes the worktree's ignored `test-runs/`.
+- Validation: lead runs through the gate:
+  - t993: contracts `Tests  323 passed (323)`; feed and completion parallel `Tests  163 passed (163)`; service real-sql `Tests  5 passed (5)`; contracts and fluxiq checks exit 0; Core and Down audits passed; libraries exit 0; job-board proof `"passed": true`, `matchedRecords` 7, `modelCalls` 0.
+  - t995: domain target-reacquire `# tests 68 # pass 68 # fail 0`; audit passed.
+  - Finishes: Down audits passed; Core t993 contract gate `Tests  70 passed (70)`.
+- Follow-up: t994 (including F23), t996, t997 and t998; then the paid round.
+
+### 2026-11-23 - t991 and t992 integrated; t995-t997 started
+- Changed: t991 (domain sweep failures, old-client definition admission, retained-extraction doc) and t992 (extension, test-runner, Core build list) finished into dev and were pushed. The shared Core was synced to 6318fac88. t995 F23, t996 person-check preflight and t997 schema labels were started with written briefs.
+- Validation: lead runs through the gate:
+  - t991: affected `# tests 65 # pass 65 # fail 0`; importers `# tests 200 # pass 200 # fail 0`; domain check exit 0; audit passed.
+  - t992: scripts `# pass 12 # fail 0`; extension `# tests 101 # pass 101 # fail 0`; runner build exit 0; lab-attempt-command `# pass 6 # fail 0`; extension check exit 0; audit passed.
+  - Finishes: both `"validation":{"passed":true}`.
+- Follow-up: t993-t997 results; the paid round after all of them land.
+
+### 2026-11-23 - t990 integrated as Core 0.54.0
+- Changed: t990 finished in both repositories. The downstream branch carries the `lab recorded-read --task` oracle mode and two admission fixes. Core adds the re-export-only subpath `fluxiq/automation/answer-first-data`, plus the version. Both t993 trees were moved to the new dev for its proof step.
+- Validation: lead runs through the gate:
+  - `node scripts/lab/run-lab.mjs recorded-read crossborder-marketplace --task crossborder-marketplace-free-hubs-under-ten …` → `{"passed":true,"phase":"done","gap":null}`, `matchedRecords` 10, `modelCalls` 0;
+  - the same for professional-network Netherlands (from44) → 32/32 and job-board remote (mwov5v61) → 7/7;
+  - owners `# tests 64 # pass 64 # fail 0`;
+  - Down audit `passed (258 warning(s), 551 baselined)` and Core audit `passed (569 warning(s), 903 baselined)`;
+  - finishes: Down audit passed; Core `Tests 70 passed (70)`.
+- Follow-up: earbuds' broad collection and photo-social are recording gaps for the paid round; t995 schema labels; t993 absent-cell semantics.
+
+### 2026-11-23 - Full sweep results; t990 worker result; four fix lanes dispatched
+- Changed: the shared Core `fxwork/!FluxIQ` was synced from cc1230032 to 2dba34613 via `pnpm task sync-core --allow-running` from the t353 sibling, moved to origin/dev. Tasks started: t991 sweep-fix-domain, t992 sweep-fix-extension-runner, t993 absent-cell-semantics (Core-paired) and t994 sweep-fix-core (Core-paired). Each has a written brief in its own tree.
+- Validation: sweep step logs read by the lead from `scratchpad/sweep/`:
+  - downstream check `# fail 1` (core-build.test.mjs:122);
+  - domain `# pass 3150 # fail 14`;
+  - extension 4 "not ok";
+  - test-runner 1 "not ok";
+  - Down build exit 0;
+  - Core fluxiq `Tests  25 failed | 20207 passed` (parallel) and `Tests  292 failed | 2944 passed` (real-sql);
+  - apps/web `Tests  2 failed | 4382 passed`.
+- Worker claims, not yet lead-run: t990's four passes and photo-social's recording gap (report `reports/t990-recorded-oracle.md` in the t990 tree).
+- Follow-up: lead verification of t990, then its finish; the four lanes' results; t995 after t991.
 
 ### 2026-11-23 - t986 integrated as Core 0.53.1; t990 and full sweep started
 - Changed: t986 finished in both repositories (offline proof harness, trace-replay host-stream fixes, commandId hidden from the model, probe instruction). t990 started with `pnpm task start recorded-oracle-acceptance --worktree --core --skip-workspace-build`. Sweep worktrees `fxwork/sweep-20261123` were created at dev. A first attempt created them inside each repository through a relative `git -C` path; the lead removed them with `git worktree remove`, removed the empty folders and recreated them with absolute paths.

@@ -14,3 +14,11 @@ test("permission not applicable needs actual declared read-only task evidence", 
   assert.equal(classifyPreflight(input).protocolPassed, true);
   assert.equal(classifyPreflight({ ...input, permission: { ...input.permission!, declaredConsequences: ["modify_existing"] } }).protocolPassed, false);
 });
+
+test("a failed site challenge is a gap that names its stage and code, and a pass is none", () => {
+  const source = { core: "core", extension: "extension" };
+  const input: PreflightEvidence = { scenarioId: "everything-store", source, stages: ["pairing", "chat_start", "person_answer", "read"].map((stage) => ({ stage: stage as "pairing", passed: true, artifact: "receipt" })), siteChallenge: "passed", externalCalls: 0, externalUsd: 0, permission: { applicability: "not_applicable", taskId: "t", taskDigest: "a".repeat(64), declaredConsequences: [], pointDeclared: false } };
+  assert.deepEqual(classifyPreflight(input), { protocolPassed: true, siteChallenge: "passed", gaps: [] });
+  const failed = classifyPreflight({ ...input, siteChallenge: "failed", siteChallengeFailure: { stage: "hand_off", code: "no_person_ask_on_thread" } });
+  assert.deepEqual(failed, { protocolPassed: false, siteChallenge: "failed", gaps: ["site_challenge_failed_hand_off_no_person_ask_on_thread"] });
+});

@@ -60,6 +60,23 @@ test("canonical dispatch gates projected and predicate-only anchors and sends su
   }
 });
 
+// A read of a detected list retains every column the detection found (t982), so an ordinary read
+// of a list with a definition column carries one it never asked for; an old client gets the read
+// without it rather than no read at all (`../../runtime/definition-fields/admission.ts`).
+test("an ordinary read reaches an old client without the definition column it only retains", async () => {
+  const payload = {
+    extractList: { item: "article", fields: { name: "h3", edition: FIELD } },
+    recordOutput: { recordsPath: "result.extracted", process: { columns: ["name"] }, schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "Name", valueType: "string" }, { id: "edition", label: "Edition", valueType: "string", required: false }] } }
+  } satisfies JsonObject;
+  const old = host([ready("selected")]);
+  assert.equal((await old.dispatch(payload)).ok, true);
+  assert.deepEqual(old.sent.map((sent) => Object.keys(sent.parameters.extractList as JsonObject)), [["item", "fields"]]);
+  assert.deepEqual(Object.keys((old.sent[0]!.parameters.extractList as { fields: JsonObject }).fields), ["name"]);
+  const current = host([ready("selected", 1)]);
+  assert.equal((await current.dispatch(payload)).ok, true);
+  assert.deepEqual(current.sent, [{ sessionId: "selected", actionType: "web.dom.extract_list", parameters: payload }]);
+});
+
 test("ordinary reads, excluded columns and other actions do not require the new feature", async () => {
   for (const payload of [{ extractList: { item: "article", fields: { name: "h3" } } }, { extractList: { item: "article", fields: { name: "h3", edition: { ...FIELD, handling: "exclude" } } } }]) {
     const run = host([ready("selected")]);

@@ -32,7 +32,8 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { parseAutomationStudioRecordSchema } from "fluxiq/components/automation";
-import type { WebLlmExtractionBinding, WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
+import type { AutomationStudioRecordSchema } from "fluxiq/automation";
+import { webLlmSampledLabel, webLlmUniqueStoredLabels, type WebLlmExtractionBinding, type WebLlmExtractionHandles, type WebLlmExtractionHandleScope } from "../../structure";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import { canonicalWebLlmTargetHandle } from "../../handle-spelling";
@@ -60,10 +61,21 @@ export function webPlanSavedExtractionBinding(value: Record<string, unknown>, ha
     frameId: saved.frameId,
     frameUrlPath: saved.frameUrlPath,
     extractList: structuredClone(list) as unknown as WebLlmExtractionBinding["extractList"],
-    recordSchema: schema?.ok ? schema.schema : undefined,
+    recordSchema: schema?.ok ? withoutSampledLabels(schema.schema) : undefined,
     itemCount: saved.itemCount,
     oneRecord: saved.oneRecord === true ? true : undefined
   });
+}
+
+/**
+ * The saved schema with each label a detection built from a sample replaced by its field's key, as a detection now
+ * stores it (`../../structure/sampled-label.ts`, t997): a Flow saved before then must not copy a page value into
+ * every dataset it writes. A label in the page's own words is kept.
+ */
+function withoutSampledLabels(schema: AutomationStudioRecordSchema): AutomationStudioRecordSchema {
+  if (!schema.fields.some((field) => webLlmSampledLabel(field.label))) return schema;
+  const labels = webLlmUniqueStoredLabels(schema.fields.map((field) => ({ id: field.id, label: webLlmSampledLabel(field.label) ? field.id : field.label })));
+  return { ...schema, fields: schema.fields.map((field, index) => ({ ...field, label: labels[index]! })) };
 }
 
 /**

@@ -10,6 +10,7 @@ import type { PreflightEvidence } from "./evidence.js";
 import { classifyPreflight } from "./evidence.js";
 import { proveOfflinePreflightRead } from "./prove-read.js";
 import { proveOfflinePreflightPermission } from "./permission-probe.js";
+import { proveSiteChallenge } from "./site-challenge/index.js";
 
 /** Runs real isolated protocol stages; a generic confirmation never claims a site's own challenge passed. */
 export async function runOfflinePreflight(input: { repositoryRoot: string; fluxiqRepositoryRoot: string; scenarioId: string; taskId: string; source: PreflightEvidence["source"]; evidenceDirectory: string }) {
@@ -47,10 +48,24 @@ export async function runOfflinePreflight(input: { repositoryRoot: string; fluxi
     }
     stages.push({ stage: "permission_answer", passed: permissionExercised, artifact: file });
   }
+  let challenge: Pick<PreflightEvidence, "siteChallenge" | "siteChallengeFailure"> = { siteChallenge: "not_declared" };
+  if (checks !== null) {
+    const file = path.join(input.evidenceDirectory, "site-challenge.json");
+    await mkdir(input.evidenceDirectory, { recursive: true });
+    try {
+      const proof = await proveSiteChallenge({ repositoryRoot: input.repositoryRoot, fluxiqRepositoryRoot: input.fluxiqRepositoryRoot, scenarioLabDist: paths.scenarioLabDist, scenario, module: checks, taskId: input.taskId, instruction: request.task.instruction, evidenceDirectory: input.evidenceDirectory });
+      await writeFile(file, JSON.stringify(proof, null, 2));
+      challenge = proof.verdict.siteChallenge === "passed" ? { siteChallenge: "passed" } : { siteChallenge: "failed", siteChallengeFailure: { stage: proof.verdict.stage, code: proof.verdict.code ?? "unknown" } };
+    } catch (error) {
+      const code = error instanceof Error && /^preflight_[a-z_]+$/u.test(error.message) ? error.message : "site_challenge_probe_failed";
+      await writeFile(file, JSON.stringify({ proof: "site_challenge", verdict: { siteChallenge: "failed", stage: "arm", code } }, null, 2));
+      challenge = { siteChallenge: "failed", siteChallengeFailure: { stage: "arm", code } };
+    }
+  }
   const evidence: PreflightEvidence = {
     scenarioId: input.scenarioId, source: input.source, stages,
     permission: { applicability: requiredPermission ? "required" : "not_applicable", taskId: request.task.id, taskDigest, declaredConsequences: [...(request.task.permits ?? [])], pointDeclared: request.task.permissionPoint !== undefined },
-    siteChallenge: checks === null ? "not_declared" : "not_run", externalCalls: 0, externalUsd: 0,
+    ...challenge, externalCalls: 0, externalUsd: 0,
   };
   await mkdir(input.evidenceDirectory, { recursive: true });
   await writeFile(path.join(input.evidenceDirectory, "preflight.json"), JSON.stringify({ evidence, classification: classifyPreflight(evidence), taskId: input.taskId, taskDigest, runtimeFailure: result.failure === null ? null : result.stage, gaps: requiredPermission && !permissionExercised ? ["declared_task_permission_not_exercised"] : [] }, null, 2));

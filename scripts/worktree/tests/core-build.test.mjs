@@ -114,7 +114,7 @@ test("the web panel is built exactly as before, every time", async () => {
   const calls = [];
   await build(cores[0], calls, [], FULL_CORE_PACKAGES);
   await build(cores[0], calls, [], FULL_CORE_PACKAGES);
-  assert.deepEqual(calls, [...CORE_PACKAGES.map((item) => item.filter), "@fluxiq/web", "@fluxiq/web"]);
+  assert.deepEqual(calls, [...CORE_PACKAGES.map((item) => item.filter), "@fluxiq/cloud", "@fluxiq/web", "@fluxiq/cloud", "@fluxiq/web"]);
 });
 
 // The SDK joined Core's root build (`sdk:build`) without joining these lists, so every

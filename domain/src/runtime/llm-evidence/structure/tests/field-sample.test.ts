@@ -68,8 +68,8 @@ function requestsPage(): JsonObject[] {
   return elements;
 }
 
-async function detected(): Promise<WebLlmRepeatingStructure> {
-  const runtime = createWebAutomationLlmEvidenceRuntime({
+function runtimeOverRequests() {
+  return createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
@@ -78,6 +78,10 @@ async function detected(): Promise<WebLlmRepeatingStructure> {
       return { status: "succeeded", payload: command.parameters.detectStructure === undefined ? { snapshot } : { snapshot, structure: structuredClone(STRUCTURE) as JsonValue } };
     }
   });
+}
+
+async function detected(): Promise<WebLlmRepeatingStructure> {
+  const runtime = runtimeOverRequests();
   const result = await runtime.executeTool({ ...SCOPE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
   assert.equal(result.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
   return result.evidence as WebLlmRepeatingStructure;
@@ -114,4 +118,47 @@ test("a form control's value is never sampled, and keys are unchanged", async ()
   assert.equal(note.sample, undefined);
   assert.equal(JSON.stringify(packet).includes("private note"), false);
   assert.deepEqual(packet.fields.map((each) => each.key), STRUCTURE.proposal.fields.map((each) => each.key));
+});
+
+// t997: the readable label above is the model's alone. The stored schema the
+// handle keeps -- copied into every dataset the read writes, bound by a
+// declaration, heading an answer's column -- holds the page's own column words
+// or the key, never a sample.
+async function stored(): Promise<{ packet: WebLlmRepeatingStructure; labels: Record<string, string> }> {
+  const runtime = runtimeOverRequests();
+  const result = await runtime.executeTool({ ...SCOPE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  const packet = result.evidence as WebLlmRepeatingStructure;
+  const resolved = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
+  assert.ok(resolved.ok);
+  const schema = resolved.binding.recordSchema;
+  assert.ok(schema);
+  return { packet, labels: Object.fromEntries(schema.fields.map((field) => [field.id, field.label])) };
+}
+
+test("a generated class path column stores its key, never its sample", async () => {
+  const { labels } = await stored();
+  assert.equal(labels["div_x0531l50_x1r2vv8_x4q0id2_a_x0ybvghy_x130pqy_x1yfagd"], "div_x0531l50_x1r2vv8_x4q0id2_a_x0ybvghy_x130pqy_x1yfagd");
+  assert.equal(labels[MUTUAL_KEY], MUTUAL_KEY);
+  // A link's address column is labelled by the same generated path and ` url`: still generated.
+  assert.equal(labels.profile_url, "profile_url");
+  // A form control's column, whose shown label stays its path, stores its key too.
+  assert.equal(labels.note, "note");
+  const serialized = JSON.stringify(labels);
+  for (const value of ["Tom Becker", "mutual friends", "/people/", "private note", "link:", "text:"]) assert.equal(serialized.includes(value), false, `the stored schema quotes ${value}`);
+});
+
+test("a column the page labels in words stores those words", async () => {
+  const { labels } = await stored();
+  assert.equal(labels.confirm, "Confirm");
+});
+
+test("the model-facing packet is unchanged: readable labels and samples stay the model's", async () => {
+  const { packet } = await stored();
+  assert.deepEqual(packet.fields.map((field) => [field.key, field.label, field.sample]), [
+    ["div_x0531l50_x1r2vv8_x4q0id2_a_x0ybvghy_x130pqy_x1yfagd", "link: 'Tom Becker'", "Tom Becker"],
+    [MUTUAL_KEY, "text: 'and 4 other mutual friends of yours…'", "and 4 other mutual friends of yours…"],
+    ["profile_url", `${BODY} > a.x0ybvghy.x130pqy.x1yfagd url`, "/people/tom.becker.9/"],
+    ["confirm", "Confirm", "Confirm"],
+    ["note", `${BODY} > input.x9k2m1q.xq8z3t1`, undefined]
+  ]);
 });

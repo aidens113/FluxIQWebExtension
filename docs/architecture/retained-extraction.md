@@ -21,6 +21,27 @@ depend on the old handle store. Alias resolution rebases field IDs and identity
 references together. A shared link is never promoted to identity when detection
 validated none.
 
+**A stored label carries no page value (t997).** The model is shown a readable
+label: where the page's own label is a generated class path, what the element is
+and its first item's value (`link: '<a title>'`, `structure/field-sample.ts`).
+That label stays in the packet. The stored `recordSchema` label is the page's own
+column words where the detection has non-generated ones (a header, a test id, an
+attribute's name, a badge's name), screened; otherwise it is the field key
+(`structure/stored-label.ts`). A column the model renames that reads the same
+detected column keeps that column's stored label under the model's id: `plus` for
+a detected `brightaisle_plus` is stored with id `plus` and label `brightaisle_plus`,
+or the page's words for that column when it has them. Core binds a declaration's
+name to an exact id first and then to the one field whose label folds to it
+(case and whitespace ignored), so a declaration may name the model's key or the
+site's label, with no Core change. A field whose reading differs from every
+detected column (an alias reading another attribute) is labelled by its id.
+Labels are made unique by `structure/stored-labels.ts`: a label that folds to a
+label already given, or to another field's id, becomes `<label> (<id> <n>)`, so
+a name always binds one field and no value is added to tell two apart. A saved
+read from before t997 may still hold a sample-built label; its reader
+(`plan-resolution/extraction/saved-list.ts`) replaces each one with the field's
+key. Datasets Core already stored keep the labels they were created with.
+
 Saved bindings without the new schema metadata retain the legacy handle fallback
 when unreadable. An explicitly present invalid or null schema refuses at the
 binding; it cannot fall through to another in-memory binding with the same name.
@@ -31,6 +52,18 @@ does not invalidate an otherwise valid row. Explicit handling exclusions remain
 authoritative: the page does not read those values, validation removes them,
 and stored schemas omit them. Sensitive-field screening remains before handle
 retention. No raw page capture is added to storage.
+
+A browser client that does not declare the semantic-definition capability still
+gets ordinary reads (`definition-fields/admission.ts`, t991). A definition column
+that the read only retains is left out of what that client is sent, and the
+stored schema keeps it as an absent optional column. "Only retains" means:
+- `process.columns` names an answer view that leaves it out;
+- it is not `required`;
+- no condition, sort, dedupe key or identity names it;
+- nothing dedupes by the whole row.
+
+Any read that does depend on a definition column is refused whole, as before.
+A client that declares the capability gets the read unchanged.
 
 Both direct exploration and replay attach the actual validated dispatch schema
 to execution metadata. Core stores original values and derives typed comparisons

@@ -354,6 +354,12 @@ there is no spending limit, and the spend ledger records each run's cost for
 reporting. Overrides are files only the user creates
 (`docs/architecture/testing-facility.md`, "Live-run waste guards").
 
+**Low memory is not a reason to hold work** (user, 2026-11-23): "dont worry
+about mem, we have pagefile". The page file (32 GB initial, 48 GB maximum)
+gives the machine commit headroom. Do not delay, serialize or skip lanes,
+builds or visible browser runs because free physical memory looks low; dispatch
+them and let the heavy gate queue its heavy steps.
+
 Authoring worktrees live under `fxwork/` beside the checkout
 (`C:/Users/osrs_/FluxStuff/fxwork/` here), never under `fxlab/`, which holds the
 Lab's pinned test worktrees. `domain/package.json` links Core by a relative path
