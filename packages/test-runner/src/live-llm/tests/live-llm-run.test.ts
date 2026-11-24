@@ -366,7 +366,7 @@ test("a build over its run budget, over its call count, or run on another model 
   const tooManyCalls = await settleBuildOnce({ ...proposedBuild, providerCalls: 27 });
   await assert.rejects(tooManyCalls.settle(), /the run made 27 provider call\(s\) against an authorized 26/u);
   const otherModel = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, model: "deepseek-reasoner" } });
-  await assert.rejects(otherModel.settle(), /Core's Flow build ran on anthropic\/deepseek-reasoner, not the authorized anthropic\/claude-sonnet-5-5/u);
+  await assert.rejects(otherModel.settle(), /Core's Flow build ran on anthropic\/deepseek-reasoner, not the authorized anthropic\/claude-haiku-5-5/u);
 });
 
 // A created Flow's playback is readied for the model too, so a Flow that

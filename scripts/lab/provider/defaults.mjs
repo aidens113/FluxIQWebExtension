@@ -1,6 +1,6 @@
-/** User's live-test preference, 2026-10-30. Mirrored by test-contracts' model registry. */
+/** User's live-test preference, 2026-10-30; Haiku since 2026-11-20 (AGENTS.md, "No model ladder"). Mirrored by test-contracts' model registry. */
 export const LIVE_LLM_DEFAULT_PROVIDER = "anthropic";
-export const LIVE_LLM_PROVIDER_DEFAULT_MODELS = Object.freeze({ anthropic: "claude-sonnet-5-5", deepseek: "deepseek-flash" });
+export const LIVE_LLM_PROVIDER_DEFAULT_MODELS = Object.freeze({ anthropic: "claude-haiku-5-5", deepseek: "deepseek-flash" });
 export const LIVE_LLM_DEFAULT_MODEL = LIVE_LLM_PROVIDER_DEFAULT_MODELS[LIVE_LLM_DEFAULT_PROVIDER];
 export const LIVE_LLM_DEFAULT_COST_USD = 5;
 export const LIVE_LLM_CREDENTIAL_NAMES = Object.freeze({

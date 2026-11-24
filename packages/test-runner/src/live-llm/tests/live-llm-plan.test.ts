@@ -252,7 +252,7 @@ test("every configured model reaches the plan, and the default is what an absent
   const absent = profile();
   delete (absent as { model?: string }).model;
   assert.equal(planAtLabCeiling(absent).model, DEFAULT_LLM_MODEL);
-  assert.equal(DEFAULT_LLM_MODEL, "claude-sonnet-5-5");
+  assert.equal(DEFAULT_LLM_MODEL, "claude-haiku-5-5");
 });
 
 test("Claude's Lab catalog and context ceiling match Core's public model seam", () => {
