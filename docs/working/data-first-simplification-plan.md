@@ -71,7 +71,9 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - t1023 (worker-heavy): the act checklist demanded `a1.fulfilment` (pickup) for 190 steps although the site had Pickup already chosen. An option standing chosen when the act lands must count as done.
   - t1024 (worker): the result line counted each replay of a read as another page ("4 rows over 13 pages"), so the model searched for Next page 8 times.
   - t1025 (worker-heavy): the unreadable replies (`content_off_shape`, 11 in the third run, several in each earlier one) must be fixed at the root.
-  - The day's full sweep on t1021 (worker-light), for `main` promotion.
+  - The full sweep of 11-24 (t1021, at Down 6acba56f8-era dev / Core e3498f9f3; report `reports/t1021-sweep-1124.md`) is done. Core check, downstream check and downstream build passed; 3 tests failed. Being fixed forward:
+    - t1026 (worker): Core `anthropic-session-panel.test.ts` (rejects `llm.provider_malformed_response`) and web `anthropic-settings.test.tsx` (`llmModel` value).
+    - t1027 (worker-heavy): domain `gateway-output-dispatcher-durable-reconcile.test.mjs`, "a lost durable press the browser never received is made again". `main` is promoted once both pass.
 - **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev, after t1022 is merged and proven offline. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$45.
 - **Watcher follow-up:** a `page_reset` inside a model-sent `core.run_flow` replay (run-mwuxd2v9, step 43) is not taken as explained by the Flow run.
 - **Open (t1020):** a rerun in attempt 2 onward that changes a read's handle, when the draft comes from a saved Flow, may resolve against the step's saved binding (`plan-resolution/extraction/slot.ts`); untested.
