@@ -515,6 +515,13 @@ progress, or to save money on a run that is still learning. A stopped run gets i
 reported as a product defect with its cause, and is not relaunched until that cause is fixed and
 proven offline.
 
+**No arbitrary limit ends or resets a run** (user, 2026-11-24): "THERE SHOULDNT BE ANY ARBITRARY
+FUCKING CALL LIMIT THAT RANDOMLY JUST RESETS EVERYTHING". No count of calls, steps, iterations or
+steps without progress ends an attempt's round, and nothing sends the browser back to the start
+page once the attempt has reached it: every round continues from the page as it stands. A
+repeat is handled by loop detection and the model's own loop decision; only the result or the
+purse ends a task. Raising such a number is not a fix; remove it.
+
 **Every node retries automatically** (user, 2026-10-07): the first attempt plus
 3 retries on every path (exploration, mid-build tests, candidate trials,
 playback), waiting for the target first; only a lasting act whose effect is
