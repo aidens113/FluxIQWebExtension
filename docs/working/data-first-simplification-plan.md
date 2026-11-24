@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Every planned fix through t1000 is integrated and pushed (Core 0.54.4, contracts 0.23.2); both full sweeps of 11-23 pass every test. The supervised $50 paid round on the ten scoreboard tasks is running (2026-11-24); t1005 (check build order) merges after it.
+Status detail: The paid round of 11-24 was halted at $0.80 on a shared look-loop defect; t1008, t1010, t1011 and t1012 fix it and are merged (Core 0.54.7). t1013 (paging per list) and t1014 (rounds keep memory) are in flight; then one watched bigbox run before the rest.
 Created: 2026-11-20
 Last updated: 2026-11-24
 Owner: Senior supervisor agent
@@ -16,34 +16,48 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (downstream af360c487, Core 5dfde039c; fluxiq 0.54.4, contracts 0.23.2):
+- **Integrated and pushed in both repositories** (downstream ffa67022e, Core 6fb3574a4; fluxiq 0.54.7, contracts 0.23.2):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
-  - t990: recorded-read oracle acceptance. Hubs 10/10, earbuds 13/13 (processing), job board 7/7 on three runs and Netherlands 32/32, all with 0 calls. Photo-social is a recording gap.
-  - t991, t992 and t994: every failure from the first full sweep of 11-23 (21 downstream, about 319 Core and web), fixed forward. t994 also fixed F23 (the run gate looks at the page for a press carried only by `heldOnRepeat`) and the read's own process under a declaration.
-  - t993 and t998: a captured-but-absent cell is "not shown", in the feed and the store (migration 0041).
+  - t990: recorded-read oracle acceptance (hubs 10/10, earbuds 13/13 processing, job board 7/7 ×3, Netherlands 32/32, 0 calls); photo-social is a recording gap.
+  - t991, t992 and t994: every failure of the first 11-23 sweep. t994 also fixed F23 and the read's own process under a declaration.
+  - t993 and t998: a captured-but-absent cell is "not shown" (feed and store, migration 0041).
   - t996: the preflight meets the four sites' own person checks.
-  - t997 and t999: stored labels hold no page values, and binding reads `_`/`-` as word separators.
-  - t1000: `ask_person` is offered only after a change_approach, with a reason (the user's 11-19 rule; t983 had dropped the gate). A judge repeating one unreadable reply is caught as a loop, and each re-ask names the missing schema part.
-- **Second full sweep of 11-23** (Down 9a29b8940 / Core fbc0356f6, before t1000): every test passes.
-  - Core fluxiq: parallel 20,257 and real-sql 3,241.
-  - Core packages: contracts 1,173, ui-components 881, websocket 213, sdk 103, cloud 67.
-  - apps/web: 4,384.
-  - Downstream: domain 3,195, extension 4,150, test-runner 2,982, scenario-lab 1,043, and the rest. Both builds exit 0.
-  - Only downstream `pnpm check` failed: 35 `error TS` from missing `@fluxiq-web-extension/domain/node` and `browser-host/reaper` declarations in a fresh tree (check ran before build). The fix is t1005, merged only after the paid round, so the lanes stay at dev.
-- **Paid round (P7, U8): running since 2026-11-24** under a supervisor (brief `briefs/paid-round-1124.md` in `fxwork/t1001-paid-lane-a`). The lanes are t1001-t1004 (`paid-a` to `paid-d`), at downstream af360c487 / Core 5dfde039c; the running report is `reports/paid-round-1124.md` in lane a. No code merges into dev until the round ends; docs-only commits keep the lanes admissible.
-  - Tasks: the ten fixed scoreboard tasks (`scoreboard/fixed-tasks.ts`), easiest first.
-  - Command: `pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd 5`, with four attempts, on Haiku, in visible Chrome, on up to four dev-synced lanes, under a supervisor that watches every run, writes its debug and reports cost as it happens.
-  - Money: a task starts only while billed spend, plus $5 for each task in flight, plus its own $5 is at most $50. A call with no reported usage is counted at its maximum. The round stops at the first balance error.
-- **Open follow-ups, not blocking the round:**
-  - narrow the P4 memory tolerance (`task-model/resolve.ts`) to store I/O errors;
+  - t997 and t999: stored labels hold no page values; binding reads `_`/`-` as word separators.
+  - t1000: `ask_person` is a last resort again; a looping judge is caught.
+  - t1005: package checks and tests build the workspace dists they import, so `pnpm check` passes in a fresh tree.
+  - **From the halted paid round:**
+    - t1008: no count ends an answer-first round. A run of looks is a loop finding the model decides; a change_approach on looks is held to its kind; the prompt no longer says to prefer observing over acting, and says how to press.
+    - t1011: a judged no on `finish_with_best` shows its defects and keeps the repeat refused.
+    - t1012: Core's built-in Anthropic default is Haiku.
+    - t1010: every Lab run has a run watcher (`scripts/lab/run-watch/`) that alerts on repeating or no progress, and the Lab's default live model is Haiku.
+- **Second full sweep of 11-23** (before t1000): every test passed (Core about 30,000, downstream about 11,700); only `pnpm check` failed in a fresh tree, fixed by t1005.
+- **Paid round of 2026-11-24: halted at $0.80 of $50.** Five launches; no task finished attempt 1.
+  - Bigbox looked for about 170 steps without pressing. Cause, from its steps:
+    - the 8-look guard ended each round and the next round's evidence window was empty;
+    - the prompt discouraged acting;
+    - a consent modal covered the store button.
+  - Bikes acted but its `finish_with_best` was refused and it went back to paging checks.
+  - Lens hood was killed early; apprentices and Halvard had not started.
+  - The user then set four rules, now in AGENTS.md:
+    - every Lab run is overseen and stopped early only when really needed;
+    - every Lab run has the watcher;
+    - no arbitrary limit ends or resets a run;
+    - fix an obvious shared problem before running more.
+  - Report: `reports/paid-round-1124.md` and the debugs, in the paid lane trees t1001-t1009 (to be committed when those lanes close).
+- **Running:**
+  - **t1013** (lead verification): paging is settled per list from each Next page's `listMove`, and a Next page whose list is absent is refused as `list_not_on_page`.
+  - **t1014** (worker-heavy): a fresh round keeps what the model learned, and unreadable decider replies go to loop detection.
+- **Next:** merge t1013 and t1014. Then **one** watched paid run (bigbox, the run that showed the defect) with the watcher, `--llm-model claude-haiku-5-5` and a fresh lane synced to dev. Only if it presses and progresses do the other nine tasks follow, within the remaining $49.20.
+- **Open follow-ups, not blocking:**
+  - narrow the P4 memory tolerance to store I/O errors;
   - a saved Flow carries its own data declaration;
-  - the test file that leaks `chrome` before act-mark's watch test;
-  - the start reading's retry on timeout (once, against 3 on network errors);
-  - a DeepSeek-only workspace with no provider named gets Haiku (the stated default);
+  - the test leaking `chrome` before act-mark's watch test;
+  - the start reading's retry on timeout;
+  - the Lab's Core build lease should be a shared reader lease (lanes sharing a Core run one at a time);
   - promote `main` after a clean full sweep;
-  - recorded evidence lanes need is kept outside the repositories in `fxwork/recorded-evidence/`, because a finish removes a worktree's ignored `test-runs/`.
+  - evidence lanes need is kept in `fxwork/recorded-evidence/`.
 
 **User-approved rules (2026-11-20):**
 - U1: no model ladder; a task keeps its starting model.
@@ -325,6 +339,23 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - Paid round halted at $0.80; the shared look-loop defect fixed (t1005, t1008, t1010-t1012)
+- Changed:
+  - The lead killed all four live runs on the user's order: "FIX THE FUCKING PROBLEM BEFORE WASTING MORE MONEY".
+  - Merged t1005 (check build order), t1011 (judged no on finish_with_best, 0.54.5), t1012 (Haiku built-in default, 0.54.6), t1008 (no count ends a round; look runs are loop findings; prompt; 0.54.7) and t1010 (Lab run watcher and the Haiku Lab default).
+  - Started t1013 (paging per list) and t1014 (rounds keep memory).
+  - AGENTS.md gained the user's oversight, watcher, no-arbitrary-limit and fix-first rules.
+  - A global lesson `fix-shared-problem-before-more-runs` was added (MeritPrompts c77cb1c).
+- Validation: lead runs through the gate:
+  - t1005, from fresh dists: `# tests 46 # pass 46 # fail 0`; checks 0 `error TS`.
+  - t1011: parallel `Tests  2455 passed (2455)`, real-sql `Tests  94 passed (94)`; check 0; audit passed.
+  - t1012: `Tests  434 passed (434)` plus 9; web `Tests  479 passed (479)`; check 0.
+  - t1008, merged with t1011 and t1012: parallel `Test Files  435 passed (435)`, `Tests  4229 passed (4229)`; real-sql `Tests  499 passed (499)`; check 0; audit passed.
+  - t1010: live-llm `# pass 54 # fail 0`; watcher `# pass 16 # fail 0`; Lab tests `# pass 237`; replay on run-mwufisf0 gave 15 alerts.
+  - Core finishes: `Tests  70 passed (70)` each.
+- Round spend: $0.7748 settled ($0.80 booked) by the supervisor's step-log tally.
+- Follow-up: t1013, t1014, then one watched bigbox run.
 
 ### 2026-11-24 - t1000 integrated (fluxiq 0.54.4); sweep 2 clean of test failures; paid round started
 - Changed:
