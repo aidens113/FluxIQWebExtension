@@ -506,8 +506,12 @@ attempt that strays from the saved Flow, or spends calls, is a defect to trace t
 
 **Every ongoing live run is overseen, and stopped early only when really needed** (user,
 2026-11-24): "ongoing runs get some sort of oversight. If it keeps just doing the same thing again
-and again and burning tokens it gets stopped early ONLY if really needed". An agent watches each
-live run as it goes: its step logs, its chat and its spend. It stops a run early only when the run
+and again and burning tokens it gets stopped early ONLY if really needed", and then "FROM NOW ON
+EVERY LAB RUN IS MONITORED IN THAT WAY. NOT SO INTENSELY THAT IT WASTES CLAUDE TOKENS BUT JUST
+ENOUGH TO CATCH REPEATING/NO PROGRESS". Every Lab run, live or provider-free, runs with the Lab's
+run watcher, which reads the run's step files and raises an alert only on repeating or no
+progress. The agent that launched the run waits on that alert (a Monitor on the watcher's alert
+file), not on the logs, and reads the run only when it fires. It stops a run early only when the run
 is plainly stuck repeating itself (the same kind of calls with no act and no new evidence) and the
 product's own loop handling has already tried to steer it without effect, so more steps would
 measure nothing. It never stops a run for being slow, for a hard task that is still making
