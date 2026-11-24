@@ -46,5 +46,15 @@ test("a mark still in flight when the lost reply is judged is waited for briefly
 });
 
 test("with no message channel there is no watch, and the press is judged as before marks", () => {
-  assert.equal(watchActMark(TAB_ID, 0, undefined), undefined);
+  // Passing undefined asks for the default, the worker's own `chrome.runtime.onMessage`; this run shares one
+  // process with every other test file, so the worker's channel is taken away here rather than assumed absent.
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const previous = Object.getOwnPropertyDescriptor(globals, "chrome");
+  Object.defineProperty(globals, "chrome", { configurable: true, writable: true, value: undefined });
+  try {
+    assert.equal(watchActMark(TAB_ID, 0, undefined), undefined);
+  } finally {
+    if (previous) Object.defineProperty(globals, "chrome", previous);
+    else delete globals["chrome"];
+  }
 });
