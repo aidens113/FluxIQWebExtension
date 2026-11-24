@@ -63,10 +63,19 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - **t992:** two test-isolation leaks (a `getComputedStyle` stub and `chrome`), a split panel test, the `--recorded-model` option sentence, and `@fluxiq/cloud` in the full Core build list.
   - Open: the test file that leaks `chrome` before act-mark's watch test is not yet identified.
   - Core defect found by t991 and given to t994: `role-routing/judge-model.ts` falls back to Haiku whatever the Flow's provider, so a DeepSeek-only Flow's result check fails.
-- **Running now** (the paid round waits for all of them; target 2026-11-24 evening, gated by t994 and the F23 fix after it):
-  - **t993** (worker-heavy, Core-paired; the lead alerted the user to the Core crossing): absent-cell semantics in `contracts/record-sets/process`, plus the result-feed sweep failures.
-  - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure, plus the judge-model provider default.
-  - **t995** (worker-heavy, Core-paired): F23 diagnosis and reproduction, owning Core `engine/automation/{target-reacquire,unbound-reacquire}` and `step-loop/incident-repair.ts`. Any answer-first part waits for t994.
+- **t993 integrated and pushed (Core 27e8fabc9, contracts 0.23.1, fluxiq 0.54.1).**
+  - In automatic processing, a cell the row's own read captured but the item does not show is a definite "not shown": each row carries its batch's `captured` field list, filled by the feed from the page's stored schema. A field a read never captured is still missing evidence.
+  - The four result-feed sweep failures are fixed, including `completion/check.ts`: an empty result refuses (use take) before "no retained schema".
+  - Lead runs: contracts process 323/323; result-feed and completion 163/163 (parallel) and service 5/5 (real-sql); both checks and both audits pass; job-board proof without a presence test 7/7 with 0 calls.
+  - Remaining: the run-dataset store's end-of-run answer still withholds. Its fix is t998 (migration 0041, per-batch captured fields), on the paid round's critical path.
+- **t995 F23 diagnosed and closed; its fix moved to t994.** The control was really gone: the saved Flow's stepper Next (`main.s4`) was never pressed on replay.
+  - Attempt 1's press answered with a `reads` line, so `act-record/gate/read-answer.ts` called it changed state, and `seed.ts` carried it as `heldOnRepeat` into every later attempt.
+  - `run-acts/run-gate.ts` refuses such a press forever, because a replay can never look.
+  - Fix, in t994's files: for a press held only by `heldOnRepeat`, the gate looks at the page using the node's recorded effect and admits only on `not_seen`. A risen cart count stays refused, keeping the never-repeat-a-lasting-act rule.
+  - The reproduction and report are preserved in `fxwork/recorded-evidence/t995/`. Downstream gained an unbound-refind test (lead 68/68). The campaign note's "calendar control still there" was wrong.
+- **Running now** (the paid round waits for all of them; target 2026-11-24 evening, gated by t994, which now also carries F23's fix):
+  - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure, the judge-model provider default, and F23's run-gate fix.
+  - **t998** (worker-heavy, the t993 worker, Core-paired): migration 0041 gives the run-dataset store each batch's captured fields, so its end-of-run answer agrees with the feed.
   - **t996** (worker, with its own Core): the preflight exercises the site-declared person checks on everything-store, crossborder, bigbox and company-website.
   - **t997** (worker-heavy): stored labels from the page's column words or the field key; a renamed column's id is the model's name and its label the detected key.
   - t990's finish removed its worktree and the ignored `test-runs/` inputs with it. Lanes that need recorded reads copy them again from the original campaign evidence.
@@ -246,6 +255,19 @@ Read Current State and the corresponding task report first; do not restart compl
 All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls or browser acceptance; one inadvertently launched Core full check was deliberately interrupted and is not acceptance.
 
 ## Work Ledger
+
+### 2026-11-23 - t993 integrated (fluxiq 0.54.1); F23 diagnosed; t998 started
+- Changed:
+  - t993 finished in both repositories.
+  - t995 finished downstream (test and report). Its empty Core branch was abandoned with 0 unmerged.
+  - F23's fix was given to t994.
+  - t998 started with a brief and handed to the t993 worker.
+  - Evidence that later lanes need is preserved outside the repositories in `fxwork/recorded-evidence/{t993,t995}/`, because a finish removes the worktree's ignored `test-runs/`.
+- Validation: lead runs through the gate:
+  - t993: contracts `Tests  323 passed (323)`; feed and completion parallel `Tests  163 passed (163)`; service real-sql `Tests  5 passed (5)`; contracts and fluxiq checks exit 0; Core and Down audits passed; libraries exit 0; job-board proof `"passed": true`, `matchedRecords` 7, `modelCalls` 0.
+  - t995: domain target-reacquire `# tests 68 # pass 68 # fail 0`; audit passed.
+  - Finishes: Down audits passed; Core t993 contract gate `Tests  70 passed (70)`.
+- Follow-up: t994 (including F23), t996, t997 and t998; then the paid round.
 
 ### 2026-11-23 - t991 and t992 integrated; t995-t997 started
 - Changed: t991 (domain sweep failures, old-client definition admission, retained-extraction doc) and t992 (extension, test-runner, Core build list) finished into dev and were pushed. The shared Core was synced to 6318fac88. t995 F23, t996 person-check preflight and t997 schema labels were started with written briefs.
