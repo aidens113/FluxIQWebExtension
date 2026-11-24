@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.16, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.17, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -223,6 +223,16 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1030 integrated (fluxiq 0.54.17): a saved act checks its standing option at playback
+- Changed:
+  - Core: the draft step's `chosen` carries the option's place (`at`). `instructed-acts/chosen-precondition.ts` writes each credited option onto the act's node as `requiresChosen`, from the one shared assembly.
+  - Domain: `actions/requires-chosen/`, gateway mapping, node definitions, failure code `web.precondition.option_not_chosen`, `standing-choices/at.ts`. Extension: `content/action-runtime/required-choices/` checks typed state before any verb.
+  - Only the person's credited options become preconditions. On a site whose chooser leaves the DOM, a replay refuses until a step chooses the option, which is safe. The build-time choose step is a follow-up for the first site that needs it; bigbox's closed chooser stays readable in the shadow DOM.
+  - New load-sensitive test: `later-attempt.test.ts` "a run's own deadline" (400 ms) failed once under load. Like t1032's `second-attempt-proof` deadline test, it needs a fake clock before the next sweep.
+- Validation: the lead's run: Core groups over `instructed-acts`, `draft-statement` and `answer-first/flow-run` gave `Tests  448 passed (448)`, `Tests  99 passed (99)`. `test-content.mjs required-choices --headed`: "playback with Pickup chosen: succeeded", then "playback with Delivery chosen: failed web.precondition.option_not_chosen", `1 passed (3.0m)`. After merging dev: domain and extension checks exit 0, domain `actions client output-nodes runtime/failure llm-evidence/node-run` gave `# pass 1227 # fail 0`, audit passed.
+- Follow-up: fake clocks for the two deadline tests.
+
 
 ### 2026-11-24 - t1029 integrated: two dated product defects behind the decline, and the browser specs
 - Changed:
