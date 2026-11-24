@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.11, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.13, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -59,8 +59,23 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - The cause (t1020, correcting the lead): the model read the wrong handle, a "cells" table of the cards' own links offered beside the card list, after its read of the list with the cells' keys was refused with bare codes. It never read the rating and pickup columns.
   - Debug: `../language-driven-flow-loop-plan/debugs/run-mwuuo3zk-75b482b3.md`. Round total about $2.75 of $50.
 - **t1020 integrated:** a card list's own links are no longer a grid; a read naming another handle's keys is told which; every detection says how its handle is read and how it replaces the draft's read.
-- **Running:** the day's full sweep on t1021 (worker-light), for `main` promotion.
-- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$47.25.
+- **Third bigbox run (run-mwuxd2v9, on t1020): stopped by the lead at step 219, $2.23.**
+  - Progress: 27 acts, the store set, and Loftwell 6-roll ($10.47, 4.8 stars, pickup) added; the dish soap kept.
+  - Judged no 4 times. The pickup listing was "read as only 2 rows ... though the page listed 8", so cheaper candidates were never compared.
+  - Every list read in the run, the draft's pickup-listing steps included, replayed as "kept 2 rows from 1 page" (handles `extraction.1`/`.4`, `.4` apparently the cart). One read ran on the home page.
+  - The model kept saying it would re-read the listing, never navigated there, and loop handling steered 4 times without effect.
+  - Evidence: `fxwork/recorded-evidence/t1015-bigbox/run-mwuxd2v9-33928ea3/`. Round total about $5.00 of $50.
+- **Three runs, three defects in reads and pages: a structural fix, not another patch** (the recurring-failures rule).
+- **Running:**
+  - t1022 (worker-heavy). It found that no read ran on another page. The cause was detection: aimed at a shelf heading, it answered a list of two shelves, each shelf's cards flattened into numbered columns. Fixed in the content script (`record-group/`, `infer-list.ts`). It now adds a browser proof on bigbox and a guard that refuses a saved read whose list does not stand on the page.
+  - t1023 (worker-heavy): the act checklist demanded `a1.fulfilment` (pickup) for 190 steps although the site had Pickup already chosen. An option standing chosen when the act lands must count as done.
+  - **t1024 integrated (0.54.13).** Every read has a declared place: [draft step, list key, page it ran on, moves of that list], or [step, batch key] for a saved Flow's batch. A replay at a place already held replaces that page, so three runs of a Flow on one page are one place; real paging stays separate pages. Rows are never compared.
+  - **t1025 integrated (0.54.12).** All 22 unreadable replies of the three runs had one cause: the Anthropic adapter held each decision to the whole schema before Core's reader saw it. Now one decision reading is shared by the harness and the adapter (`runtime/llm/decision-reading/`). A decision is checked against the variant it names, and an unoffered tool goes to the loop's named refusals; withdrawn looks keep `core.loop_decision`. Of the 22 replies, 7 now read, 12 are refused by name, and 3 stay unreadable. Open: withdrawing and restoring looks changes the schema at the head of the request, which misses the prompt cache (one step paid 93k uncached and 77k cache-write tokens).
+  - The full sweep of 11-24 (t1021, at Down 6acba56f8-era dev / Core e3498f9f3; report `reports/t1021-sweep-1124.md`) is done. Core check, downstream check and downstream build passed; 3 tests failed. Being fixed forward:
+    - t1026 (worker): Core `anthropic-session-panel.test.ts` (rejects `llm.provider_malformed_response`) and web `anthropic-settings.test.tsx` (`llmModel` value).
+    - t1027 (worker-heavy): domain `gateway-output-dispatcher-durable-reconcile.test.mjs`, "a lost durable press the browser never received is made again". `main` is promoted once both pass.
+- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev, after t1022 is merged and proven offline. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$45.
+- **Watcher follow-up:** a `page_reset` inside a model-sent `core.run_flow` replay (run-mwuxd2v9, step 43) is not taken as explained by the Flow run.
 - **Open (t1020):** a rerun in attempt 2 onward that changes a read's handle, when the draft comes from a saved Flow, may resolve against the step's saved binding (`plan-resolution/extraction/slot.ts`); untested.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
@@ -351,6 +366,21 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1024 integrated (fluxiq 0.54.13): a replayed read is the same place
+- Changed:
+  - Core `answer-first/result-feed/place-of.ts` (new), `result-feed/feed.ts`, `result/{place-order,types,page-set}.ts`.
+  - The lead sent the first version back. It matched identical whole rows, which guesses identity from content, and a replay whose rows changed would still have counted as a new page. The second version also had a gap: the model's own Flow replays enter through `called`/`passed` with no list key. The place now includes the draft step.
+- Validation: the lead's run: `vitest-groups --groups=parallel,real-sql` over `result`, `result-feed` and `tests/endings` gave parallel `Test Files  30 passed (30)`, `Tests  207 passed (207)`; real-sql `Test Files  20 passed (20)`, `Tests  95 passed (95)`; check exit 0; audit passed. After merging Core dev: `result` and `result-feed` gave `Tests  207 passed (207)` and `Tests  10 passed (10)`.
+- Follow-up: none.
+
+
+### 2026-11-24 - t1025 integrated (fluxiq 0.54.12): one decision reading for every provider
+- Changed:
+  - Core `runtime/llm/decision-reading/` (new), `anthropic/decision-check.ts` (new), `anthropic/task-answer.ts`, `harness/provider-result.ts`, `unknown-tool/refusal-of.ts`, `unusable-decision.ts`, `evidence-loop/decision-refusal.ts`, `decision-handlers/look-withdrawal.ts`, `models/providers/anthropic/reply/reading.ts`. The lead accepted the worker's edit of the reply reading: it is the adapter's parsing, and no other lane owns it.
+  - Safety, as the lead reviewed it: every offered variant keeps every constraint, and an unoffered tool takes DeepSeek's long-standing path to the loop's named refusals. A node id given as `toolId` is read as `core.run_node` only when the input already names that node, never by declaring consequences for the model.
+- Validation: the lead's run through the gate: `vitest-groups --groups=parallel,real-sql` over llm `anthropic`, `decision-reading`, `decision-handlers`, `evidence-loop`, `harness`, `unknown-tool`, `tests`, `deepseek` and `models/providers/anthropic` gave parallel `Test Files  168 passed (168)`, `Tests  1721 passed (1721)`; real-sql `Tests  2 passed (2)`; `pnpm --filter fluxiq check` exit 0; audit passed. The worker ran its new tests on the pre-fix files: 10 failed and 2 passed, the 2 being guards.
+- Follow-up: the prompt-cache cost of look withdrawal (see Current State).
 
 ### 2026-11-24 - Second bigbox relaunch stopped circling; t1020 integrated
 - Changed:
