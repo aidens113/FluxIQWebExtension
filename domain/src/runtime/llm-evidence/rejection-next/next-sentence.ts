@@ -10,6 +10,7 @@
 
 import { webPlanScriptedChoiceMove } from "../plan-resolution/control-fit";
 import type { WebLlmToolRejectionReason } from "../tool-rejection";
+import { webLlmListMadeOn } from "./list-made-on";
 import { webLlmUnknownColumn } from "./unknown-column";
 
 /** A read whose items are on the page and not shown (t903): what shows them, then the same read. */
@@ -32,8 +33,9 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     // Read off the field code in `instead`, so a repeat that passes it back says it again.
     : reason === "incomplete_text" ? incompleteTextNext(instead)
     : reason === "next_leaves_filtered_list" ? FILTERED_LIST_NEXT
-    // Read off the list's handle in `target`, so a repeat that passes it back says it again (t1013).
-    : reason === "list_not_on_page" ? listNotOnPageNext(target)
+    // Read off the list's handle in `target`, so a repeat that passes it back says it again (t1013); a read's,
+    // told apart by the page its list was made on in `instead`, says what was kept and where to go (t1022).
+    : reason === "list_not_on_page" ? (webLlmListMadeOn.isRead(instead) ? webLlmListMadeOn.next(target, instead) : listNotOnPageNext(target))
     // Read off the key codes in `instead`, so a repeat that passes them back says it again.
     : reason === "parameter_not_readable" ? scrollKeysNext(instead)
     // Read off the kind code in `instead`, so a repeat that passes it back says it again.

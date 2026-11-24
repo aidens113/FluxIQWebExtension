@@ -79,6 +79,7 @@ import { present } from "../present";
 import { webActionPermission } from "../permission";
 import { webNodeActVerb } from "./act-verb";
 import { resolveWebPlanNode } from "../plan-resolution";
+import { webNodeListPages, webNodeReadElsewhere } from "./list-pages";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
@@ -461,6 +462,16 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // from a list read's own account, and otherwise the longest list
   // (`webNodeProduced`). What counts as a change is `readChange`.
   const payload = result.payload as JsonValue | undefined;
+  // A saved read whose list does not stand on the page it read fails as that, naming the list and where it was made,
+  // and none of the rows its selector matched there is answered or kept (`../plan-resolution/extraction/list-stands.ts`,
+  // t1022). A list the Flow's own Next page moved stands wherever the pager took it (`./list-pages/`).
+  const listPages = webNodeListPages(run);
+  const elsewhere = webNodeReadElsewhere(listPages, node.actionType, parameters, payload, undefined)?.elsewhere;
+  if (elsewhere !== undefined) {
+    const madeOn = URL.canParse(elsewhere.madeAt) ? new URL(elsewhere.madeAt).pathname : "its own page";
+    return await failedOnPage(run, `the list ${elsewhere.handle} this step reads is not on this page: it was detected on ${madeOn}, so nothing was kept (list_not_on_page)`, { resultReason: "list_not_on_page", nodeId: node.definitionId, assumed, failure: undefined, actionability }, undefined);
+  }
+  listPages.pagerAnswered(ran, payload);
   // A Next page reads nothing, so nothing it answers is a read that changed:
   // it says where the list went, or that the list ended (`./replay-answer.ts`).
   const moved = node.actionType === NEXT_PAGE_ACTION ? nextPageSaid(payload) : undefined;

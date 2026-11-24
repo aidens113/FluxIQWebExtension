@@ -23,6 +23,8 @@ export {
 export { keptWebExtractionConditions, type WebExtractionConditionColumns, type WebExtractionConditions } from "./extraction";
 // What a saved read holds of its list, so it needs no handle in memory (t869).
 export { webPlanWithExtractionBinding } from "./extraction";
+// Whether a saved read's list stands on the page it read (t1022).
+export { webPlanListReadElsewhere, type WebPlanListReadElsewhere } from "./extraction";
 // The first target handle a node call's parameters name: the control the call acts on.
 export { webPlanFirstTargetHandle } from "./first-target-handle";
 // The key a step's argument carries its row under, declared to Core (`rowContextKeys`).
