@@ -376,4 +376,6 @@ test("fresh capture is a separate provider-free bootstrap diagnosis command", ()
 test("recorded-read has explicit scenario and file boundaries and no live mode", () => {
   assert.deepEqual(parseLabCommand(["recorded-read", "everything-store", "--input", "test-runs/read/input.json", "--out", "test-runs/read/report.json"]), { command: "recorded-read", scenarioId: "everything-store", inputFile: "test-runs/read/input.json", outputFile: "test-runs/read/report.json" });
   assert.throws(() => parseLabCommand(["recorded-read", "everything-store", "--input", "x", "--out", "y", "--live-llm"]), /Unknown|unknown/u);
+  assert.deepEqual(parseLabCommand(["recorded-read", "everything-store", "--task", "everything-store-plus-earbuds-under-50", "--input", "test-runs/o/in.json", "--out", "test-runs/o/out.json"]), { command: "recorded-read", scenarioId: "everything-store", inputFile: "test-runs/o/in.json", outputFile: "test-runs/o/out.json", taskId: "everything-store-plus-earbuds-under-50" });
+  assert.throws(() => parseLabCommand(["recorded-read", "everything-store", "--task", "Not A Task", "--input", "x", "--out", "y"]), /requires SCENARIO/u);
 });

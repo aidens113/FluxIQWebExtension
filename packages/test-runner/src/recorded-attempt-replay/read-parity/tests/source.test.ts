@@ -33,3 +33,23 @@ test("a contradictory original Lab receipt cannot be replaced by a synthetic-fix
     await assert.rejects(() => readRecordedReadSource({ ...identity, repositoryRoot, sourceRootDir, canonicalResultFile: path.join(step, "result.json"), canonicalResultSha256: hash(result), runEntrySha256: hash(entry) }), /fixture_receipt_mismatch/u);
   } finally { await rm(repositoryRoot, { recursive: true, force: true }); }
 });
+
+test("a saved Flow pass is admitted only by its own replayed labels, and an explored read never by labels", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "recorded-read-replayed-"));
+  const sourceRootDir = path.join(repositoryRoot, "test-runs", "copy");
+  const run = path.join(repositoryRoot, "recorded-run");
+  const step = path.join(run, "steps", "0215-tool-core.run_node");
+  const labels = JSON.stringify({ ok: true, readRows: { rows: [{ title: "Synthetic" }] } });
+  const entry = JSON.stringify({ runId: "recorded-run", scenarioId: "company-website", task: "different" });
+  const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+  const meta = (resultCode: string) => writeFile(path.join(step, "meta.json"), JSON.stringify({ kind: "tool", toolId: "core.run_node", callId: identity.callId, resultCode }));
+  const read = (canonicalKind?: "replayed") => readRecordedReadSource({ ...identity, repositoryRoot, sourceRootDir, canonicalResultFile: path.join(step, "result.json"), canonicalResultSha256: hash(labels), runEntrySha256: hash(entry), ...(canonicalKind ? { canonicalKind } : {}) });
+  try {
+    await Promise.all([mkdir(sourceRootDir, { recursive: true }), mkdir(step, { recursive: true })]);
+    await Promise.all([writeFile(path.join(step, "result.json"), labels), meta("core.replay.replayed"), writeFile(path.join(run, "entry.json"), entry)]);
+    await assert.rejects(() => read(), /canonical_identity_unproved/u);
+    await assert.rejects(() => read("replayed"), /fixture_receipt_mismatch/u);
+    await meta("web.inspect.succeeded");
+    await assert.rejects(() => read("replayed"), /canonical_identity_unproved/u);
+  } finally { await rm(repositoryRoot, { recursive: true, force: true }); }
+});

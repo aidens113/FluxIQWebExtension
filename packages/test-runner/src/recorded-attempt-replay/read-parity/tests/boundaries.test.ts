@@ -52,3 +52,15 @@ test("missing context remains unavailable and schema validity cannot replace eit
   assert.equal(noSchema.modelProjectedRowsMatch, true);
   assert.equal(noSchema.boundariesPassed, false);
 });
+
+test("a link-free read states no origin on either side and still checks its address; one side's origin alone fails", () => {
+  const plain = { url, extracted: [{ title: "Fixture", note: null }] };
+  const plainCanonical = { extracted: [{ title: "Fixture", note: null }] };
+  const plainSchema = { schemaVersion: "0.1", fields: ["title", "note"].map(id => ({ id, label: id, valueType: "string", required: false })) };
+  const compare = (actualPayload: JsonObject, canonicalRead: unknown) => compareRecordedReadBoundaries({ actualPayload, originalPayload: plain, canonicalRead, parameters: {}, recordedUrl: url, currentDerivedSchema: plainSchema });
+  const same = compare(structuredClone(plain), structuredClone(plainCanonical));
+  assert.equal(same.projectionContextMatches, true);
+  assert.equal(same.boundariesPassed, true);
+  assert.equal(compare(structuredClone(plain), { ...plainCanonical, origin: "http://127.0.0.1:4100" }).projectionContextMatches, false);
+  assert.equal(compare({ ...structuredClone(plain), url: "http://127.0.0.1:4100/scenarios/everything-store/other" }, structuredClone(plainCanonical)).projectionContextMatches, false);
+});
