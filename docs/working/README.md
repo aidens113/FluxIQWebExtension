@@ -17,7 +17,7 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 | Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
 | [agent-working-doc-protocol.md](./agent-working-doc-protocol.md) | Senior supervisor agent | 498 | How the supervisor and workers use `docs/working/` as durable memory and as the coordination substrate for multi-agent work. | `agent-working-doc-protocol.md` |
-| [data-first-simplification-plan.md](./data-first-simplification-plan.md) | Senior supervisor agent | 463 | What changes after the 2026-11-19/20 live campaign: extraction keeps every column, one simple data layer dedupes and cleans from that upstream data, the model collects broadly, the framework does the heavy lifting, one model per task, replays that keep their repairs, a cheaper judge, and no paid run before a provider-free proof. | `data-first-simplification-plan.md` |
+| [data-first-simplification-plan.md](./data-first-simplification-plan.md) | Senior supervisor agent | 510 | What changes after the 2026-11-19/20 live campaign: extraction keeps every column, one simple data layer dedupes and cleans from that upstream data, the model collects broadly, the framework does the heavy lifting, one model per task, replays that keep their repairs, a cheaper judge, and no paid run before a provider-free proof. | `data-first-simplification-plan.md` |
 | [manual-panel-test-findings.md](./manual-panel-test-findings.md) | User for submission; senior supervisor agent for triage and closure | 311 | Capture manual panel, extension, recording, Flow creation, execution, repair, reuse, and performance findings so isolated workers can reproduce and fix them. | none |
 
 ## Paused

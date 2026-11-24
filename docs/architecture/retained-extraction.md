@@ -32,6 +32,18 @@ authoritative: the page does not read those values, validation removes them,
 and stored schemas omit them. Sensitive-field screening remains before handle
 retention. No raw page capture is added to storage.
 
+A browser client that does not declare the semantic-definition capability still
+gets ordinary reads (`definition-fields/admission.ts`, t991). A definition column
+that the read only retains is left out of what that client is sent, and the
+stored schema keeps it as an absent optional column. "Only retains" means:
+- `process.columns` names an answer view that leaves it out;
+- it is not `required`;
+- no condition, sort, dedupe key or identity names it;
+- nothing dedupes by the whole row.
+
+Any read that does depend on a definition column is refused whole, as before.
+A client that declares the capability gets the read unchanged.
+
 Both direct exploration and replay attach the actual validated dispatch schema
 to execution metadata. Core stores original values and derives typed comparisons
 with its shared parsers. Parsed column samples never replace row values. See

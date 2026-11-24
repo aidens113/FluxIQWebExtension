@@ -24,5 +24,7 @@ export * from "./client/capabilities";
 export * from "./client/gateway-mapping";
 // The tab message a DOM action travels in, for a host that runs the content code outside the extension (the offline snapshot page).
 export { executeActionMessage, type ExecuteActionMessage } from "./client";
+// The gateway result a content result becomes, for a host that answers the evidence runtime's commands from a recorded page (the test runner's recorded-oracle proof).
+export { gatewayActionResultFromBrowserResult } from "./client";
 
 export { createWebElementMatcher, WEB_ELEMENT_FINGERPRINT_WEIGHTS } from "./element-fingerprint";

@@ -1,5 +1,5 @@
 import os from "node:os";
-import { runRecordedReplayCommand, runRecordedCaptureCommand, runRecordedReadCommand } from "./recorded-attempt-replay/index.js";
+import { runRecordedReplayCommand, runRecordedCaptureCommand, runRecordedOracleCommand, runRecordedReadCommand } from "./recorded-attempt-replay/index.js";
 import { runOfflinePreflight, classifyPreflight } from "./attempt-lane/preflight/index.js";
 import { offlineSourceFingerprint } from "./attempt-lane/scoreboard/index.js";
 import path from "node:path";
@@ -44,6 +44,12 @@ export async function runCli(argv: string[], given: NodeJS.ProcessEnv = process.
       const report = await runRecordedReplayCommand({ ...command, repositoryRoot });
       process.stdout.write(`${JSON.stringify(report)}\n`);
       return report.status === "ran" ? 0 : 1;
+    }
+    if (command.command === "recorded-read" && command.taskId !== undefined) {
+      const report = await runRecordedOracleCommand({ repositoryRoot, scenarioId: command.scenarioId, taskId: command.taskId, inputFile: command.inputFile, outputFile: command.outputFile });
+      process.stdout.write(`${JSON.stringify({ passed: report.passed, phase: report.phase, gap: report.gap })}
+`);
+      return report.passed ? 0 : 1;
     }
     if (command.command === "recorded-read") {
       const report = await runRecordedReadCommand({ ...command, repositoryRoot });

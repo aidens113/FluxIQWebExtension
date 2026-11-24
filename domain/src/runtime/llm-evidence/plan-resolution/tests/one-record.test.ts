@@ -2,7 +2,10 @@
 // label/value receipt detected as a list of one (t195 w20j; w19e cause 1, w19d C3).
 //
 // - The plan names the record's handle with two of its columns under its own
-//   keys, and the node reads the card's own item and those two spans.
+//   keys, and the node reads the card's own item and those two spans. Since
+//   t982 (ba64bbf1c, `docs/architecture/retained-extraction.md`) the read also
+//   retains the record's other detected column under its detected key, and the
+//   two asked for are the answer's view (`recordOutput.process.columns`).
 // - The Flow keeps that resolved request, and read back as a draft it is the
 //   Flow's own list, not a guess (`../own-extraction-list.ts`).
 // - A receipt's handle with `minItems` and `maxItems` of 1 builds an extract
@@ -59,6 +62,7 @@ test("the record's handle with two of its columns resolves to the card's item an
   assert.notEqual(record.handle, packet.extraction);
 
   const resolved = await resolve(runtime, { handle: record.handle, fields: { item: "span_1", price: "span_2" } });
+  const NOTE = "span_x1s0c7au_x1xkdpo7_xdd3vo9";
   assert.deepEqual(resolved, {
     status: "resolved",
     parameters: {
@@ -66,10 +70,29 @@ test("the record's handle with two of its columns resolves to the card's item an
         item: REPLY_CARD.item,
         fields: {
           item: { kind: "text", selector: REPLY_CARD.name, required: false },
-          price: { kind: "text", selector: REPLY_CARD.price, required: false }
+          price: { kind: "text", selector: REPLY_CARD.price, required: false },
+          // Retained beside them, optional, under the key the detection gave it.
+          [NOTE]: { kind: "text", selector: REPLY_CARD.note, required: false }
         },
         // One record reads one row, though the plan wrote no bound.
         maxItems: 1
+      },
+      recordOutput: {
+        datasetId: `extracted-list-item-price-${NOTE}:459b840cd2b62a0e`,
+        recordsPath: "result.extracted",
+        schema: {
+          schemaVersion: "0.1",
+          fields: [
+            { id: "item", label: "span:1", valueType: "string", required: false },
+            { id: "price", label: "span:2", valueType: "string", required: false },
+            { id: NOTE, label: "span.x1s0c7au.x1xkdpo7.xdd3vo9", valueType: "string", required: false }
+          ]
+        },
+        writeMode: "append",
+        label: `Extracted list: item, price, ${NOTE}`,
+        maxRecords: 1000,
+        // The answer is the one row, in the two columns the plan asked for.
+        process: { limit: 1, columns: ["item", "price"] }
       }
     }
   });
@@ -85,7 +108,7 @@ test("the record's handle with two of its columns resolves to the card's item an
   // The Flow keeps the resolved request; read back as a draft, with each
   // selector withheld, it is the Flow's own list and gets them back.
   const kept = (resolved as { parameters: { extractList: JsonObject } }).parameters.extractList;
-  const draft = { item: kept.item as string, fields: { item: { kind: "text", required: false }, price: { kind: "text", required: false } }, maxItems: 1 };
+  const draft = { item: kept.item as string, fields: { item: { kind: "text", required: false }, price: { kind: "text", required: false }, [NOTE]: { kind: "text", required: false } }, maxItems: 1 };
   assert.deepEqual(await resolve(runtime, draft), { status: "resolved", parameters: { extractList: kept } });
 });
 
@@ -104,10 +127,30 @@ test("a receipt detected as a list of one builds an extract node that reads exac
         fields: {
           role: { kind: "text", selector: ":scope > dd:nth-of-type(1)", required: false },
           company: { kind: "text", selector: ":scope > dd:nth-of-type(2)", required: false },
-          reference: { kind: "text", selector: ":scope > dd:nth-of-type(3)", required: false }
+          reference: { kind: "text", selector: ":scope > dd:nth-of-type(3)", required: false },
+          // The receipt's other detected column, retained beside the three asked for (t982).
+          submitted: { kind: "text", selector: ":scope > dd:nth-of-type(4)", required: false }
         },
         minItems: 1,
         maxItems: 1
+      },
+      recordOutput: {
+        datasetId: "extracted-list-role-company-reference-submitted:a3bf9705abc97fc3",
+        recordsPath: "result.extracted",
+        schema: {
+          schemaVersion: "0.1",
+          fields: [
+            { id: "role", label: "Role", valueType: "string", required: false },
+            { id: "company", label: "Company", valueType: "string", required: false },
+            { id: "reference", label: "Reference", valueType: "string", required: false },
+            { id: "submitted", label: "Submitted", valueType: "string", required: false }
+          ]
+        },
+        writeMode: "append",
+        label: "Extracted list: role, company, reference, submitted",
+        maxRecords: 1000,
+        // Exactly one row is the answer, in the three columns asked for.
+        process: { limit: 1, columns: ["role", "company", "reference"], minRows: 1 }
       }
     }
   });

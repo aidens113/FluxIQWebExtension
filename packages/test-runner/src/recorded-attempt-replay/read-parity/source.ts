@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { clientGatewayTraceRecordedDeliveries, clientGatewayTraceReevaluationRequest, readClientGatewayTraceOperation, type ClientGatewayTraceEvent, type ClientGatewayTraceRecordedOperation, type ClientGatewayTraceRecordedPayload } from "fluxiq/client-gateway";
+import { clientGatewayTraceRecordedDeliveries, clientGatewayTraceReevaluationRequest, type ClientGatewayTraceRecordedPayload } from "fluxiq/client-gateway";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID, webAutomationActionFromGatewayCommand, webAutomationExtractListDispatch, webOfflineReadGatewayCommand, webOfflineReadRecordedSnapshot } from "@fluxiq-web-extension/domain/node";
 import { openOfflineTrialHost } from "../../offline-trial-experiment/run/offline-trial/index.js";
@@ -11,8 +11,9 @@ import { ledgerTask } from "../../lab-runs/index.js";
 import { resolveLabPaths } from "../../lab-instance/index.js";
 import { loadScenarioManifest } from "../../scenarios.js";
 import { recordedReadFixtureUrlMatches } from "./fixture-url.js";
+import { recordedReadOperations } from "./recorded-operations.js";
 
-type SourceInput = { repositoryRoot: string; scenarioId: string; taskId: string; sourceRootDir: string; projectId: string; traceId: string; commandSequence: number; resultSequence: number; commandId: string; callId: string; primaryArtifactId: string; primarySha256: string; bindingSha256: string; canonicalResultFile: string; canonicalResultSha256: string; runEntrySha256: string };
+type SourceInput = { repositoryRoot: string; scenarioId: string; taskId: string; sourceRootDir: string; projectId: string; traceId: string; commandSequence: number; resultSequence: number; commandId: string; callId: string; primaryArtifactId: string; primarySha256: string; bindingSha256: string; canonicalResultFile: string; canonicalResultSha256: string; runEntrySha256: string; canonicalKind?: "explored" | "replayed" };
 const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
 
 /** Admits this exact read segment, never the open trace or its whole task. Raw values stay in memory. */
@@ -30,7 +31,7 @@ export async function readRecordedReadSource(input: SourceInput) {
     const manifest = await store.readManifest(input.traceId);
     if (!manifest || manifest.origin.kind !== "live") throw new Error("recorded_read_live_source_required");
     const events = await store.readEventRange(input.traceId, 1, Number.MAX_SAFE_INTEGER);
-    const operations = recordedOperations(events);
+    const operations = recordedReadOperations(events);
     const cursor = operations.findIndex(operation => operation.sequence === input.commandSequence && operation.commandId === input.commandId);
     const recorded = operations[cursor];
     const event = events.find(event => event.sequence === input.commandSequence);
@@ -69,23 +70,16 @@ async function canonicalEvidence(input: SourceInput) {
   const result = JSON.parse(bytes.toString("utf8"));
   const metadata = JSON.parse(metadataBytes.toString("utf8"));
   const entry = JSON.parse(entryBytes.toString("utf8"));
-  if (metadata.kind !== "tool" || metadata.toolId !== "core.run_node" || metadata.callId !== input.callId || !Array.isArray(result.read?.extracted) || !result.read.extracted.length) throw new Error("recorded_read_canonical_identity_unproved");
+  // An explored read's step shows the model its rows whole; a saved Flow's pass shows only each kept row's label
+  // (`readRows`), so its canonical evidence is those labels, never rows it did not show.
+  const replayed = input.canonicalKind === "replayed";
+  const shown = replayed ? (metadata.resultCode === "core.replay.replayed" ? result.readRows?.rows : undefined) : result.read?.extracted;
+  if (metadata.kind !== "tool" || metadata.toolId !== "core.run_node" || metadata.callId !== input.callId || !Array.isArray(shown) || !shown.length) throw new Error("recorded_read_canonical_identity_unproved");
   if (entry.runId !== path.basename(run) || entry.scenarioId !== input.scenarioId) throw new Error("recorded_read_fixture_receipt_mismatch");
   const paths = resolveLabPaths(input.repositoryRoot);
   const scenario = await loadScenarioManifest(input.repositoryRoot, input.scenarioId, paths.scenarioLabDist);
   const task = await loadCreatedFlowRequest({ repositoryRoot: input.repositoryRoot, scenarioLabDist: paths.scenarioLabDist, scenarioId: input.scenarioId, taskId: input.taskId });
   const selected = ledgerTask({ scenarioId: input.scenarioId, work: task.task.id, workflowId: task.workflowId, variantId: task.variantId });
   if (entry.task !== selected) throw new Error("recorded_read_fixture_task_changed");
-  return { rows: result.read.extracted as unknown, read: result.read as unknown, startPath: scenario.startPath, receipt: { runId: entry.runId as string, scenarioId: input.scenarioId, taskId: task.task.id, runEntrySha256: input.runEntrySha256, currentTaskSha256: digest(JSON.stringify(task.task)) } };
-}
-
-function recordedOperations(events: readonly ClientGatewayTraceEvent[]): ClientGatewayTraceRecordedOperation[] {
-  const operations: ClientGatewayTraceRecordedOperation[] = [];
-  for (const event of events) {
-    if (event.kind !== "outbound" || event.messageType !== "server.execute_action" || event.payload.encoding !== "json") continue;
-    const envelope = event.payload.value as Record<string, unknown>;
-    const payload = envelope?.payload as ClientGatewayTraceRecordedPayload | undefined;
-    if (payload && typeof payload.commandId === "string") operations.push({ ...readClientGatewayTraceOperation(payload), sequence: event.sequence, logicalMs: event.time.logicalMs, commandId: payload.commandId, session: event.session ?? undefined, redacted: event.redactions.length > 0 });
-  }
-  return operations;
+  return { rows: shown as unknown, read: (replayed ? undefined : result.read) as unknown, startPath: scenario.startPath, receipt: { runId: entry.runId as string, scenarioId: input.scenarioId, taskId: task.task.id, runEntrySha256: input.runEntrySha256, currentTaskSha256: digest(JSON.stringify(task.task)), canonicalKind: replayed ? "replayed" as const : "explored" as const } };
 }
