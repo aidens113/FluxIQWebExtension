@@ -15,7 +15,7 @@ function feed(thresholds, events) {
     step += 1;
     alerts.push(...state.observe({
       step, name: `${step}`, kind: "decide", toolId: null, callId: null, callKey: null, node: null, startUrl: null, initial: false, act: false,
-      costUsd: 0.001, decision: null, verdict: null, pattern: null, toolIds: [], location: null, pageHash: null, rows: null, ...partial,
+      costUsd: 0.001, decision: null, verdict: null, decidedTool: null, resultCode: null, pattern: null, toolIds: [], location: null, pageHash: null, rows: null, ...partial,
     }));
   }
   return { alerts, state };
@@ -70,6 +70,18 @@ test("the page landing on the start URL again after the first time alerts, unles
   const explained = feed(LOW, [at("http://site/"), at("http://site/search?p=2"), { kind: "judge" }, at("http://site/", { pageHash: "again" })]);
   assert.deepEqual(patterns(explained.alerts), []);
   assert.equal(explained.state.snapshot().pageResets, 0);
+});
+
+test("a start-page landing inside a model-sent Flow run raises nothing, and one outside it still raises", () => {
+  const at = (location, extra = {}) => ({ kind: "tool", toolId: "core.run_node", callKey: `core.run_node:${location}${extra.pageHash ?? ""}`, startUrl: "http://site/", location, ...extra });
+  const replay = { resultCode: "core.replay.replayed" };
+  const sent = feed(LOW, [at("http://site/"), at("http://site/cart"), { kind: "decide", decidedTool: "core.run_flow" }, at(null, replay), at("http://site/", { pageHash: "again" })]);
+  assert.deepEqual(patterns(sent.alerts), []);
+  assert.equal(sent.state.snapshot().pageResets, 0);
+  const byReplay = feed(LOW, [at("http://site/"), at("http://site/cart"), at(null, replay), at("http://site/", { pageHash: "again", ...replay })]);
+  assert.deepEqual(patterns(byReplay.alerts), []);
+  const outside = feed(LOW, [at("http://site/"), at("http://site/cart"), { kind: "decide", decidedTool: "web.find_on_page" }, at("http://site/", { pageHash: "again", resultCode: "ok" })]);
+  assert.deepEqual(patterns(outside.alerts), ["page_reset"]);
 });
 
 test("an opening call whose held navigate names the start URL while the page stays elsewhere raises nothing", () => {

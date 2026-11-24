@@ -17,7 +17,7 @@ const RUN_TOOLS = new Set(["core.run_node", "core.run_flow"]);
  * @returns {Promise<null | {
  *   step: number, name: string, kind: string, toolId: string | null, callId: string | null, callKey: string | null,
  *   node: string | null, startUrl: string | null, initial: boolean, act: boolean, costUsd: number,
- *   decision: string | null, verdict: string | null, pattern: string | null, toolIds: string[], location: string | null, pageHash: string | null, rows: number | null,
+ *   decision: string | null, decidedTool: string | null, resultCode: string | null, verdict: string | null, pattern: string | null, toolIds: string[], location: string | null, pageHash: string | null, rows: number | null,
  * }>} null while the step is not finished
  */
 export async function readStep(stepsDirectory, name) {
@@ -43,6 +43,9 @@ async function readFacts(stepsDirectory, name) {
     callKey: null, node: null, startUrl: null, initial: false, act: false,
     costUsd: typeof meta.costUsd === "number" && Number.isFinite(meta.costUsd) ? meta.costUsd : 0,
     decision: typeof meta.decision === "string" ? meta.decision : null,
+    // The tool a model decision asked for (`tool_call core.run_flow`), and the code a tool call ended with.
+    decidedTool: kind === "decide" && typeof meta.summary === "string" ? /^tool_call (\S+)/.exec(meta.summary)?.[1] ?? null : null,
+    resultCode: typeof meta.resultCode === "string" ? meta.resultCode : null,
     verdict: typeof meta.verdict === "string" ? meta.verdict : null,
     pattern: typeof meta.pattern === "string" ? meta.pattern : null,
     toolIds: Array.isArray(meta.toolIds) ? meta.toolIds.filter((id) => typeof id === "string") : [],

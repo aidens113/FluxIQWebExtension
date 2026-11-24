@@ -16,6 +16,8 @@
 import { WATCH_THRESHOLDS } from "./config.mjs";
 
 const BOUNDARY_KINDS = new Set(["flow", "run", "judge", "test", "reset", "escalate", "repair", "offline_trial", "diagnose"]);
+/** A step the model's own Flow run is made of: its `core.run_flow` decision, then the `core.replay.*` results of the steps it ran. */
+const isFlowRunStep = (event) => event.decidedTool === "core.run_flow" || (event.kind === "tool" && event.resultCode?.startsWith("core.replay.") === true);
 const PROGRESS_KINDS = new Set(["flow", "run", "judge", "test", "repair", "offline_trial"]);
 
 /** @param {typeof WATCH_THRESHOLDS} [thresholds] */
@@ -119,7 +121,7 @@ export function createWatchState(thresholds = WATCH_THRESHOLDS) {
 
     // `startUrl` is only where the draft starts (a held navigate never runs). A reset is read from
     // where the page is after the step: landing on the start URL again after the first time, with no
-    // Flow run, judged run or test to explain it.
+    // Flow run (a boundary kind, or one the model sent with `core.run_flow`), judged run or test to explain it.
     if (event.startUrl !== null && state.startUrl === null) state.startUrl = event.startUrl;
     if (event.kind === "tool" && event.location !== null) {
       const here = sameUrl(event.location, state.startUrl);
@@ -137,7 +139,7 @@ export function createWatchState(thresholds = WATCH_THRESHOLDS) {
       }
       state.lastLocation = event.location;
     }
-    if (BOUNDARY_KINDS.has(event.kind)) state.boundary = true;
+    if (BOUNDARY_KINDS.has(event.kind) || isFlowRunStep(event)) state.boundary = true;
 
     // Progress that is not a page change: an act, a Flow run, a judged run, an applied draft amendment.
     let fresh = event.act || PROGRESS_KINDS.has(event.kind) || (event.kind === "answer" && event.decision === "amend_draft" && event.verdict === "applied");
