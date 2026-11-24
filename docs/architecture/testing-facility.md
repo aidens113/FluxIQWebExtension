@@ -4167,7 +4167,7 @@ Per attempt (one run's step log) it keeps rolling counts and alerts on:
 | `repeated_call` | the same tool and input sent again and again with no act between (4) |
 | `finish_not_ending` | decisions after a `finish_with_best` decision with no Flow run or judged run (4) |
 | `approach_unchanged` | calls after `change_approach` that stay the kind the loop named, with no act (6) |
-| `page_reset` | the page landing on the start URL again after the first time, read from where the page is after the step (its `result.json` location, else the URL in `page.txt`), with no Flow run, judged run or test to explain it; a navigate inside Core's `held` list never runs and is not read as one |
+| `page_reset` | the page landing on the start URL again after the first time, read from where the page is after the step (its `result.json` location, else the URL in `page.txt`), with no Flow run, judged run or test to explain it (a Flow run is a boundary step kind, or one the model sent: its `core.run_flow` decision, then the steps ending `core.replay.*`); a navigate inside Core's `held` list never runs and is not read as one |
 | `rounds_without_decision` | Core opening calls (`initial.*`) starting again with no model decision since the previous opening (2, again at each multiple) |
 | `no_new_evidence` | steps since a new page location, page fingerprint, row count, act, Flow run, judged run or applied draft amendment (60) |
 

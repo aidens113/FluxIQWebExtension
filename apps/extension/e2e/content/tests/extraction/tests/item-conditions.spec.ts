@@ -327,16 +327,21 @@ test("the model names which items it wants in the vocabulary the detection showe
   expect(ran.resultCode, JSON.stringify(ran.evidence)).toBe("web.inspect.succeeded");
 
   // What went out is a literal request the page can run, with the condition
-  // resolved into the column's own spec -- so the saved Flow needs no handle,
-  // no detection and no model to read the same rows again.
+  // resolved into a column the request itself reads -- so the saved Flow needs
+  // no handle, no detection and no model to read the same rows again. Since
+  // t982 (`731b2b601`, `docs/architecture/retained-extraction.md`) a read
+  // retains every safe detected field beside the asked ones, the ad mark among
+  // them, and the condition tests that retained column by its key instead of
+  // repeating its read inline.
   const extraction = dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1);
   expect(extraction, "the node dispatched an extraction").toBeTruthy();
   const sent = extraction?.parameters.extractList as unknown as WebAutomationExtractListRequest;
   expect(sent.where?.length).toBe(1);
   expect(sent.where?.[0]?.is).toBe("absent");
-  expect(sent.where?.[0]?.field, "the resolved condition carries the column, not a reference to the table's fields").toBeUndefined();
-  expect(JSON.stringify(sent.where?.[0]?.read)).toContain("data-ad-id");
-  expect(Object.keys(sent.fields)).toEqual(columns);
+  const tested = sent.where?.[0]?.field;
+  expect(tested, "the resolved condition names a column of the request").toBeTruthy();
+  expect(JSON.stringify(sent.fields[tested!]), "whose own spec in the request reads the ad mark").toContain("data-ad-id");
+  expect(Object.keys(sent.fields)).toEqual(expect.arrayContaining(columns));
 
   // What the page holds, read off it after the extraction: a read completes the
   // page it is on, so the store's lazily loaded results are there by now and

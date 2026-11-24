@@ -75,7 +75,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - **t1026 integrated (0.54.14):** both Core failures were tests made stale by t1012's intended Haiku default; the panel tests also reloaded the whole llm module graph to re-read one setting (2.8-4.7 s, 15 s timeouts under load), and now inject it (375-558 ms).
     - **t1027/t1028 integrated (0.54.15):** the durable-reconcile failure was a Core race, not a regression. The answer timer kept running after a required command's answer was accepted and, on a busy machine, revoked the proof as "Outcome uncertain" though the browser had answered. It is now cancelled on acceptance (`client-gateway/service/command-ledger/dispatch.ts`). No press is sent twice, and an answer that never came still ends unknown. `main` is promoted after a clean full sweep.
 - **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev, after t1022 is merged and proven offline. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$45.
-- **Watcher follow-up:** a `page_reset` inside a model-sent `core.run_flow` replay (run-mwuxd2v9, step 43) is not taken as explained by the Flow run.
+- **Fourth bigbox run (run-mwv5m906, on fluxiq 0.54.16): stopped by the lead at step 142, $0.20, with 0 unreadable replies.** It set the store, found the cheapest qualifying item (Softerra 6 Double Rolls, $9.47), added it, kept the dish soap and answered the table. Two judges said yes (0.8, no defects), but each completion was `judged_unsure`: the Flow's result was the 14-row product listing (step 6), not the cart. The result line also said "paging after unplaced read 1 not yet checked" for a list that cannot page, and the model chased it for 24 decisions. t1032 is diagnosing. t1031 (merged) makes a model-sent Flow run explain its own start-page landing to the watcher. Round total about $5.20 of $50.
 - **Open (t1020):** a rerun in attempt 2 onward that changes a read's handle, when the draft comes from a saved Flow, may resolve against the step's saved binding (`plan-resolution/extraction/slot.ts`); untested.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
@@ -223,6 +223,17 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1029 integrated: two dated product defects behind the decline, and the browser specs
+- Changed:
+  - Domain `runtime/web-sessions/leased-web-session.ts`: cause A. Since 11-18 (Core t911), every build trial's first page read threw on a bound lease, as `executor.fault.unclassified`.
+  - Domain `judge-evidence/{project,action}.ts`: cause B. Since 11-22 (t987), Core's waits, merges, loops and self-toggling presses were held as missing evidence, so such trials were always unsure.
+  - Content harness timers: cause C, all 9 auction specs. Specs updated for t982 and t903: causes D and E.
+  - Open: cause F, given to t1033. Kept-but-unasked columns make the reader press "See more" (`social-read-completion:90`).
+  - `pinned-calls-job-board:79` times out in its own setup with three headed workers; it passes alone.
+- Validation: the worker's run: 18 of 20 listed specs passed headed, the 2 being causes F and the setup timeout. The lead's run: `test-content.mjs part-run-job-board auction-marketplace-kestrel-auctions --headed` gave `12 passed (8.5m)`; domain `judge-evidence` and `web-sessions` gave `# pass 27 # fail 0`; domain and extension checks exit 0; audit passed.
+- Follow-up: t1033 (cause F); the pinned-calls setup wait.
+
 
 ### 2026-11-24 - t1023 integrated (fluxiq 0.54.16): an act's preset option counts as done
 - Changed:

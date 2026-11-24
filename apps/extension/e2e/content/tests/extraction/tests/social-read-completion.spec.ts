@@ -259,7 +259,10 @@ test("normally authored optional For Each expands helper rows before a full feed
         if (output.datasetId === "helper") {
           if (output.purpose !== "intermediate") proofIssues.push("helper.purpose");
           if (output.writeMode !== "replace") proofIssues.push("helper.writeMode");
-          if (rows.some((row) => Object.keys(row).join(",") !== "identity")) proofIssues.push("helper.columns");
+          // The helper's one asked column, and beside it only columns the detection offered: a read retains every
+          // safe detected field (t982, `ba64bbf1c` and `731b2b601`, `docs/architecture/retained-extraction.md`; the
+          // user's rule of 2026-11-20 that extraction keeps every column), and invents none.
+          if (rows.some((row) => !Object.hasOwn(row, "identity") || Object.keys(row).some((key) => key !== "identity" && !packet.fields.some((field) => field.key === key)))) proofIssues.push("helper.columns");
           if (rows.some((row) => typeof row.identity !== "string" || row.identity.length === 0)) proofIssues.push("helper.missing_identity");
           helperCounts.push(rows.length);
         } else {
