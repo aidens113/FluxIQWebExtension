@@ -62,13 +62,29 @@ test("calls after change_approach that stay the kind the loop named alert; a dif
   assert.ok(!patterns(feed(LOW, [change, act(1), read("x"), read("y")]).alerts).includes("approach_unchanged"));
 });
 
-test("the page sent back to the start after the first time alerts, unless a Flow run or judged run explains it", () => {
-  const start = (extra = {}) => ({ kind: "tool", toolId: "core.run_node", callId: "initial.core.run_node", callKey: "core.run_node:s", initial: true, startUrl: "http://site/", ...extra });
-  const bare = feed(LOW, [start(), {}, start({ pageHash: "again" })]);
+test("the page landing on the start URL again after the first time alerts, unless a Flow run or judged run explains it", () => {
+  const at = (location, extra = {}) => ({ kind: "tool", toolId: "core.run_node", callKey: `core.run_node:${location}`, startUrl: "http://site/", location, ...extra });
+  const bare = feed(LOW, [at("http://site/"), at("http://site/search?p=2"), at("http://site/", { pageHash: "again" })]);
   assert.deepEqual(patterns(bare.alerts), ["page_reset"]);
   assert.equal(bare.alerts[0].counts.resets, 1);
-  const explained = feed(LOW, [start(), { kind: "judge" }, start({ pageHash: "again" })]);
+  const explained = feed(LOW, [at("http://site/"), at("http://site/search?p=2"), { kind: "judge" }, at("http://site/", { pageHash: "again" })]);
   assert.deepEqual(patterns(explained.alerts), []);
+  assert.equal(explained.state.snapshot().pageResets, 0);
+});
+
+test("an opening call whose held navigate names the start URL while the page stays elsewhere raises nothing", () => {
+  const opening = (n) => ({ kind: "tool", toolId: "core.run_node", callId: "initial.core.run_node", callKey: `core.run_node:o${n}`, initial: true, startUrl: "http://site/", location: "http://site/search?q=x&page=3", pageHash: "same" });
+  const events = [{ kind: "tool", toolId: "core.run_node", startUrl: "http://site/", location: "http://site/" }, { location: null }, opening(1), { kind: "decide" }, opening(2), { kind: "decide" }, opening(3), { kind: "decide" }, opening(4)];
+  assert.ok(!patterns(feed(LOW, events).alerts).includes("page_reset"));
+});
+
+test("Core opening calls again with no model decision between alert, and a decision between them does not", () => {
+  const opening = (n) => ({ kind: "tool", toolId: "core.run_node", callId: "initial.core.run_node", callKey: `core.run_node:o${n}`, initial: true, pageHash: `o${n}` });
+  const stuck = feed(LOW, [opening(1), opening(2)]);
+  assert.deepEqual(patterns(stuck.alerts), ["rounds_without_decision"]);
+  assert.equal(stuck.alerts[0].toStep, 2);
+  assert.deepEqual(patterns(feed(LOW, [opening(1), {}, opening(2)]).alerts), []);
+  assert.deepEqual(patterns(feed(LOW, [opening(1), opening(2), opening(3), opening(4)]).alerts), ["rounds_without_decision", "rounds_without_decision"]);
 });
 
 test("steps since the last new evidence alert; a new location, fingerprint, row count, or an act resets them", () => {
