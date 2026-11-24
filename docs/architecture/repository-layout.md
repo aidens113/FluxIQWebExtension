@@ -474,33 +474,27 @@ resolution omits the `node` condition, but esbuild with `platform: "node"` sets
 it, so a conditional `.` would silently switch those consumers from source to a
 possibly stale `dist`.
 
-A `./node` consumer needs `domain/dist` to exist, and a fresh clone has none:
-without it `packages/test-runner` fails with `TS7016`. That package therefore
-guards its own `build` and `check` with a `domain:dist` script — if
-`domain/dist/index.d.ts` is absent it builds the domain once and says so; if it
-is present it does nothing. The root `pnpm check` has no build step of its own;
-that guard, reached through `pnpm -r check`, is the only build it can trigger,
-and only on a tree that has none.
+A `./node` consumer needs `domain/dist`, and a `browser-host` consumer needs
+`packages/browser-host/dist` (its `./launcher` and `./reaper` exports resolve
+there only), and a fresh clone has neither: without them a check fails with
+`TS2307` or `TS7016`. The `check` of `packages/test-runner` and of
+`apps/extension` (whose e2e compiles test-runner sources) therefore opens with
+`node ../../scripts/build-cache/cli.mjs domain:build browser-host:build`, and
+test-runner's `build` and `test` do the same (`pnpm --filter
+@fluxiq-web-extension/test-runner workspace-dists` runs it alone). These are the
+ordinary stamped, locked build-cache steps: they reuse a `dist` whose inputs
+match its stamp, restore it from the shared store when it is missing, and
+rebuild it when `domain/src` or the browser host changed, so a check never reads
+a stale or missing declaration, and two concurrent callers do not build one step
+twice. The extension's `extension:check` fingerprint includes those `dist`
+directories. The root `pnpm check` needs no build before it for this reason.
 
-The guard is written to fire only when there is nothing to disturb. A
-verification command must not rewrite a build artifact another process may be
-loading: an isolated Testing Lab run builds the domain before it starts, so a
-`pnpm check` overlapping that run finds a `dist` and leaves it alone, and
-concurrent checks cannot race each other inside `dist` either. Two consequences
-follow.
-
-- **`pnpm check` does not refresh `domain/dist`.** It proves the declarations
-  exist, not that they match `domain/src`. After changing `domain/src`, run
-  `pnpm --filter @fluxiq-web-extension/domain build` before trusting the
-  `packages/test-runner` typecheck or `pnpm test`, both of which read the built
-  output. The domain's own `check` always reads source, so errors in `domain/src`
-  still surface on every run.
 - **Deleting `domain/dist` outright also deletes the panel host bundle.** The
   domain build does not regenerate `dist/host/web-panel-host.mjs`;
   `pnpm fluxiq:host:build` does. The clean step inside the build preserves it,
   so an ordinary rebuild is safe — a manual `rm -rf` is not.
 
-Both consequences disappear once `domain/src` carries explicit `.js` relative
+The remaining consequence disappears once `domain/src` carries explicit `.js` relative
 specifiers, after which `./node` can take types from source the way
 `packages/test-contracts` already does and no build is needed to typecheck a
 consumer. A consumer-side `paths` mapping cannot substitute: `domain/package.json`
