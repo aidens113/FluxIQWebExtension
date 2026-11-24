@@ -53,13 +53,15 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - fix an obvious shared problem before running more.
   - Report: `reports/paid-round-1124.md` with its brief, and the five run debugs in `../language-driven-flow-loop-plan/debugs/` (run-mwufisf0, -mwug2xjw, -mwug3pjo, -mwug6pz3, -mwugbs39).
 - **Bigbox relaunch of 11-24 (run-mwus396e, lane t1015): stopped at $0.12.** The model acted (6 landed acts, a draft with search, list read and paging, its Flow run three times), then every fresh round's first request was refused inside Core, unsent, because t1014's carried rounds kept denied keys; fixed by t1018 and proven offline on the recording. Debug: `../language-driven-flow-loop-plan/debugs/run-mwus396e-5447c6f6.md`.
-- **Second bigbox relaunch (run-mwuuo3zk, lane t1015, on t1014-t1019): stopped by the lead at step 309, $1.80 settled.**
-  - What worked: no refused rounds, 17 landed acts, and the store was set.
-  - The draft's list read stays pinned to a bad detection (`extraction.18`: the item is the link inside each card, and the card is a group). Every row holds only a name or a URL, and the read is accepted anyway.
-  - The model saw the fields missing and re-detected a good card-level structure (`extraction.27`), but never read with it or replaced the step. It circled: 40 decisions without an act, 8 identical detections, 11 loop steers without effect.
-  - Evidence: `fxwork/recorded-evidence/t1015-bigbox/run-mwuuo3zk-75b482b3/`. Round total about $2.74 of $50.
-- **Running:** t1020 (worker-heavy): find and fix why a split-row read is made and accepted, and why the model cannot move the read step onto a new detection; prove it offline; write the run's debug. No paid launch until it is merged and proven.
-- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$47.26.
+- **Second bigbox relaunch (run-mwuuo3zk, lane t1015, on t1014-t1019): stopped by the lead at step 309, $1.83.**
+  - What worked: no refused rounds, 17 landed acts, the store set, the Pickup filter applied.
+  - The model circled: 40 decisions without an act, 8 identical detections, 11 loop steers without effect.
+  - The cause (t1020, correcting the lead): the model read the wrong handle, a "cells" table of the cards' own links offered beside the card list, after its read of the list with the cells' keys was refused with bare codes. It never read the rating and pickup columns.
+  - Debug: `../language-driven-flow-loop-plan/debugs/run-mwuuo3zk-75b482b3.md`. Round total about $2.75 of $50.
+- **t1020 integrated:** a card list's own links are no longer a grid; a read naming another handle's keys is told which; every detection says how its handle is read and how it replaces the draft's read.
+- **Running:** the day's full sweep on t1021 (worker-light), for `main` promotion.
+- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$47.25.
+- **Open (t1020):** a rerun in attempt 2 onward that changes a read's handle, when the draft comes from a saved Flow, may resolve against the step's saved binding (`plan-resolution/extraction/slot.ts`); untested.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
   - a saved Flow carries its own data declaration;
@@ -349,6 +351,17 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - Second bigbox relaunch stopped circling; t1020 integrated
+- Changed:
+  - The lead stopped run-mwuuo3zk-75b482b3 at step 309: 40 decisions without an act, 8 identical detections, 11 loop steers without effect. $1.83 by the step index.
+  - t1020 (worker-heavy) found the cause. The lead had read Core's `readRows` labels as split rows; the read's real rows held name, URL and price.
+  - The content script offered the cards' own links as a "cells" grid (`grid-cells.ts`: one group with two side by side was enough; now at least half the holding groups must have two side by side).
+  - A read naming the cells' keys on the list's handle was refused with bare codes. The refused names now ride in `instead`, and `next` says which handle a key belongs to (`rejection-next/unknown-column.ts`).
+  - No detection said how its handle is read. `readNote` is in every packet, in generic words.
+  - Core unchanged. The worker wrote the run's debug.
+- Validation: lead, on the t1020 tree: domain `test-domain.mjs llm-evidence/tests/read-columns llm-evidence/structure llm-evidence/rejection-next llm-evidence/node-run` gave `# tests 697 # pass 697 # fail 0`; extension `test-extension.mjs content/extraction` gave `# tests 553 # pass 553 # fail 0`; domain and extension checks exit 0; audit passed. The worker showed that each fix's test fails without it (`not ok 2` with the `run.ts` line reverted; `not ok 3`, `not ok 5` with the old grid rule).
+- Follow-up: relaunch bigbox on lane t1015 synced to dev; the held-Flow handle-change rerun stays open.
 
 ### 2026-11-24 - t1016 integrated (fluxiq 0.54.11): task memory tolerates only a store failure
 - Changed:
