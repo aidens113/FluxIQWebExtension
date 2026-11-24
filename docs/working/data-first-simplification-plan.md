@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.12, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.13, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -69,7 +69,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 - **Running:**
   - t1022 (worker-heavy). It found that no read ran on another page. The cause was detection: aimed at a shelf heading, it answered a list of two shelves, each shelf's cards flattened into numbered columns. Fixed in the content script (`record-group/`, `infer-list.ts`). It now adds a browser proof on bigbox and a guard that refuses a saved read whose list does not stand on the page.
   - t1023 (worker-heavy): the act checklist demanded `a1.fulfilment` (pickup) for 190 steps although the site had Pickup already chosen. An option standing chosen when the act lands must count as done.
-  - t1024 (worker): the result line counted each replay of a read as another page ("4 rows over 13 pages"), so the model searched for Next page 8 times.
+  - **t1024 integrated (0.54.13).** Every read has a declared place: [draft step, list key, page it ran on, moves of that list], or [step, batch key] for a saved Flow's batch. A replay at a place already held replaces that page, so three runs of a Flow on one page are one place; real paging stays separate pages. Rows are never compared.
   - **t1025 integrated (0.54.12).** All 22 unreadable replies of the three runs had one cause: the Anthropic adapter held each decision to the whole schema before Core's reader saw it. Now one decision reading is shared by the harness and the adapter (`runtime/llm/decision-reading/`). A decision is checked against the variant it names, and an unoffered tool goes to the loop's named refusals; withdrawn looks keep `core.loop_decision`. Of the 22 replies, 7 now read, 12 are refused by name, and 3 stay unreadable. Open: withdrawing and restoring looks changes the schema at the head of the request, which misses the prompt cache (one step paid 93k uncached and 77k cache-write tokens).
   - The full sweep of 11-24 (t1021, at Down 6acba56f8-era dev / Core e3498f9f3; report `reports/t1021-sweep-1124.md`) is done. Core check, downstream check and downstream build passed; 3 tests failed. Being fixed forward:
     - t1026 (worker): Core `anthropic-session-panel.test.ts` (rejects `llm.provider_malformed_response`) and web `anthropic-settings.test.tsx` (`llmModel` value).
@@ -366,6 +366,14 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1024 integrated (fluxiq 0.54.13): a replayed read is the same place
+- Changed:
+  - Core `answer-first/result-feed/place-of.ts` (new), `result-feed/feed.ts`, `result/{place-order,types,page-set}.ts`.
+  - The lead sent the first version back. It matched identical whole rows, which guesses identity from content, and a replay whose rows changed would still have counted as a new page. The second version also had a gap: the model's own Flow replays enter through `called`/`passed` with no list key. The place now includes the draft step.
+- Validation: the lead's run: `vitest-groups --groups=parallel,real-sql` over `result`, `result-feed` and `tests/endings` gave parallel `Test Files  30 passed (30)`, `Tests  207 passed (207)`; real-sql `Test Files  20 passed (20)`, `Tests  95 passed (95)`; check exit 0; audit passed. After merging Core dev: `result` and `result-feed` gave `Tests  207 passed (207)` and `Tests  10 passed (10)`.
+- Follow-up: none.
+
 
 ### 2026-11-24 - t1025 integrated (fluxiq 0.54.12): one decision reading for every provider
 - Changed:
