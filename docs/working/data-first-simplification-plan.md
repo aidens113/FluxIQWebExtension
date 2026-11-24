@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.13, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.14, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -72,7 +72,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - **t1024 integrated (0.54.13).** Every read has a declared place: [draft step, list key, page it ran on, moves of that list], or [step, batch key] for a saved Flow's batch. A replay at a place already held replaces that page, so three runs of a Flow on one page are one place; real paging stays separate pages. Rows are never compared.
   - **t1025 integrated (0.54.12).** All 22 unreadable replies of the three runs had one cause: the Anthropic adapter held each decision to the whole schema before Core's reader saw it. Now one decision reading is shared by the harness and the adapter (`runtime/llm/decision-reading/`). A decision is checked against the variant it names, and an unoffered tool goes to the loop's named refusals; withdrawn looks keep `core.loop_decision`. Of the 22 replies, 7 now read, 12 are refused by name, and 3 stay unreadable. Open: withdrawing and restoring looks changes the schema at the head of the request, which misses the prompt cache (one step paid 93k uncached and 77k cache-write tokens).
   - The full sweep of 11-24 (t1021, at Down 6acba56f8-era dev / Core e3498f9f3; report `reports/t1021-sweep-1124.md`) is done. Core check, downstream check and downstream build passed; 3 tests failed. Being fixed forward:
-    - t1026 (worker): Core `anthropic-session-panel.test.ts` (rejects `llm.provider_malformed_response`) and web `anthropic-settings.test.tsx` (`llmModel` value).
+    - **t1026 integrated (0.54.14):** both Core failures were tests made stale by t1012's intended Haiku default; the panel tests also reloaded the whole llm module graph to re-read one setting (2.8-4.7 s, 15 s timeouts under load), and now inject it (375-558 ms).
     - t1027 (worker-heavy): domain `gateway-output-dispatcher-durable-reconcile.test.mjs`, "a lost durable press the browser never received is made again". `main` is promoted once both pass.
 - **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev, after t1022 is merged and proven offline. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$45.
 - **Watcher follow-up:** a `page_reset` inside a model-sent `core.run_flow` replay (run-mwuxd2v9, step 43) is not taken as explained by the Flow run.
@@ -366,6 +366,12 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1026 integrated (fluxiq 0.54.14): the sweep's Core failures
+- Changed: Core `src/tests/{anthropic-session-panel,session-key-provider}.test.ts`, web `settings/tests/anthropic-settings.test.tsx`, `runtime/llm/flow-execution-limits/run-cost-ceiling.ts` and `runtime/llm/session-key-provider.ts`, which now take an `env`; the default is unchanged. The lead sent it back once: under load the panel tests timed out at 15000 ms, and the root cause was a whole-graph module reload.
+- Validation: the lead's run: `vitest-groups` over the two test files and `flow-execution-limits` gave `Tests  27 passed (27)`; web `settings/tests` gave `Test Files  12 passed (12)`, `Tests  77 passed (77)`; check exit 0; audit passed. The worker ran 10 runs across two concurrent loops: 24/24 each, 375-558 ms.
+- Follow-up: none.
+
 
 ### 2026-11-24 - t1022 integrated: shelf detection and the saved-read page guard
 - Changed:
