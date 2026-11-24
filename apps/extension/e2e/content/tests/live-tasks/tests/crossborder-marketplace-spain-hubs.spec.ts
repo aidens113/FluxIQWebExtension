@@ -381,11 +381,14 @@ test.describe("crossborder-marketplace-spain-hubs, the site's own filters", () =
     });
     expect(kept.reply.status, JSON.stringify(kept.reply.validation)).toBe("succeeded");
     expect(answer(kept.rows), "#2 and #5 share a title and stay two rows: their stores differ").toEqual(expectedWithout("price"));
-    // The saved request carries its conditions resolved: the ad mark, a column
-    // the read does not keep, as its own read; the rating, which it keeps, by
-    // its kept key (c8be5125, `plan-resolution/extraction/conditions.ts`).
+    // The saved request carries its conditions resolved, each by the key of a
+    // column the read keeps: the rating, asked for, and the ad mark, which the
+    // read retains though nobody asked for it, so the condition tests it in
+    // place rather than repeating its read (t982, `731b2b601`,
+    // `docs/architecture/retained-extraction.md`; before it, c8be5125 wrote the
+    // ad mark as a read of its own).
     expect(kept.request.where?.map((condition) => ({ is: condition.is, atLeast: condition.atLeast, field: condition.field, read: typeof condition.read }))).toEqual([
-      { is: "absent", atLeast: undefined, field: undefined, read: "object" },
+      { is: "absent", atLeast: undefined, field: keys.ad, read: "undefined" },
       { is: undefined, atLeast: 4.5, field: "rating", read: "undefined" }
     ]);
   });

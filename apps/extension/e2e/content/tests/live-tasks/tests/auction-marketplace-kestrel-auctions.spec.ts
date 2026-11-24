@@ -281,6 +281,16 @@ function project(rows: readonly Row[], keys: Record<(typeof OWED_COLUMNS)[number
 }
 
 /**
+ * The owed columns of rows read under the owed names. A read through the evidence runtime retains every safe detected
+ * field beside the columns it was asked for (t982, `ba64bbf1c` and `731b2b601`, `docs/architecture/retained-extraction.md`;
+ * the user's rule of 2026-11-20 that extraction keeps every column), so its rows carry more keys than the four owed.
+ */
+const OWED_NAMES = Object.fromEntries(OWED_COLUMNS.map((column) => [column, column])) as Record<(typeof OWED_COLUMNS)[number], string>;
+function owedColumns(rows: readonly Row[]): Row[] {
+  return project(rows, OWED_NAMES);
+}
+
+/**
  * A field of the detection by the shape of its key: page structure the model
  * is shown, never a value. Until D3-3 (b05e186b, 2026-10-06) a hashed column's
  * label was this same class path; it now says what the element is and its
@@ -577,7 +587,7 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     note("filtered runtime rows", rows);
     expect(rows.length, "ten rows: the conditions keep every owed listing and nothing else").toBe(OWED.length);
     expect(rows.map(({ price, bids, postage }) => ({ price, bids, postage }))).toEqual(OWED.map(({ price, bids, postage }) => ({ price, bids, postage })));
-    expect(rows, "and every title as the card shows it").toEqual(OWED);
+    expect(owedColumns(rows), "and every title as the card shows it").toEqual(OWED);
   });
 
   test("keyword route, G2: the detection says how the results continue", async ({ openHarness }) => {
@@ -628,9 +638,10 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     const pageOne = (sent.reply.extracted ?? []) as Row[];
     expect(pageOne.length, "page one holds only some of the owed rows").toBeLessThan(OWED.length);
     expect(sent.reply.extraction, "the read read page one").toMatchObject({ pagesRead: 1 });
-    // Every condition was resolved into a read of its own column: the estimate
-    // and the condition line are tested without becoming columns of the table.
-    expect(Object.keys(request.fields).sort()).toEqual([...OWED_COLUMNS].sort());
+    // Every owed column is read under its own name. The read also retains every
+    // other safe detected field (t982, `owedColumns`), the estimate and the
+    // condition line among them, which its conditions test in place.
+    expect(Object.keys(request.fields)).toEqual(expect.arrayContaining([...OWED_COLUMNS]));
 
     // The same request with the detected pager allowed every page, sent to the
     // content script directly (its own paged read stays until stage S7), with
@@ -647,7 +658,7 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     note("keyword across documents", { documents: across.documents, checkpoints: across.checkpoints, status: across.reply.status, extraction: across.reply.extraction, validation: across.reply.validation });
     expect(across.reply.status, JSON.stringify(across.reply.validation ?? across.reply.message)).toBe("succeeded");
     expect(across.reply.extraction).toMatchObject({ pagesRead: 3 });
-    expect(across.reply.extracted, "the ten owed rows, each once, in the order they end").toEqual(OWED);
+    expect(owedColumns((across.reply.extracted ?? []) as Row[]), "the ten owed rows, each once, in the order they end").toEqual(OWED);
   });
 
   test("keyword route: the Next arrow that reloads page two does not trap a read -- it goes on to page three by the pager's numbers", async ({ openHarness }) => {

@@ -420,7 +420,12 @@ test.describe("professional-network: what the page proposes for the people resul
     // record collection (`recordOutput.process`), as it is here: first seen kept.
     const people: Row[] = [];
     for (const row of pages.flat()) if (!people.some((kept) => kept.name === row.name)) people.push(row);
-    expect(people, "the three pages' rows, in order, each person once").toEqual(EXPECTED);
+    // Each read retains every safe detected field beside the columns it was asked for (t982, `ba64bbf1c` and
+    // `731b2b601`, `docs/architecture/retained-extraction.md`; the user's rule of 2026-11-20 that extraction keeps
+    // every column), so the answer is each row in the answer's own columns.
+    const columns = Object.keys(EXPECTED[0] ?? {});
+    const answer = people.map((row) => Object.fromEntries(columns.map((column) => [column, row[column] ?? null])));
+    expect(answer, "the three pages' rows, in order, each person once").toEqual(EXPECTED);
   });
 
   test("on the last page Next page answers that the list ended, rather than following the script Next back", async ({ openHarness }) => {
