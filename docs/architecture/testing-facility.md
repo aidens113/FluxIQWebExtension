@@ -3911,26 +3911,32 @@ real-site command does not execute a probe.
 
 ### Core library builds during a Lab run
 
-Before checking or loading Core, the Lab launcher acquires the actual Core
-build-cache locks for `contracts:build`, `fluxiq:build` and
-`client-gateway-websocket:build`. Their stamp paths and lock implementation
-come from that checkout's own build-cache module. A running build therefore
-finishes before launch, and a new rebuild or shared-store restore waits until
-the run and its final output scan finish. A valid local stamp may still be
-reused without rewriting module contents. Live-run waste refusals happen before
-these locks are acquired.
+Before checking or loading Core, the Lab launcher takes a shared read hold on
+the actual Core build-cache locks for `contracts:build`, `fluxiq:build`,
+`client-gateway-websocket:build` and `ui-components:build`, through Core's
+`acquireStepReadLock`. Their stamp paths and lock implementation come from that
+checkout's own build-cache module. Any number of Lab runs hold one Core
+checkout at once. A running or already waiting build finishes before launch
+(new runs queue behind a waiting build, so builds are never starved), and a new
+rebuild or shared-store restore waits until every run reading that library and
+its final output scan finish. A valid local stamp may still be reused without
+rewriting module contents. Live-run waste refusals happen before these holds
+are acquired.
 
-Each acquired lock is heartbeated every 30 seconds, including while waiting
-for another library lock, so Core's 30-minute stale-owner rule cannot evict a
-healthy long run. Normal completion and exceptions release the locks; explicit
-process exit removes only locks still bearing this process's ownership token.
-After a crash, Core recovers a dead owner's locks on the next acquisition.
-Separate Core checkouts have separate locks and can run independently. Runs
-sharing one Core checkout serialize; use the existing paired lane trees for
-concurrent live work.
+Each read hold is its own entry beside the library's lock
+(`<stamp>.lock.reader-<token>`), heartbeated by Core every 30 seconds from the
+moment it is acquired, including while waiting for another library, so Core's
+30-minute stale-owner rule cannot evict a healthy long run. Normal completion
+and exceptions release the holds; explicit process exit removes only entries
+still bearing this process's ownership token. After a crash, a build removes a
+dead or 30-minute-stale reader entry, and a run breaks a dead build's lock, so
+a dead owner never blocks the other side for good. Separate Core checkouts have
+separate locks and run independently; runs sharing one Core checkout no longer
+serialize (t1017).
 
-Core must be a Git checkout whose three package build scripts use its own
-supported build cache. An unsupported checkout is refused as a setup failure.
+Core must be a Git checkout whose package build scripts use its own supported
+build cache and export the shared read lock. An unsupported checkout, an older
+Core without `acquireStepReadLock` included, is refused as a setup failure.
 Direct commands that bypass Core's build cache do not honor these locks; the
 final output scan remains diagnostic protection against those out-of-band
 writes. Do not rebuild a live lane by bypassing its package build scripts.
