@@ -24,3 +24,5 @@ export { webPlanRunRecordOutput } from "./run-record-output";
 export { webPlanRetainedRecordOutput } from "./retained-output";
 // What a refusal says beside its codes: the field and the names it can use (t489, t497).
 export { type WebPlanRefusalIssue } from "./refusal-issues";
+// Whether a saved read's list stands on the page it read, by the page's family and the list's own pager (t1022).
+export { webPlanListReadElsewhere, type WebPlanListReadElsewhere } from "./list-stands";

@@ -41,6 +41,14 @@
 // in the order the page shows them, under an item selector that reaches them
 // (`item-selector.ts`, the descendant candidate).
 //
+// **A run of groups is never the list; the target's group's records are**
+// (`record-group/`, t1022). A shop's shelves -- a heading and a link over a
+// list of cards, drawn side by side from one template -- are a pair of records
+// by every test above, and read as one they gave a row per shelf holding its
+// first card, the other cards flattened into columns by their place. At a level
+// whose run is a list of groups, the proposal is the run of records inside the
+// target's own group.
+//
 // Confidence is the item selector's strength multiplied by the average coverage
 // of the fields: a run named by a test id every item shares, whose fields are in
 // every item, is 1, and everything read structurally or unevenly is less.
@@ -54,12 +62,17 @@ import { selectorFor } from "../selector";
 import { detectPagination } from "./detect-pagination";
 import { inferFields } from "./infer-fields";
 import { generalizedItemSelector, type ItemSelectorCandidate } from "./item-selector";
+import { contentFieldCount } from "./content-fields";
 import { withNestedItems } from "./nested-run";
+import { groupRecordsStart } from "./record-group";
 import { isRecordPair } from "./record-pair";
 import { keyValueRecord } from "./single-record";
 
 /** What the page's own repeating evidence calls a template rather than a coincidence (`evidence/repeating.ts`). */
 const MIN_ITEMS_PER_RUN = 3;
+
+/** Values of their own a group's records must hold to be read as records rather than as the group's decoration (`content-fields.ts`). */
+const MIN_RECORD_VALUES = 2;
 
 /** The elements that are a record's columns, never the record. */
 const FIELD_CELL_TAGS = new Set(["TD", "TH"]);
@@ -87,7 +100,7 @@ export function inferListFromElement(
   let nearest: WebAutomationExtractionProposal | undefined;
   for (let level: Element | null = picked; level && level !== document.documentElement; level = level.parentElement) {
     if (keyValue && isPairOf(level, keyValue.list)) continue;
-    const proposal = proposalForLevel(level, runs);
+    const proposal = groupRecordsAt(level, runs) ?? proposalForLevel(level, runs);
     if (proposal && proposal.itemCount >= MIN_ITEMS_PER_RUN) return proposal;
     // A pair, or the label/value list's own record: the nearest is kept, and
     // the walk goes on for a run it sits inside. At the list's own level a pair
@@ -117,6 +130,20 @@ function namedExactly(element: Element): { container: string; item: ItemSelector
   const containerSelector = selectorFor(container);
   const item = generalizedItemSelector([element], containerSelector);
   return item ? { container: containerSelector, item } : undefined;
+}
+
+/**
+ * The records of `level`'s own group, when `level` is one of a run of groups --
+ * a shelf's heading and link over its cards -- and those records are a readable
+ * run; `undefined` otherwise (`record-group/`, t1022). A list of groups is never
+ * the proposal: read as one, each row held one group's first record.
+ */
+function groupRecordsAt(level: Element, runs?: Map<Element, WebAutomationExtractionProposal | undefined>): WebAutomationExtractionProposal | undefined {
+  const container = level.parentElement;
+  if (!isRecordItemTag(level.tagName) || !container || container === document.documentElement) return undefined;
+  const start = groupRecordsStart(level, sameTemplateSiblings(level, container), itemTemplateSignature);
+  const records = start === undefined ? undefined : proposalForLevel(start, runs);
+  return records !== undefined && contentFieldCount(records.fields) >= MIN_RECORD_VALUES ? records : undefined;
 }
 
 /** The level's run as a proposal, from `runs` when that run was already judged; see `inferListFromElement`. */

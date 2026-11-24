@@ -89,6 +89,7 @@ import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./writte
 import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused, webListReadRecordSchema } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNextPageListNamed } from "../action-failure";
+import { webNodeListPages, webNodeReadElsewhere } from "./list-pages";
 import { webAutomationNextPageListMove } from "../../../output-nodes/next-page";
 import { webNodeWithHandleShape } from "./handle-shape";
 import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
@@ -464,6 +465,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal, failure, actionability)
         : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded, failure, actionability);
     }
+    // A read whose list does not stand on the page it read is refused naming it and where it was made, none of its rows kept (`./list-pages/`, t1022).
+    const listPages = webNodeListPages(run);
+    const elsewhere = webNodeReadElsewhere(listPages, node.actionType, written, result.payload as JsonValue | undefined, current?.evidence.location);
+    if (elsewhere !== undefined) throw current ? await pageRefusal(run.gateway, run.sessionId, run.request, current, elsewhere.refused, run.request.signal, failure, actionability) : new RecoverableToolRejection(elsewhere.refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, undefined, failure, actionability);
+    listPages.pagerAnswered(ran, result.payload as JsonValue | undefined);
     actionAnswered = true;
     // The command worked. Should the look after it meet a robot check, the step
     // stands with what it read, as a success's statement would say.
