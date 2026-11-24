@@ -38,7 +38,8 @@ export type LabCommand =
   | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "recorded"; artifact: string } | { kind: "live"; llm: LlmExecutionProfile }; attempts: number; restartBetween?: true; humanness?: number; dryRun?: true }
   // The state-aware recovery plan's provider-free acceptance matrix: `lab recovery-matrix` (`recovery-matrix/command.ts`).
   | { command: "recorded-replay"; inputFile: string; outputFile: string }
-  | { command: "recorded-read"; scenarioId: string; inputFile: string; outputFile: string }
+  // With `--task`, the task's recorded reads judged by its oracle through today's reader and Core's data stage (`recorded-attempt-replay/read-oracle/`, t990).
+  | { command: "recorded-read"; scenarioId: string; inputFile: string; outputFile: string; taskId?: string }
   | { command: "recorded-capture"; scenarioId: string; taskId: string; evidenceDirectory: string }
   | { command: "offline-preflight"; scenarioId: string; taskId: string; evidenceDirectory: string }
   | RecoveryMatrixCommand
@@ -50,12 +51,13 @@ const COMPARE_USAGE = "Usage: lab compare <baseline-report> <candidate-report> [
 export function parseLabCommand(argv: string[]): LabCommand {
   const [command, ...args] = argv;
   if (command === "recorded-read") {
-    rejectUnknownOptions(args, ["--input", "--out"]);
+    rejectUnknownOptions(args, ["--input", "--out", "--task"]);
     const scenarioId = positional(args, 0, "scenario ID");
     const inputFile = option(args, "--input");
     const outputFile = option(args, "--out");
-    if (!inputFile || !outputFile) throw new Error("lab recorded-read requires SCENARIO --input FILE --out FILE");
-    return { command, scenarioId, inputFile, outputFile };
+    const taskId = option(args, "--task");
+    if (!inputFile || !outputFile || (taskId !== undefined && !KEBAB_ID.test(taskId))) throw new Error("lab recorded-read requires SCENARIO [--task TASK] --input FILE --out FILE");
+    return { command, scenarioId, inputFile, outputFile, ...(taskId === undefined ? {} : { taskId }) };
   }
   if (command === "recorded-replay") {
     rejectUnknownOptions(args, ["--input", "--out"]);
