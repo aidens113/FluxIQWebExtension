@@ -224,6 +224,17 @@ Lead owns shared-state updates, exact observed acceptance, commits, pushes and p
 
 ## Work Ledger
 
+### 2026-11-24 - t1029 integrated: two dated product defects behind the decline, and the browser specs
+- Changed:
+  - Domain `runtime/web-sessions/leased-web-session.ts`: cause A. Since 11-18 (Core t911), every build trial's first page read threw on a bound lease, as `executor.fault.unclassified`.
+  - Domain `judge-evidence/{project,action}.ts`: cause B. Since 11-22 (t987), Core's waits, merges, loops and self-toggling presses were held as missing evidence, so such trials were always unsure.
+  - Content harness timers: cause C, all 9 auction specs. Specs updated for t982 and t903: causes D and E.
+  - Open: cause F, given to t1033. Kept-but-unasked columns make the reader press "See more" (`social-read-completion:90`).
+  - `pinned-calls-job-board:79` times out in its own setup with three headed workers; it passes alone.
+- Validation: the worker's run: 18 of 20 listed specs passed headed, the 2 being causes F and the setup timeout. The lead's run: `test-content.mjs part-run-job-board auction-marketplace-kestrel-auctions --headed` gave `12 passed (8.5m)`; domain `judge-evidence` and `web-sessions` gave `# pass 27 # fail 0`; domain and extension checks exit 0; audit passed.
+- Follow-up: t1033 (cause F); the pinned-calls setup wait.
+
+
 ### 2026-11-24 - t1023 integrated (fluxiq 0.54.16): an act's preset option counts as done
 - Changed:
   - Domain `node-run/standing-choices/` (new) records controls shown chosen by typed state (checked, selected, pressed, current, marked), never by words. Every press reports the options standing, wired through `tools.ts`, `run.ts`, `capture.ts`, `context.ts`, `outcome.ts` and `written-step.ts`.
