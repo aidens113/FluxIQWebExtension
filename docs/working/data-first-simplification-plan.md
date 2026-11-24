@@ -38,7 +38,12 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - Core: trace-replay and trace-matcher 15 files 68/68; `pnpm --filter fluxiq check` recompiled, exit 0; audit passed; library rebuild exit 0.
   - Downstream: domain check exit 0; domain `node-run` and `offline-reads` 645/645; runner build and check exit 0; the 30-file runner owners 206/206; audit passed.
   - Finishes: Down audit passed; Core contract gate 70/70.
-- **t990 (P1-P3 recorded-run acceptance), worker result, lead verification running.** Four of five tasks reproduce the oracle's exact table from a run's own recorded reads, through today's production reader and Core's own row sink, result feed and automatic data stage, with 0 model calls:
+- **t990 (P1-P3 recorded-run acceptance) integrated and pushed in both repositories (Core 0.54.0).** Lead reruns through the gate:
+  - hubs, Netherlands and job board each `"passed":true`, with `matchedRecords` 10/10, 32/32 and 7/7, `modelCalls` 0, `providerCalls` 0 and `externalCalls` 0;
+  - read-oracle, read-parity and commands owners `# pass 64 # fail 0`;
+  - runner build exit 0, and both audits passed.
+
+  Finishes: Down audit passed; Core contract gate `Tests 70 passed (70)`. Four of five tasks reproduce the oracle's exact table from a run's own recorded reads, through today's production reader and Core's own row sink, result feed and automatic data stage, with 0 model calls:
   - hubs 10/10 (run-mwoq9g4l);
   - earbuds 13/13 (run-mwow1z18), though that run's reads were already narrowed on the page, so it proves processing, not broad collection;
   - job board 7/7 on three runs;
@@ -56,7 +61,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - **t992** (worker): extension 4, test-runner 1, and the `cloud` build-list check.
   - **t993** (worker-heavy, Core-paired; the lead alerted the user to the Core crossing): absent-cell semantics in `contracts/record-sets/process`, plus the result-feed sweep failures.
   - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure.
-  - **Lead:** reruns of t990's hubs, Netherlands and job-board checks, its 64 owner tests and both audits.
+  - **Shared Core:** `fxwork/!FluxIQ` sits at 2dba34613, behind Core dev 6318fac88, which only adds the t990 subpath. It is re-synced before t991 and t992 finish, not while they validate against it.
   - **Next:** t995 (schema labels and aliases), then F23 diagnosis, then paid-round readiness.
 - **Combined P2+P6 (history):** t984 Core e2b1f2635 (worker results: compatibility 195/195, combined 192/192, both checks; product fixes to the processing overlay, live page hand-off, `{process:null}`, P4 memory tolerance and FluxNode pin) was merged with t987 (clean in Core; downstream kept both post-reboot briefs) and with current dev (clean). The combined Core branch now passes the pre-push audit. A worker-heavy agent runs every owner group on the combined tree (`briefs/combined-p2-p6-acceptance.md`). Lead follow-up: the P4 memory tolerance catches any non-integrity store error; narrow it to store I/O failures. A saved Flow replayed under a task with no declaration still acts as a legacy task (P2/P6 design question).
 
@@ -234,6 +239,16 @@ Read Current State and the corresponding task report first; do not restart compl
 All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls or browser acceptance; one inadvertently launched Core full check was deliberately interrupted and is not acceptance.
 
 ## Work Ledger
+
+### 2026-11-23 - t990 integrated as Core 0.54.0
+- Changed: t990 finished in both repositories. The downstream branch carries the `lab recorded-read --task` oracle mode and two admission fixes. Core adds the re-export-only subpath `fluxiq/automation/answer-first-data`, plus the version. Both t993 trees were moved to the new dev for its proof step.
+- Validation: lead runs through the gate:
+  - `node scripts/lab/run-lab.mjs recorded-read crossborder-marketplace --task crossborder-marketplace-free-hubs-under-ten …` → `{"passed":true,"phase":"done","gap":null}`, `matchedRecords` 10, `modelCalls` 0;
+  - the same for professional-network Netherlands (from44) → 32/32 and job-board remote (mwov5v61) → 7/7;
+  - owners `# tests 64 # pass 64 # fail 0`;
+  - Down audit `passed (258 warning(s), 551 baselined)` and Core audit `passed (569 warning(s), 903 baselined)`;
+  - finishes: Down audit passed; Core `Tests 70 passed (70)`.
+- Follow-up: earbuds' broad collection and photo-social are recording gaps for the paid round; t995 schema labels; t993 absent-cell semantics.
 
 ### 2026-11-23 - Full sweep results; t990 worker result; four fix lanes dispatched
 - Changed: the shared Core `fxwork/!FluxIQ` was synced from cc1230032 to 2dba34613 via `pnpm task sync-core --allow-running` from the t353 sibling, moved to origin/dev. Tasks started: t991 sweep-fix-domain, t992 sweep-fix-extension-runner, t993 absent-cell-semantics (Core-paired) and t994 sweep-fix-core (Core-paired). Each has a written brief in its own tree.
