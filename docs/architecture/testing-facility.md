@@ -4161,7 +4161,8 @@ Per attempt (one run's step log) it keeps rolling counts and alerts on:
 | `repeated_call` | the same tool and input sent again and again with no act between (4) |
 | `finish_not_ending` | decisions after a `finish_with_best` decision with no Flow run or judged run (4) |
 | `approach_unchanged` | calls after `change_approach` that stay the kind the loop named, with no act (6) |
-| `page_reset` | the page sent back to the start URL after the first time, with no Flow run, judged run or test to explain it |
+| `page_reset` | the page landing on the start URL again after the first time, read from where the page is after the step (its `result.json` location, else the URL in `page.txt`), with no Flow run, judged run or test to explain it; a navigate inside Core's `held` list never runs and is not read as one |
+| `rounds_without_decision` | Core opening calls (`initial.*`) starting again with no model decision since the previous opening (2, again at each multiple) |
 | `no_new_evidence` | steps since a new page location, page fingerprint, row count, act, Flow run, judged run or applied draft amendment (60) |
 
 An act is a `core.run_node` or `core.run_flow` the model sent whose node changes
@@ -4189,8 +4190,11 @@ watcher over a finished run's step folders (read only; alerts go to a temporary
 folder unless `--evidence` is given) and prints each alert and a one-line summary.
 `pnpm lab watch --steps <dir>` follows a run in flight until interrupted. Recorded
 proof: on `run-mwufisf0-5535f5f5` (2026-11-24, stuck) it alerts on no act after the
-loop decisions, on the repeated `describe_element` calls and on six resets to the
-start page; on `run-mwowwwd0-ea0caab9` (2026-11-20, passed, 84 Core calls) it raises
+loop decisions and on the repeated `describe_element` calls, and raises no reset (its
+page never left the start page, so the six resets once reported were navigations
+that only appeared in Core's `held` list); on `run-mwus396e-5447c6f6` (2026-11-24,
+every new round refused inside Core before reaching the model) it raises
+`rounds_without_decision` from step 91 and no reset; on `run-mwowwwd0-ea0caab9` (2026-11-20, passed, 84 Core calls) it raises
 two alerts.
 
 #### Stopping one Lab run

@@ -59,7 +59,9 @@ async function readFacts(stepsDirectory, name) {
   if (RUN_TOOLS.has(toolId ?? "")) {
     event.node = typeof call.input?.node === "string" ? call.input.node : null;
     event.act = !event.initial && isActNode(event.node);
-    // Core's own opening call holds the navigation inside `held`, so the URL is looked for there too.
+    // `held` is the draft's acts given as context: they do not run, so a navigate inside it is only
+    // where the draft starts. It names the start URL; whether the page really lands there is read from
+    // the step's own location below.
     const navigations = [call.input, ...(Array.isArray(call.input?.held) ? call.input.held : [])].filter((node) => typeof node?.node === "string" && node.node.endsWith("browser-navigate"));
     const url = navigations.map((node) => node.parameters?.url).find((value) => typeof value === "string");
     if (url !== undefined) event.startUrl = url;
@@ -71,8 +73,21 @@ async function readFacts(stepsDirectory, name) {
     if (Number.isInteger(rows)) event.rows = rows;
   }
   const page = await readText(path.join(directory, "page.txt"));
-  if (page !== null) event.pageHash = createHash("sha1").update(page).digest("hex").slice(0, 12);
+  if (page !== null) {
+    event.pageHash = createHash("sha1").update(page).digest("hex").slice(0, 12);
+    event.location ??= pageUrl(page);
+  }
   return event;
+}
+
+/** The page's URL from the first lines of `page.txt` (`URL ~?q=x   (~ = http://site/search)` or a full URL). */
+function pageUrl(page) {
+  const line = page.split(/\r?\n/, 6).find((one) => one.startsWith("URL "));
+  if (line === undefined) return null;
+  const match = /^URL (\S+)(?:\s+\(~ = (\S+)\))?/.exec(line);
+  if (match === null) return null;
+  if (!match[1].startsWith("~")) return match[1];
+  return match[2] === undefined ? null : match[2] + match[1].slice(1);
 }
 
 async function readJson(file) {
