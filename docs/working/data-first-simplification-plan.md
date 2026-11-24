@@ -67,7 +67,10 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - Evidence: `fxwork/recorded-evidence/t1015-bigbox/run-mwuxd2v9-33928ea3/`. Round total about $5.00 of $50.
 - **Three runs, three defects in reads and pages: a structural fix, not another patch** (the recurring-failures rule).
 - **Running:**
-  - t1022 (worker-heavy): a read, whether fresh, rerun or replayed, reads only the list its handle was made for, on a page where it stands; it is otherwise refused, and its rows say which list they came from. The worker diagnoses all three runs and writes the third run's debug.
+  - t1022 (worker-heavy). It found that no read ran on another page. The cause was detection: aimed at a shelf heading, it answered a list of two shelves, each shelf's cards flattened into numbered columns. Fixed in the content script (`record-group/`, `infer-list.ts`). It now adds a browser proof on bigbox and a guard that refuses a saved read whose list does not stand on the page.
+  - t1023 (worker-heavy): the act checklist demanded `a1.fulfilment` (pickup) for 190 steps although the site had Pickup already chosen. An option standing chosen when the act lands must count as done.
+  - t1024 (worker): the result line counted each replay of a read as another page ("4 rows over 13 pages"), so the model searched for Next page 8 times.
+  - t1025 (worker-heavy): the unreadable replies (`content_off_shape`, 11 in the third run, several in each earlier one) must be fixed at the root.
   - The day's full sweep on t1021 (worker-light), for `main` promotion.
 - **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev, after t1022 is merged and proven offline. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$45.
 - **Watcher follow-up:** a `page_reset` inside a model-sent `core.run_flow` replay (run-mwuxd2v9, step 43) is not taken as explained by the Flow run.
