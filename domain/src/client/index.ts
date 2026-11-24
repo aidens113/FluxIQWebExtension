@@ -12,6 +12,7 @@ export * from "../actions/cleared-layers";
 export * from "../actions/obstruction";
 export * from "../actions/text-sighting";
 export * from "../actions/toggle-signature";
+export * from "../actions/requires-chosen";
 export * from "../extraction";
 export * from "../io/input-model";
 export * from "../output-nodes";

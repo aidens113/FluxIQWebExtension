@@ -6,7 +6,8 @@
 // pressed an add on the same page, where Pickup was no longer in view. Core was
 // never told the option stood chosen when the add ran. Here a garden shop's
 // branch chooser shows "Collection" drawn apart from "Delivery"; the add is
-// pressed with the chooser closed.
+// pressed with the chooser closed. Each option stated carries what finds it
+// again (t1030), which Core writes onto a saved act as an option it requires.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -34,10 +35,15 @@ test("an add pressed with the chooser closed states the option the chooser showe
   const branch = await press(runtime, control(opened, "Make this my branch"));
   assert.equal(shownPageLines(branch.evidence).some((line) => line.words === "Collection"), false);
   // The chooser stood open with Collection chosen when the branch was set: stated, and named as no longer in view.
-  assert.deepEqual(branch.draft?.chosen, [{ key: collection, words: "Collection" }]);
+  assert.deepEqual(said(branch.draft?.chosen), [{ key: collection, words: "Collection" }]);
   const added = await press(runtime, control(branch, "+ Add"));
-  assert.deepEqual(added.draft?.chosen, [{ key: collection, words: "Collection" }]);
+  assert.deepEqual(said(added.draft?.chosen), [{ key: collection, words: "Collection" }]);
   assert.deepEqual((added.evidence as JsonObject).stoodChosen, [`${collection} "Collection"`]);
+  // And where it is found again on a later visit, as the look that showed it resolved it (t1030): Core writes it onto the saved act.
+  const at = added.draft?.chosen?.[0]?.at as JsonObject | undefined;
+  assert.equal(at?.selector, "#tab-collection");
+  assert.equal((at?.element as JsonObject | undefined)?.tagName, "div");
+  assert.deepEqual(Object.keys(at ?? {}).sort(), ["element", "selector"]);
 });
 
 test("an option the page showed un-chosen since stands no longer, and the one chosen in its place does", async () => {
@@ -47,10 +53,10 @@ test("an option the page showed un-chosen since stands no longer, and the one ch
   const delivery = control(opened, "Delivery");
   const switched = await press(runtime, delivery);
   // Found with Collection chosen, left with Delivery: the press states what it found.
-  assert.deepEqual(switched.draft?.chosen, [{ key: collection, words: "Collection" }]);
+  assert.deepEqual(said(switched.draft?.chosen), [{ key: collection, words: "Collection" }]);
   const closed = await press(runtime, control(switched, "×"));
   const added = await press(runtime, control(closed, "+ Add"));
-  assert.deepEqual(added.draft?.chosen, [{ key: delivery, words: "Delivery" }]);
+  assert.deepEqual(said(added.draft?.chosen), [{ key: delivery, words: "Delivery" }]);
 });
 
 test("an option is never said standing on another page, nor from a line that only mentions it", async () => {
@@ -71,6 +77,11 @@ test("a look states nothing, and a press with nothing standing states nothing", 
   const added = await press(runtime, control(first, "+ Add"));
   assert.equal("chosen" in (added.draft ?? {}), false);
 });
+
+/** What a statement says of each option, without where it is found again. */
+function said(chosen: readonly { key: string; words: string }[] | undefined): { key: string; words: string }[] | undefined {
+  return chosen?.map(({ key, words }) => ({ key, words }));
+}
 
 function control(looked: { evidence: unknown }, words: string): string {
   const line = shownPageLines(looked.evidence).find((each) => each.kind !== undefined && each.words === words);

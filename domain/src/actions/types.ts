@@ -22,6 +22,7 @@ import type { WebAutomationClearedLayer } from "./cleared-layers";
 import type { WebAutomationObstruction } from "./obstruction";
 import type { WebAutomationNextPageAnswer, WebAutomationNextPageRequest } from "./next-page";
 import type { WebAutomationTextPresence } from "./text-sighting";
+import type { WebAutomationRequiredChoice } from "./requires-chosen";
 import type { WebToggleSignature } from "./toggle-signature";
 
 export type WebAutomationActionType =
@@ -423,6 +424,13 @@ export type WebAutomationActionCommand = {
    * result says `skipped: "already_in_state"`.
    */
   ensureState?: WebToggleSignature | undefined;
+  /**
+   * `web.dom.click`, `web.dom.type` and `web.dom.keypress` in a saved Flow: the
+   * options the act requires chosen before it runs (t1030, `./requires-chosen/`).
+   * Each is found again and read by the page's typed state first; one that does
+   * not stand chosen refuses the act unrun with OPTION_NOT_CHOSEN.
+   */
+  requiresChosen?: WebAutomationRequiredChoice[] | undefined;
   /**
    * `web.dom.type`: after the text, send the field's form as Enter does. Typing
    * alone sends nothing, and live runs 36-38 (t193) typed search queries that

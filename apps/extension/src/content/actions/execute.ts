@@ -89,6 +89,7 @@ import type { ContentActionDependencies } from "./types";
 import { TargetResolutionError } from "../action-runtime";
 import { clearableLayerOverPage, pressWaysOut, runOpenedLayers, type ClearingTarget } from "../action-runtime/interference";
 import { faultMayHideBehindLayer, recordRecovery, runWithRecovery } from "../action-runtime/recovery";
+import { requiredChoiceUnmet } from "../action-runtime/required-choices";
 import { observePageIdentity, reportPageChange } from "./page-identity";
 import { watchActionNavigation } from "../action-runtime/navigation-watch";
 import { actedClock } from "../action-runtime/acted-at";
@@ -170,6 +171,9 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
       startedAt,
       async () => {
         const startedOn = observePageIdentity();
+        // An option the saved act requires chosen that does not stand refuses the act before anything is touched (t1030).
+        const unmet = requiredChoiceUnmet(action, (command) => deps.resolveTarget(command));
+        if (unmet) return deps.failure(action, unmet, startedAt);
         if (!pressesControl(action)) return reportPageChange(await routeContentAction(action, watched, startedAt), startedOn);
         const before = runOpenedLayers.snapshot();
         let pressed: Element | undefined;

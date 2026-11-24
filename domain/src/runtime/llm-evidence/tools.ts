@@ -63,7 +63,7 @@ import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "./script-examples";
 import { WEB_FLOW_SCRIPT_GUIDANCE } from "./script-guidance";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { createWebNodeArrivals, createWebNodeHeldLiterals, createWebNodeOwnLayers, createWebNodeShownAddresses, createWebNodeStandingChoices, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION } from "./node-run";
+import { createWebNodeArrivals, createWebNodeHeldLiterals, createWebNodeOwnLayers, createWebNodeShownAddresses, createWebNodeStandingChoices, runWebOutputNode, webStandingChoiceAt, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
@@ -180,6 +180,9 @@ export function createWebAutomationLlmEvidenceRuntime(
   // The options each build has seen standing chosen on each page, by the page's typed state, so a press states those
   // standing as it found the page, out of view or not (`./node-run/standing-choices/`, t1023). Fed from every look below.
   const choices = createWebNodeStandingChoices(persistence);
+  // What finds a control this look showed chosen again, as the look just remembered resolves it (t1030).
+  const chosenAt = (input: WebLlmEvidenceToolRequest, snapshot: WebLlmSnapshotBinding) => (handle: string) =>
+    webStandingChoiceAt(targetPackets.resolveOn({ projectId: input.projectId, flowId: input.flowId }, handle, snapshot.evidence.location));
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
@@ -188,7 +191,7 @@ export function createWebAutomationLlmEvidenceRuntime(
     returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
     targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
     addresses.saw(webNodeBuildOf(input).build, snapshot);
-    choices.seen(webNodeBuildOf(input).build, snapshot.evidence);
+    choices.seen(webNodeBuildOf(input).build, snapshot.evidence, chosenAt(input, snapshot));
   };
   // The look a node run takes before it acts, which the model is not shown. Cut
   // short, its controls join the page's handles without forgetting any the
@@ -197,7 +200,7 @@ export function createWebAutomationLlmEvidenceRuntime(
   const looked = (input: WebLlmEvidenceToolRequest, snapshot: WebLlmSnapshotBinding): void => {
     targetPackets.rememberLook({ projectId: input.projectId, flowId: input.flowId }, snapshot);
     addresses.saw(webNodeBuildOf(input).build, snapshot);
-    choices.seen(webNodeBuildOf(input).build, snapshot.evidence);
+    choices.seen(webNodeBuildOf(input).build, snapshot.evidence, chosenAt(input, snapshot));
   };
   // Keyed by the page as the model read it (`./page-view/retention-key.ts`),
   // because Core hands that page back to `validateTargetOverrideEvidence`

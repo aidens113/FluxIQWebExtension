@@ -296,8 +296,8 @@ export type WebLlmEvidenceToolExecution = {
      * must learn `conditions` before this side sends it.
      */
     conditions?: Array<{ kept: number; rejected: number; keptValues: string[] }>;
-    /** The options standing chosen, by typed state, as a changing call found the page: handle and words, at most sixteen (`./node-run/standing-choices/memory.ts`, t1023). */
-    chosen?: Array<{ key: string; words: string }>;
+    /** The options standing chosen, by typed state, as a changing call found the page: handle, words and what finds it again (t1030), at most sixteen (`./node-run/standing-choices/`, t1023). */
+    chosen?: Array<{ key: string; words: string; at?: JsonObject }>;
   };
 };
 

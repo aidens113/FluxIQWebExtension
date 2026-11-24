@@ -440,6 +440,23 @@ does the act without it; the checklist says so beside the choice, and a
 `web.dom.check` step on the option, named for the choice, makes the Flow right
 however the page arrives.
 
+Each option stated also carries `at` (t1030): its `{ selector, element }` as the
+look that showed it chosen resolved its handle (`standing-choices/at.ts`, top
+frame only), kept in the memory beside it and refreshed by each look that shows
+it chosen again. Core writes the person's option, with `at`, onto the saved
+act's node as `requiresChosen` (click, type and key press declare it, hidden
+from the model; `actions/requires-chosen/`). The gateway lifts it onto the
+command, and a list it cannot read refuses the whole command
+(`web.action.invalid_parameter`) rather than dropping the check. Before the act
+the content script finds each option again, hidden or not, and reads it by the
+same typed states the view prints as chosen
+(`apps/extension/src/content/action-runtime/required-choices/`): one not on the
+page, or not chosen, refuses the act unrun with
+`web.precondition.option_not_chosen` (`target_not_found`, unacted, not
+retryable), so a Flow run routes the step by page state and a repair can add the
+step that chooses it. Its record names the option only by its place in the
+act's list, never by page words.
+
 `stable-handles.ts` preserves an unambiguous control's handle across a reload
 that rewrites its selector shape by matching page, frame, shadow-root depth,
 record, tag and identity words after the existing address tiers. Both capture

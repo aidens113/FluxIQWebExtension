@@ -22,12 +22,22 @@
 // (`AS/runtime/flow-authoring/bootstrap/instructed-acts/standing-option.ts`).
 // The typed state is the fact; the words only name the option.
 //
+// **Where it is found again (t1030).** A control shown chosen is kept with
+// `at`, what finds it again on a later visit (`./at.ts`): its address and
+// identity as the look that showed it resolved them. The press says it beside
+// the option, and Core writes it onto a saved act's node as the option that
+// act requires chosen, which the page checks before the act runs
+// (`AS/runtime/flow-authoring/bootstrap/instructed-acts/chosen-precondition.ts`).
+// A later look that shows the control chosen again refreshes it; one that
+// cannot resolve it keeps the last.
+//
 // Held per build in this process and written through to Core's store, as every
 // build memory is (`../build-state/`); a fresh opening of a round forgets it.
 
-import type { JsonValue } from "fluxiq/core";
+import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmPageEvidence } from "../../sanitize";
 import { createWebNodeBuildMemory, type WebNodeBuildKey, type WebNodeBuildStatePersistence, type WebNodeOpening } from "../build-state";
+import { present } from "../../present";
 import { webPageChoiceLines } from "./page-choices";
 
 /** How many builds this process remembers at once, as the other build memories do. */
@@ -39,22 +49,28 @@ const REMEMBERED_CONTROLS = 48;
 /** The most options said standing on one page, as Core reads at most sixteen. */
 const MOST_SAID = 16;
 
-/** One option standing chosen on the page a call found: its handle, its words, and whether that page shows it. */
-export type WebStandingChoice = { handle: string; words: string; shown: boolean };
+/** One option standing chosen on the page a call found: its handle, its words, whether that page shows it, and what finds it again. */
+export type WebStandingChoice = { handle: string; words: string; shown: boolean; at?: JsonObject };
+
+/** What finds a control of the look being remembered again, by its handle, or nothing (`./at.ts`). */
+export type WebStandingChoiceFinder = (handle: string) => JsonObject | undefined;
+
+/** One remembered control. */
+type Control = { words: string; chosen: boolean; at?: JsonObject };
 
 export type WebNodeStandingChoices = {
   /** Read this build's choices back from Core's store when this process holds none (`../build-state/memory.ts`). */
   restore(build: WebNodeBuildKey): Promise<void>;
   /** Forget this build's choices, when this call is Core's opening of a fresh round. */
   opening(build: WebNodeBuildKey, opening: WebNodeOpening | undefined): void;
-  /** A look at `page` this build took: remember what it shows chosen and not chosen. */
-  seen(build: WebNodeBuildKey, page: WebLlmPageEvidence): void;
+  /** A look at `page` this build took: remember what it shows chosen and not chosen, and where each shown chosen is found again. */
+  seen(build: WebNodeBuildKey, page: WebLlmPageEvidence, at?: WebStandingChoiceFinder): void;
   /** The options standing chosen on `page`, those it shows first, at most sixteen. */
   standing(build: WebNodeBuildKey, page: WebLlmPageEvidence): WebStandingChoice[];
 };
 
 /** Per page location, per handle: the control's words and whether it stands chosen. Maps keep insertion order, oldest first. */
-type Remembered = Map<string, Map<string, { words: string; chosen: boolean }>>;
+type Remembered = Map<string, Map<string, Control>>;
 
 export function createWebNodeStandingChoices(persistence?: WebNodeBuildStatePersistence): WebNodeStandingChoices {
   const builds = createWebNodeBuildMemory<Remembered>({ name: "web.standing-choices", bound: REMEMBERED_BUILDS, encode, decode, persistence });
@@ -63,22 +79,23 @@ export function createWebNodeStandingChoices(persistence?: WebNodeBuildStatePers
     opening(build, opening) {
       if (opening === "fresh") builds.forget(build);
     },
-    seen(build, page) {
+    seen(build, page, at) {
       const lines = webPageChoiceLines(page);
       const known = builds.get(build)?.get(page.location);
       // Nothing to remember: no line shows chosen, and none this page remembers is shown.
       if (!lines.some((line) => line.chosen || known?.has(line.handle))) return;
       const remembered = builds.entry(build, () => new Map());
-      const controls = remembered.get(page.location) ?? new Map<string, { words: string; chosen: boolean }>();
+      const controls = remembered.get(page.location) ?? new Map<string, Control>();
       remembered.delete(page.location);
       remembered.set(page.location, controls);
       let changed = false;
       for (const line of lines) {
         const was = controls.get(line.handle);
         if (!line.chosen && was === undefined) continue;
-        if (was?.chosen === line.chosen && was.words === line.words) continue;
+        const found = line.chosen ? at?.(line.handle) ?? was?.at : was?.at;
+        if (was?.chosen === line.chosen && was.words === line.words && sameAt(was.at, found)) continue;
         controls.delete(line.handle);
-        controls.set(line.handle, { words: line.words, chosen: line.chosen });
+        controls.set(line.handle, present<Control>({ words: line.words, chosen: line.chosen, at: found }));
         changed = true;
       }
       trim(controls, REMEMBERED_CONTROLS);
@@ -89,7 +106,7 @@ export function createWebNodeStandingChoices(persistence?: WebNodeBuildStatePers
       const controls = builds.get(build)?.get(page.location);
       if (!controls) return [];
       const shown = new Set(webPageChoiceLines(page).filter((line) => line.chosen).map((line) => line.handle));
-      const standing = [...controls].filter(([, control]) => control.chosen).map(([handle, control]) => ({ handle, words: control.words, shown: shown.has(handle) }));
+      const standing = [...controls].filter(([, control]) => control.chosen).map(([handle, control]) => present<WebStandingChoice>({ handle, words: control.words, shown: shown.has(handle), at: control.at }));
       // Those the page shows first, then the newest remembered.
       return [...standing.filter((each) => each.shown), ...standing.filter((each) => !each.shown).reverse()].slice(0, MOST_SAID);
     }
@@ -104,9 +121,14 @@ function trim<V>(map: Map<string, V>, most: number): void {
   }
 }
 
-/** Each page as `[location, [[handle, words, chosen], ...]]`: page words already shown to the model, and nothing else. */
+/** Whether two `at`s are the same, by their JSON. */
+function sameAt(left: JsonObject | undefined, right: JsonObject | undefined): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** Each page as `[location, [[handle, words, chosen, at?], ...]]`: page words already shown to the model, and what finds each control again. */
 function encode(remembered: Remembered): JsonValue {
-  return [...remembered].map(([location, controls]) => [location, [...controls].map(([handle, control]) => [handle, control.words, control.chosen])]);
+  return [...remembered].map(([location, controls]) => [location, [...controls].map(([handle, control]) => control.at ? [handle, control.words, control.chosen, control.at] : [handle, control.words, control.chosen])]);
 }
 
 function decode(stored: JsonValue): Remembered | undefined {
@@ -114,11 +136,17 @@ function decode(stored: JsonValue): Remembered | undefined {
   const remembered: Remembered = new Map();
   for (const page of stored) {
     if (!Array.isArray(page) || typeof page[0] !== "string" || !Array.isArray(page[1])) continue;
-    const controls = new Map<string, { words: string; chosen: boolean }>();
+    const controls = new Map<string, Control>();
     for (const control of page[1]) {
-      if (Array.isArray(control) && typeof control[0] === "string" && typeof control[1] === "string" && typeof control[2] === "boolean") controls.set(control[0], { words: control[1], chosen: control[2] });
+      if (!Array.isArray(control) || typeof control[0] !== "string" || typeof control[1] !== "string" || typeof control[2] !== "boolean") continue;
+      const at = control[3];
+      controls.set(control[0], present<Control>({ words: control[1], chosen: control[2], at: isObject(at) ? at : undefined }));
     }
     remembered.set(page[0], controls);
   }
   return remembered;
+}
+
+function isObject(value: JsonValue | undefined): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
