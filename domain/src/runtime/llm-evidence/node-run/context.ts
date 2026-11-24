@@ -13,6 +13,7 @@ import type { WebNodeArrivals } from "./arrival";
 import type { WebNodeHeldLiterals } from "./held-literals";
 import type { WebNodeOwnLayers } from "./own-layers";
 import type { WebNodeShownAddresses } from "./shown-addresses";
+import type { WebNodeStandingChoices } from "./standing-choices";
 import type { WebNodeFrozenExecution } from "./frozen-execution";
 
 export type WebNodeRun = {
@@ -41,6 +42,11 @@ export type WebNodeRun = {
   addresses: WebNodeShownAddresses;
   /** The layers a press of this build opened, which closing is a step of the Flow and not an interruption (`./own-layers/memory.ts`). */
   layers: WebNodeOwnLayers;
+  /**
+   * The options standing chosen on each page this build looked at (`./standing-choices/`, t1023). Absent in a run that
+   * keeps no build memory, whose calls then state none.
+   */
+  choices?: WebNodeStandingChoices;
   /** What the Flow a round continues holds, which the model's call did not write (`./held-literals/`). */
   held: WebNodeHeldLiterals;
   /** Host-local rerun authority; never a field of a model call or its result. */

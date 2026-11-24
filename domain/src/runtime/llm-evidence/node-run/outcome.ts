@@ -154,6 +154,15 @@ export type WebNodeRanOutcome = WebNodeOutcome & {
    */
   listMove?: WebAutomationNextPageListMove;
   /**
+   * On a changing node: the options that stood chosen on the page as it found
+   * it, by the page's typed state, that the page it left does not show chosen
+   * -- a chooser closed again, a panel out of view -- each `t332 "Pickup"`
+   * (`./standing-choices/`, t1023). Information: Core counts the person's
+   * option done by the act's step that ran with it standing, and a result
+   * names it so its words reach the model. Absent where there are none.
+   */
+  stoodChosen?: string[];
+  /**
    * Said on a press that cleared a layer covering the page, one this build's
    * own press did not open: the layer covered controls on the look before and
    * covers none on the look after, the same page, and the control the press

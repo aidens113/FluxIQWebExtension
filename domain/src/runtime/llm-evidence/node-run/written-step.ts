@@ -132,7 +132,8 @@ export function webWrittenStep(input: WebWrittenStepInput): WebLlmEvidenceToolEx
     toggle: undefined,
     reads: undefined,
     changed: undefined,
-    conditions: undefined
+    conditions: undefined,
+    chosen: undefined
   });
   // Nothing was sent, so the page the call found is the page it left.
   return withCallStates(toolExecution(outcome as unknown as JsonValue, false, WEB_NODE_WRITTEN_RESULT_CODE, undefined, draft, {

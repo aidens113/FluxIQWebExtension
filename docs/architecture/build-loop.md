@@ -416,6 +416,30 @@ rather than from the model's label (`runtime/flow-authoring/draft/step.ts`,
 `changed`; week report W1, run `run-muqiho5c-e830ce01`). A checked rerun given
 a new argument clears it with `toggle` and `reads`.
 
+## What Stood Chosen
+
+Every look a build takes (each node run's look before and after, and every
+packet shown) updates one build memory, `node-run/standing-choices/`: for each
+page location, the controls the view has shown chosen by their own typed state
+(`checked`, `selected`, `pressed`, `current` or `marked`; never words), by
+handle and words. A remembered control shown again without its chosen state is
+no longer chosen; one out of view keeps what it last showed, so a chooser closed
+again still holds what it showed. It is written through to Core's build state
+and forgotten on a fresh opening, like the other build memories. A changing node
+states on its draft statement `chosen`: the options standing on the page as it
+found it, those shown first, at most sixteen `{ key, words }` with the handle as
+key. Those the page it left does not show chosen are named on the result as
+`stoodChosen` (`t332 "Pickup"`), so their words are in the call's own evidence
+and reach the model. Core counts a variant the person asked for (a size, a
+colour, "for pickup") done by the act's own step when that step ran with it
+standing (`runtime/flow-authoring/bootstrap/instructed-acts/standing-option.ts`,
+t1023): paid run `run-mwuxd2v9-33928ea3` owed "for pickup" for 190 steps while
+the site's chooser had Pickup chosen all along. A Flow saved that way has no step
+choosing the option, so a run whose page arrives with another option chosen
+does the act without it; the checklist says so beside the choice, and a
+`web.dom.check` step on the option, named for the choice, makes the Flow right
+however the page arrives.
+
 `stable-handles.ts` preserves an unambiguous control's handle across a reload
 that rewrites its selector shape by matching page, frame, shadow-root depth,
 record, tag and identity words after the existing address tiers. Both capture
