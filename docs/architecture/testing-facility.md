@@ -4011,7 +4011,7 @@ profiles, credentials, cookies, authorization headers, pairing tokens, and
 recorded page data out of source control and user-facing logs.
 ## Live LLM Safety Envelope
 
-Since the user's 2026-10-30 switch, live tests default to provider `anthropic` and model `claude-sonnet-5-5`, with the user-approved $5 whole-build allowance across all calls. Explicit lower limits still hold, and ordinary product defaults are separate. The Lab never substitutes a DeepSeek key when Claude is unavailable. Explicit legacy DeepSeek configurations remain supported. Core owns both providers' HTTP adapters, authorized encrypted key custody, schema validation and usage-aware billing; the Lab owns only credential injection, provider/model selection and acceptance reporting. Keep realistic instructions and oracles unchanged, and record the exact model, verdict, calls, billed usage/cost and elapsed time for comparison. Provider-free checks make no live provider calls; scripted fixtures report their synthetic model calls separately from zero-model deterministic replay.
+Since the user's 2026-10-30 switch, live tests default to provider `anthropic` and model `claude-haiku-5-5` (Sonnet until 2026-11-20, when the user dropped the model ladder: a task keeps the model it starts with, Haiku for build and judge), with the user-approved $5 whole-build allowance across all calls. Explicit lower limits still hold, and ordinary product defaults are separate. The Lab never substitutes a DeepSeek key when Claude is unavailable. Explicit legacy DeepSeek configurations remain supported. Core owns both providers' HTTP adapters, authorized encrypted key custody, schema validation and usage-aware billing; the Lab owns only credential injection, provider/model selection and acceptance reporting. Keep realistic instructions and oracles unchanged, and record the exact model, verdict, calls, billed usage/cost and elapsed time for comparison. Provider-free checks make no live provider calls; scripted fixtures report their synthetic model calls separately from zero-model deterministic replay.
 
 Live-provider testing is an explicit opt-in lane and is not part of ordinary deterministic runs or CI. The Testing Lab driver is the sole process allowed to read provider credential environment variables. A case-insensitive explicit provider-secret denylist is removed at the final managed-process boundary and from both direct Chromium launch paths, so Core, Scenario Lab, setup/build commands, the browser, and the loaded extension cannot inherit the source key. Repository-local schema 0.1 contracts describe the LLM task, a non-secret execution profile, sanitized invocation provenance, and review/replay evaluation.
 
@@ -4141,6 +4141,58 @@ read from the working tree, leaving out `docs/`, Markdown, and build and run
 output. Writing a debug does not change it; editing source in either
 repository does.
 
+#### The run watcher
+
+Every `lab attempt` and `lab run`, live or provider-free, starts the run
+watcher (`scripts/lab/run-watch/`) beside the run, and `run-lab.mjs` stops it
+when the run ends. It is the mechanical half of AGENTS.md "Every ongoing live run
+is overseen": it reads each step folder's `meta.json` (and a tool step's
+`call.json`, `result.json` and `page.txt`) as it finishes, with no model and no
+logs read by an agent, and writes an alert only when a pattern holds. It never
+stops, slows or resets a run, and its numbers are detection thresholds, not limits
+(`run-watch/config.mjs`, the one place they live).
+
+Per attempt (one run's step log) it keeps rolling counts and alerts on:
+
+| Pattern | Holds when |
+| --- | --- |
+| `no_act_after_loop` | model decisions with no act after a `loop` or `loop_decision` step (8, again at each multiple) |
+| `no_act` | decisions in a row with no act at all (40) |
+| `repeated_call` | the same tool and input sent again and again with no act between (4) |
+| `finish_not_ending` | decisions after a `finish_with_best` decision with no Flow run or judged run (4) |
+| `approach_unchanged` | calls after `change_approach` that stay the kind the loop named, with no act (6) |
+| `page_reset` | the page sent back to the start URL after the first time, with no Flow run, judged run or test to explain it |
+| `no_new_evidence` | steps since a new page location, page fingerprint, row count, act, Flow run, judged run or applied draft amendment (60) |
+
+An act is a `core.run_node` or `core.run_flow` the model sent whose node changes
+the page or site (a press, type, select, navigate, scroll, keypress, upload or
+any node the watcher has not met); Core's own `initial.*` calls and reads,
+snapshots and waits are not acts (`run-watch/is-act-node.mjs`).
+
+Each alert is one JSON line: pattern, step range, counts, billed spend so far
+(the sum of `costUsd` in `meta.json`) and a sentence. It is appended to
+`<lab-runs>/<date>/<runId>/watch-alerts.ndjson`, mirrored to one file per launch
+whose path the launcher prints before the run starts
+(`test-runs/lab-watch/<instance>-<pid>/watch-alerts.ndjson`), and printed as one
+short `[watch]` line. `watch-status.json` beside the run's alerts is a heartbeat
+(steps, acts, decisions without an act, loops, resets, spend), written at most
+every 30 seconds and once more when the run ends.
+
+**Waiting on it.** The agent that launched a run does not poll logs. It starts a
+Claude Code Monitor on the printed launch file with an until-condition, for
+example `until grep -q . "<launch alert file>"; do sleep 20; done`, and reads the
+run only when that fires; an alert is a reason to look, and the run is stopped
+only as AGENTS.md says.
+
+**Replay.** `pnpm lab watch --from-steps <run>/steps [--evidence <dir>]` runs the
+watcher over a finished run's step folders (read only; alerts go to a temporary
+folder unless `--evidence` is given) and prints each alert and a one-line summary.
+`pnpm lab watch --steps <dir>` follows a run in flight until interrupted. Recorded
+proof: on `run-mwufisf0-5535f5f5` (2026-11-24, stuck) it alerts on no act after the
+loop decisions, on the repeated `describe_element` calls and on six resets to the
+start page; on `run-mwowwwd0-ea0caab9` (2026-11-20, passed, 84 Core calls) it raises
+two alerts.
+
 #### Stopping one Lab run
 
 `node scripts/lab/run-lab.mjs stop <instance>` (or `pnpm lab stop <instance>`)
@@ -4250,7 +4302,7 @@ pnpm lab:campaign <task-id> --llm-model claude-sonnet-5-5
 ```
 
 The live campaign always hands each run its `--llm-model` (default
-`claude-sonnet-5-5`), so a campaign run gives Core the live-test model explicitly.
+`claude-haiku-5-5`), so a campaign run gives Core the live-test model explicitly.
 
 The campaign likewise always hands each run its `--authoring-mode` (the
 campaign's own option, default `legacy`; refused after `--`), so every run's

@@ -1,15 +1,15 @@
 /** Lab routing only. Provider HTTP, pricing and runtime resolution belong to Core. */
 export const llmProviderModels = {
-  anthropic: ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"],
+  anthropic: ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
   deepseek: ["deepseek-flash", "deepseek-v4-pro"],
 } as const;
 
 export type LlmProvider = keyof typeof llmProviderModels;
 export type LlmModel = (typeof llmProviderModels)[LlmProvider][number];
 
-/** User preference, 2026-10-30: all live tests default to Claude. No credential fallback. */
+/** User preference, 2026-10-30: all live tests default to Claude, Haiku since 2026-11-20 ("No model ladder"). No credential fallback. */
 export const DEFAULT_LLM_PROVIDER: LlmProvider = "anthropic";
-export const DEFAULT_LLM_MODEL: LlmModel = "claude-sonnet-5-5";
+export const DEFAULT_LLM_MODEL: LlmModel = "claude-haiku-5-5";
 /** User's Claude live-test allowance, 2026-10-30; a whole build, not each call. */
 export const CLAUDE_LIVE_BUILD_COST_USD = 5;
 export const llmModels = [...llmProviderModels.anthropic, ...llmProviderModels.deepseek] as const;

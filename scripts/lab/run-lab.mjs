@@ -27,6 +27,7 @@ import { createStepTimer, runBuildPhase } from "./prelude/index.mjs";
 import { buildOrder, runStep } from "../build-cache/index.mjs";
 import { labScenarioRefusal } from "./scenario-guard/index.mjs";
 import { runStopCommand } from "./stop-run/index.mjs";
+import { labRunsRoot, runWatchCommand, startLabWatcher } from "./run-watch/index.mjs";
 import { acquireCoreBuildLease } from "./core/index.mjs";
 
 const args = process.argv.slice(2);
@@ -38,6 +39,11 @@ const args = process.argv.slice(2);
 // three lanes' runs to stop one (docs/architecture/testing-facility.md,
 // "Stopping one Lab run").
 if (args[0] === "stop") process.exit(await runStopCommand(args.slice(1)));
+
+// `watch --from-steps <dir>` replays a finished run's step folders through the
+// run watcher, and `watch --steps <dir>` follows one in flight. Reads files
+// only, like `stop`, so it returns before the build and the guards.
+if (args[0] === "watch") process.exit(await runWatchCommand(args.slice(1)));
 
 // Every Lab run, live or provider-free, opens only the ten realistic scenarios
 // (user rule, 2026-09-29). Asked first, before the live-run guards, the Core
@@ -54,6 +60,8 @@ if (args[0] === "stop") process.exit(await runStopCommand(args.slice(1)));
 }
 
 const interactive = args[0] === "interactive";
+/** The commands that open a run; each gets the run watcher. */
+const WATCHED_COMMANDS = new Set(["attempt", "run"]);
 const paths = resolveLabInstancePaths(process.env);
 const instanced = paths.instance !== null;
 
@@ -240,7 +248,20 @@ process.stderr.write(`${JSON.stringify({ lab: "paths", instance: paths.instance,
 timer.finish();
 coreLease?.assertHeld();
 const liveStart = liveAdmission === null ? null : await recordLiveRunStart(liveAdmission);
-process.exitCode = await run("node", [path.join(repositoryRoot, "packages", "test-runner", "dist", "cli.js"), ...args], runEnvironment, { tolerateFailure: true });
+// Every `lab attempt` and `lab run`, live or provider-free, runs with the run
+// watcher beside it: a model-free reader of the run's step files that writes an
+// alert only on repeating or no progress. It never stops the run. The agent that
+// launched the run waits on the alert file printed here, not on the logs
+// (docs/architecture/testing-facility.md, "The run watcher").
+const watcher = WATCHED_COMMANDS.has(args[0] ?? "")
+  ? await startLabWatcher({ runsRoot: labRunsRoot(process.env), launchDirectory: path.join(repositoryRoot, "test-runs", "lab-watch", `${paths.instance ?? "default"}-${process.pid}`), instance: paths.instance, print: (line) => process.stderr.write(`${line}\n`) })
+  : null;
+try {
+  process.exitCode = await run("node", [path.join(repositoryRoot, "packages", "test-runner", "dist", "cli.js"), ...args], runEnvironment, { tolerateFailure: true, onSpawn: (child) => watcher?.setPid(child.pid ?? null) });
+} finally {
+  const alerts = watcher === null ? [] : await watcher.stop();
+  if (watcher !== null) note({ lab: "watch", state: "finished", alerts: alerts.length, alertsFile: watcher.launchAlertsFile });
+}
 if (liveStart !== null) await recordLiveFinish(liveAdmission, liveStart, process.exitCode);
 
 // The race this catches is the one the guard above cannot prevent: Core was
@@ -325,12 +346,13 @@ function iso(ms) { return ms > 0 ? new Date(ms).toISOString() : null; }
  * @param {"node"} command
  * @param {string[]} commandArgs
  * @param {NodeJS.ProcessEnv} env
- * @param {{ tolerateFailure?: boolean }} [options]
+ * @param {{ tolerateFailure?: boolean, onSpawn?: (child: import("node:child_process").ChildProcess) => void }} [options]
  * @returns {Promise<number>}
  */
 function run(command, commandArgs, env, options = {}) {
   runtimeAbort.signal.throwIfAborted();
   const child = spawn(process.execPath, commandArgs, { cwd: repositoryRoot, env, stdio: "inherit", signal: runtimeAbort.signal });
+  options.onSpawn?.(child);
   // Keep the launcher (and hence the lease) alive until the runner finishes
   // responding to interruption. A parent exiting first leaves a child using
   // modules whose locks Core can already reclaim as a dead owner's.
