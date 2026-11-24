@@ -10,23 +10,19 @@ import { assertRealisticScenarios } from "../../realistic-scenarios/index.js";
 import { compareRecordedReadBoundaries, readRecordedReadSource } from "../read-parity/index.js";
 import { collectRecordedOracleAnswer, type RecordedOracleRead } from "./collect.js";
 import { recordedOracleTaskProcess } from "./declarations.js";
-import { declarationInRunTerms } from "./model-aliases.js";
 import { discoverRecordedOracleRead } from "./discover.js";
 import { judgeRecordedOracleTable } from "./oracle-table.js";
 import { runRetainedRecordedRead } from "./retained-read.js";
 
-/**
- * `declarationAsWritten: true` hands Core the declaration exactly as the task fixture writes it, with no rewrite into
- * the run's model keys (`./model-aliases.ts`), so Core's own binding is what is proved (t997).
- */
-type Input = { provenance: unknown; scenarioId: unknown; taskId: unknown; runDir: unknown; sourceRootDir: unknown; projectId: unknown; steps: unknown; declarationAsWritten?: unknown };
+type Input = { provenance: unknown; scenarioId: unknown; taskId: unknown; runDir: unknown; sourceRootDir: unknown; projectId: unknown; steps: unknown };
 
 /**
  * P1-P3 acceptance over a campaign run's own recorded reads (t990), with no provider: each named read step admitted by
  * the recorded-read checks and its recorded command reproduced as the control; the same recorded page read again by
  * today's production reader from the model's own call, every safe field retained; the answers stored and joined by
- * Core's own row sink and result feed, whose data stage applies the task's processing declaration; and the answer
- * judged by the task's oracle. Reports hold counts, codes, field names and digests, never a recorded value.
+ * Core's own row sink and result feed, whose data stage applies the task's processing declaration exactly as the fixture
+ * writes it, bound by Core's own binding (a site key such as `brightaisle_plus` binds a column labelled in the page's
+ * words, t999); and the answer judged by the task's oracle. Reports hold counts, codes, field names and digests, never a recorded value.
  */
 export async function runRecordedOracleCommand(input: { repositoryRoot: string; scenarioId: string; taskId: string; inputFile: string; outputFile: string }) {
   assertRealisticScenarios([input.scenarioId], "Recorded oracle");
@@ -48,9 +44,8 @@ export async function runRecordedOracleCommand(input: { repositoryRoot: string; 
   try {
     const configuration = JSON.parse(await readFile(input.inputFile, "utf8")) as Input;
     if (configuration.provenance !== "synthetic-fixture" || configuration.scenarioId !== input.scenarioId || configuration.taskId !== input.taskId) throw new Error("recorded_oracle_fixture_provenance_required");
-    const { runDir, sourceRootDir, projectId, steps, declarationAsWritten } = configuration;
+    const { runDir, sourceRootDir, projectId, steps } = configuration;
     if (typeof runDir !== "string" || typeof sourceRootDir !== "string" || typeof projectId !== "string" || !Array.isArray(steps) || !steps.length || !steps.every((step) => typeof step === "string")) throw new Error("recorded_oracle_input_invalid");
-    if (declarationAsWritten !== undefined && typeof declarationAsWritten !== "boolean") throw new Error("recorded_oracle_input_invalid");
     const run = path.resolve(input.repositoryRoot, runDir);
     const root = path.resolve(input.repositoryRoot, sourceRootDir);
     phase = "task";
@@ -103,14 +98,13 @@ export async function runRecordedOracleCommand(input: { repositoryRoot: string; 
       if (admitted) answers.push({ callId: identity.callId, value: identity.callValue, execution: retained.execution! });
     }
     phase = "data_stage";
-    const declared = declarationAsWritten === true ? { process, rewritten: {} } : declarationInRunTerms(process, answers.map((answer) => answer.value));
-    const collected = await collectRecordedOracleAnswer({ instructionText: task.task.instruction, process: declared.process, referenceTimeMs, reads: answers });
+    const collected = await collectRecordedOracleAnswer({ instructionText: task.task.instruction, process, referenceTimeMs, reads: answers });
     const columns = collected.answer.columns.map((column) => column.id);
     phase = "oracle";
     const table = await judgeRecordedOracleTable({ repositoryRoot: input.repositoryRoot, scenarioLabDist: paths.scenarioLabDist, scenarioId: input.scenarioId, taskId: input.taskId, scenarioOrigin: origin ?? "http://127.0.0.1", runId: entry.runId, columns, rows: collected.answer.rows, collected: collected.collected?.rows ?? [] });
     phase = "done";
     outcome = {
-      runId: entry.runId, referenceTimeMs, declaration: process, declarationAsWritten: declarationAsWritten === true, declarationRewritten: declared.rewritten, admittedReads: answers.length, namedReads: steps.length,
+      runId: entry.runId, referenceTimeMs, declaration: process, admittedReads: answers.length, namedReads: steps.length,
       dataStage: { readiness: collected.readiness, stored: collected.stored, collectedRows: collected.collected?.rows.length ?? 0, collectedSchemaFields: collected.collected?.schema.fields.map((field) => ({ id: field.id, ...(field.semanticType ? { semanticType: field.semanticType } : {}), ...(field.mark ? { mark: field.mark } : {}) })) ?? [], bound: collected.bound, account: accountCounts(collected.processing), answerColumns: columns, answerRows: collected.answer.rows.length },
       oracle: table,
       passed: table.verdict.passed && answers.length === steps.length,

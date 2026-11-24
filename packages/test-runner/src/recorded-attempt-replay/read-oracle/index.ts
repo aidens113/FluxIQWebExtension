@@ -7,4 +7,3 @@ export { judgeRecordedOracleTable } from "./oracle-table.js";
 export { runRetainedRecordedRead, type RetainedRecordedRead } from "./retained-read.js";
 export { recordedSnapshotGateway, type RecordedSnapshotCommand } from "./snapshot-gateway.js";
 export { recordedOracleTaskProcess } from "./declarations.js";
-export { declarationInRunTerms } from "./model-aliases.js";
