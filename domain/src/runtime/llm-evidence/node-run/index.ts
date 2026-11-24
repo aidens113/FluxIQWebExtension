@@ -9,7 +9,7 @@ export { createWebNodeHeldLiterals, type WebNodeHeldLiterals } from "./held-lite
 export { WEB_NAVIGATION_ACTION } from "./start-location";
 export { createWebNodeShownAddresses, type WebNodeShownAddresses } from "./shown-addresses";
 export { createWebNodeOwnLayers, type WebNodeOwnLayers } from "./own-layers";
-export { createWebNodeStandingChoices, type WebNodeStandingChoices } from "./standing-choices";
+export { createWebNodeStandingChoices, webStandingChoiceAt, type WebNodeStandingChoices } from "./standing-choices";
 export { replayWebOutputNode, webNodeRecordCount, webNodeReplayCall, webNodeReplayStatement, WEB_LLM_REPLAY_KEY, type WebNodeReplayStatement } from "./replay";
 export { webLlmCallWords, type WebLlmCallWords } from "./call-words";
 export { webNodeNamedControlShown } from "./named-control-shown";

@@ -73,6 +73,13 @@ const waitSchema = {
   }
 } satisfies JsonObject;
 
+/** `WebAutomationRequiredChoice[]` (t1030): the options a saved act requires chosen first, each where it is found again and its words. */
+const requiresChosenSchema = {
+  type: "array",
+  label: "Options chosen first",
+  items: { type: "object", required: ["at", "words"], properties: { at: { type: "object", required: ["selector"], properties: { selector: { type: "string" }, element: elementFingerprintSchema } }, words: { type: "string" } } }
+} satisfies JsonObject;
+
 /** `WebAutomationKeyModifiers`. */
 const keyModifiersSchema = {
   type: "object",
@@ -267,7 +274,8 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
             gains: { type: "array", items: { type: "string" } },
             loses: { type: "array", items: { type: "string" } }
           }
-        }
+        },
+        requiresChosen: requiresChosenSchema
       }
     }
   },
@@ -291,7 +299,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     // A withheld value is supplied at run time instead of carried: `text` may
     // therefore also be the secret request `output-nodes/secret-binding.ts`
     // builds, which names the run input the value arrives in and never a value.
-    parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" }, submit: { type: "boolean", label: "Then send the field's form, as Enter does" } } }
+    parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" }, submit: { type: "boolean", label: "Then send the field's form, as Enter does" }, requiresChosen: requiresChosenSchema } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
   // Points at its element without pressing it (t903, `output-nodes/hover/`).
@@ -319,7 +327,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     actionType: "web.dom.keypress",
     label: "Key Press",
     description: "Dispatch a keyboard event, with modifier keys.",
-    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" }, modifiers: keyModifiersSchema } }
+    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" }, modifiers: keyModifiersSchema, requiresChosen: requiresChosenSchema } }
   },
   {
     actionType: "web.dom.wait_for_selector",

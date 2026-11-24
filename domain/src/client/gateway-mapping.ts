@@ -177,7 +177,8 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
   // Refused whole instead, naming the action and the fields, never their values.
   const { lifted, refused } = webAutomationReadActionParameters(parameters);
   const required = requiredParameters(normalized.actionType);
-  const unreadable = refused.filter((field) => required.includes(field));
+  // An act's required options are never dropped: unread, the act would press on with whatever option stands (t1030).
+  const unreadable = refused.filter((field) => required.includes(field) || field === "requiresChosen");
   if (unreadable.length > 0) {
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unreadableFieldMessage(normalized.actionType, unreadable), failure: unreadableFieldFailure(normalized.actionType, unreadable) };
   }
