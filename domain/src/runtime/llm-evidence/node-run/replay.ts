@@ -435,10 +435,14 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // A not-found press whose control the read before it showed by name, on
     // the page the step acted on, is a control the step could not find, not
     // one the site remembered (`./named-control-shown.ts`, run mux6n7m4).
-    const notFound = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND;
+    // A Next page whose list is not on the page is that, never a control the site remembered (t1013): it fails as such.
+    const listAbsent = refused.detail?.reason === "list_not_on_page";
+    const notFound = !listAbsent && result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND;
     const shownByName = notFound && before !== undefined && webNodeRefusedBecause(result) === undefined ? webNodeNamedControlShown(before, ran, value) : undefined;
     const answered = lastingAct === "uncertain"
       ? await failedOnPage(run, `the step was sent, and whether it took effect is uncertain (${failure}): it was not made again, since making it twice could do it twice`, about, undefined)
+      : listAbsent
+      ? await failedOnPage(run, "the list this Next page moves is not on the page, so nothing was pressed (list_not_on_page)", about, undefined)
       : shownByName !== undefined
       ? await failedOnPage(run, `the page shows a control named "${shownByName}" but the step could not find it (${failure})`, about, undefined)
       : notFound

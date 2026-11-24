@@ -286,6 +286,8 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   other than the list arriving -- the page settling, the render window, the
  *   command's own deadline -- with nothing read. The list is late or is not on
  *   this page; go where it is, or act to bring it up.
+ * - `list_not_on_page` (`target_not_found`, t1013): a Next page's list is not on this page; nothing was pressed and
+ *   nothing ended. `target` names the list. Go back to the page that shows it, then move it on there.
  * - `conditions_kept_nothing`: `where` was applied and kept no item at all, so
  *   the read is empty because of its own conditions rather than the page. Widen
  *   or drop them, or name a column the detection actually showed.
@@ -410,6 +412,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "page_is_not_the_content",
   "list_never_appeared",
   "list_did_not_finish_loading",
+  "list_not_on_page",
   "conditions_kept_nothing",
   "records_have_no_fields",
   "items_not_rendered",

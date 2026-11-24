@@ -1233,6 +1233,31 @@ The read's page limit is checked before this fallback moves the list; its page
 count remains distinct from the fallback's own scroll bound. A timed-out or
 unchanged loading attempt retains the existing typed failure and retry path.
 
+### Next page names its list, and is refused where its list is not (t1013)
+
+A Next page that moved its list or found its end answers, beside its outcome,
+`listMove`: the list's opaque `listKey` (the same key a one-page read of that
+list carries: its item selector and frame, `output-nodes/next-page/list-move.ts`),
+`verdict` (`moved` or `ended`), `said` (this domain's words for an end, such as
+"no control to its next page shows on the list's own page") and, where the pager
+marks one, `place` (`page=N`). An end therefore carries the page the pager
+marks current (`page` on `nextPage`, contract C1). Core's answer-first result
+settles that list's paging from it, so its header says a page follows, the list
+ended, or paging is not yet checked; before this only a forward run's pass could
+settle it, and a move the model ran itself never did (bikes run
+`run-mwug2xjw-41f62603`).
+
+A Next page on a page that shows none of its list fails before anything is
+pressed (`listAbsent` on the page's answer, still `list_vanished` on the wire)
+with TARGET_NOT_FOUND, not OUTPUT_NOT_OBSERVED. It is never held back as a move
+whose outcome is uncertain: the model is refused `target_not_found` with reason
+`list_not_on_page`, naming the list by the handle it wrote (`target`), and told
+to go back to the page that shows it (`action-failure/next-page-list.ts`). A
+test replay answers `core.replay.failed` saying the list is not on the page,
+never `remembered`; in playback the step's category is Core's
+`target_not_found`, which routes by page state. A list that vanishes after a
+press is still OUTPUT_NOT_OBSERVED.
+
 ### Bounded inferred columns
 
 Field discovery and proposal share a 64-column bound. Detection retains late

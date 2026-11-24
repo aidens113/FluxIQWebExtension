@@ -3,6 +3,7 @@
 
 import type { JsonValue } from "fluxiq/core";
 import type { WebToggleSignature } from "../../../actions/toggle-signature";
+import type { WebAutomationNextPageListMove } from "../../../output-nodes/next-page";
 import type { WebPressClearedLayer } from "./press-effect";
 
 /**
@@ -147,6 +148,11 @@ export type WebNodeRanOutcome = WebNodeOutcome & {
    * no act goes on the record (`AS/runtime/answer-first/act-record/gate/read-answer.ts`).
    */
   skipped?: "already_in_state";
+  /**
+   * On a Next page that moved its list or found its end: which list, by the `listKey` its reads carry, and what it
+   * said (`output-nodes/next-page/list-move.ts`, t1013). Core settles that list's paging from it. Absent elsewhere.
+   */
+  listMove?: WebAutomationNextPageListMove;
   /**
    * Said on a press that cleared a layer covering the page, one this build's
    * own press did not open: the layer covered controls on the look before and

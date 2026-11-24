@@ -88,6 +88,8 @@ import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNo
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused, webListReadRecordSchema } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
+import { webNextPageListNamed } from "../action-failure";
+import { webAutomationNextPageListMove } from "../../../output-nodes/next-page";
 import { webNodeWithHandleShape } from "./handle-shape";
 import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
 import { webNodeCurrentPage as currentPage, webNodeReadablePage as readablePage } from "./frozen-execution/page";
@@ -252,7 +254,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       capture?.publish(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, skipped: undefined, pageUnreadable: undefined, actedOn: undefined, actedOnItem: undefined, actedOnCard: undefined, choice: undefined, toggle: undefined, layerCleared: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, skipped: undefined, pageUnreadable: undefined, actedOn: undefined, actedOnItem: undefined, actedOnCard: undefined, choice: undefined, toggle: undefined, layerCleared: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, listMove: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -452,7 +454,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // page, and where the Flow has not reached its start location that is the
       // whole of what can honestly be said, whatever the page then answered.
       // A lasting act Core left uncertain and did not repeat says that instead (`./retries/uncertain-outcome.ts`, t361).
-      const refused = webNodeFailureRefusal(result, lastingAct, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran) });
+      // A Next page whose list is not on this page names the list it was written with (`../action-failure/next-page-list.ts`, t1013).
+      const refused = webNextPageListNamed(webNodeFailureRefusal(result, lastingAct, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran) }), written);
       throw current
         ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal, failure, actionability)
         : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded, failure, actionability);
@@ -555,7 +558,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),
       control: control.name, controlHandle: named,
-      read, addable: node.proposes,
+      read, addable: node.proposes, listMove: webAutomationNextPageListMove(ran, result.payload as JsonValue | undefined), // Which list a Next page moved, for Core's paging (t1013).
       inFlow: undefined, attempts: attempts > 1 ? attempts : undefined
     });
     // The state the node found is the read before it acted, and the state it

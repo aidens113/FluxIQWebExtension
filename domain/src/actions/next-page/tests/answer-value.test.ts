@@ -18,6 +18,7 @@ test("a move, an end and a fault are read as written", () => {
     { outcome: "ended", stop: "control_disabled" },
     { outcome: "ended", stop: "no_following_page" },
     { outcome: "ended", stop: "scrolled_to_end" },
+    { outcome: "ended", stop: "control_disabled", page: 4 },
     { outcome: "failed", stop: "list_unchanged" },
     { outcome: "failed", stop: "rate_limited" },
     { outcome: "failed", stop: "list_vanished" },
@@ -30,7 +31,7 @@ test("a move, an end and a fault are read as written", () => {
 
 test("nothing a producer put beside the declared fields is carried", () => {
   assert.deepEqual(webAutomationNextPageAnswerValue({ outcome: "moved", by: "next", page: 2, label: "Page 2 of 9" }), { outcome: "moved", by: "next", page: 2 });
-  assert.deepEqual(webAutomationNextPageAnswerValue({ outcome: "ended", stop: "control_absent", page: 4 }), { outcome: "ended", stop: "control_absent" });
+  assert.deepEqual(webAutomationNextPageAnswerValue({ outcome: "ended", stop: "control_absent", page: 4, label: "Page 4 of 4" }), { outcome: "ended", stop: "control_absent", page: 4 });
 });
 
 test("a word outside its outcome's set, or a page that is not a page number, is not an answer", () => {
@@ -41,6 +42,8 @@ test("a word outside its outcome's set, or a page that is not a page number, is 
     { outcome: "moved", by: "next", page: 1.5 },
     { outcome: "moved", by: "next", page: "2" },
     { outcome: "ended", stop: "rate_limited" },
+    { outcome: "ended", stop: "control_absent", page: 0 },
+    { outcome: "ended", stop: "control_absent", page: "4" },
     { outcome: "ended", stop: "page_limit" },
     { outcome: "failed", stop: "control_absent" },
     { outcome: "failed", stop: "deadline" },

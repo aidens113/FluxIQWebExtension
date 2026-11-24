@@ -15,6 +15,7 @@ import {
   type WebLlmEvidenceGateway,
   type WebLlmRepeatingStructure
 } from "../..";
+import { webAutomationFailureRecord, WEB_AUTOMATION_FAILURE_CODES } from "../../../failure";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 import { webObservationNodeId } from "../catalog";
 import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
@@ -628,4 +629,55 @@ test("an incomplete-text list refusal reaches the builder with executable disclo
   // t738: no row loop after each page move, which nests a repeat inside a repeat.
   assert.doesNotMatch(String(detail?.next), /after each Next page/u);
   assert.doesNotMatch(JSON.stringify(failed.evidence), /field description|unexpanded text disclosure/u);
+});
+
+// t1013 (bikes run-mwug2xjw-41f62603, step 0089): a Next page names the list it moved by the `listKey` its reads carry,
+// so Core settles that list's paging; and one asked where its list is not is refused naming the list, not answered as a
+// move whose outcome is uncertain.
+const NEXT_PAGE = "web.output.dom-next_page";
+
+/** Detect the timetable list, read it by its handle, then run Next page on it with `nextPage` as the page's answer. */
+async function nextPageAfterRead(answer: (command: { actionType: string }) => { status: "succeeded" | "failed"; payload?: JsonObject; failure?: JsonObject }) {
+  const sent: string[] = [];
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"], structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      sent.push(command.actionType);
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page("Timetable", 0), structure: structuredClone(ROWS) } };
+      if (command.actionType === "web.dom.next_page") return answer(command) as Awaited<ReturnType<WebLlmEvidenceGateway["executeAction"]>>;
+      return { status: "succeeded", payload: { extracted: [{ name: "Night train" }], extraction: { recordCount: 1, pagesRead: 1, itemsSeen: 1, truncated: false, fieldNames: ["name"], missingFields: [] } } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const detected = (await runtime.executeTool({ ...PROJECT, callId: "detect.1", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).evidence as WebLlmRepeatingStructure;
+  const read = (await runtime.executeTool({ ...PROJECT, callId: "read.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED, value: { node: EXTRACT, parameters: { extractList: { handle: detected.extraction } }, consequences: [] } })).evidence as JsonObject;
+  const moved = await runtime.executeTool({ ...PROJECT, callId: "next.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED, value: { node: NEXT_PAGE, parameters: { nextPage: { list: detected.extraction } }, consequences: [] } });
+  return { handle: detected.extraction, listKey: (read.read as JsonObject).listKey, moved, nextPages: sent.filter((type) => type === "web.dom.next_page").length };
+}
+
+test("a Next page's answer carries the listKey of the list it moved, the same its read carries, and what it said", async () => {
+  const ended = await nextPageAfterRead(() => ({ status: "succeeded", payload: { nextPage: { outcome: "ended", stop: "control_absent" }, route: "ended" } }));
+  assert.equal(ended.moved.effectApplied, true);
+  assert.match(String(ended.listKey), /^list\./u);
+  assert.deepEqual((ended.moved.evidence as JsonObject).listMove, { listKey: ended.listKey, verdict: "ended", said: "no control to its next page shows on the list's own page" });
+  const moved = await nextPageAfterRead(() => ({ status: "succeeded", payload: { nextPage: { outcome: "moved", by: "next", page: 2 } } }));
+  assert.deepEqual((moved.moved.evidence as JsonObject).listMove, { listKey: moved.listKey, verdict: "moved", said: "the list moved to page=2", place: "page=2" });
+});
+
+test("a Next page asked where its list is not is refused naming the list, never as a move whose outcome is uncertain", async () => {
+  const absent = await nextPageAfterRead(() => ({
+    status: "failed",
+    payload: { nextPage: { outcome: "failed", stop: "list_vanished" } },
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, { actual: "list_vanished: No item matching the list is on the page" }) as unknown as JsonObject
+  }));
+  assert.equal(absent.moved.effectApplied, false);
+  assert.equal(absent.moved.resultCode, "web.action.rejected.target_not_found");
+  assert.notEqual(absent.moved.resultReason, "outcome_uncertain");
+  const evidence = absent.moved.evidence as JsonObject;
+  assert.equal(evidence.code, "target_not_found");
+  const detail = evidence.detail as JsonObject;
+  assert.equal(detail.reason, "list_not_on_page");
+  assert.equal(detail.target, absent.handle);
+  assert.match(String(detail.next), new RegExp(`the list ${absent.handle.replace(".", "\.")} is not on this page`, "u"));
+  assert.equal(Object.hasOwn(evidence, "listMove"), false, "a refused move settles nothing");
 });
