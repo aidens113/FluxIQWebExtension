@@ -1,6 +1,6 @@
 // Scratch Git checkouts running the actual sibling Core build-cache code.
 import { execFileSync, spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -64,6 +64,12 @@ mkdirSync('dist', { recursive: true }); writeFileSync('dist/out.txt', 'built out
   return {
     root,
     lockPath: (step = "fluxiq:build") => `${cache.resolveStep(step, { repoRoot: root }).stampPath}.lock`,
+    /** The reader entries a lease holds beside a step's lock, as full paths. */
+    async readerPaths(step = "fluxiq:build") {
+      const lock = `${cache.resolveStep(step, { repoRoot: root }).stampPath}.lock`;
+      const names = await readdir(path.dirname(lock)).catch(() => []);
+      return names.filter((name) => name.startsWith(`${path.basename(lock)}.reader-`) && !name.endsWith(".tmp")).map((name) => path.join(path.dirname(lock), name));
+    },
     put: (relative, value = "") => writeFile(path.join(root, relative), value),
     read: (relative) => readFile(path.join(root, relative), "utf8"),
     start(mode, env = {}, step) {
