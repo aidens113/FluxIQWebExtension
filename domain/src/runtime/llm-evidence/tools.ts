@@ -63,7 +63,7 @@ import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "./script-examples";
 import { WEB_FLOW_SCRIPT_GUIDANCE } from "./script-guidance";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { createWebNodeArrivals, createWebNodeHeldLiterals, createWebNodeOwnLayers, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION } from "./node-run";
+import { createWebNodeArrivals, createWebNodeHeldLiterals, createWebNodeOwnLayers, createWebNodeShownAddresses, createWebNodeStandingChoices, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
@@ -177,6 +177,9 @@ export function createWebAutomationLlmEvidenceRuntime(
   const layers = createWebNodeOwnLayers(persistence);
   // What the Flow each continuing round holds, which a rerun keeps without the model writing it (`./node-run/held-literals/`).
   const held = createWebNodeHeldLiterals(persistence);
+  // The options each build has seen standing chosen on each page, by the page's typed state, so a press states those
+  // standing as it found the page, out of view or not (`./node-run/standing-choices/`, t1023). Fed from every look below.
+  const choices = createWebNodeStandingChoices(persistence);
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
@@ -185,6 +188,7 @@ export function createWebAutomationLlmEvidenceRuntime(
     returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
     targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
     addresses.saw(webNodeBuildOf(input).build, snapshot);
+    choices.seen(webNodeBuildOf(input).build, snapshot.evidence);
   };
   // The look a node run takes before it acts, which the model is not shown. Cut
   // short, its controls join the page's handles without forgetting any the
@@ -193,6 +197,7 @@ export function createWebAutomationLlmEvidenceRuntime(
   const looked = (input: WebLlmEvidenceToolRequest, snapshot: WebLlmSnapshotBinding): void => {
     targetPackets.rememberLook({ projectId: input.projectId, flowId: input.flowId }, snapshot);
     addresses.saw(webNodeBuildOf(input).build, snapshot);
+    choices.seen(webNodeBuildOf(input).build, snapshot.evidence);
   };
   // Keyed by the page as the model read it (`./page-view/retention-key.ts`),
   // because Core hands that page back to `validateTargetOverrideEvidence`
@@ -367,7 +372,7 @@ export function createWebAutomationLlmEvidenceRuntime(
       // Every round opens with Core's opening call, fresh or continuing, scoped or not.
       if (opening !== undefined) repeatedRefusals.startedOver(webNodeBuildSlot(build));
       // A host restarted mid-build reads the build's memories back before any of them is consulted.
-      await Promise.all([arrivals.restore(build), addresses.restore(build), layers.restore(build), held.restore(build)]);
+      await Promise.all([arrivals.restore(build), addresses.restore(build), layers.restore(build), held.restore(build), choices.restore(build)]);
       // Every way out of this call goes through here, because a refusal is
       // returned on one path and thrown on another: `node-run/run.ts` catches
       // its own and answers with it, while a detection and the resolver throw
@@ -401,6 +406,7 @@ export function createWebAutomationLlmEvidenceRuntime(
             addresses,
             layers,
             held,
+            choices,
             frozenExecution
           }));
         }

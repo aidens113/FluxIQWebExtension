@@ -89,12 +89,13 @@ import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./writte
 import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused, webListReadRecordSchema } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNextPageListNamed } from "../action-failure";
-import { webNodeListPages, webNodeReadElsewhere } from "./list-pages";
+import { webNodeListReadGuard } from "./list-pages";
 import { webAutomationNextPageListMove } from "../../../output-nodes/next-page";
 import { webNodeWithHandleShape } from "./handle-shape";
 import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
 import { webNodeCurrentPage as currentPage, webNodeReadablePage as readablePage } from "./frozen-execution/page";
 import { webNodeTiming } from "./timing";
+import { webStandingChoicesFound, webStandingChoicesStated, webStandingChoicesUnshown } from "./standing-choices";
 
 /** The keys the library verb takes (`Core runtime/llm/node-tools/`), as a refusal names them. */
 const CALL_KEYS = ["node", "parameters", "consequences"];
@@ -205,6 +206,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   if (frozen.kind === "ordinary") {
     if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), opening);
     if (!continuing) run.layers.opening(buildOf(run), opening);
+    if (!continuing) run.choices?.opening(buildOf(run), opening);
     if (!continuing) run.held.opening(buildOf(run), opening);
     else run.held.hold(buildOf(run), continuing.calls);
     for (const address of continuing?.addresses ?? []) {
@@ -255,11 +257,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       capture?.publish(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, skipped: undefined, pageUnreadable: undefined, actedOn: undefined, actedOnItem: undefined, actedOnCard: undefined, choice: undefined, toggle: undefined, layerCleared: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, listMove: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, skipped: undefined, pageUnreadable: undefined, actedOn: undefined, actedOnItem: undefined, actedOnCard: undefined, choice: undefined, toggle: undefined, layerCleared: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, listMove: undefined, stoodChosen: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined, conditions: undefined }),
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined, conditions: undefined, chosen: undefined }),
         // A look that worked refuses nothing, so it says neither why it refused
         // nor which node it would have named: the draft statement beside it
         // already carries `actionId`, and a successful call is not the row a
@@ -280,6 +282,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // remembered as shown, a notice that pushed a shown filter past this look's
     // forty controls took the filter's handle with it (`run-muohbi3e-e5847e5a`).
     if (current) run.looked(current);
+    const stood = webStandingChoicesFound(run.choices, buildOf(run), current?.evidence, node.effect); // The options standing chosen as this call found the page, said on a changing node's statement (t1023).
     // A handle written bare -- `selector: t3` -- is the shape the Flow
     // script writes and the shape a model reaches for, and the resolver only
     // knows `{handle}`. Left alone it is not a handle at all: it goes to the
@@ -461,11 +464,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal, failure, actionability)
         : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded, failure, actionability);
     }
-    // A read whose list does not stand on the page it read is refused naming it and where it was made, none of its rows kept (`./list-pages/`, t1022).
-    const listPages = webNodeListPages(run);
-    const elsewhere = webNodeReadElsewhere(listPages, node.actionType, written, result.payload as JsonValue | undefined, current?.evidence.location);
-    if (elsewhere !== undefined) throw current ? await pageRefusal(run.gateway, run.sessionId, run.request, current, elsewhere.refused, run.request.signal, failure, actionability) : new RecoverableToolRejection(elsewhere.refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, undefined, failure, actionability);
-    listPages.pagerAnswered(ran, result.payload as JsonValue | undefined);
+    await webNodeListReadGuard(run, { actionType: node.actionType, written, ran, payload: result.payload as JsonValue | undefined, current, failure, actionability }); // A read whose list does not stand on the page it read is refused naming it and where it was made, none of its rows kept (t1022).
     actionAnswered = true;
     // The command worked. Should the look after it meet a robot check, the step
     // stands with what it read, as a success's statement would say.
@@ -564,6 +563,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),
       control: control.name, controlHandle: named,
+      stoodChosen: webStandingChoicesUnshown(stood, after?.evidence), // Those standing out of view, so their words reach the model (t1023).
       read, addable: node.proposes, listMove: webAutomationNextPageListMove(ran, result.payload as JsonValue | undefined), // Which list a Next page moved, for Core's paging (t1013).
       inFlow: undefined, attempts: attempts > 1 ? attempts : undefined
     });
@@ -644,7 +644,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // What each `where` condition of a list read kept and rejected, with a few values it read on the kept rows
         // (`./list-read/condition-account.ts`, t693): Core names a condition that left out no row when the model
         // reruns the read unchanged. Absent on every other node.
-        conditions: webListReadConditionAccount(node.definitionId, recorded)
+        conditions: webListReadConditionAccount(node.definitionId, recorded),
+        // The options standing chosen as it found the page: Core counts the person's option done by the act's step that ran with it (t1023).
+        chosen: webStandingChoicesStated(stood)
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under
@@ -711,6 +713,7 @@ function refusal(
     reads: undefined,
     changed: undefined,
     conditions: undefined,
+    chosen: undefined,
     // Whether a call of this kind belongs in a result, which is a property of
     // the node and not of this attempt. That it did not work is said by
     // `effectApplied: false`, and the two are held apart so a failed step stays
@@ -751,7 +754,7 @@ function refusal(
 function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
   const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
   if (!record.acted || record.standing === undefined) {
-    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined, conditions: undefined });
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined, conditions: undefined, chosen: undefined });
   }
   return present<WebNodeDraftStatement>({
     actionId: record.actionId,
@@ -767,7 +770,8 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     reads: record.standing.reads,
     // The page after it was the robot check, compared with nothing: no line is said changed, as no toggle is.
     changed: undefined,
-    conditions: undefined
+    conditions: undefined,
+    chosen: undefined
   });
 }
 

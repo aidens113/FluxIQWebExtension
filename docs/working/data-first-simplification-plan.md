@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.15, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.16, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -68,7 +68,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 - **Three runs, three defects in reads and pages: a structural fix, not another patch** (the recurring-failures rule).
 - **Running:**
   - **t1022 integrated.** A detection aimed at a group's heading answers that group's records, never the run of groups (content script `record-group/`), proven in visible Chromium on bigbox: 8 cards where the run read 2. A saved read whose list does not stand on the page is refused `list_not_on_page`, naming where the list was made. Not covered: Flow playback after the build (the resolved request carries no binding location; a wire change). It found existing browser-spec failures on several realistic scenarios, owned next.
-  - t1023 (worker-heavy): the act checklist demanded `a1.fulfilment` (pickup) for 190 steps although the site had Pickup already chosen. An option standing chosen when the act lands must count as done.
+  - **t1023 integrated (0.54.16).** An act's option the page shows chosen by its typed state when the act lands counts as done. The domain reports standing choices on every press (`node-run/standing-choices/`), and Core credits them (`instructed-acts/standing-option.ts`). On the recording, `actsMissing` goes from `[a1.fulfilment]` to `[]`. Being built next: a Flow saved this way carries those options as a precondition checked at playback, so a site whose default differs never gets the act silently done the wrong way.
   - **t1024 integrated (0.54.13).** Every read has a declared place: [draft step, list key, page it ran on, moves of that list], or [step, batch key] for a saved Flow's batch. A replay at a place already held replaces that page, so three runs of a Flow on one page are one place; real paging stays separate pages. Rows are never compared.
   - **t1025 integrated (0.54.12).** All 22 unreadable replies of the three runs had one cause: the Anthropic adapter held each decision to the whole schema before Core's reader saw it. Now one decision reading is shared by the harness and the adapter (`runtime/llm/decision-reading/`). A decision is checked against the variant it names, and an unoffered tool goes to the loop's named refusals; withdrawn looks keep `core.loop_decision`. Of the 22 replies, 7 now read, 12 are refused by name, and 3 stay unreadable. Open: withdrawing and restoring looks changes the schema at the head of the request, which misses the prompt cache (one step paid 93k uncached and 77k cache-write tokens).
   - The full sweep of 11-24 (t1021, at Down 6acba56f8-era dev / Core e3498f9f3; report `reports/t1021-sweep-1124.md`) is done. Core check, downstream check and downstream build passed; 3 tests failed. Being fixed forward:
@@ -223,6 +223,19 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1023 integrated (fluxiq 0.54.16): an act's preset option counts as done
+- Changed:
+  - Domain `node-run/standing-choices/` (new) records controls shown chosen by typed state (checked, selected, pressed, current, marked), never by words. Every press reports the options standing, wired through `tools.ts`, `run.ts`, `capture.ts`, `context.ts`, `outcome.ts` and `written-step.ts`.
+  - Core: a draft step's `chosen`, `instructed-acts/standing-option.ts` (sizes, colours, versions, fulfilment and times, never quantities; a step named for the choice wins), and the statement readers moved to `runtime/llm/draft-statement/`.
+  - Merging t1022 took `run.ts` to 805 lines. A worker split it by responsibility (`list-pages/answer-guard.ts`, `standing-choices/{found,stated}.ts`), and it is now at 800.
+  - The lead accepted the scope beyond `runtime/llm/**` (the cause was in `flow-authoring`), and accepted that short control words are kept in Core's build-state store as shown addresses already are.
+- Validation: the lead's run:
+  - Core groups over `runtime/llm/tests`, `evidence-loop`, `draft-statement`, `flow-authoring/draft` and `instructed-acts`: `Test Files  106 passed (106)`, `Tests  1633 passed (1633)`; real-sql `Tests  2 passed (2)`. After merging Core dev: `Tests  363 passed (363)`, check exit 0.
+  - Domain `runtime/llm-evidence`: `# pass 1767 # fail 0` after merging t1022. Domain check exit 0; both audits passed.
+  - The worker's new test failed 3 of 8 before the fix.
+- Follow-up: the playback precondition for a saved option (next lane).
+
 
 ### 2026-11-24 - t1028 integrated (fluxiq 0.54.15): an answered press is never revoked as uncertain
 - Changed: Core `client-gateway/service/command-ledger/dispatch.ts` (`accept()` cancels the answer timer for required commands too), `tests/dispatch.test.ts` (the `timeout` case is gone from the revoke-proof test, with deterministic `startTimer` tests: an answer accepted during the deadline completes, an answer that never came ends unknown, and no press is repeated), and `docs/architecture/automation-studio/client-gateway.md` (the t329 paragraph). t1027, the diagnosis, changed no source. Its stall probe reproduced the sweep's failure at 2000 and 4000 ms, and its report is beside this one.
