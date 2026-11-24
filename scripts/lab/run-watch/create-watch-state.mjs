@@ -9,7 +9,8 @@
 //   repeated_call        the same tool and input sent again and again with no act between
 //   finish_not_ending    a `finish_with_best` decision and the build still going
 //   approach_unchanged   calls after `change_approach` that stayed the kind the loop named
-//   page_reset           the page sent back to the start URL after the first time
+//   page_reset           the page landing on the start URL again after the first time (read from where it is)
+//   rounds_without_decision  Core opening calls again and again with no model decision between
 //   no_new_evidence      steps since a new page location, fingerprint or row count
 
 import { WATCH_THRESHOLDS } from "./config.mjs";
@@ -26,6 +27,7 @@ export function createWatchState(thresholds = WATCH_THRESHOLDS) {
     calls: new Map(), finish: /** @type {null | { step: number, steps: number }} */ (null),
     change: /** @type {null | { step: number, toolIds: string[], calls: number }} */ (null),
     startUrl: /** @type {string | null} */ (null), resets: 0, explainedResets: 0, boundary: false,
+    landed: false, lastLocation: /** @type {string | null} */ (null), openings: 0,
     locations: new Set(), pages: new Set(), rows: 0, lastEvidence: 0,
     alerts: 0, lastAlerted: new Map(),
   };
@@ -60,6 +62,8 @@ export function createWatchState(thresholds = WATCH_THRESHOLDS) {
       if (event.decision === "finish_with_best") state.finish = { step: event.step, steps: 0 };
       else if (event.decision === "change_approach") state.change = { step: event.step, toolIds: event.toolIds, calls: 0 };
     } else if (event.kind === "decide") {
+      state.openings = 0;
+      state.lastAlerted.delete("rounds_without_decision");
       state.noAct += 1;
       if (state.afterLoop !== null) state.afterLoop.decisions += 1;
       if (state.afterLoop !== null && crossed("no_act_after_loop", state.afterLoop.decisions, thresholds.noActAfterLoopDecisions)) {
@@ -104,18 +108,35 @@ export function createWatchState(thresholds = WATCH_THRESHOLDS) {
       }
     }
 
-    if (event.startUrl !== null && (event.initial || event.act)) {
-      if (state.startUrl === null) state.startUrl = event.startUrl;
-      else if (event.startUrl === state.startUrl && state.boundary) state.explainedResets += 1;
-      else if (event.startUrl === state.startUrl) {
-        state.resets += 1;
-        if (state.resets >= thresholds.pageResets) raise("page_reset", event.step, { resets: state.resets, bySystem: event.initial ? 1 : 0 }, `the page was sent back to the start URL (${state.resets} time${state.resets === 1 ? "" : "s"} this attempt)`);
+    // A round Core opens (an `initial.*` call) with no model decision since the last opening: the
+    // round never reached the model.
+    if (event.kind === "tool" && event.initial) {
+      state.openings += 1;
+      if (crossed("rounds_without_decision", state.openings, thresholds.roundsWithoutDecision)) {
+        raise("rounds_without_decision", event.step, { openings: state.openings }, `${state.openings} rounds opened in a row and no model decision ran since the last round opened`);
       }
     }
 
-    // A Flow run, a judged run or a test is the page legitimately leaving where the build was, so
-    // the start navigation that follows one is expected; it is a reset only when nothing explains it.
-    if (event.startUrl !== null && (event.initial || event.act)) state.boundary = false;
+    // `startUrl` is only where the draft starts (a held navigate never runs). A reset is read from
+    // where the page is after the step: landing on the start URL again after the first time, with no
+    // Flow run, judged run or test to explain it.
+    if (event.startUrl !== null && state.startUrl === null) state.startUrl = event.startUrl;
+    if (event.kind === "tool" && event.location !== null) {
+      const here = sameUrl(event.location, state.startUrl);
+      const arrived = here && state.lastLocation !== null && !sameUrl(state.lastLocation, state.startUrl);
+      if (here && arrived && state.landed) {
+        if (state.boundary) state.explainedResets += 1;
+        else {
+          state.resets += 1;
+          if (state.resets >= thresholds.pageResets) raise("page_reset", event.step, { resets: state.resets, bySystem: event.initial ? 1 : 0 }, `the page was sent back to the start URL (${state.resets} time${state.resets === 1 ? "" : "s"} this attempt)`);
+        }
+      }
+      if (here) {
+        state.landed = true;
+        state.boundary = false;
+      }
+      state.lastLocation = event.location;
+    }
     if (BOUNDARY_KINDS.has(event.kind)) state.boundary = true;
 
     // Progress that is not a page change: an act, a Flow run, a judged run, an applied draft amendment.
@@ -150,6 +171,12 @@ export function createWatchState(thresholds = WATCH_THRESHOLDS) {
   }
 
   return { observe, snapshot };
+}
+
+function sameUrl(a, b) {
+  if (a === null || b === null) return false;
+  const bare = (url) => url.split("#")[0].replace(/\/$/, "");
+  return bare(a) === bare(b);
 }
 
 function round(value) { return Math.round(value * 1e6) / 1e6; }
