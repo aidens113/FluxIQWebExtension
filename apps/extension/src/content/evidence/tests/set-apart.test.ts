@@ -30,11 +30,14 @@ test("the one chip carrying a class few of its like siblings carry is set apart"
 test("a refused option is left out of the run, so the chosen one is still the one set apart", () => {
   const members = run("div", ["chip"], ["chip", "on"], ["chip", "off"], ["chip"]);
   const globals = globalThis as unknown as Record<string, unknown>;
+  const previous = Object.getOwnPropertyDescriptor(globals, "getComputedStyle");
   globals.getComputedStyle = (element: Fake) => ({ cursor: element.classList.contains("off") ? "not-allowed" : "pointer" });
   try {
     assert.deepEqual(apart(members), [false, true, false, false]);
   } finally {
-    delete globals.getComputedStyle;
+    // Put back what stood there: another file in this run stubs it once, at load, for its own tests.
+    if (previous) Object.defineProperty(globals, "getComputedStyle", previous);
+    else delete globals.getComputedStyle;
   }
 });
 
@@ -66,6 +69,7 @@ test("no class is named where no member, or more than one, is set apart", () => 
 test("the cursors are not asked unless a like sibling lacks one of the element's classes", () => {
   const members = run("div", ["card", "tile"], ["card", "tile"], ["card", "tile"]);
   const globals = globalThis as unknown as Record<string, unknown>;
+  const previous = Object.getOwnPropertyDescriptor(globals, "getComputedStyle");
   let asked = 0;
   globals.getComputedStyle = () => {
     asked += 1;
@@ -75,6 +79,8 @@ test("the cursors are not asked unless a like sibling lacks one of the element's
     assert.deepEqual(stateClasses(members), [[], [], []]);
     assert.equal(asked, 0, "a run of identical members is settled without reading a style");
   } finally {
-    delete globals.getComputedStyle;
+    // Put back what stood there: another file in this run stubs it once, at load, for its own tests.
+    if (previous) Object.defineProperty(globals, "getComputedStyle", previous);
+    else delete globals.getComputedStyle;
   }
 });

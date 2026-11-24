@@ -102,6 +102,18 @@ test("a list nobody detected, the list in another frame, and another Flow's keys
   // Flow two detected the same list but never wrote `name`, `price` or `url`
   // into a step, so those keys give nothing back there.
   await detect(runtime, "flow.two");
-  const amended = { item: kept.item, fields: withheld(kept.fields) };
+  const planKeys = ["name", "price", "url"];
+  const planFields = Object.fromEntries(planKeys.map((key) => [key, kept.fields[key]!]));
+  const amended = { item: kept.item, fields: withheld(planFields) };
   assert.deepEqual(await resolve(runtime, { extractList: amended }, "flow.two"), { status: "unchanged" });
+  // Since t982 (ba64bbf1c) flow one's step also retains the list's other detected
+  // columns, under the keys the detection gave them. Flow two's own detection gave
+  // them the same keys, so those come back there; the plan's keys still do not.
+  const retainedKeys = Object.keys(kept.fields).filter((key) => !planKeys.includes(key));
+  assert.ok(retainedKeys.length > 0, "the kept step retains detected columns beside the plan's");
+  const whole = await resolve(runtime, { extractList: { item: kept.item, fields: withheld(kept.fields) } }, "flow.two");
+  assert.equal(whole.status, "resolved", JSON.stringify(whole));
+  const fields = ((whole as { parameters: JsonObject }).parameters.extractList as { fields: Record<string, JsonObject> }).fields;
+  for (const key of planKeys) assert.equal(fields[key]?.selector, undefined, `${key} is not flow two's own`);
+  for (const key of retainedKeys) assert.equal(fields[key]?.selector, kept.fields[key]?.selector, `${key} is flow two's own detected column`);
 });

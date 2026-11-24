@@ -70,8 +70,15 @@ test("dotted extractList.fields and extractList.minItems read as the nested form
   // And with the list already in the handle's shape, as the node run hands it on.
   assert.deepEqual(await resolve(made, { extractList: { handle: extraction }, "extractList.fields": NAMED, "extractList.minItems": 0 }), nested);
   if (dotted.status === "resolved") {
-    assert.deepEqual(Object.keys(dotted.parameters), ["extractList"], "no dotted key rides on to the page");
-    assert.deepEqual(Object.keys((dotted.parameters.extractList as JsonObject).fields as JsonObject), ["name", "price"], "only the columns asked for");
+    // Since t982 (ba64bbf1c, `docs/architecture/retained-extraction.md`) the resolved read also carries
+    // its record output, and it retains every other detected column beside the ones asked for,
+    // under the detected keys; the columns asked for are the answer's view.
+    assert.deepEqual(Object.keys(dotted.parameters), ["extractList", "recordOutput"], "no dotted key rides on to the page");
+    const asked = new Set<string>(Object.values(NAMED));
+    const retained = CATALOG.structure.ok ? CATALOG.structure.proposal.fields.map((field) => field.key).filter((key) => !asked.has(key)) : [];
+    assert.ok(retained.length > 0, "the detection found columns beyond the two asked for");
+    assert.deepEqual(Object.keys((dotted.parameters.extractList as JsonObject).fields as JsonObject), ["name", "price", ...retained], "the columns asked for under the plan's keys, then the retained ones");
+    assert.deepEqual(((dotted.parameters.recordOutput as JsonObject).process as JsonObject).columns, ["name", "price"], "only the columns asked for are the answer");
   }
 });
 
