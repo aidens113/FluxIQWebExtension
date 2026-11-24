@@ -1,7 +1,7 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: Every unit through t999 and t994 is integrated and pushed (Core 0.54.3, contracts 0.23.2). t1000 (loop decisions) and the second full sweep of 11-23 run; the supervised $50 paid round follows (target 2026-11-24 evening).
+Status detail: Every planned fix through t1000 is integrated and pushed (Core 0.54.4, contracts 0.23.2); both full sweeps of 11-23 pass every test. The supervised $50 paid round on the ten scoreboard tasks is running (2026-11-24); t1005 (check build order) merges after it.
 Created: 2026-11-20
 Last updated: 2026-11-24
 Owner: Senior supervisor agent
@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (downstream 9a29b8940, Core fbc0356f6; fluxiq 0.54.3, contracts 0.23.2):
+- **Integrated and pushed in both repositories** (downstream af360c487, Core 5dfde039c; fluxiq 0.54.4, contracts 0.23.2):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -25,10 +25,14 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - t993 and t998: a captured-but-absent cell is "not shown", in the feed and the store (migration 0041).
   - t996: the preflight meets the four sites' own person checks.
   - t997 and t999: stored labels hold no page values, and binding reads `_`/`-` as word separators.
-- **Running:**
-  - **t1000** (worker-heavy, Core-paired): `ask_person` is offered only after a change_approach, with a reason (the user's 11-19 rule; t983 had dropped the gate). A judge repeating one unreadable reply goes through loop detection; one fixture made 2,399 re-asks in 90 s.
-  - **Second full sweep of 11-23** (worker-light) on `fxwork/sweep-20261123b` at Down 9a29b8940 / Core fbc0356f6.
-- **Paid round (P7, U8), next, once t1000 lands and sweep 2 is clean; target 2026-11-24 evening:**
+  - t1000: `ask_person` is offered only after a change_approach, with a reason (the user's 11-19 rule; t983 had dropped the gate). A judge repeating one unreadable reply is caught as a loop, and each re-ask names the missing schema part.
+- **Second full sweep of 11-23** (Down 9a29b8940 / Core fbc0356f6, before t1000): every test passes.
+  - Core fluxiq: parallel 20,257 and real-sql 3,241.
+  - Core packages: contracts 1,173, ui-components 881, websocket 213, sdk 103, cloud 67.
+  - apps/web: 4,384.
+  - Downstream: domain 3,195, extension 4,150, test-runner 2,982, scenario-lab 1,043, and the rest. Both builds exit 0.
+  - Only downstream `pnpm check` failed: 35 `error TS` from missing `@fluxiq-web-extension/domain/node` and `browser-host/reaper` declarations in a fresh tree (check ran before build). The fix is t1005, merged only after the paid round, so the lanes stay at dev.
+- **Paid round (P7, U8): running since 2026-11-24** under a supervisor (brief `briefs/paid-round-1124.md` in `fxwork/t1001-paid-lane-a`). The lanes are t1001-t1004 (`paid-a` to `paid-d`), at downstream af360c487 / Core 5dfde039c; the running report is `reports/paid-round-1124.md` in lane a. No code merges into dev until the round ends; docs-only commits keep the lanes admissible.
   - Tasks: the ten fixed scoreboard tasks (`scoreboard/fixed-tasks.ts`), easiest first.
   - Command: `pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd 5`, with four attempts, on Haiku, in visible Chrome, on up to four dev-synced lanes, under a supervisor that watches every run, writes its debug and reports cost as it happens.
   - Money: a task starts only while billed spend, plus $5 for each task in flight, plus its own $5 is at most $50. A call with no reported usage is counted at its maximum. The round stops at the first balance error.
@@ -53,7 +57,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **Why this plan exists:** the recorded campaign counted 37 runs, 0 strict SUCCESS, 17 PARTIAL and 20 FAILURE, about $90. Strict SUCCESS means four correct attempts, three predecessor-Flow continuation proofs and zero model calls on attempts 2-4. The original campaign, causes and approved phased design follow; historical task diagnoses remain in the task reports and git history.
 
-**Next:** t1000 and sweep 2, then the supervised paid round; after the round, a full sweep and `main` promotion.
+**Next:** finish the supervised paid round; merge t1005; diagnose each round failure from its recorded run before any rerun; then a full sweep and `main` promotion.
 
 ## Integration History (2026-11-22/23, superseded by Current State)
 
@@ -321,6 +325,20 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1000 integrated (fluxiq 0.54.4); sweep 2 clean of test failures; paid round started
+- Changed:
+  - t1000 finished in both repositories. The lead also aligned `refused-words.ts` (ask_person only once offered), `failure-control.md` and a stale ladder comment.
+  - The shared Core was synced to 5dfde039c.
+  - Paid lanes t1001-t1004 were created at af360c487.
+  - The paid round supervisor was dispatched.
+  - t1005 (check build order) was started; it merges after the round.
+- Validation: lead runs through the gate on t1000:
+  - parallel `Test Files  343 passed (343)`, `Tests  3011 passed (3011)`;
+  - real-sql `Tests  107 passed (107)`;
+  - fluxiq check 0 `error TS`; audit passed; Core finish `Tests  70 passed (70)`.
+- Sweep 2 (worker, logs `scratchpad/sweep2/`): Core fluxiq parallel `Tests 20257 passed | 6 skipped` and real-sql `Tests 3241 passed | 1 skipped`; apps/web `4384 passed`; downstream every package `# fail 0`; builds exit 0. Down `pnpm check` exit 1 with 35 `error TS` (missing subpath declarations in a fresh tree).
+- Follow-up: the round's per-task results; t1005 after the round.
 
 ### 2026-11-23 - t994 integrated (fluxiq 0.54.3); t1000 and the second sweep started
 - Changed:

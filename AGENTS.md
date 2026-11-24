@@ -504,6 +504,35 @@ Flow its predecessor saved (the continuation proof), and its report names its pa
 calls (ideally none), and time. A single attempt is a diagnosis, never a task's acceptance. A later
 attempt that strays from the saved Flow, or spends calls, is a defect to trace to its root.
 
+**Every ongoing live run is overseen, and stopped early only when really needed** (user,
+2026-11-24): "ongoing runs get some sort of oversight. If it keeps just doing the same thing again
+and again and burning tokens it gets stopped early ONLY if really needed", and then "FROM NOW ON
+EVERY LAB RUN IS MONITORED IN THAT WAY. NOT SO INTENSELY THAT IT WASTES CLAUDE TOKENS BUT JUST
+ENOUGH TO CATCH REPEATING/NO PROGRESS". Every Lab run, live or provider-free, runs with the Lab's
+run watcher, which reads the run's step files and raises an alert only on repeating or no
+progress. The agent that launched the run waits on that alert (a Monitor on the watcher's alert
+file), not on the logs, and reads the run only when it fires. It stops a run early only when the run
+is plainly stuck repeating itself (the same kind of calls with no act and no new evidence) and the
+product's own loop handling has already tried to steer it without effect, so more steps would
+measure nothing. It never stops a run for being slow, for a hard task that is still making
+progress, or to save money on a run that is still learning. A stopped run gets its debug, is
+reported as a product defect with its cause, and is not relaunched until that cause is fixed and
+proven offline.
+
+**No arbitrary limit ends or resets a run** (user, 2026-11-24): "THERE SHOULDNT BE ANY ARBITRARY
+FUCKING CALL LIMIT THAT RANDOMLY JUST RESETS EVERYTHING". No count of calls, steps, iterations or
+steps without progress ends an attempt's round, and nothing sends the browser back to the start
+page once the attempt has reached it: every round continues from the page as it stands. A
+repeat is handled by loop detection and the model's own loop decision; only the result or the
+purse ends a task. Raising such a number is not a fix; remove it.
+
+**Fix an obvious shared problem before running more** (user, 2026-11-24): "dont just spam fucking
+runs next time when an obvious problem that will effect other runs severely. FIX THE PROBLEM FIRST.
+Then do more runs". When a run shows a defect that plainly will hit the other runs (the agent
+loop, the round, the reader, the judge, the Lab itself), launch nothing more and stop runs already
+showing it. Diagnose it from the recorded run, fix it, prove the fix offline on that recording,
+and only then launch again. Never run more tasks "to see whether it is general".
+
 **Every node retries automatically** (user, 2026-10-07): the first attempt plus
 3 retries on every path (exploration, mid-build tests, candidate trials,
 playback), waiting for the target first; only a lasting act whose effect is
