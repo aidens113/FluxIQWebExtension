@@ -51,9 +51,10 @@ test("with no pagination named, the way forward is found from the list: page one
 test("the last page, whose Next is a disabled span, ends on control_disabled and presses nothing", async () => {
   await onStorePage(5, async (marks, shown) => {
     const named = await movePage({ item: STORE_ITEM, pagination: { next: nthPagerLink(6) } }, { timeoutMs: 20_000, mark: marking(marks) });
-    assert.deepEqual(named, { outcome: "ended", stop: "control_disabled" });
+    // An end says the page it was seen on, as the pager marks it (t1013).
+    assert.deepEqual(named, { outcome: "ended", stop: "control_disabled", page: 5 });
     const live = await movePage({ item: STORE_ITEM }, { timeoutMs: 20_000, mark: marking(marks) });
-    assert.deepEqual(live, { outcome: "ended", stop: "control_disabled" });
+    assert.deepEqual(live, { outcome: "ended", stop: "control_disabled", page: 5 });
     assert.deepEqual(shown.followed, []);
     assert.deepEqual(marks, [], "nothing was about to be pressed");
   });
@@ -68,9 +69,9 @@ test("the last page, whose script Next is still enabled, ends on no_following_pa
   const marks: PageMoveMark[] = [];
   try {
     const named = await movePage({ item: STORE_ITEM, pagination: { next: NEXT_BUTTON } }, { timeoutMs: 20_000, mark: marking(marks) });
-    assert.deepEqual(named, { outcome: "ended", stop: "no_following_page" });
+    assert.deepEqual(named, { outcome: "ended", stop: "no_following_page", page: 5 });
     const live = await movePage({ item: STORE_ITEM }, { timeoutMs: 20_000, mark: marking(marks) });
-    assert.deepEqual(live, { outcome: "ended", stop: "no_following_page" });
+    assert.deepEqual(live, { outcome: "ended", stop: "no_following_page", page: 5 });
     assert.deepEqual(shown.followed, []);
     assert.deepEqual(marks, [], "nothing was about to be pressed");
   } finally {
@@ -83,6 +84,8 @@ test("a list that is not on the page is a failed move, not an ended one", async 
     const answer = await movePage({ item: "[data-nothing]" }, { timeoutMs: 20_000, mark: marking(marks) });
     assert.equal(answer.outcome, "failed");
     assert.equal(answer.outcome === "failed" ? answer.stop : undefined, "list_vanished");
+    // Found before anything was pressed: the list is absent, which the verb reports as its target not found (t1013).
+    assert.equal(answer.outcome === "failed" ? answer.listAbsent : undefined, true);
     assert.deepEqual(marks, []);
   });
 });

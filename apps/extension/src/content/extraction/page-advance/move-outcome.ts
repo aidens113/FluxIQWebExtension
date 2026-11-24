@@ -16,8 +16,8 @@ import type { PagerPress } from "./pager-press";
 export type PageMoveOutcome =
   | { outcome: "needs_person"; sighting: RobotCheckSighting }
   | { outcome: "moved"; by: WebAutomationNextPageBy; page?: number | undefined }
-  | { outcome: "ended"; stop: WebAutomationNextPageEnd }
-  | { outcome: "failed"; stop: WebAutomationNextPageFault; reason: string; filtersDropped?: number | undefined; noEffect?: true | undefined }
+  | { outcome: "ended"; stop: WebAutomationNextPageEnd; page?: number | undefined }
+  | { outcome: "failed"; stop: WebAutomationNextPageFault; reason: string; filtersDropped?: number | undefined; noEffect?: true | undefined; listAbsent?: true | undefined }
   | { outcome: "timed_out"; reason: string };
 
 export type PageMoveOptions = {
@@ -44,6 +44,14 @@ export type PageMove = (request: WebAutomationNextPageRequest, options?: PageMov
 export function failedMove(stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number, noEffect?: boolean): PageMoveOutcome {
   const failed: PageMoveOutcome = stop === "page_fault" && filtersDropped !== undefined ? { outcome: "failed", stop, reason, filtersDropped } : { outcome: "failed", stop, reason };
   return noEffect === true ? { ...failed, noEffect: true } : failed;
+}
+
+/**
+ * The list is not on this page at all, found before anything was pressed (t1013): a Next page asked where its list is
+ * not is told so, never taken for a move whose outcome is uncertain (bikes run-mwug2xjw-41f62603, step 0089).
+ */
+export function listAbsentMove(reason: string): PageMoveOutcome {
+  return { outcome: "failed", stop: "list_vanished", reason, listAbsent: true };
 }
 
 /**

@@ -4,7 +4,8 @@
 // answer into the action result the domain lifts onto the wire.
 //
 // - `moved` succeeds with `nextPage: {outcome: "moved", by, page?}`.
-// - `ended` succeeds too, with the stop word and `route: "ended"`: a list with
+// - `ended` succeeds too, with the stop word, the page the pager marks current
+//   where it marks one, and `route: "ended"`: a list with
 //   no next page is the loop over it ending, which Core routes down the node's
 //   `ended` output, never the recovery ladder.
 // - `failed` fails with the word and the closed set's code for it:
@@ -15,6 +16,9 @@
 //   on the answer (t626), which the domain names to the model. None is retried by the page's recovery loop:
 //   this verb moves the page. A fault the page decided before pressing anything carries `noEffect` and
 //   fails as NO_EFFECT, so it never reads as a press whose outcome is uncertain (run-mwaf6gnt-638d90a0).
+//   A list that is not on the page at all (`listAbsent`, found before anything was pressed) fails as
+//   TARGET_NOT_FOUND: the step's list is not here, and the domain tells the model so by the list's handle (t1013,
+//   bikes run-mwug2xjw-41f62603, where it came back as a move whose outcome was uncertain).
 // - A move out of time is `timed_out`, with no answer, as every verb's is.
 //
 // Nothing read off the page is in the result: the words, how the list moved,
@@ -49,10 +53,11 @@ const FAULT_CODES = {
 class NextPageFault extends Error implements WebAutomationFailureCarrier {
   readonly failure: WebAutomationFailureRecord;
 
-  constructor(stop: WebAutomationNextPageFault, reason: string, noEffect = false) {
+  constructor(stop: WebAutomationNextPageFault, reason: string, noEffect = false, listAbsent = false) {
     super(reason);
     this.name = "NextPageFault";
-    this.failure = webAutomationFailureRecord(noEffect ? WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT : FAULT_CODES[stop], { expected: EXPECTED, actual: `${stop}: ${reason}` });
+    const code = listAbsent ? WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND : noEffect ? WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT : FAULT_CODES[stop];
+    this.failure = webAutomationFailureRecord(code, { expected: EXPECTED, actual: `${stop}: ${reason}` });
   }
 }
 
@@ -88,10 +93,10 @@ async function nextPageMove(
       }
       case "ended": {
         const result = deps.success(action, startedAt, "The list has no next page.", { status: "passed", expected: EXPECTED, actual: `ended: ${answer.stop}` });
-        return { ...result, nextPage: { outcome: "ended", stop: answer.stop }, route: "ended" };
+        return { ...result, nextPage: { outcome: "ended", stop: answer.stop, ...(answer.page === undefined ? {} : { page: answer.page }) }, route: "ended" };
       }
       case "failed":
-        return failed(action, deps, startedAt, answer.stop, answer.reason, answer.filtersDropped, loaderSettlement.consume(answer, request) || answer.noEffect === true);
+        return failed(action, deps, startedAt, answer.stop, answer.reason, answer.filtersDropped, loaderSettlement.consume(answer, request) || answer.noEffect === true, answer.listAbsent === true);
       default:
         return deps.timedOut(action, startedAt, answer.reason, { status: "failed", expected: EXPECTED, actual: "the time ran out before the move finished" });
     }
@@ -100,7 +105,7 @@ async function nextPageMove(
   }
 }
 
-function failed(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number, noEffect = false): BrowserActionResult {
+function failed(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number, noEffect = false, listAbsent = false): BrowserActionResult {
   const nextPage = stop === "page_fault" && filtersDropped !== undefined ? { outcome: "failed" as const, stop, filtersDropped } : { outcome: "failed" as const, stop };
-  return { ...deps.failure(action, new NextPageFault(stop, reason, noEffect), startedAt), nextPage };
+  return { ...deps.failure(action, new NextPageFault(stop, reason, noEffect, listAbsent), startedAt), nextPage };
 }

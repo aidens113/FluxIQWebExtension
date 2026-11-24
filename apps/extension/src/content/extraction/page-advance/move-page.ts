@@ -2,8 +2,9 @@
 // list to its next page, as the read used to take between the pages it read.
 //
 // 1. The list must be here: its first item is waited for briefly, and a page
-//    that shows none of it fails `list_vanished` -- a Next page on a list that
-//    is not there is not the list ending.
+//    that shows none of it fails `list_vanished`, marked as the list absent
+//    before anything was pressed (`listAbsent`, t1013) -- a Next page on a list
+//    that is not there is not the list ending, and nothing was pressed.
 // 2. The way forward is the request's `pagination`, or, where the list carried
 //    none, the pager's Next found by walking up from the first item
 //    (`../detect-pagination.ts`, `nextControlOnPage`): a Next, the following
@@ -18,7 +19,8 @@
 //    following page: `ended`.
 // 3. A disabled or absent control is never pressed: the list has ended, and the
 //    answer says why (`control_absent`, `control_disabled`,
-//    `no_following_page`, `scrolled_to_end`).
+//    `no_following_page`, `scrolled_to_end`) and, where the pager marks one,
+//    the page it ended on (t1013).
 // 4. Otherwise the page load is booked on the worker's pace, the press is
 //    marked to the worker (`options.mark`), the control is pressed, and the
 //    list must change, a cancelled link going by its own address
@@ -34,7 +36,7 @@
 import type { WebAutomationNextPageRequest } from "../../../shared/protocol";
 import { arriveAfterMove, awaitListItems } from "./arrival";
 import { deadlineFor } from "./list-change";
-import { failedMove, stoppedMove, type PageMoveOptions, type PageMoveOutcome } from "./move-outcome";
+import { failedMove, listAbsentMove, stoppedMove, type PageMoveOptions, type PageMoveOutcome } from "./move-outcome";
 import { PaginationFault, paginationStopOf } from "./pagination-fault";
 import { watchListLoading } from "./list-loading";
 import { pageShownNow } from "./shown-page";
@@ -63,7 +65,7 @@ async function movePageNow(request: WebAutomationNextPageRequest, options: PageM
   if (options.resume !== undefined) return await arriveAfterMove(request, options.resume, deadline, options);
   const shown = await awaitListItems(request.item, LIST_WINDOW_MS, deadline);
   if (shown === "timed_out") return { outcome: "timed_out", reason: "The time ran out before the list showed on the page." };
-  if (shown.length === 0) return failedMove("list_vanished", `No item matching ${JSON.stringify(request.item)} is on the page, so there is no list to move on.`);
+  if (shown.length === 0) return listAbsentMove(`No item matching ${JSON.stringify(request.item)} is on the page, so there is no list to move on.`);
   const way = request.pagination;
   const current = pageShownNow(way, request.item);
   if (way?.mode === "numbered" && current === undefined) {
@@ -113,7 +115,10 @@ async function movePageNow(request: WebAutomationNextPageRequest, options: PageM
       return { outcome: "timed_out", reason: "The time ran out before the list reached its next page." };
     case "truncated":
       return failedMove("list_unchanged", `Scrolling ${progress.scrolls} times brought no new item of the list, though the page was not at its bottom.`);
-    default:
-      return stoppedMove(step.stop, `The move stopped on ${step.stop}.`);
+    default: {
+      const stopped = stoppedMove(step.stop, `The move stopped on ${step.stop}.`);
+      // An end says the page the pager marks current, where it marks one: the page it was seen on.
+      return stopped.outcome === "ended" && current !== undefined ? { ...stopped, page: current } : stopped;
+    }
   }
 }

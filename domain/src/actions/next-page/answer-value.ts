@@ -21,7 +21,10 @@ export function webAutomationNextPageAnswerValue(value: unknown): WebAutomationN
   }
   if (answer.outcome === "ended") {
     const stop = memberOf(answer.stop, WEB_AUTOMATION_NEXT_PAGE_WORDS.ends);
-    return stop === undefined ? undefined : { outcome: "ended", stop };
+    if (stop === undefined) return undefined;
+    if (answer.page === undefined) return { outcome: "ended", stop };
+    const page = positiveInteger(answer.page);
+    return page === undefined ? undefined : { outcome: "ended", stop, page };
   }
   if (answer.outcome === "failed") {
     const stop = memberOf(answer.stop, WEB_AUTOMATION_NEXT_PAGE_WORDS.faults);

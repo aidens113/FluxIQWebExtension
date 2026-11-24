@@ -704,7 +704,11 @@ packet states no page bound. Next page (`web.output.dom-next_page`, action
 `web.dom.next_page`) moves the list on by one page and answers `success`,
 `ended` when there is no further page, or `failed`; Core's do-while
 `repeat {through, while, most}` runs the span again while Next page moves on,
-and an `ended` answer leaves the loop cleanly. `nextPage` may also name a
+and an `ended` answer leaves the loop cleanly. A Next page the build runs
+itself names the list it moved (`listMove`, its read's `listKey`), which settles
+that list's paging in the result header; one asked where its list is not is
+refused `list_not_on_page` (web-capabilities, "Next page names its list").
+`nextPage` may also name a
 page-view handle for the site's own Next control (`control: "tN"`), or be a
 literal `{item, next?}` for a list nothing detected
 (`plan-resolution/next-page-slot.ts`).

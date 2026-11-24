@@ -55,7 +55,7 @@ test("from page two, told by its class, the step goes on to the number three", a
 test("on the last page, whose Next only looks disabled and shows no next number, the step ends no_following_page and presses nothing", async () => {
   await onPage(4, { current: "class", arrival: "/find?q=lamp&page=4&ref=banner" }, async (shown, marks) => {
     const answer = await movePage({ item: SCRIPT_NEXT_HIT, pagination: { next: LAST_PAGE_NEXT } }, { timeoutMs: 20_000, mark: marking(marks) });
-    assert.deepEqual(answer, { outcome: "ended", stop: "no_following_page" });
+    assert.deepEqual(answer, { outcome: "ended", stop: "no_following_page", page: 4 }, "with the page it was seen on (t1013)");
     assert.deepEqual(shown.followed, []);
     assert.equal(shown.nextPresses(), 0);
     assert.deepEqual(marks, [], "nothing was about to be pressed");

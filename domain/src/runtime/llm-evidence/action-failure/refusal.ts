@@ -156,7 +156,7 @@ const BY_FAILURE_REASON: Readonly<Record<string, WebLlmToolRejectionReason>> = O
 export function webActionFailureRefusal(result: WebFailedActionResult, sent?: { actionType: string; parameters: JsonObject }): WebActionRefusal {
   const code = webActionFailureRejectionCode(result);
   const shortfall = webActionReadShortfall(result.payload);
-  const reason = typeof result.failure?.code === "string" ? BY_FAILURE_REASON[result.failure.code] : undefined;
+  const reason = nextPageListAbsent(result) ? "list_not_on_page" : typeof result.failure?.code === "string" ? BY_FAILURE_REASON[result.failure.code] : undefined;
   const filtersDropped = droppedFilters(result);
   const withoutValue = parameterWithoutValue(result);
   const scrollKeys = withoutValue === undefined ? unreadableScrollKeys(result, sent) : undefined;
@@ -233,6 +233,19 @@ function siteWait(result: WebFailedActionResult): { retryAfterMs: number | undef
 
 /** The extension's closed words for a tab it took back to the page the act was made on, after a refused load. */
 const TAB_RETURNED = /nothing was loaded; the tab was taken back to the page the (?:click|check|choice) was (?:pressed|made) on \(/u;
+
+/**
+ * Whether a Next page step was asked where its list is not (t1013): TARGET_NOT_FOUND beside its own answer's
+ * `list_vanished`, which the page sends only when it found none of the list before pressing anything
+ * (`apps/extension/src/content/extraction/page-advance/move-page.ts`). Read off the code and the closed word, never a
+ * sentence. Its reason, `list_not_on_page`, names the list by its handle where the call wrote one
+ * (`./next-page-list.ts`); until t1013 this came back as a move whose outcome was uncertain (bikes run-mwug2xjw-41f62603).
+ */
+function nextPageListAbsent(result: WebFailedActionResult): boolean {
+  if (result.status === "timed_out" || result.failure?.code !== WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND) return false;
+  const answer = webAutomationNextPageAnswerValue(result.payload?.nextPage);
+  return answer?.outcome === "failed" && answer.stop === "list_vanished";
+}
 
 /**
  * How many filters the page shows applied that a Next page step's Next would
