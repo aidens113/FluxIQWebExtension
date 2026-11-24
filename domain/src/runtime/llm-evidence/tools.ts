@@ -38,7 +38,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { isEligibleWebSession, leasedWebSessionId } from "../web-sessions";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
-import { webDefinitionFieldCapabilityRefusal } from "../definition-fields";
+import { webDefinitionFieldAdmission } from "../definition-fields";
 import {
   assertActive,
   captureEvidence,
@@ -587,8 +587,10 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
     structureDetectionSessionIds: () => eligibleWebSessionIds(fluxiq, WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID),
     executeAction: async (sessionId, command) => {
       const session = fluxiq.programs.clientGateway.snapshot().sessions.find((candidate) => candidate.sessionId === sessionId);
-      return webDefinitionFieldCapabilityRefusal(command.actionType, command.parameters, session)
-        ?? await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
+      // A definition column the read only retains is left out for a client that cannot read it (`../definition-fields/admission.ts`).
+      const admitted = webDefinitionFieldAdmission(command.actionType, command.parameters, session);
+      if (admitted.status !== "admitted") return admitted;
+      return await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, admitted.parameters === command.parameters ? command : { ...command, parameters: admitted.parameters });
     },
   }, webAutomationClearedWayOutsOf(fluxiq), webAutomationBuildStateSource(fluxiq)));
 }

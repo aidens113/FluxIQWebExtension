@@ -2,6 +2,7 @@ import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { WEB_AUTOMATION_DEFINITION_FIELDS_CAPABILITY_ID } from "../capabilities";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../failure";
+import { webActiveDefinitionField } from "./active-field";
 
 /** Refuse an unsupported semantic read before any command reaches the selected browser. */
 export function webDefinitionFieldCapabilityRefusal(actionType: string, parameters: unknown, session: unknown): { status: "failed"; message: string; failure: AutomationStudioFailureRecord } | undefined {
@@ -21,13 +22,8 @@ function requiresDefinition(parameters: unknown): boolean {
   const request = record(record(parameters)?.extractList);
   if (request === undefined) return false;
   const fields = record(request.fields);
-  return (fields !== undefined && Object.values(fields).some(activeDefinition))
-    || (Array.isArray(request.where) && request.where.some((condition) => activeDefinition(record(condition)?.read)));
-}
-
-function activeDefinition(value: unknown): boolean {
-  const field = record(value);
-  return field?.kind === "text" && field.handling !== "exclude" && Object.hasOwn(field, "definition") && field.definition !== undefined;
+  return (fields !== undefined && Object.values(fields).some(webActiveDefinitionField))
+    || (Array.isArray(request.where) && request.where.some((condition) => webActiveDefinitionField(record(condition)?.read)));
 }
 
 function supportsDefinition(value: unknown): boolean {
