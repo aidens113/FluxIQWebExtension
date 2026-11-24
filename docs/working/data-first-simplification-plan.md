@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.10, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.11, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -37,6 +37,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - t1018: a carried earlier round holds no denied key (t1014 had kept them as `[withheld]`, so every fresh round after a Flow replay was refused unsent).
     - t1019: the run watcher reads page resets from where the page is, and alerts `rounds_without_decision`.
     - t1017: Lab runs sharing one Core hold a shared reader lease, so lanes on one Core run at once.
+    - t1016: task memory tolerates only a store that could not be read or written (typed at the store boundary), in model resolution and at the attempt's opening; any other error stops the task.
 - **Second full sweep of 11-23** (before t1000): every test passed (Core about 30,000, downstream about 11,700); only `pnpm check` failed in a fresh tree, fixed by t1005.
 - **Paid round of 2026-11-24: halted at $0.80 of $50.** Five launches; no task finished attempt 1.
   - Bigbox looked for about 170 steps without pressing. Cause, from its steps:
@@ -52,7 +53,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - fix an obvious shared problem before running more.
   - Report: `reports/paid-round-1124.md` with its brief, and the five run debugs in `../language-driven-flow-loop-plan/debugs/` (run-mwufisf0, -mwug2xjw, -mwug3pjo, -mwug6pz3, -mwugbs39).
 - **Bigbox relaunch of 11-24 (run-mwus396e, lane t1015): stopped at $0.12.** The model acted (6 landed acts, a draft with search, list read and paging, its Flow run three times), then every fresh round's first request was refused inside Core, unsent, because t1014's carried rounds kept denied keys; fixed by t1018 and proven offline on the recording. Debug: `../language-driven-flow-loop-plan/debugs/run-mwus396e-5447c6f6.md`. Round total $0.92 of $50.
-- **Running:** t1016 (lead verification): task memory tolerates only a store I/O failure (typed at the store boundary), in model resolution and at the attempt's opening.
+- **Running:** nothing paid.
 - **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev. Only if it presses and progresses do the other nine tasks follow, now four lanes on the shared Core, within the remaining $49.08.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
@@ -343,6 +344,13 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1016 integrated (fluxiq 0.54.11): task memory tolerates only a store failure
+- Changed:
+  - Worker: `task-memory/store-io.ts` types a driver failure (a Node system code or a SQLite code, never message words) as `AutomationStudioAnswerFirstTaskMemoryStoreError` at the store boundary (`task-memory/store.ts`). `task-model/resolve.ts` tolerates only that error.
+  - Lead: the attempt's opening (`attempt/opening.ts`, `keptOrNothing`) reads unscoped memory the same way. The brief had asked for it while leaving `attempt/` out of the worker's paths. `tests/later-attempt.test.ts` "a memory that fails" now fakes the typed store failure, since a plain `Error` is no longer taken for one.
+- Validation: lead, through the gate: task-model, task-memory, `attempt` and answer-first `tests`: 50 of 51 files passed. The one failure was "a memory that fails", with `new Error("disk")` now rethrown; after the fix it is `Tests  24 passed (24)`. After merging Core dev: parallel `Test Files  5 passed (5)`, `Tests  34 passed (34)`; real-sql `Test Files  4 passed (4)`, `Tests  59 passed (59)`; `pnpm --filter fluxiq check` exit 0; audit passed.
+- Follow-up: relaunch bigbox on lane t1015 synced to dev.
 
 ### 2026-11-24 - Bigbox relaunch stopped on refused fresh rounds; t1018, t1019 and t1017 integrated (fluxiq 0.54.10)
 - Changed:
