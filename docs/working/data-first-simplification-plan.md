@@ -81,10 +81,18 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - A stored schema label is now the page's own column words, or the field key for a generated class path, never a first-item value. The model-facing packet is unchanged, and a column the model renames keeps the detected column's stored label.
   - Lead runs: domain structure and plan-resolution 442/442; domain check; read-oracle 10/10; audit. Earbuds mwocg0zw with the rewrite: ready, kept 11, matched 11/11 collected, 0 calls. It is 11/13 overall because the run never read the other 2 records' pages.
   - Remaining: a declaration naming a site key (`brightaisle_plus`) does not bind a page-worded label ("Brightaisle Plus"). Labelling renamed columns with raw keys was rejected, since class paths would become answer headers. Instead, t999 makes Core binding treat `_` and `-` as word separators, in binding only.
-- **Running now** (the paid round waits for all of them; target 2026-11-24 evening, gated by t994, which now also carries F23's fix):
+- **t996 integrated and pushed (downstream 7b9d9f955).** The S6 preflight now meets each site's own declared person check. The lead reran all four on the dev-synced build, in visible Chrome and provider-free, and each gave `{"protocolPassed":true,"siteChallenge":"passed","gaps":[]}`.
+  - Everything-store's `site-challenge.json`: `armedCheck: type-the-characters`, `askInChat: true`, `did: cleared`, `answer: person_done`, `via: chat`, `readSucceeded: true`.
+  - Bigbox's `press-and-hold` is declared to lift by itself; the product waits it out (`how: waited_out`), which the lead accepts.
+  - Preflight tests 14/14, runner check, audit. Evidence is preserved in `fxwork/recorded-evidence/t996/`.
+- **t999 integrated and pushed (Core b7e1de714, contracts 0.23.2).**
+  - In binding only, `_` and `-` are word separators (`binding/name-key.ts`), so a declaration naming a site key binds the page-worded column. Cell comparisons are unchanged.
+  - The read-oracle hands declarations to Core as written; `model-aliases.ts` is removed.
+  - The lead made downstream `stored-labels.ts` fold names the same way, so labels stay unique to Core.
+  - Lead runs: contracts process 335/335 (again after merging dev); fluxiq and contracts checks; domain structure and extraction 188/188; read-oracle 8/8; runner check; both audits. Earbuds as written: `ready`, kept 11, matched 11/11 collected, 0 calls (2 of 13 are on pages never read).
+- **Running now** (the paid round waits for it; target 2026-11-24 evening):
   - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure, the judge-model provider default, and F23's run-gate fix. The lead merged Core dev 27e8fabc9 into its branch at its request.
-  - **t996** (worker done, lead verification running): the preflight's site challenge. The worker's four visible provider-free preflights all reported `siteChallenge: "passed"`. Bigbox's check is declared not person-only and lifts by itself; the product waits it out (`how: waited_out`), which the lead accepts. The lead is rerunning all four on the dev-synced build.
-  - **t999** (worker-heavy, the t997 worker, Core-paired): binding word separators, then the read-oracle uses declarations as written and drops the `model-aliases.ts` rewrite.
+  - t994 found that a read's own `recordOutput.process` is dropped once a task has a declaration (05d61fea4, the t869 class). The lead's decision: not superseded. The active path must evaluate the same `merged(read process, declaration)` as the legacy path. `result-feed/**` passed to t994 for this fix.
   - **t996** (worker, with its own Core): the preflight exercises the site-declared person checks on everything-store, crossborder, bigbox and company-website.
   - **t997** (worker-heavy): stored labels from the page's column words or the field key; a renamed column's id is the model's name and its label the detected key.
   - t990's finish removed its worktree and the ignored `test-runs/` inputs with it. Lanes that need recorded reads copy them again from the original campaign evidence.
@@ -264,6 +272,17 @@ Read Current State and the corresponding task report first; do not restart compl
 All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls or browser acceptance; one inadvertently launched Core full check was deliberately interrupted and is not acceptance.
 
 ## Work Ledger
+
+### 2026-11-23 - t996 and t999 (contracts 0.23.2) integrated
+- Changed:
+  - t996 finished downstream, the preflight's site challenge. Its empty Core branch was abandoned with 0 unmerged.
+  - t999 finished in both repositories. Its Core branch was merged with dev 143d80419 first, after a finish refused it as behind.
+  - The lead added the downstream `stored-labels.ts` fold and its test on t999.
+- Validation: lead runs through the gate:
+  - t996: preflight `# tests 14 # pass 14 # fail 0`; runner check `0` `error TS`; audit passed; four `offline-preflight` runs each `{"protocolPassed":true,"siteChallenge":"passed","gaps":[]}`.
+  - t999: contracts `Tests  335 passed (335)` (before and after the dev merge); contracts, fluxiq, domain and runner checks exit 0; domain `# tests 188 # pass 188 # fail 0`; read-oracle `# pass 8 # fail 0`; Core and Down audits passed; earbuds `"state": "ready"`, `matchedRecords` 11, `modelCalls` 0.
+  - Finishes: Down audits passed; Core `Tests  70 passed (70)`.
+- Follow-up: t994; then the paid round.
 
 ### 2026-11-23 - t998 (fluxiq 0.54.2) and t997 integrated; t999 started
 - Changed:
