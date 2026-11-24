@@ -6,6 +6,8 @@ export type PreflightEvidence = Readonly<{
   source: Readonly<{ core: string; extension: string }>;
   stages: readonly Readonly<{ stage: "pairing" | "chat_start" | "person_answer" | "permission_answer" | "read"; passed: boolean; artifact: string }> [];
   siteChallenge: "passed" | "failed" | "not_declared" | "not_run";
+  /** Where a site challenge that did not pass stopped, and why: the stage and a closed code. */
+  siteChallengeFailure?: Readonly<{ stage: string; code: string }>;
   externalCalls: number | null;
   externalUsd: number | null;
   /** A read-only task does not prove the consequential-action permission protocol. */
@@ -24,6 +26,7 @@ export function classifyPreflight(evidence: PreflightEvidence): Readonly<{ proto
     const receipts = evidence.stages.filter((receipt) => receipt.stage === stage);
     if (receipts.length !== 1 || receipts[0]?.passed !== true || !receipts[0].artifact) gaps.push(`unproved_${stage}`);
   }
+  if (evidence.siteChallenge === "failed") gaps.push(`site_challenge_failed_${evidence.siteChallengeFailure?.stage ?? "unknown"}_${evidence.siteChallengeFailure?.code ?? "unknown"}`);
   if (evidence.externalCalls !== 0 || evidence.externalUsd !== 0) gaps.push("unproved_zero_external_spend");
   return { protocolPassed: gaps.length === 0, siteChallenge: evidence.siteChallenge, gaps };
 }
