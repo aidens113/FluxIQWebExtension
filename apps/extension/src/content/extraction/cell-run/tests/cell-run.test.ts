@@ -76,6 +76,77 @@ test("a card list whose cards each hold the same Like and Share, or one button e
   assert.equal(gridCells(products), undefined, "one control per item is the item's own, not a grid");
 });
 
+type Tool = { name: string; price: string; rating: string; pickup: string; sizes: boolean };
+
+/**
+ * One rental listing as a results grid draws it (t1020): the card's own title link first, then the
+ * picture, the price, the name again as text, the rating and the pickup line, and last its one
+ * action -- a Sizes link where the tool comes in several sizes, a Reserve button otherwise. Both
+ * links sit straight in the card, so the card with Sizes holds two links side by side.
+ */
+function toolCard({ name, price, rating, pickup, sizes }: Tool, index: number): Element {
+  const href = `/tools/${index}`;
+  const action = sizes ? dom.el("a", { class: "sizes", href }, "Sizes") : dom.el("button", { class: "reserve" }, "Reserve");
+  return dom.el("div", { class: "tile", "data-item-id": String(100 + index) },
+    dom.el("a", { class: "tile-link", href }, dom.el("span", { class: "sr" }, name)),
+    dom.el("div", { class: "pic" }, dom.el("img", { src: `/img/${index}.svg`, alt: name })),
+    dom.el("div", { class: "price" }, dom.el("span", { class: "sr" }, price)),
+    dom.el("span", { class: "title" }, name),
+    dom.el("div", { class: "rating" }, dom.el("span", { class: "value" }, rating)),
+    dom.el("div", { class: "pickup" }, dom.el("div", { class: "line" }, pickup)),
+    action);
+}
+
+function toolGrid(): Element[] {
+  const tools: Tool[] = [
+    { name: "Orbital sander", price: "$12.00", rating: "4.6", pickup: "Pickup today", sizes: true },
+    { name: "Tile cutter", price: "$18.50", rating: "4.1", pickup: "Pickup tomorrow", sizes: false },
+    { name: "Post hole digger", price: "$9.75", rating: "4.8", pickup: "Pickup today", sizes: false },
+    { name: "Pressure washer", price: "$31.00", rating: "4.4", pickup: "Pickup today", sizes: false },
+    { name: "Wet vacuum", price: "$14.25", rating: "4.7", pickup: "Pickup tomorrow", sizes: false }
+  ];
+  const cards = tools.map(toolCard);
+  dom.el("section", { class: "results" }, dom.el("div", { class: "grid" }, ...cards));
+  return cards;
+}
+
+test("cards that each hold their own link, one card a second link beside it, are no grid: one link per card is the card's own (t1020)", () => {
+  const cards = toolGrid();
+  assert.equal(gridCells(cards), undefined, "a second link in one card of five is that card's exception, not a grid's rule");
+});
+
+test("those cards read as the run, one row per card carrying its link, price, rating and pickup line (t1020)", () => {
+  const cards = toolGrid();
+  const fields = inferFields(cards[0]!, cards);
+  const stored = records(cards, Object.fromEntries(fields.map((field) => [field.key, field.spec as WebAutomationExtractField])));
+  assert.equal(stored.length, cards.length, "one row per card");
+  // The fake page resolves no link address, so the card's link is proven as its column; a browser reads its href.
+  assert.ok(fields.some((field) => field.spec.kind === "link"), "the card's own link is a column of its row");
+  const wanted: Array<[number, string[]]> = [[0, ["$12.00", "4.6", "Pickup today", "Orbital sander"]], [2, ["$9.75", "4.8", "Pickup today", "Post hole digger"]]];
+  for (const [index, values] of wanted) {
+    const row = Object.values(stored[index]!);
+    for (const value of values) assert.ok(row.some((cell) => cell?.includes(value) === true), `card ${index} carries ${value} in its one row: ${JSON.stringify(stored[index])}`);
+  }
+});
+
+test("days that hold one showing each but one are no grid, and days that mostly repeat still are", () => {
+  const sparse = [
+    day("Fri 02/10", "2026-10-02", [{ time: "14:00", free: true }]),
+    day("Sat 03/10", "2026-10-03", [{ time: "15:00", free: true }]),
+    day("Sun 04/10", "2026-10-04", [{ time: "16:00", free: true }, { time: "19:00", free: true }]),
+    day("Mon 05/10", "2026-10-05", [{ time: "17:00", free: true }])
+  ];
+  dom.el("div", { class: "week" }, ...sparse);
+  assert.equal(gridCells(sparse), undefined, "one of four days repeating is not a timetable");
+  const mostly = [
+    day("Fri 02/10", "2026-10-02", [{ time: "14:00", free: true }]),
+    day("Sat 03/10", "2026-10-03", [{ time: "14:00", free: true }, { time: "17:00", free: true }]),
+    day("Sun 04/10", "2026-10-04", [{ time: "16:00", free: true }, { time: "19:00", free: true }])
+  ];
+  dom.el("div", { class: "week" }, ...mostly);
+  assert.equal(gridCells(mostly)?.length, 5, "two of three days repeating is");
+});
+
 test("each cell carries its day's heading read in its group, its own words, its date and its disabled state", () => {
   const days = week();
   const cells = gridCells(days)!;

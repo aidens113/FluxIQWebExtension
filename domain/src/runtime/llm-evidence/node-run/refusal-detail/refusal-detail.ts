@@ -6,6 +6,7 @@
 
 import type { JsonObject } from "fluxiq/core";
 import { webPlanFirstTargetHandle } from "../../plan-resolution";
+import { webLlmUnknownColumn } from "../../rejection-next";
 import { rejectionDetail } from "../../tool-rejection";
 import { webRunnableNodeIds } from "../catalog";
 
@@ -25,14 +26,18 @@ export const webNodeRefusalDetail = {
       requestId: undefined
     });
   },
-  /** The handle refusal, carrying the handle the call named and the resolver's own codes. */
-  handle(parameters: JsonObject, issueCodes: readonly string[]) {
+  /**
+   * The handle refusal, carrying the handle the call named, the resolver's own codes, and the column names the
+   * resolver's `issues` say no column answers to (`../../rejection-next/unknown-column.ts`, t1020): until then those
+   * issues were dropped here, and a read refused for a column was told codes alone.
+   */
+  handle(parameters: JsonObject, issueCodes: readonly string[], issues?: readonly { code: string; field?: string }[]) {
     return rejectionDetail({
       reason: "parameters_not_resolved",
       target: webPlanFirstTargetHandle(parameters),
       // The codes, and then the shapes a handle is accepted in. A live build was refused `web.handle.extraction_required` fifteen times
       // and never once corrected the shape, because a code is a name for a mistake and not a statement of what is accepted instead (`run-mudabxqd-266e728d`).
-      instead: [...issueCodes.map((code) => String(code).slice(0, 100)).slice(0, 12), ...HANDLE_SHAPE],
+      instead: [...issueCodes.map((code) => String(code).slice(0, 100)).slice(0, 12), ...webLlmUnknownColumn.codes(issues), ...HANDLE_SHAPE],
       missing: undefined,
       requestId: undefined
     });

@@ -47,6 +47,8 @@ const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one",
 const PACKET_KEYS = new Set([
   "schemaVersion", "trust", "location", "extraction", "target", "list", "sample", "itemCount", "fields", "pagination", "confidence",
   "key", "label", "kind", "coverage", "at", "atNote", "nextPageNote",
+  // How the handle is read, and how its read replaces one the draft holds (t1020, `../packet.ts`).
+  "readNote",
   // What a column holds and what a list's rows carry (t800, CC1-CC3: `../column-type.ts`, `../list-items/`).
   "type", "parsed", "fieldMarks", "markNote", "id", "rowIdentity", "items", "itemKey", "marks", "itemsNote"
 ]);

@@ -93,6 +93,16 @@
 // binding keeps the detected pagination, because Next page reads the way to
 // the next page from it (`plan-resolution/next-page-slot.ts`).
 //
+// **Every packet says how its handle is read (t1020).** Live run
+// `run-mwuuo3zk-75b482b3` was shown a list and its cells in one packet, each
+// with its own handle and keys, and nothing said which keys went with which
+// handle or how a new detection takes the place of a read the draft already
+// held. It read the list's handle with the cells' keys (refused), then read
+// the cells, and never put the list's columns into its read. `readNote` says
+// once, around this handle: name it in `extractList` with keys from its own
+// fields, a key under cells or record needs their handle, and a read the draft
+// holds is replaced by running this read as a new step and dropping the old one.
+//
 // **A column says what kind of value it holds, and a list what its rows carry
 // (t800, contracts CC1-CC3).** Each field with a sample, or a read that says
 // it, carries `type` and its sample `parsed` as that type (`./column-type.ts`).
@@ -161,6 +171,16 @@ const ITEMS_NOTE = "items are the list's items in page order, the first being it
  */
 function nextPageNote(handle: string): string {
   return `this list goes on past this page, and a read reads this page only; for every page, add Next page with nextPage: {list: "${handle}"} after the read, then repeat the read through Next page while it succeeds`;
+}
+
+/**
+ * How this list is read, and how its read takes the place of one the draft holds (t1020, header): domain text
+ * around the list's own handle. No key, sample or page word: the keys are the packet's own fields.
+ */
+function readNote(handle: string): string {
+  return `read this list by naming "${handle}" in extractList with fields written as {your name: key}, each key one listed under fields above; `
+    + "a key is read only through the handle it is listed under, so a key under cells or record needs that handle. "
+    + "To replace a read the draft already holds, run this read as a new step and drop the old read step";
 }
 
 /** What the packet says of a section's link to more: domain text around the link's closed-phrase label. */
@@ -260,6 +280,8 @@ export type WebLlmRepeatingStructure = {
   itemCount: number;
   fields: WebLlmStructureField[];
   pagination: WebLlmStructurePaginationMode;
+  /** How this handle is read and how its read replaces one the draft holds. A sentence of this module around the handle (t1020). */
+  readNote: string;
   /** How every page of a list that continues is read: Next page on this handle, and a repeat. A sentence of this module; absent when `pagination` is `none`. */
   nextPageNote?: string;
   /** How sure the detection is, from 0 to 1. */
@@ -351,6 +373,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     itemCount: proposal.itemCount,
     fields: readable.map((field) => field.shown),
     pagination,
+    readNote: readNote(input.handle),
     nextPageNote: pagination === "none" ? undefined : nextPageNote(input.handle),
     confidence: proposal.confidence,
     record: recordBinding === undefined ? undefined : {

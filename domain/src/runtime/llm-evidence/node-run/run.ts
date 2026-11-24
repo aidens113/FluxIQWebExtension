@@ -323,7 +323,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // instead are on it, so the next call need not be a look to learn them
       // (`run-mup2i28c-6c7fc209`, C3).
       if (current) run.shown(current);
-      return refusal(current, "target_unobserved", webNodeRefusalDetail.handle(written, resolved.issueCodes), record);
+      return refusal(current, "target_unobserved", webNodeRefusalDetail.handle(written, resolved.issueCodes, resolved.issues), record);
     }
     written = webPlanWithExtractionBinding(written, { projectId: run.request.projectId, flowId: run.request.flowId }, run.stores.extractions); // A saved read holds what its handle stands for, unseen by the model (t869).
     // A node that acts on an element, whose parameters named no handle, is
