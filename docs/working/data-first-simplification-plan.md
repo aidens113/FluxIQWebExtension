@@ -73,9 +73,18 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - `run-acts/run-gate.ts` refuses such a press forever, because a replay can never look.
   - Fix, in t994's files: for a press held only by `heldOnRepeat`, the gate looks at the page using the node's recorded effect and admits only on `not_seen`. A risen cart count stays refused, keeping the never-repeat-a-lasting-act rule.
   - The reproduction and report are preserved in `fxwork/recorded-evidence/t995/`. Downstream gained an unbound-refind test (lead 68/68). The campaign note's "calendar control still there" was wrong.
+- **t998 integrated and pushed (Core 143d80419, fluxiq 0.54.2).**
+  - Migration 0041 stores each batch's captured field ids (`run_dataset_batches.captured_fields_json`) from that batch's own schema. The store's end-of-run answer passes them as `captured`, so it agrees with the feed on not-shown cells.
+  - Batches written before 0041 still withhold; nothing is inferred.
+  - Lead runs: run-dataset, answer, migration, feed-agreement and result-feed tests: parallel 102/102, real-sql 54/54. fluxiq check and audit pass.
+- **t997 integrated and pushed (downstream 1485a34c1).**
+  - A stored schema label is now the page's own column words, or the field key for a generated class path, never a first-item value. The model-facing packet is unchanged, and a column the model renames keeps the detected column's stored label.
+  - Lead runs: domain structure and plan-resolution 442/442; domain check; read-oracle 10/10; audit. Earbuds mwocg0zw with the rewrite: ready, kept 11, matched 11/11 collected, 0 calls. It is 11/13 overall because the run never read the other 2 records' pages.
+  - Remaining: a declaration naming a site key (`brightaisle_plus`) does not bind a page-worded label ("Brightaisle Plus"). Labelling renamed columns with raw keys was rejected, since class paths would become answer headers. Instead, t999 makes Core binding treat `_` and `-` as word separators, in binding only.
 - **Running now** (the paid round waits for all of them; target 2026-11-24 evening, gated by t994, which now also carries F23's fix):
-  - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure, the judge-model provider default, and F23's run-gate fix.
-  - **t998** (worker-heavy, the t993 worker, Core-paired): migration 0041 gives the run-dataset store each batch's captured fields, so its end-of-run answer agrees with the feed.
+  - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure, the judge-model provider default, and F23's run-gate fix. The lead merged Core dev 27e8fabc9 into its branch at its request.
+  - **t996** (worker done, lead verification running): the preflight's site challenge. The worker's four visible provider-free preflights all reported `siteChallenge: "passed"`. Bigbox's check is declared not person-only and lifts by itself; the product waits it out (`how: waited_out`), which the lead accepts. The lead is rerunning all four on the dev-synced build.
+  - **t999** (worker-heavy, the t997 worker, Core-paired): binding word separators, then the read-oracle uses declarations as written and drops the `model-aliases.ts` rewrite.
   - **t996** (worker, with its own Core): the preflight exercises the site-declared person checks on everything-store, crossborder, bigbox and company-website.
   - **t997** (worker-heavy): stored labels from the page's column words or the field key; a renamed column's id is the model's name and its label the detected key.
   - t990's finish removed its worktree and the ignored `test-runs/` inputs with it. Lanes that need recorded reads copy them again from the original campaign evidence.
@@ -255,6 +264,19 @@ Read Current State and the corresponding task report first; do not restart compl
 All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls or browser acceptance; one inadvertently launched Core full check was deliberately interrupted and is not acceptance.
 
 ## Work Ledger
+
+### 2026-11-23 - t998 (fluxiq 0.54.2) and t997 integrated; t999 started
+- Changed:
+  - t998 finished in both repositories: migration 0041 and the store's captured fields.
+  - t997 finished downstream: stored labels without page values.
+  - The shared Core was synced to 143d80419 when t997's finish refused on the lagging Core.
+  - t999 was started and handed to the t997 worker. Its downstream tree got dev 1485a34c1.
+  - Both t996 trees got dev.
+- Validation: lead runs through the gate:
+  - t998: vitest-groups parallel `Tests  102 passed (102)` and real-sql `Tests  54 passed (54)`; fluxiq check exit 0; audit passed; Core finish `Tests  70 passed (70)`.
+  - t997: domain `# tests 442 # pass 442 # fail 0`; domain check exit 0; read-oracle `# pass 10 # fail 0`; audit `passed (259 warning(s), 551 baselined)`.
+  - t997 earbuds proof (runterms): `"state": "ready"`, `kept` 11, `matchedRecords` 11, `expectedInCollected` 11, `modelCalls` 0. It exits 1 only because 2 of the 13 expected records are on pages the recording never read.
+- Follow-up: t996 lead preflights; t999; t994; then the paid round.
 
 ### 2026-11-23 - t993 integrated (fluxiq 0.54.1); F23 diagnosed; t998 started
 - Changed:
