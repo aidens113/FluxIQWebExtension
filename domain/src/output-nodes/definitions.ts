@@ -351,13 +351,16 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   // `WebAutomationActionCommand`, declared in `actions/schemas.ts`. The flat
   // scalars beside it stay authorable, and a recorded action fills them.
   const structured = (id: string, label: string): AutomationNodeParameter => ({ id, label, valueType: "object", ui: { control: "value" } });
+  // The options a saved act requires chosen before it runs (t1030): written by Core from the build's evidence, never by a model,
+  // and checked by the page's typed state before the act (`../actions/requires-chosen/`).
+  const requiresChosen: AutomationNodeParameter = { id: "requiresChosen", label: "Options Chosen First", valueType: "array", shownToModel: false, ui: { control: "value" } };
   if (outputId === "web.browser.navigate") return [
     { id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } },
     WEB_AUTOMATION_NEW_TAB_PARAMETER
   ];
-  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }, WEB_AUTOMATION_SUBMIT_PARAMETER];
+  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }, WEB_AUTOMATION_SUBMIT_PARAMETER, requiresChosen];
   if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("option", "Option")];
-  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("modifiers", "Modifiers")];
+  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("modifiers", "Modifiers"), requiresChosen];
   if (outputId === "web.dom.scroll") return [
     ...selectorParameters,
     { id: "x", label: "X", valueType: "number", defaultValue: 0 },
@@ -366,7 +369,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     { ...structured("scroll", "Scroll Mode"), description: SCROLL_REQUEST_DESCRIPTION, example: { mode: "untilStable", maxScrolls: 20 } }
   ];
   // The model chooses the instructed end state from observations; Core grounds the exact copy.
-  if (outputId === "web.dom.click") return [...selectorParameters, { ...structured("ensureState", "Ensure State"), description: "Choose the state the instruction asks to leave. Copy an exact observed state signature from this control's shown state or observed before/after press states; a control already showing it is skipped." }];
+  if (outputId === "web.dom.click") return [...selectorParameters, { ...structured("ensureState", "Ensure State"), description: "Choose the state the instruction asks to leave. Copy an exact observed state signature from this control's shown state or observed before/after press states; a control already showing it is skipped." }, requiresChosen];
   if (outputId === "web.dom.extract") return [...selectorParameters, webAutomationExtractReadParameter()];
   if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [

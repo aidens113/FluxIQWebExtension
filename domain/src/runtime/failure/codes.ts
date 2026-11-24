@@ -90,6 +90,19 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   OPTION_NOT_OFFERED: "web.validation.option_not_offered",
   /** An authored `web.dom.assert` condition did not hold. */
   STATE_MISMATCH: "web.validation.state_mismatch",
+  /**
+   * A saved act requires options chosen before it runs (`requiresChosen`,
+   * t1030) and one of them does not stand chosen on the page by its typed
+   * state, or is not on it: the act was refused before anything was pressed
+   * (`apps/extension/src/content/action-runtime/required-choices/`). Core's
+   * `target_not_found`, so a Flow run routes by page state as for any step that
+   * cannot run, and a repair may add the step that chooses it; never pressed
+   * with whatever option the page arrived with. Not retryable: asking the same
+   * act again changes no option, a step before it has to. Core says it in its
+   * own words by the code's last segment
+   * (`AS/runtime/flow-authoring/bootstrap/instructed-acts/chosen-precondition.ts`).
+   */
+  OPTION_NOT_CHOSEN: "web.precondition.option_not_chosen",
   /** The browser landed somewhere other than the requested URL, or never left where it was. */
   NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
   /**
@@ -353,6 +366,8 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   // asking again offers the same list (the code's own comment above).
   "web.validation.option_not_offered": { category: "output_not_observed", retryable: false, stage: "verification" },
   "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
+  // An option the saved act requires is not chosen, decided before the act (the code's own comment above).
+  "web.precondition.option_not_chosen": { category: "target_not_found", retryable: false, stage: "target_resolution", effect: "unacted" },
   "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
   "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
   "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
