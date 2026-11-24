@@ -59,8 +59,18 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - The cause (t1020, correcting the lead): the model read the wrong handle, a "cells" table of the cards' own links offered beside the card list, after its read of the list with the cells' keys was refused with bare codes. It never read the rating and pickup columns.
   - Debug: `../language-driven-flow-loop-plan/debugs/run-mwuuo3zk-75b482b3.md`. Round total about $2.75 of $50.
 - **t1020 integrated:** a card list's own links are no longer a grid; a read naming another handle's keys is told which; every detection says how its handle is read and how it replaces the draft's read.
-- **Running:** the day's full sweep on t1021 (worker-light), for `main` promotion.
-- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$47.25.
+- **Third bigbox run (run-mwuxd2v9, on t1020): stopped by the lead at step 219, $2.23.**
+  - Progress: 27 acts, the store set, and Loftwell 6-roll ($10.47, 4.8 stars, pickup) added; the dish soap kept.
+  - Judged no 4 times. The pickup listing was "read as only 2 rows ... though the page listed 8", so cheaper candidates were never compared.
+  - Every list read in the run, the draft's pickup-listing steps included, replayed as "kept 2 rows from 1 page" (handles `extraction.1`/`.4`, `.4` apparently the cart). One read ran on the home page.
+  - The model kept saying it would re-read the listing, never navigated there, and loop handling steered 4 times without effect.
+  - Evidence: `fxwork/recorded-evidence/t1015-bigbox/run-mwuxd2v9-33928ea3/`. Round total about $5.00 of $50.
+- **Three runs, three defects in reads and pages: a structural fix, not another patch** (the recurring-failures rule).
+- **Running:**
+  - t1022 (worker-heavy): a read, whether fresh, rerun or replayed, reads only the list its handle was made for, on a page where it stands; it is otherwise refused, and its rows say which list they came from. The worker diagnoses all three runs and writes the third run's debug.
+  - The day's full sweep on t1021 (worker-light), for `main` promotion.
+- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev, after t1022 is merged and proven offline. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$45.
+- **Watcher follow-up:** a `page_reset` inside a model-sent `core.run_flow` replay (run-mwuxd2v9, step 43) is not taken as explained by the Flow run.
 - **Open (t1020):** a rerun in attempt 2 onward that changes a read's handle, when the draft comes from a saved Flow, may resolve against the step's saved binding (`plan-resolution/extraction/slot.ts`); untested.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
