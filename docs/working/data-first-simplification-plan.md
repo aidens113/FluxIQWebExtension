@@ -52,9 +52,14 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - no arbitrary limit ends or resets a run;
     - fix an obvious shared problem before running more.
   - Report: `reports/paid-round-1124.md` with its brief, and the five run debugs in `../language-driven-flow-loop-plan/debugs/` (run-mwufisf0, -mwug2xjw, -mwug3pjo, -mwug6pz3, -mwugbs39).
-- **Bigbox relaunch of 11-24 (run-mwus396e, lane t1015): stopped at $0.12.** The model acted (6 landed acts, a draft with search, list read and paging, its Flow run three times), then every fresh round's first request was refused inside Core, unsent, because t1014's carried rounds kept denied keys; fixed by t1018 and proven offline on the recording. Debug: `../language-driven-flow-loop-plan/debugs/run-mwus396e-5447c6f6.md`. Round total $0.92 of $50.
-- **Running:** nothing paid.
-- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev. Only if it presses and progresses do the other nine tasks follow, now four lanes on the shared Core, within the remaining $49.08.
+- **Bigbox relaunch of 11-24 (run-mwus396e, lane t1015): stopped at $0.12.** The model acted (6 landed acts, a draft with search, list read and paging, its Flow run three times), then every fresh round's first request was refused inside Core, unsent, because t1014's carried rounds kept denied keys; fixed by t1018 and proven offline on the recording. Debug: `../language-driven-flow-loop-plan/debugs/run-mwus396e-5447c6f6.md`.
+- **Second bigbox relaunch (run-mwuuo3zk, lane t1015, on t1014-t1019): stopped by the lead at step 309, $1.80 settled.**
+  - What worked: no refused rounds, 17 landed acts, and the store was set.
+  - The draft's list read stays pinned to a bad detection (`extraction.18`: the item is the link inside each card, and the card is a group). Every row holds only a name or a URL, and the read is accepted anyway.
+  - The model saw the fields missing and re-detected a good card-level structure (`extraction.27`), but never read with it or replaced the step. It circled: 40 decisions without an act, 8 identical detections, 11 loop steers without effect.
+  - Evidence: `fxwork/recorded-evidence/t1015-bigbox/run-mwuuo3zk-75b482b3/`. Round total about $2.74 of $50.
+- **Running:** t1020 (worker-heavy): find and fix why a split-row read is made and accepted, and why the model cannot move the read step onto a new detection; prove it offline; write the run's debug. No paid launch until it is merged and proven.
+- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev. Only if it reaches its result do the other nine tasks follow, on four lanes sharing one Core, within the remaining ~$47.26.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
   - a saved Flow carries its own data declaration;
