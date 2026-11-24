@@ -10,6 +10,7 @@
 
 import { webPlanScriptedChoiceMove } from "../plan-resolution/control-fit";
 import type { WebLlmToolRejectionReason } from "../tool-rejection";
+import { webLlmUnknownColumn } from "./unknown-column";
 
 /** A read whose items are on the page and not shown (t903): what shows them, then the same read. */
 const NOT_RENDERED_NEXT = "The read found its items, but the page does not show them: they sit inside something closed, such as a menu, a panel or a tab. Show them first, by a hover or a click on the control that opens what holds them, then run the same read again.";
@@ -39,6 +40,8 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     : reason === "handle_not_a_field" ? notAFieldNext(instead) : reason === "handle_wrong_kind_of_control" ? webPlanScriptedChoiceMove(instead)
     // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
     : reason === "page_moved_since_packet" || reason === "handle_no_longer_on_page" ? (staleHandleNamed(instead) ? STALE_NEXT_INSTEAD : STALE_NEXT)
+    // Read off the name codes in `instead`, so a repeat that passes them back says it again (t1020).
+    : reason === "column_not_in_detected_list" ? webLlmUnknownColumn.next(instead)
     : undefined;
 }
 
