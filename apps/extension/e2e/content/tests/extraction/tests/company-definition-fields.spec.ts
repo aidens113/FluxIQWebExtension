@@ -1,7 +1,7 @@
 // Real detected fields must retain their meaning on later cards whose
 // definition pairs have a different order. This uses the unchanged realistic
 // task and its full expected dataset; no model or provider participates.
-import { gatewayActionResultFromBrowserResult, WEB_AUTOMATION_FAILURE_CODES, type WebAutomationExtractionProposal } from "@fluxiq-web-extension/domain/client";
+import { gatewayActionResultFromBrowserResult, type WebAutomationExtractionProposal } from "@fluxiq-web-extension/domain/client";
 import { expect, test, type ContentHarness } from "../../../index.js";
 import { GAS_ENGINEER_RECORDS } from "../../../../../../scenario-lab/src/scenarios/company-website/index.js";
 import { TEAM, TEAM_BATCH_SIZE } from "../../../../../../scenario-lab/src/scenarios/company-website/data/index.js";
@@ -116,15 +116,14 @@ test("company-website: detected definition fields keep all eight matching record
   });
   try {
     const { outcome, receipts } = await nextPageWithHostRetries(harness, proposal.item, `${people} > button`);
+    // The loader swallows its first press. Since f72e2bff9 (t903) a load-more press the list proves
+    // ignored is pressed once more inside the same command, so the second press is the command's
+    // own and no host retry is spent on it: one attempt, one receipt, both presses in it.
     expect(outcome.result.status).toBe("succeeded");
-    expect(outcome.attempts).toBe(2);
+    expect(outcome.attempts).toBe(1);
     expect(outcome.lastingAct).toBeUndefined();
-    expect(receipts.length).toBe(2);
-    const noEffect = receipts[0]?.failure;
-    expect({ code: noEffect?.code, stage: noEffect?.stage, effect: noEffect?.effect, certainNoEffect: noEffect?.certainNoEffect, retryable: noEffect?.retryable }).toEqual({
-      code: WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT, stage: "execution", effect: "unacted", certainNoEffect: true, retryable: true
-    });
-    expect(receipts[1]?.status).toBe("succeeded");
+    expect(receipts.length).toBe(1);
+    expect(receipts[0]?.status, JSON.stringify(receipts[0]?.failure ?? null)).toBe("succeeded");
     expect(await page.locator(proposal.item).count()).toBe(afterPage);
     expect(await presses.evaluate((observation) => observation.state.count)).toBe(2);
   } finally {

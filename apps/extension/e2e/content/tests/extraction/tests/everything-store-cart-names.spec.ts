@@ -27,6 +27,16 @@ import { ADD_TO_CART_WORKFLOW } from "../../../../../../scenario-lab/src/scenari
 const SAGE = TIDEWELL_KETTLES.find((child) => child.variant?.colour === "Sage Green" && child.variant.capacity === "1.7 L")!;
 const EXPECTED = ADD_TO_CART_WORKFLOW.expected.extracted?.[0]?.records ?? [];
 const EXTRACT_LIST = "web.output.dom-extract_list";
+const ASKED = ["item", "quantity", "price"] as const;
+
+/**
+ * A read's rows in the instruction's own columns. A read retains every safe detected field beside the columns it was
+ * asked for (t982, `ba64bbf1c` and `731b2b601`, `docs/architecture/retained-extraction.md`; the user's rule of
+ * 2026-11-20 that extraction keeps every column), so each row carries more keys than the three asked.
+ */
+function askedColumns(rows: unknown): Record<string, unknown>[] {
+  return (rows as Record<string, unknown>[]).map((row) => Object.fromEntries(ASKED.map((column) => [column, row[column] ?? null])));
+}
 
 /** One store operation, as the page's own scripts send it. */
 async function storeCall(harness: ContentHarness, operation: string, payload: Record<string, unknown>): Promise<void> {
@@ -92,11 +102,11 @@ test("the cart read in the instruction's own names returns the task's records, a
   const handle = (detected.evidence as { extraction?: string }).extraction;
   expect(handle, `a list was detected: ${detected.resultCode}`).toBeTruthy();
 
-  for (const fields of [{ item: "item", quantity: "quantity", price: "price" }, ["item", "quantity", "price"]]) {
+  for (const fields of [{ item: "item", quantity: "quantity", price: "price" }, [...ASKED]]) {
     const before = records.length;
     const ran = await read(handle!, fields);
     expect(ran.resultCode, `${JSON.stringify(fields)}: ${ran.resultReason ?? ""}`).toBe("web.inspect.succeeded");
     expect(records.length, "the read reached the page").toBe(before + 1);
-    expect(records.at(-1)).toEqual(EXPECTED);
+    expect(askedColumns(records.at(-1))).toEqual(EXPECTED);
   }
 });

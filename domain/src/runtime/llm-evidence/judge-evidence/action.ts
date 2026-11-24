@@ -1,5 +1,5 @@
-import type { JsonObject } from "fluxiq/core";
-import { webToggleSignatureValue, type WebToggleSignature } from "../../../actions/toggle-signature";
+import type { JsonObject, JsonValue } from "fluxiq/core";
+import { webToggleOutput, webToggleSignatureValue, type WebToggleSignature } from "../../../actions/toggle-signature";
 import { webAutomationNextPageAnswerValue, type WebAutomationNextPageAnswer, type WebAutomationNextPageBy, type WebAutomationNextPageEnd, type WebAutomationNextPageFault } from "../../../actions/next-page";
 import { isJsonRecord } from "../untrusted-json";
 import { present } from "../present";
@@ -36,11 +36,9 @@ export function webJudgeActionFacts(value: JsonObject): { facts: JsonObject; inv
     else invalid = true;
   }
   if (value.toggle !== undefined) {
-    const toggle = isJsonRecord(value.toggle) ? value.toggle : undefined;
-    const signature = webToggleSignatureValue(toggle?.signature);
-    const before = toggle?.beforeSignature === undefined ? undefined : webToggleSignatureValue(toggle.beforeSignature);
-    if (signature === undefined || (toggle?.beforeSignature !== undefined && before === undefined) || (toggle?.idempotentWith !== undefined && toggle.idempotentWith !== "web.output.dom-check")) invalid = true;
-    else facts.toggle = present<WebJudgeToggleFacts>({ signature: { ...signature }, beforeSignature: before === undefined ? undefined : { ...before }, idempotentWith: toggle?.idempotentWith === "web.output.dom-check" ? "web.output.dom-check" : undefined });
+    const toggle = toggleFacts(value.toggle, value.toggleBefore);
+    if (toggle === undefined) invalid = true;
+    else facts.toggle = toggle;
   }
   if (value.nextPage !== undefined) {
     const next = webAutomationNextPageAnswerValue(value.nextPage);
@@ -48,6 +46,28 @@ export function webJudgeActionFacts(value: JsonObject): { facts: JsonObject; inv
     else facts.nextPage = nextPageFacts(next);
   }
   return { facts, invalid };
+}
+
+/**
+ * A press's toggle, in either shape it reaches the projector in: as Core is told it (`webToggleOutput`, a `signature`
+ * with its `beforeSignature`), on an explored press and at the top of a dispatch; or as the click verb answered it, the
+ * signature itself with its reverse beside it as `toggleBefore`, inside the client's result a Flow attempt's evidence is
+ * read from (`./project.ts`). Only the first was read, so every Flow press that flipped its own control was refused as
+ * invalid and left its trial unconfirmed (t1029). Both become the one told shape.
+ */
+function toggleFacts(raw: JsonValue, rawBefore: JsonValue | undefined): WebJudgeToggleFacts | undefined {
+  const told = isJsonRecord(raw) && Object.hasOwn(raw, "signature") ? raw : undefined;
+  if (told !== undefined) {
+    const signature = webToggleSignatureValue(told.signature);
+    const before = told.beforeSignature === undefined ? undefined : webToggleSignatureValue(told.beforeSignature);
+    if (signature === undefined || (told.beforeSignature !== undefined && before === undefined) || (told.idempotentWith !== undefined && told.idempotentWith !== "web.output.dom-check")) return undefined;
+    return present<WebJudgeToggleFacts>({ signature: { ...signature }, beforeSignature: before === undefined ? undefined : { ...before }, idempotentWith: told.idempotentWith === "web.output.dom-check" ? "web.output.dom-check" : undefined });
+  }
+  const signature = webToggleSignatureValue(raw);
+  const before = rawBefore === undefined ? undefined : webToggleSignatureValue(rawBefore);
+  if (signature === undefined || (rawBefore !== undefined && before === undefined)) return undefined;
+  const output = webToggleOutput(signature, before);
+  return present<WebJudgeToggleFacts>({ signature: { ...output.signature }, beforeSignature: output.beforeSignature === undefined ? undefined : { ...output.beforeSignature }, idempotentWith: output.idempotentWith });
 }
 
 function nextPageFacts(next: WebAutomationNextPageAnswer): WebJudgeNextPageMoved | WebJudgeNextPageEnded | WebJudgeNextPageFailed {
