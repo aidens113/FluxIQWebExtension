@@ -264,6 +264,8 @@ test("an extraction handle becomes the request the detection kept, with the plan
   const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle, minItems: 0 }, timeoutMs: 20_000 });
   assert.equal(resolved.status, "resolved");
   if (resolved.status !== "resolved") return;
+  // With no columns named the read is every detected column, and since t982 (ba64bbf1c) the
+  // record output carries the read's full schema; with no view named, every column is the answer.
   assert.deepEqual(resolved.parameters, {
     extractList: {
       item,
@@ -275,7 +277,24 @@ test("an extraction handle becomes the request the detection kept, with the plan
       },
       minItems: 0
     },
-    timeoutMs: 20_000
+    timeoutMs: 20_000,
+    recordOutput: {
+      datasetId: "extracted-list-product-category-price-stock:fd56bf19276d666f",
+      recordsPath: "result.extracted",
+      schema: {
+        schemaVersion: "0.1",
+        fields: [
+          { id: "product", label: "Product", valueType: "string", required: false },
+          { id: "category", label: "Category", valueType: "string", required: false },
+          { id: "price", label: "Price", valueType: "string", required: false },
+          { id: "stock", label: "Stock", valueType: "string", required: false }
+        ]
+      },
+      writeMode: "append",
+      label: "Extracted list: product, category, price, stock",
+      maxRecords: 1000,
+      process: { minRows: 0 }
+    }
   });
   assert.deepEqual((await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle, maxItems: 50 } })).status, "resolved");
 
@@ -392,9 +411,21 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   }
   // An element's own handle as the list's is one element read as a one-row table (t903): bound as the node's target
   // would be, refused as that is where it names nothing.
+  // Its record output carries the one column's schema and keeps the one row in it (t982, ba64bbf1c).
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: "t2", fields: { label: "text" } } }), {
     status: "resolved",
-    parameters: { extractList: { item: "#submit", fields: { label: { selector: ":scope", kind: "text" } }, maxItems: 1 } }
+    parameters: {
+      extractList: { item: "#submit", fields: { label: { selector: ":scope", kind: "text" } }, maxItems: 1 },
+      recordOutput: {
+        datasetId: "extracted-list-label:b65a6e49cb8ba4d7",
+        recordsPath: "result.extracted",
+        schema: { schemaVersion: "0.1", fields: [{ id: "label", label: "label", valueType: "string", required: true }] },
+        writeMode: "append",
+        label: "Extracted list: label",
+        maxRecords: 1000,
+        process: { limit: 1, columns: ["label"] }
+      }
+    }
   });
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: "t9" } }), refusedAt("web.handle.unknown", "extractList.handle"));
   // Core's Run Output node runs its payload as the named web output, so a handle there is resolved as that output's node resolves it.

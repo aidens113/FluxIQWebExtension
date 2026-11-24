@@ -42,8 +42,8 @@ test("--restart-between restarts Core before every later attempt, and needs two 
 });
 
 test("it takes exactly one model, its task, and the mode it drives", () => {
-  assert.throws(() => parseLabCommand(["attempt", "company-website", "--task", "x", "--authoring-mode", "answer-first"]), /exactly one of --scripted-model or --live-llm/u);
-  assert.throws(() => parseLabCommand([...SCRIPTED, "--live-llm"]), /exactly one of --scripted-model or --live-llm/u);
+  assert.throws(() => parseLabCommand(["attempt", "company-website", "--task", "x", "--authoring-mode", "answer-first"]), /exactly one of --scripted-model, --recorded-model FILE or --live-llm/u);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--live-llm"]), /exactly one of --scripted-model, --recorded-model FILE or --live-llm/u);
   assert.throws(() => parseLabCommand(["attempt", "company-website", "--authoring-mode", "answer-first", "--scripted-model"]), /--task/u);
   assert.throws(() => parseLabCommand(["attempt", "company-website", "--task", "x", "--scripted-model"]), /--authoring-mode answer-first/u);
   assert.throws(() => parseLabCommand(["attempt", "company-website", "--task", "x", "--authoring-mode", "project", "--scripted-model"]), /--authoring-mode answer-first/u);

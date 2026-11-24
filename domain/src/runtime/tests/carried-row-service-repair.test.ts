@@ -202,6 +202,10 @@ async function fixture(root: string) {
   const project = await service.createProject({ name: "Carried service fixture", domainId: WEB_AUTOMATION_DOMAIN_ID });
   const flow = await service.createFlow({ projectId: project.id, flowId: "flow.carried.fixture", name: "Row messages and summary" });
   await service.saveFlow({ projectId: project.id, flow: { ...flow, metadata: {
+    // The fixture's only key is DeepSeek, so the Flow names that key's model. Since Core t983
+    // (002650596) automation that names no model starts on claude-haiku-5-5, and its build, repair
+    // and judge all keep that one model, which no DeepSeek key can serve.
+    llmProvider: "deepseek", llmModel: "deepseek-flash",
     adaptationModeVersion: 1, adaptationMode: "fully_adaptive",
     adaptationPolicySettings: { preset: "adaptive", proposalMode: "auto", allowRuntimeRecovery: true, allowCreateRecoveryPaths: true, allowModifySubflows: true, allowCreateSubflows: true, allowModifyRouter: true, allowModifyExpectations: true, allowModifyActionTargets: true },
     trainingModeSettings: { mode: "continuous_adaptive", allowLlmIntervention: true, allowRuntimeRecovery: true, allowAdaptationCreation: true, proposalApprovalMode: "auto", allowPromotion: true, requireFirstManualReviewBeforeAutoPromotion: false,

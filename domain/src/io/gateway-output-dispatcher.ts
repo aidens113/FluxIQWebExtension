@@ -13,7 +13,7 @@ import { webAutomationClearedWayOutsOf, type WebAutomationClearedWayOutFlow } fr
 import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../output-nodes";
 import { pickWebAutomationSession } from "../runtime/web-sessions";
-import { webDefinitionFieldCapabilityRefusal } from "../runtime/definition-fields";
+import { webDefinitionFieldAdmission } from "../runtime/definition-fields";
 
 export async function dispatchWebAutomationOutput(
   fluxiq: FluxIQ,
@@ -27,16 +27,18 @@ export async function dispatchWebAutomationOutput(
   const session = targetSession(fluxiq, request.metadata);
   const sessionId = session?.sessionId;
   if (!sessionId) { if (required) await ClientGatewayRequiredCommandContext.stop(request.commandContext!, "web.no_selected_session"); return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." }; }
-  const unsupported = webDefinitionFieldCapabilityRefusal(request.outputId, request.payload, session);
-  if (unsupported !== undefined) {
-    if (required) await ClientGatewayRequiredCommandContext.stop(request.commandContext!, unsupported.failure.code);
-    return { ok: false, outputId: request.outputId, metadata: { sessionId }, status: unsupported.status, error: unsupported.message, payload: { status: unsupported.status, message: unsupported.message }, failure: unsupported.failure };
+  // A definition column the read only retains is left out for a client that cannot read it (`../runtime/definition-fields/admission.ts`).
+  const admitted = webDefinitionFieldAdmission(request.outputId, request.payload, session);
+  if (admitted.status !== "admitted") {
+    if (required) await ClientGatewayRequiredCommandContext.stop(request.commandContext!, admitted.failure.code);
+    return { ok: false, outputId: request.outputId, metadata: { sessionId }, status: admitted.status, error: admitted.message, payload: { status: admitted.status, message: admitted.message }, failure: admitted.failure };
   }
+  const payload = admitted.parameters;
   try {
-    const target = outputTargetFromPayload(request.payload);
+    const target = outputTargetFromPayload(payload);
     const command: { actionType: string; parameters: JsonObject; target?: JsonObject; timeoutMs?: number } = {
       actionType: request.outputId,
-      parameters: request.payload
+      parameters: payload
     };
     if (target) command.target = target;
     if (request.timeoutMs !== undefined) command.timeoutMs = request.timeoutMs;
@@ -56,7 +58,7 @@ export async function dispatchWebAutomationOutput(
     // (plan B3). Its status and record are decided again here from the command
     // this dispatch sent: a committing act is `unknown` and uncertain, any
     // other act a failure that did nothing (`client/interrupted-action/`).
-    const interrupted = webAutomationInterruptedDispatchReading(request.outputId, request.payload, result.payload);
+    const interrupted = webAutomationInterruptedDispatchReading(request.outputId, payload, result.payload);
     const status = interrupted?.status ?? result.status;
     const reportedFailure = interrupted?.failure ?? result.failure;
     // Keep the existing invalid-original fallback path visible to the adapter;

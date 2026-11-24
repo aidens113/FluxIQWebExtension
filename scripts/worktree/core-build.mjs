@@ -15,7 +15,7 @@
 // checkout pair build these and stop, which is what keeps a second worktree at
 // seconds rather than minutes.
 //
-// `FULL_CORE_PACKAGES` adds `@fluxiq/web` and is exactly Core's own root
+// `FULL_CORE_PACKAGES` adds `@fluxiq/cloud` and `@fluxiq/web` and is exactly Core's own root
 // `build` script. The shared Core is built with it, because it is not one
 // task's private build output: it is the Core every worktree under that base
 // links, and a half-built one is a Core whose web panel the next person to run
@@ -70,8 +70,12 @@ export const CORE_PACKAGES = [
   { filter: "@fluxiq/ui-components", directory: "ui-components" }
 ];
 
-/** Core's own root `build` script: the libraries above, then the web panel. */
-export const FULL_CORE_PACKAGES = [...CORE_PACKAGES, { filter: "@fluxiq/web", directory: "web" }];
+/**
+ * Core's own root `build` script: the libraries above, the cloud platform CLI, then the web panel.
+ * Nothing downstream imports `@fluxiq/cloud`, so a worktree's compile list leaves it out; the shared
+ * Core is built whole, as its root script builds it (Core e36af5873 added `cloud:build` to that script).
+ */
+export const FULL_CORE_PACKAGES = [...CORE_PACKAGES, { filter: "@fluxiq/cloud", directory: "cloud" }, { filter: "@fluxiq/web", directory: "web" }];
 
 /** Where each built library leaves its output, which is how "already built" is decided. */
 export function coreDistPaths(coreRoot) {
@@ -79,15 +83,15 @@ export function coreDistPaths(coreRoot) {
 }
 
 /**
- * Where a FULLY built Core has left output: the libraries, plus the web panel's
- * Next output. A shared Core missing the last one is not built, however current
+ * Where a FULLY built Core has left output: the libraries, plus the cloud
+ * package's output and the web panel's Next output. A shared Core missing the last one is not built, however current
  * its libraries are, or nothing would ever build the web panel into a Core that
  * was provisioned before `sync-core` built it. The panel counts by its
  * `BUILD_ID`, which Next writes only when a build finished: a failed build
  * leaves `.next` itself with its cache and partial output (2026-11-19).
  */
 export function fullCoreDistPaths(coreRoot) {
-  return [...coreDistPaths(coreRoot), path.join(coreRoot, "apps", "web", ".next", "BUILD_ID")];
+  return [...coreDistPaths(coreRoot), path.join(coreRoot, "packages", "cloud", "dist", "index.js"), path.join(coreRoot, "apps", "web", ".next", "BUILD_ID")];
 }
 
 /**
