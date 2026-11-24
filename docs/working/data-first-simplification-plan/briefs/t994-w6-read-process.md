@@ -1,0 +1,18 @@
+# t994 W6: a read's own declared process holds under a declared task (worker-heavy)
+
+Goal: `answer-first/tests/declared-process.test.ts` passes 4/4 with its assertions unchanged. Lead's decision (2026-11-23): a read's own `recordOutput.process` (sort, where, limit) is NOT superseded; dropping it under a declared task is a regression from 05d61fea4 (t984), the same class as t869 (run-mw37vz9n). Never weaken an assertion, delete or skip a test, or cap a symptom.
+Code: `C:/Users/osrs_/FluxStuff/fxwork/t994/!FluxIQ` (Core; other workers' changes are in the working tree, leave them). Rules: Core `AGENTS.md`; U2-U5 in `C:/Users/osrs_/FluxStuff/fxwork/t994/!FluxIQWebExtension/docs/working/data-first-simplification-plan.md` (automatic data stage, collect broadly, filter deterministically).
+Diagnosis (W1, `.../reports/t994-sweep-fix-core/w1-answer-first.md` section 6; verify it): once a task has a declaration, `packages/fluxiq/src/framework/automation-service/service/answer-first/result-feed/feed.ts` (~206) takes the `stage.active()` path, which evaluates only the task's declaration. The read's own process is applied only on the legacy path, `merged(processes.get(output.id), held)` (~219; `merged` at ~464). The header at `feed.ts:25` still promises the old behaviour.
+Fix, exactly as the lead specified:
+- On the active path, the stage evaluates the same merge of the read's process with the task's declaration that the legacy path uses: reuse `merged` (move it where placement rules put it if the stage needs to import it; one exported thing per file, barrel imports), never a second merge rule. W1's sketch: pass `processes.get(output.id)` into `stage.evaluate` and merge in `stage.ts` `bind`; check it against how `merged` orders own vs held.
+- Add the read's process to the stage's cache key so two reads with different processes never share a cached result.
+- Tests (in `result-feed/tests/`, or beside the moved function): a read's `where`, `sort` and `limit` hold under a declared task; and one where the declaration's own condition still applies on top of the read's process. Keep the feed header comment true.
+
+Owned (may edit): `packages/fluxiq/src/framework/automation-service/service/answer-first/result-feed/**` (source and tests), and `answer-first/tests/declared-process.test.ts` only if a fixture (not an assertion) needs it.
+Must not touch: `packages/contracts/**`; `answer-first/completion/check.ts`; other answer-first source; `runtime/**`; `framework/persistence/**`. If the cause needs one of them, stop and report a proposed diff.
+
+Run tests only like this (from `packages/fluxiq`), named files only, in the foreground, one heavy job at a time, waiting for each result:
+`node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t994-w6 -- node ../../scripts/vitest-groups.mjs --groups=parallel,real-sql <files> --maxWorkers=1 --minWorkers=1 --fileParallelism=false`
+No git mutations, no `node -e`, no provider or paid calls, no browsers, no package typecheck (the supervisor runs it).
+Acceptance: `answer-first/tests/declared-process.test.ts` 4/4; every test in `answer-first/result-feed/tests/` passes; `answer-first/result-processing/tests/`, `answer-first/tests/latest-read.test.ts`, `answer-first/tests/row-identity.test.ts` still pass; `node scripts/structure-audit.mjs` (Core root) passes.
+Report: `C:/Users/osrs_/FluxStuff/fxwork/t994/!FluxIQWebExtension/docs/working/data-first-simplification-plan/reports/t994-sweep-fix-core/w6-read-process.md`: cause as verified, fix, files changed, exact commands with observed counts. End with the return contract.

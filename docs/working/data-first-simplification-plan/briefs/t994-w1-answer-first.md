@@ -1,0 +1,19 @@
+# t994 W1: Answer First real-sql sweep failures (worker-heavy)
+
+Goal: every listed failure passes for the right reason: a product regression fixed at its cause, or a test pinning deliberately superseded behaviour updated to the new contract, citing the superseding commit and rule. Never weaken an assertion, delete or skip a test, raise a timeout or cap a symptom.
+Code: `C:/Users/osrs_/FluxStuff/fxwork/t994/!FluxIQ` (Core, HEAD 2dba34613). Rules: Core `AGENTS.md`; superseding rules are U1 (no model ladder, fixed starting model), t976 (permission asked once at start), t981 (repeat-safe repair), t984/P2 (automatic data stage; a task carries a processing declaration).
+Evidence: sweep log `C:/Users/osrs_/AppData/Local/Temp/claude/bc302d3e1bd85154/b9e846ce-920f-4917-ba85-cff713b3e423/scratchpad/sweep/core-test-clean.txt`; one line per failure (log line number, file > test || first error) in `.../scratchpad/sweep/fails-index.txt`.
+
+Your files (real-sql group), all under `packages/fluxiq/src/`: every failing `framework/automation-service/service/answer-first/**/tests/*.test.ts` in the index EXCEPT `result-feed/**` (lane t993) and `attempt/tests/remember-acts.test.ts`, `loop-signal/**`, `result-processing/**` (W3); plus `framework/automation-service/service/input-basis/execution/tests/flow-stage.test.ts`, `framework/automation-service/tests/person-humanness/tests/answer-first.test.ts`, `server/fluxnode-api/tests/sdk-acceptance.test.ts`.
+Leading symptoms: attempts end `stopped_by_person` (and FluxNode `stopped`) where `achieved` was expected; then the next attempt hits the `stopped_part_way` Run-again refusal (`answer-first/run-again/`, unchanged since 11-05, so the guard is probably right and the earlier ending is wrong); 37x `scriptRanOut`/similar `expected true to be false` in `tests/endings/**` and `forward-loop`; 18x `expected 0 to be greater than 0` in `latest-read.test.ts`. Find the few shared causes first; do not patch per test.
+Method: reproduce a small file first; find the breaking commit by reading history (`git log -p`, `git show <rev>:<path>`, `git diff <rev>..HEAD -- <path>`); no checkout or bisect (git mutations are forbidden). Likely suspects: P2/P6 merges of 11-22/23 (`e2b1f2635`, `f1ee81995`, `5a4cdc507`), t976, t981.
+
+Owned (may edit): the test files above and their support files under `answer-first/tests/**` (not `result-feed/**`); product source under `framework/automation-service/service/answer-first/**` except `result-feed/**`; `service/input-basis/**`; `server/fluxnode-api/**`.
+Must not touch: `answer-first/result-feed/**` source (t993), `packages/contracts/src/record-sets/process/**`, any file of W2/W3/W4 (bootstrap tests, `runtime/**`, `apps/web/**`). If the cause lies outside your owned paths, stop editing there and report the diagnosis with a proposed diff.
+
+Run tests only like this (from `packages/fluxiq`), named files only, never the whole suite, one heavy job at a time:
+`node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t994-w1 -- node ../../scripts/vitest-groups.mjs --groups=real-sql <files> --maxWorkers=1 --minWorkers=1 --fileParallelism=false`
+(a file in the `parallel` group needs `--groups=parallel`). No git mutations, no `node -e`, no provider or paid calls, no browsers.
+
+Acceptance: every owned failing file passes; also rerun `answer-first/result-feed/tests/service.test.ts` once at the end and say whether it passes (do not edit it). Keep product changes minimal and placed per Core's code structure rules; run `node scripts/structure-audit.mjs` from the Core root if you changed source.
+Report: `C:/Users/osrs_/FluxStuff/fxwork/t994/!FluxIQWebExtension/docs/working/data-first-simplification-plan/reports/t994-sweep-fix-core/w1-answer-first.md`: per cause cluster: cause, breaking commit, fix or test update (with the rule cited), files changed, exact commands with observed pass/fail counts. End with the return contract.
