@@ -24,8 +24,8 @@ const DECLARATIONS: Readonly<Record<string, JsonObject>> = Object.freeze({
   "job-board-remote-easy-apply": {
     where: [
       { field: "location", equals: "Remote (UK)" },
-      // Shown on the card or not: a card without the tag is a known no, and the tag shown must say Easily apply.
-      { field: "easilyApply", is: "present" },
+      // A card the read captured without the tag does not show it: Core reads that as a definite no (t993), so the
+      // condition is the instruction's words alone, with no separate presence test.
       { field: "easilyApply", contains: "Easily apply" },
       { field: "salary", is: "present" },
     ],
