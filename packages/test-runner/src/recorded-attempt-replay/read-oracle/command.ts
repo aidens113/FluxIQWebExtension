@@ -15,7 +15,11 @@ import { discoverRecordedOracleRead } from "./discover.js";
 import { judgeRecordedOracleTable } from "./oracle-table.js";
 import { runRetainedRecordedRead } from "./retained-read.js";
 
-type Input = { provenance: unknown; scenarioId: unknown; taskId: unknown; runDir: unknown; sourceRootDir: unknown; projectId: unknown; steps: unknown };
+/**
+ * `declarationAsWritten: true` hands Core the declaration exactly as the task fixture writes it, with no rewrite into
+ * the run's model keys (`./model-aliases.ts`), so Core's own binding is what is proved (t997).
+ */
+type Input = { provenance: unknown; scenarioId: unknown; taskId: unknown; runDir: unknown; sourceRootDir: unknown; projectId: unknown; steps: unknown; declarationAsWritten?: unknown };
 
 /**
  * P1-P3 acceptance over a campaign run's own recorded reads (t990), with no provider: each named read step admitted by
@@ -44,8 +48,9 @@ export async function runRecordedOracleCommand(input: { repositoryRoot: string; 
   try {
     const configuration = JSON.parse(await readFile(input.inputFile, "utf8")) as Input;
     if (configuration.provenance !== "synthetic-fixture" || configuration.scenarioId !== input.scenarioId || configuration.taskId !== input.taskId) throw new Error("recorded_oracle_fixture_provenance_required");
-    const { runDir, sourceRootDir, projectId, steps } = configuration;
+    const { runDir, sourceRootDir, projectId, steps, declarationAsWritten } = configuration;
     if (typeof runDir !== "string" || typeof sourceRootDir !== "string" || typeof projectId !== "string" || !Array.isArray(steps) || !steps.length || !steps.every((step) => typeof step === "string")) throw new Error("recorded_oracle_input_invalid");
+    if (declarationAsWritten !== undefined && typeof declarationAsWritten !== "boolean") throw new Error("recorded_oracle_input_invalid");
     const run = path.resolve(input.repositoryRoot, runDir);
     const root = path.resolve(input.repositoryRoot, sourceRootDir);
     phase = "task";
@@ -98,14 +103,14 @@ export async function runRecordedOracleCommand(input: { repositoryRoot: string; 
       if (admitted) answers.push({ callId: identity.callId, value: identity.callValue, execution: retained.execution! });
     }
     phase = "data_stage";
-    const declared = declarationInRunTerms(process, answers.map((answer) => answer.value));
+    const declared = declarationAsWritten === true ? { process, rewritten: {} } : declarationInRunTerms(process, answers.map((answer) => answer.value));
     const collected = await collectRecordedOracleAnswer({ instructionText: task.task.instruction, process: declared.process, referenceTimeMs, reads: answers });
     const columns = collected.answer.columns.map((column) => column.id);
     phase = "oracle";
     const table = await judgeRecordedOracleTable({ repositoryRoot: input.repositoryRoot, scenarioLabDist: paths.scenarioLabDist, scenarioId: input.scenarioId, taskId: input.taskId, scenarioOrigin: origin ?? "http://127.0.0.1", runId: entry.runId, columns, rows: collected.answer.rows, collected: collected.collected?.rows ?? [] });
     phase = "done";
     outcome = {
-      runId: entry.runId, referenceTimeMs, declaration: process, declarationRewritten: declared.rewritten, admittedReads: answers.length, namedReads: steps.length,
+      runId: entry.runId, referenceTimeMs, declaration: process, declarationAsWritten: declarationAsWritten === true, declarationRewritten: declared.rewritten, admittedReads: answers.length, namedReads: steps.length,
       dataStage: { readiness: collected.readiness, stored: collected.stored, collectedRows: collected.collected?.rows.length ?? 0, collectedSchemaFields: collected.collected?.schema.fields.map((field) => ({ id: field.id, ...(field.semanticType ? { semanticType: field.semanticType } : {}), ...(field.mark ? { mark: field.mark } : {}) })) ?? [], bound: collected.bound, account: accountCounts(collected.processing), answerColumns: columns, answerRows: collected.answer.rows.length },
       oracle: table,
       passed: table.verdict.passed && answers.length === steps.length,

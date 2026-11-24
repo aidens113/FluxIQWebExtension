@@ -30,6 +30,9 @@ export {
   type WebLlmExtractionHandleScope
 } from "./handles";
 export { webLlmItemRow, webLlmItemWholeWords } from "./item-row";
+// What a stored schema labels a column with: never a value (t997, `stored-label.ts`).
+export { webLlmUniqueStoredLabels } from "./stored-labels";
+export { webLlmSampledLabel } from "./sampled-label";
 export type { WebLlmColumnType } from "./column-type";
 export { webLlmColumnType } from "./column-type";
 export type { WebLlmStructureItem, WebLlmStructureMark } from "./list-items";

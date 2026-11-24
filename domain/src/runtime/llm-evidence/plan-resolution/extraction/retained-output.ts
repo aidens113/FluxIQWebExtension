@@ -3,6 +3,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationExtractListRequest } from "../../../../actions/extraction";
 import { webAutomationDerivedRecordOutput, webAutomationStoredColumns } from "../../../../output-nodes";
 import { present } from "../../present";
+import { webLlmUniqueStoredLabels } from "../../structure";
 
 /** The host's full schema and the author's display view, with resolved aliases rebased once. */
 export function webPlanRetainedRecordOutput(input: {
@@ -20,10 +21,12 @@ export function webPlanRetainedRecordOutput(input: {
   const originalFields = isObject(authored?.schema) && Array.isArray(authored.schema.fields) ? authored.schema.fields : [];
   const exclusions = new Set(originalFields.flatMap((field) => isObject(field) && field.handling === "exclude" && typeof field.id === "string" ? [field.id] : []));
   const columns = originalFields.flatMap((field) => isObject(field) && field.handling !== "exclude" && typeof field.id === "string" ? [field.id] : []);
+  // A field renamed for the record output keeps its stored label; no label may answer to another field's new id (t997).
+  const labels = webLlmUniqueStoredLabels(input.schema.fields.map((field) => ({ id: name(field.id), label: field.label })));
   const schema = present<AutomationStudioRecordSchema>({
     schemaVersion: input.schema.schemaVersion,
-    fields: input.schema.fields.map((field) => present<AutomationStudioRecordSchema["fields"][number]>({
-      id: name(field.id), label: field.label, valueType: field.valueType, semanticType: field.semanticType, mark: field.mark,
+    fields: input.schema.fields.map((field, index) => present<AutomationStudioRecordSchema["fields"][number]>({
+      id: name(field.id), label: labels[index]!, valueType: field.valueType, semanticType: field.semanticType, mark: field.mark,
       required: field.required, handling: exclusions.has(name(field.id)) ? "exclude" : field.handling
     })),
     primaryKey: input.schema.primaryKey?.map(name)

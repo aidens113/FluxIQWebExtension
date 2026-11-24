@@ -50,3 +50,23 @@ test("a saved Flow's passes are pages of its one saved read step, told as a forw
   assert.equal(result.readiness.state, "ready");
   assert.deepEqual(result.answer.rows.map((row) => row.title), ["Loft", "Hut"]);
 });
+
+test("Core's own binding finds a renamed column by the site label the domain stores beside the model's id (t997)", async () => {
+  // As the domain stores a column the model renamed: id `badge`, label the detected key `member_badge`.
+  const renamed = { schemaVersion: "0.1", fields: [
+    { id: "title", label: "Title", valueType: "string" },
+    { id: "rate", label: "Nightly rate", valueType: "string", semanticType: "currency" },
+    { id: "badge", label: "member_badge", valueType: "string", mark: "badge" },
+  ] };
+  const read = (rows: JsonObject[]): JsonObject => ({ kind: "llm_evidence_tool_execution", effectApplied: true, evidence: { read: { extracted: rows, listKey: "fixture.rentals", place: "page=1" } }, recordSchema: renamed });
+  const rows = [{ title: "Cabin", rate: "$80", badge: "Member" }, { title: "Loft", rate: "$70" }];
+  for (const name of ["member_badge", "badge"]) {
+    const result = await collectRecordedOracleAnswer({
+      instructionText, referenceTimeMs: Date.UTC(2030, 0, 1),
+      process: { where: [{ field: name, is: "present" }], columns: ["title", "rate"] },
+      reads: [{ callId: "read.one", value, execution: read(rows) }],
+    });
+    assert.equal(result.readiness.state, "ready", name);
+    assert.deepEqual(result.answer.rows.map((row) => row.title), ["Cabin"], name);
+  }
+});

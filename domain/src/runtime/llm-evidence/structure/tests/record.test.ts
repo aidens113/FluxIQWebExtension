@@ -108,7 +108,8 @@ test("the record beside the run gets a second handle, and the packet names it wi
     recordSchema: { schemaVersion: "0.1", fields: [
       { id: "span_1", label: "span:1", valueType: "string" },
       { id: "span_2", label: "span:2", valueType: "string" },
-      { id: "span_x1s0c7au_x1xkdpo7_xdd3vo9", label: "span.x1s0c7au.x1xkdpo7.xdd3vo9", valueType: "string" }
+      // A generated class path names nothing a declaration would use, so the stored label is the key (t997).
+      { id: "span_x1s0c7au_x1xkdpo7_xdd3vo9", label: "span_x1s0c7au_x1xkdpo7_xdd3vo9", valueType: "string" }
     ] },
     // It names one record, so a plan that names it reads one row (`../handles.ts`).
     oneRecord: true
