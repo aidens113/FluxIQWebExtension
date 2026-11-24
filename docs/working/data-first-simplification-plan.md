@@ -52,19 +52,24 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - Netherlands 32/32 (the saved Flow's four page passes).
 
   Photo-social is a recording gap: the only surviving store never opened a post. Command: `lab recorded-read SITE --task TASK --input FILE --out FILE` (`read-oracle/`). Core gained a re-export-only subpath, `fluxiq/automation/answer-first-data`. Two admission defects were fixed: equal absent link origin, and a saved Flow's replayed pass admitted on its row labels. Lead decisions on the worker's questions:
-  - stored schema labels must not carry page values, and a model alias must not hide the detected site key (t995, after t991 frees `domain/`);
+  - stored schema labels must not carry page values, and a model alias must not hide the detected site key (t997);
   - in automatic mode, a cell the row's read captured but the item does not show is a definite "not shown", not missing evidence (t993);
   - earbuds' broad collection and photo-social are recording gaps for the paid round to cover.
 - **Full sweep of dev 2026-11-23 (Down c61dbf0fa / Core 2dba34613): failures, being fixed forward.**
   - Downstream: check 803/805 (Core build list lacks `cloud`); domain 3150/3164; extension 4145/4149; test-runner 2962/2968; every other package passes; build exit 0.
   - Core: contracts, sdk, cloud, websocket and ui-components all pass. fluxiq `parallel` has 25 failures in 16 files, and `real-sql` has 292 in 69 files, concentrated in Answer First and service bootstrap: 37× a "Run again was refused: you stopped the last run part way" guard, and 19× `stopped_by_person`/`stopped` where `achieved` was expected. apps/web has 2 failures.
-- **Running now:**
-  - **t991** (worker-heavy): the 14 domain failures.
-  - **t992** (worker): extension 4, test-runner 1, and the `cloud` build-list check.
+- **t991 and t992 integrated and pushed (downstream dev 5ca1a2cea).** All 20 downstream sweep failures are fixed. The shared Core is synced to Core dev 6318fac88.
+  - **t991, domain:** one real regression (t982 made a client without the definition capability refuse ordinary reads whole; `definition-fields/admission.ts` now leaves out definition columns that are only retained). 13 tests now follow t982, t989, t968 and t983.
+  - **t992:** two test-isolation leaks (a `getComputedStyle` stub and `chrome`), a split panel test, the `--recorded-model` option sentence, and `@fluxiq/cloud` in the full Core build list.
+  - Open: the test file that leaks `chrome` before act-mark's watch test is not yet identified.
+  - Core defect found by t991 and given to t994: `role-routing/judge-model.ts` falls back to Haiku whatever the Flow's provider, so a DeepSeek-only Flow's result check fails.
+- **Running now** (the paid round waits for all of them; target 2026-11-24 evening, gated by t994 and the F23 fix after it):
   - **t993** (worker-heavy, Core-paired; the lead alerted the user to the Core crossing): absent-cell semantics in `contracts/record-sets/process`, plus the result-feed sweep failures.
-  - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure.
-  - **Shared Core:** `fxwork/!FluxIQ` sits at 2dba34613, behind Core dev 6318fac88, which only adds the t990 subpath. It is re-synced before t991 and t992 finish, not while they validate against it.
-  - **Next:** t995 (schema labels and aliases), then F23 diagnosis, then paid-round readiness.
+  - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure, plus the judge-model provider default.
+  - **t995** (worker-heavy, Core-paired): F23 diagnosis and reproduction, owning Core `engine/automation/{target-reacquire,unbound-reacquire}` and `step-loop/incident-repair.ts`. Any answer-first part waits for t994.
+  - **t996** (worker, with its own Core): the preflight exercises the site-declared person checks on everything-store, crossborder, bigbox and company-website.
+  - **t997** (worker-heavy): stored labels from the page's column words or the field key; a renamed column's id is the model's name and its label the detected key.
+  - t990's finish removed its worktree and the ignored `test-runs/` inputs with it. Lanes that need recorded reads copy them again from the original campaign evidence.
 - **Combined P2+P6 (history):** t984 Core e2b1f2635 (worker results: compatibility 195/195, combined 192/192, both checks; product fixes to the processing overlay, live page hand-off, `{process:null}`, P4 memory tolerance and FluxNode pin) was merged with t987 (clean in Core; downstream kept both post-reboot briefs) and with current dev (clean). The combined Core branch now passes the pre-push audit. A worker-heavy agent runs every owner group on the combined tree (`briefs/combined-p2-p6-acceptance.md`). Lead follow-up: the P4 memory tolerance catches any non-integrity store error; narrow it to store I/O failures. A saved Flow replayed under a task with no declaration still acts as a legacy task (P2/P6 design question).
 
 **Post-reboot execution (2026-11-22):** the user restarted and requested tests and all remaining work. The configured 32 GiB initial / 48 GiB maximum page file is active at 32 GiB. Fresh workers processing/t984, judge/t987 and offline/t986 own written post-reboot briefs. P2 combined publication/restart fixture checkpoint 6dcd8bfa0 and P6 credential fixture bf3787ec7 are preserved locally; t987 and t986 received the shared P2/P6 baseline. Processing is adding authoritative source replacement receipts; judge is implementing exact-source recovery and action/witness correspondence; offline capture now forwards authored task-processing criteria. These new changes are not accepted yet. Root fixed the cost-reader union and contradictory metadata/request classification; independent six-owner tests and runner types pass. A stale pre-reboot gate ticket was traced to a PID reused by WebView2 and pruned using process birth/boot evidence. The isolated gate fix passed 47/47 focused tests and 99/99 full tests. Pagefile-aware admission passed 100/100 full tests before and after merge; Merit dev c8a64a1/version0.3.2 is installed and pushed. Product checks resumed normally. One isolated provider-free browser proof reached snapshot evaluation but failed snapshot_unavailable; no browser acceptance or paid run yet.
@@ -241,6 +246,14 @@ Read Current State and the corresponding task report first; do not restart compl
 All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls or browser acceptance; one inadvertently launched Core full check was deliberately interrupted and is not acceptance.
 
 ## Work Ledger
+
+### 2026-11-23 - t991 and t992 integrated; t995-t997 started
+- Changed: t991 (domain sweep failures, old-client definition admission, retained-extraction doc) and t992 (extension, test-runner, Core build list) finished into dev and were pushed. The shared Core was synced to 6318fac88. t995 F23, t996 person-check preflight and t997 schema labels were started with written briefs.
+- Validation: lead runs through the gate:
+  - t991: affected `# tests 65 # pass 65 # fail 0`; importers `# tests 200 # pass 200 # fail 0`; domain check exit 0; audit passed.
+  - t992: scripts `# pass 12 # fail 0`; extension `# tests 101 # pass 101 # fail 0`; runner build exit 0; lab-attempt-command `# pass 6 # fail 0`; extension check exit 0; audit passed.
+  - Finishes: both `"validation":{"passed":true}`.
+- Follow-up: t993-t997 results; the paid round after all of them land.
 
 ### 2026-11-23 - t990 integrated as Core 0.54.0
 - Changed: t990 finished in both repositories. The downstream branch carries the `lab recorded-read --task` oracle mode and two admission fixes. Core adds the re-export-only subpath `fluxiq/automation/answer-first-data`, plus the version. Both t993 trees were moved to the new dev for its proof step.
