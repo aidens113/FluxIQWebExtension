@@ -1,9 +1,9 @@
 # Data-First Simplification Plan
 
 Status: Active
-Status detail: P0-P4, P6, the bounded F24 replay fix and the offline proof (t986) are integrated and pushed (Core 0.53.1). t990 (recorded-run oracle acceptance for the five campaign tasks) and a full sweep of dev are running. No paid runs.
+Status detail: Every unit through t999 and t994 is integrated and pushed (Core 0.54.3, contracts 0.23.2). t1000 (loop decisions) and the second full sweep of 11-23 run; the supervised $50 paid round follows (target 2026-11-24 evening).
 Created: 2026-11-20
-Last updated: 2026-11-23
+Last updated: 2026-11-24
 Owner: Senior supervisor agent
 Scope: What changes after the 2026-11-19/20 live campaign: extraction keeps every column, one simple data layer dedupes and cleans from that upstream data, the model collects broadly, the framework does the heavy lifting, one model per task, replays that keep their repairs, a cheaper judge, and no paid run before a provider-free proof.
 Paired document: ../!FluxIQ/docs/working/data-first-simplification-plan.md
@@ -14,6 +14,48 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Week focus (user, 2026-11-23):** "for now we'll only focus this week on getting the core product 100% working". Hosted and cloud work stays paused until this plan's proofs and paid round show the core product working. That includes the web remote viewer the user asked for the same day, recorded as unit HC-V in [hosted-platform-launch-plan.md](./hosted-platform-launch-plan.md).
 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
+
+**State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
+- **Integrated and pushed in both repositories** (downstream 9a29b8940, Core fbc0356f6; fluxiq 0.54.3, contracts 0.23.2):
+  - P0: t976, t979, t981.
+  - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
+  - S1/S2/S6 t986 offline proof, scoreboard and preflights.
+  - t990: recorded-read oracle acceptance. Hubs 10/10, earbuds 13/13 (processing), job board 7/7 on three runs and Netherlands 32/32, all with 0 calls. Photo-social is a recording gap.
+  - t991, t992 and t994: every failure from the first full sweep of 11-23 (21 downstream, about 319 Core and web), fixed forward. t994 also fixed F23 (the run gate looks at the page for a press carried only by `heldOnRepeat`) and the read's own process under a declaration.
+  - t993 and t998: a captured-but-absent cell is "not shown", in the feed and the store (migration 0041).
+  - t996: the preflight meets the four sites' own person checks.
+  - t997 and t999: stored labels hold no page values, and binding reads `_`/`-` as word separators.
+- **Running:**
+  - **t1000** (worker-heavy, Core-paired): `ask_person` is offered only after a change_approach, with a reason (the user's 11-19 rule; t983 had dropped the gate). A judge repeating one unreadable reply goes through loop detection; one fixture made 2,399 re-asks in 90 s.
+  - **Second full sweep of 11-23** (worker-light) on `fxwork/sweep-20261123b` at Down 9a29b8940 / Core fbc0356f6.
+- **Paid round (P7, U8), next, once t1000 lands and sweep 2 is clean; target 2026-11-24 evening:**
+  - Tasks: the ten fixed scoreboard tasks (`scoreboard/fixed-tasks.ts`), easiest first.
+  - Command: `pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd 5`, with four attempts, on Haiku, in visible Chrome, on up to four dev-synced lanes, under a supervisor that watches every run, writes its debug and reports cost as it happens.
+  - Money: a task starts only while billed spend, plus $5 for each task in flight, plus its own $5 is at most $50. A call with no reported usage is counted at its maximum. The round stops at the first balance error.
+- **Open follow-ups, not blocking the round:**
+  - narrow the P4 memory tolerance (`task-model/resolve.ts`) to store I/O errors;
+  - a saved Flow carries its own data declaration;
+  - the test file that leaks `chrome` before act-mark's watch test;
+  - the start reading's retry on timeout (once, against 3 on network errors);
+  - a DeepSeek-only workspace with no provider named gets Haiku (the stated default);
+  - promote `main` after a clean full sweep;
+  - recorded evidence lanes need is kept outside the repositories in `fxwork/recorded-evidence/`, because a finish removes a worktree's ignored `test-runs/`.
+
+**User-approved rules (2026-11-20):**
+- U1: no model ladder; a task keeps its starting model.
+- U2: the data layer automatically dedupes and cleans using upstream data where possible, simply.
+- U3: extraction keeps every column; output projection happens in processing.
+- U4: collect broadly, then filter deterministically.
+- U5: the framework does the heavy lifting.
+- U6: the judge stays on that same model.
+- U7: all L1-L9, S1-S10 and P0-P7 below are approved, including Haiku as automation default; finish the three interrupted fixes first.
+- U8: paid round approved, **$50 absolute total ceiling**. Lead's conservative reading covers the round and reruns together. Only launch while billed total plus the task's $5 purse is at most $50; supervise every run and stop on a balance error. Required provider-free proofs and available Claude credit come first.
+
+**Why this plan exists:** the recorded campaign counted 37 runs, 0 strict SUCCESS, 17 PARTIAL and 20 FAILURE, about $90. Strict SUCCESS means four correct attempts, three predecessor-Flow continuation proofs and zero model calls on attempts 2-4. The original campaign, causes and approved phased design follow; historical task diagnoses remain in the task reports and git history.
+
+**Next:** t1000 and sweep 2, then the supervised paid round; after the round, a full sweep and `main` promotion.
+
+## Integration History (2026-11-22/23, superseded by Current State)
 
 **Handover to Claude Code (2026-11-23).** The user handed the Codex session's work to a Claude Code lead. Codex stopped about 13:40 on 11-22 with no process left running.
 - **Committed at handover:** Codex's final status notes on both dev branches. Its uncommitted lane work went onto each task branch as unverified checkpoints: t984 Core 4c4868428 (FluxNode fixtures, never run) and t986 Down 4e364886d (split raw/projected read parity, never compiled).
@@ -90,9 +132,33 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
   - The read-oracle hands declarations to Core as written; `model-aliases.ts` is removed.
   - The lead made downstream `stored-labels.ts` fold names the same way, so labels stay unique to Core.
   - Lead runs: contracts process 335/335 (again after merging dev); fluxiq and contracts checks; domain structure and extraction 188/188; read-oracle 8/8; runner check; both audits. Earbuds as written: `ready`, kept 11, matched 11/11 collected, 0 calls (2 of 13 are on pages never read).
-- **Running now** (the paid round waits for it; target 2026-11-24 evening):
-  - **t994** (Opus supervisor with a team, Core-paired): every other Core sweep failure, the judge-model provider default, and F23's run-gate fix. The lead merged Core dev 27e8fabc9 into its branch at its request.
-  - t994 found that a read's own `recordOutput.process` is dropped once a task has a declaration (05d61fea4, the t869 class). The lead's decision: not superseded. The active path must evaluate the same `merged(read process, declaration)` as the legacy path. `result-feed/**` passed to t994 for this fix.
+- **t994 integrated and pushed (Core fbc0356f6, fluxiq 0.54.3).** Every Core and apps/web failure from the first sweep is fixed.
+  - Most failing tests pinned contracts that named commits changed on purpose. For example, the 37 "Run again was refused" errors came from tasks declaring no processing under t984, and t976's start reading shifted the scripted replies. Each updated test cites its commit.
+  - Product fixes:
+    - t981: a rerun's replaced attempt is withdrawn.
+    - A read's own process survives a task declaration (05d61fea4, the t869 class), via the legacy merge rule.
+    - F23: the run gate looks at the page for a press carried only by `heldOnRepeat` and admits it only on `not_seen`, including in FluxNode carried runs.
+    - The judge and recovery take the Flow's provider's starting model from one `starting-model.ts`.
+    - The ladder remnant is removed; the web panel CSS uses tokens.
+  - Lead runs on the tree merged with dev 143d80419 + t999:
+    - all 85 first-sweep failing files plus the new and neighbouring tests, parallel `Tests  774 passed (774)` and real-sql `Tests  515 passed (515)`;
+    - web `Tests  36 passed (36)`;
+    - fluxiq and web checks 0 `error TS`;
+    - audit passed;
+    - Core finish `Tests  70 passed (70)`.
+  - Lead decisions on t994's questions:
+    - the judged-build call limit 4→5 (the start reading now counts) and W6's column and amendment choices are accepted;
+    - the `ask_person`-at-first-catch pin is a regression against the user's 2026-11-19 rule, now t1000;
+    - the unthrottled unreadable-judge re-ask (2,399 calls in 90 s on one fixture) is t1000;
+    - a timed-out call with no reported usage settles at $0 (`reported=false`). During the paid round the lead counts such calls conservatively in the $50 tally.
+- **Running now** (the paid round waits for both; target 2026-11-24 evening):
+  - **t1000** (worker-heavy, Core-paired): `ask_person` is offered only after a change_approach, with a stated reason. The judge's repeated unreadable reply goes through loop detection, and each re-ask states the parse failure.
+  - **Second full sweep of the day** (worker-light): `fxwork/sweep-20261123b` at Down 9a29b8940 / Core fbc0356f6.
+- **Paid round plan** (U8):
+  - The ten fixed scoreboard tasks (`scoreboard/fixed-tasks.ts`), easiest first: lens hood, apprentices, Halvard roles, towels, bikes, earbuds, free hubs, Netherlands, August-over-1300, then delete stranger requests.
+  - Each task runs `pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd 5` (default `--attempts 4`), on Haiku, in visible Chrome, on up to four dev-synced lanes.
+  - A task starts only while billed spend plus every in-flight task's $5 purse plus its own $5 is at most $50.
+  - The round stops at the first balance error. A supervisor watches every run, writes its debug, and reports cost as it happens.
   - **t996** (worker, with its own Core): the preflight exercises the site-declared person checks on everything-store, crossborder, bigbox and company-website.
   - **t997** (worker-heavy): stored labels from the page's column words or the field key; a renamed column's id is the model's name and its label the detected key.
   - t990's finish removed its worktree and the ignored `test-runs/` inputs with it. Lanes that need recorded reads copy them again from the original campaign evidence.
@@ -128,21 +194,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 
 **Validation and environment:** no paid calls or completed full FluxIQ sweeps. Core t988's default finish unexpectedly launched pnpm check after 70 passing contracts; lead stopped only that identified owned check during script tests and reran finish with narrow validation. This interrupted sweep is not a pass. Main downstream pre-existing AGENTS.md, .clinerules/fluxiq.md and the untracked language-driven debug note are preserved. S8 is installed and agents resumed normal gated work. The user rebooted after the pagefile increase. OneDrive was measured as small, not diagnosed as leaking, and was not stopped. The earlier cache counter was not proof of a leak. Root corrected the scheduler physical-versus-commit policy as recorded below; no per-job admission override or user process termination.
 
-**User-approved rules (2026-11-20):**
-- U1: no model ladder; a task keeps its starting model.
-- U2: the data layer automatically dedupes and cleans using upstream data where possible, simply.
-- U3: extraction keeps every column; output projection happens in processing.
-- U4: collect broadly, then filter deterministically.
-- U5: the framework does the heavy lifting.
-- U6: the judge stays on that same model.
-- U7: all L1-L9, S1-S10 and P0-P7 below are approved, including Haiku as automation default; finish the three interrupted fixes first.
-- U8: paid round approved, **$50 absolute total ceiling**. Lead's conservative reading covers the round and reruns together. Only launch while billed total plus the task's $5 purse is at most $50; supervise every run and stop on a balance error. Required provider-free proofs and available Claude credit come first.
-
-**Why this plan exists:** the recorded campaign counted 37 runs, 0 strict SUCCESS, 17 PARTIAL and 20 FAILURE, about $90. Strict SUCCESS means four correct attempts, three predecessor-Flow continuation proofs and zero model calls on attempts 2-4. The original campaign, causes and approved phased design follow; historical task diagnoses remain in the task reports and git history.
-
-**Next:** finish P2/P6 compatibility and recovery acceptance, integrate bounded F24 and collection guidance, and execute the authorized provider-free browser proofs after their combined build checks. Complete affected-recording gates before the approved supervised round; full sweep/promotion follows. Agents are executing the resumed briefs; lead coordinates interfaces, validation and integration.
-
-### Earlier execution checkpoint (2026-11-22; superseded by the table above)
+**Earlier execution checkpoint (2026-11-22).**
 
 - Both dev branches pushed: downstream 93cda7b0d and Core 4ddfe98a5. No main promotion or paid run.
 - P1 source checkpointed (Core 3b85dd9d0, downstream ba64bbf1c) and both task trees merged current dev. Worker resumed public schema-parser exports and combined validation; 392 tests in loaded downstream entries passed, but 73/135 entries could not load before that export fix. This is not acceptance.
@@ -259,19 +311,30 @@ These are the lead's, 2026-11-20. The user's bottom line: "we seriously NEED thi
 
 ## Next Session
 
-Read Current State and the corresponding task report first; do not restart completed P0 work. Inspect running heavy-slot holders/queue before scheduling checks, and preserve another lane's frozen validation snapshot.
+Read Current State first; every unit it lists as integrated is done and verified, so do not reopen it. Check the heavy-slot holders and queue (`heavy-slot.mjs status`) before scheduling checks, and never disturb another lane's validation tree.
 
-1. P0 judge/repeat/permission are integrated and pushed. Fixed-model t983 is now integrated after 140 passing combined tests, typecheck/build/audit and 70 merge contracts; confirm paired push completed. Do not reopen those completed units.
-2. P1 t982 owns retained schema/rows, internal collected/answer paging, migration 0040, private exclusion hashes/readiness/batch receipts and public projection. It includes t984 seam 2c4099965. Core lead acceptance is complete (180 tests); finish downstream corrected selection/legacy compatibility checks and paired integration. P2 may now edit its Core runtime against this frozen accepted interface.
-3. P2 t984 owns exact field binding and explicit automatic-mode processing/readiness. Independent binder tests/types/audit passed. Synchronize P1/P4/permission before interpretation, task-memory and completion edits; preserve saved legacy process behavior.
-4. P5 t985 has the tested F24 retry-proof subset. F4/F18 regressions pass with permission parent; F23 still needs exact target/semantic-repair reconstruction. Screened artifacts prove all successors loaded predecessor digests and some digests changed: do not repeat the unsupported blanket claim that nothing persisted.
-5. t986 owns recorded model/domain proof, strict scoreboard and real preflight. Public trace-scope wrapper and CLI foundations exist; enforce first-divergence closure and actual starting-state admission. A prefix, scripted model response, missing call count or generic confirm is not full task, zero-call or permission proof.
-6. After P1/P2 interfaces settle, implement P3 generic collection guidance, preserving action-row selection. P6 t987 source implementation is active; shared callers remain P2-owned. S7 is integrated and pushed in both repositories. S8 is integrated, pushed and installed with lead/branch/parent 94/94 tests and native smoke passing. S3 discovery is complete but its graph/registry gate is not implemented; S5 observer is checkpointed and awaits combined runner checks. No threshold/priority bypass is authorized.
-7. Paid acceptance remains blocked on the approved provider-free proofs, not on another permission question. Strict SUCCESS is four correct attempts, three predecessor Flow/digest proofs and zero logical model calls on attempts 2-4. Only then launch the supervised approved round within the total $50 ceiling, report spend as it happens, and stop on balance error. Final full sweep/promotion follows coherent completed work, within the twice-daily sweep rule.
+1. If t1000 is still running or unmerged: verify its report by rerunning its tests, then finish it in both repositories (downstream first, then Core with `--skip-checks`), merging Core dev first when the finish says it is behind.
+2. Read sweep 2's report (`scratchpad/sweep2/` of the 11-23 session, or rerun it). Fix any failure forward on a task branch before paying.
+3. The paid round: sync four lane trees to dev (both repositories), rebuild them, and dispatch one supervisor with the brief in "Paid round" above. Track spend against the $50 ceiling yourself, from the ledger.
+4. After the round: diagnose each failure from its recorded run (S1), prove its fix offline, then rerun only what changed. Then a full sweep, and promote `main` by fast-forward (AGENTS.md).
 
-All agents have written briefs and task-local reports. Lead owns shared-state updates, exact observed acceptance, commits/pushes and paired integration. No paid calls or browser acceptance; one inadvertently launched Core full check was deliberately interrupted and is not acceptance.
+Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-23 - t994 integrated (fluxiq 0.54.3); t1000 and the second sweep started
+- Changed:
+  - t994 finished in both repositories, after the lead committed its team's work (113 files), merged Core dev and kept 0.54.3 over dev's 0.54.2.
+  - t1000 started with a brief.
+  - Sweep worktrees `fxwork/sweep-20261123b` were created at current dev.
+- Validation: lead runs through the gate on the merged t994 tree:
+  - vitest-groups parallel `Test Files  61 passed (61)`, `Tests  774 passed (774)`;
+  - real-sql `Test Files  76 passed (76)`, `Tests  515 passed (515)`;
+  - web `Tests  36 passed (36)`;
+  - fluxiq and web checks 0 `error TS`;
+  - audit `passed (570 warning(s), 903 baselined)`;
+  - finishes: Down audit passed; Core `Tests  70 passed (70)`.
+- Follow-up: t1000; sweep 2; then the paid round.
 
 ### 2026-11-23 - t996 and t999 (contracts 0.23.2) integrated
 - Changed:
