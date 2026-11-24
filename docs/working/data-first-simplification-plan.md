@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.9, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.10, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -34,6 +34,9 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - t1010: every Lab run has a run watcher (`scripts/lab/run-watch/`) that alerts on repeating or no progress, and the Lab's default live model is Haiku.
     - t1013: paging is settled per list from each Next page's `listMove`; a Next page whose list is absent is refused as `list_not_on_page`.
     - t1014: a later round, and a carried-on attempt's first round, is shown every call the earlier rounds made and what each found (`answer-first/earlier-rounds/`), so a round end never empties the window. The last count endings on the answer-first path (a run of refusals for one reason, a completion refused again, unreadable replies) are loop findings the model decides.
+    - t1018: a carried earlier round holds no denied key (t1014 had kept them as `[withheld]`, so every fresh round after a Flow replay was refused unsent).
+    - t1019: the run watcher reads page resets from where the page is, and alerts `rounds_without_decision`.
+    - t1017: Lab runs sharing one Core hold a shared reader lease, so lanes on one Core run at once.
 - **Second full sweep of 11-23** (before t1000): every test passed (Core about 30,000, downstream about 11,700); only `pnpm check` failed in a fresh tree, fixed by t1005.
 - **Paid round of 2026-11-24: halted at $0.80 of $50.** Five launches; no task finished attempt 1.
   - Bigbox looked for about 170 steps without pressing. Cause, from its steps:
@@ -48,8 +51,9 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - no arbitrary limit ends or resets a run;
     - fix an obvious shared problem before running more.
   - Report: `reports/paid-round-1124.md` with its brief, and the five run debugs in `../language-driven-flow-loop-plan/debugs/` (run-mwufisf0, -mwug2xjw, -mwug3pjo, -mwug6pz3, -mwugbs39).
-- **Running:** nothing paid.
-- **Next:** **one** watched paid run of bigbox (the run that showed the defect) on a fresh lane synced to dev, with the watcher and `--llm-model claude-haiku-5-5`. Only if it presses and progresses do the other nine tasks follow, within the remaining $49.20.
+- **Bigbox relaunch of 11-24 (run-mwus396e, lane t1015): stopped at $0.12.** The model acted (6 landed acts, a draft with search, list read and paging, its Flow run three times), then every fresh round's first request was refused inside Core, unsent, because t1014's carried rounds kept denied keys; fixed by t1018 and proven offline on the recording. Debug: `../language-driven-flow-loop-plan/debugs/run-mwus396e-5447c6f6.md`. Round total $0.92 of $50.
+- **Running:** t1016 (lead verification): task memory tolerates only a store I/O failure (typed at the store boundary), in model resolution and at the attempt's opening.
+- **Next:** relaunch the one watched bigbox run on lane t1015 synced to dev. Only if it presses and progresses do the other nine tasks follow, now four lanes on the shared Core, within the remaining $49.08.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
   - a saved Flow carries its own data declaration;
@@ -339,6 +343,21 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - Bigbox relaunch stopped on refused fresh rounds; t1018, t1019 and t1017 integrated (fluxiq 0.54.10)
+- Changed:
+  - Lane t1015 ran bigbox once (run-mwus396e-5447c6f6, Haiku, watcher on). The model now acts, but after loop detection's last rung ended round 1 (step 89), every fresh round's first decision was refused inside Core (`flow_bootstrap.request_refused_evidence_denied_key`), five times, with no model call. The lead stopped it at $0.120981 settled (no call in flight). The evidence is in `fxwork/recorded-evidence/t1015-bigbox/`; the debug is committed.
+  - t1018 (lead, Core): `earlier-rounds/carried-step.ts` drops every member under a denied key, key and all (the draft's `automationStudioLlmValueWithoutDeniedKeys`), before the trail screen, and says something was left out. The t1014 test that pinned `secretToken: "[withheld]"` now expects the key gone.
+  - t1019 (worker): the watcher's `page_reset` reads the page's own location (a navigate in an opening call's `held` never runs). The five resets on run-mwus396e and six on run-mwufisf0 were all false. New `rounds_without_decision` pattern.
+  - t1017 (worker-heavy): Core's build cache gained `acquireStepReadLock` (entry-then-recheck against the writer's lock-then-list; heartbeated; stale at 30 minutes; a waiting build blocks new readers). The Lab lease takes read holds, so lanes sharing one Core run concurrently.
+  - Closed lanes t1001-t1004, t1006, t1007 and t1009 after their round files were committed; released lab slots 1-4.
+  - Open: `attempt/opening.ts` still reads the attempt-row and act stores best effort with every error swallowed (`automationStudioAnswerFirstBestEffort`); those stores have no typed I/O error yet.
+- Validation: lead runs through the gate:
+  - t1018 offline proof on the recording (temporary test feeding all 42 recorded calls through `automationStudioResultTrailStepOfCall`): `{"steps":42,"oldStepsWithDeniedKey":3,"newEntryHasDeniedKey":false,"carriedCalls":42,"callsWithSomethingLeftOut":[20,24,27]}`.
+  - t1018 tests over answer-first `earlier-rounds`, `tests/endings`, `attempt` and llm `harness`: parallel `Test Files  80 passed (80)`, `Tests  580 passed (580)`; real-sql `Test Files  28 passed (28)`, `Tests  131 passed (131)`; `pnpm --filter fluxiq check` exit 0; audit passed.
+  - t1019: `# tests 18 # pass 18 # fail 0`; `lab watch --from-steps` on run-mwus396e gave `{"no_act_after_loop":1,"rounds_without_decision":2}` and no `page_reset`; audit passed.
+  - t1017: Core `node --test "scripts/build-cache/tests/*.test.mjs"` gave `# tests 87 # pass 87 # fail 0`; downstream lease `# tests 9 # pass 9 # fail 0`; both audits passed.
+- Follow-up: merge t1016; sync the shared Core and lane t1015; relaunch bigbox.
 
 ### 2026-11-24 - t1013 and t1014 integrated (fluxiq 0.54.9); the halted round's report and debugs committed
 - Changed:
