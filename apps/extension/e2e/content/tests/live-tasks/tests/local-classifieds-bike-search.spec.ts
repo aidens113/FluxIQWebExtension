@@ -253,6 +253,16 @@ function withPaths(rows: readonly Row[], origin: string): Row[] {
   return rows.map((row) => ({ ...row, url: typeof row.url === "string" && row.url.startsWith(origin) ? row.url.slice(origin.length) : row.url }));
 }
 
+/**
+ * A read's rows in the answer's own columns. A read through the evidence runtime retains every safe detected field
+ * beside the columns it was asked for (t982, `ba64bbf1c` and `731b2b601`, `docs/architecture/retained-extraction.md`;
+ * the user's rule of 2026-11-20 that extraction keeps every column), so each row carries more keys than the answer's.
+ */
+function answerColumns(rows: readonly Row[]): Row[] {
+  const columns = Object.keys(bikeRecords()[0] ?? {});
+  return rows.map((row) => Object.fromEntries(columns.map((column) => [column, row[column] ?? null])) as Row);
+}
+
 test.describe.configure({ timeout: 180_000 });
 
 test("the radius chip inside the picker's shadow root opens with one click", async ({ openHarness }) => {
@@ -310,7 +320,7 @@ test("the detected proposal and the instruction's conditions read the twelve bik
   expect(request.paginate).toBeUndefined();
   expect(reply.status, JSON.stringify(reply.validation)).toBe("succeeded");
   // GAP 2 (fixed in t194-w30): the one-page reveal presses the failed batch's Try again.
-  expect(withPaths((reply.extracted ?? []) as Row[], harness.lab.origin), `read ${reply.extraction?.recordCount} rows`).toEqual(bikeRecords());
+  expect(answerColumns(withPaths((reply.extracted ?? []) as Row[], harness.lab.origin)), `read ${reply.extraction?.recordCount} rows`).toEqual(bikeRecords());
 });
 
 test("once the failed batch is retried, the proposal's read is exactly the answer", async ({ openHarness }) => {
@@ -332,7 +342,7 @@ test("once the failed batch is retried, the proposal's read is exactly the answe
 
   const { reply } = await readFromProposal(harness);
   expect(reply.status, JSON.stringify(reply.validation)).toBe("succeeded");
-  const rows = withPaths((reply.extracted ?? []) as Row[], harness.lab.origin);
+  const rows = answerColumns(withPaths((reply.extracted ?? []) as Row[], harness.lab.origin));
   expect(rows).toEqual(bikeRecords());
 
   // The traps, each observed on the page the read ran on.

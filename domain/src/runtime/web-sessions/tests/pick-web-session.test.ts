@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
 import { pickWebAutomationSession } from "..";
-import { AutomationStudioHostLeaseScope, AutomationStudioHostResourceScheduler } from "fluxiq/automation";
+import { AutomationStudioHostLeaseAuthority, AutomationStudioHostLeaseScope, AutomationStudioHostResourceScheduler } from "fluxiq/automation";
 
 function session(sessionId: string, overrides: Partial<ClientGatewaySession> = {}): ClientGatewaySession {
   return {
@@ -87,4 +87,32 @@ test("a callback from a released lease cannot fall back to a personal browser", 
   });
   resume();
   await assert.rejects(late!, /lease/iu);
+});
+
+// A project build's trials, part runs and held pages hold a lease bound to their Core instance's
+// domain (Core t911). The unbound gateway source answers "not current" for every bound lease, and
+// asking it made each page read inside a trial throw as stale (t1029). A bound lease picks its own
+// browser; Core's gateway fences it on the wire, and a late callback still never reaches another one.
+function boundScope(sessionId: string): AutomationStudioHostLeaseScope {
+  const binding = AutomationStudioHostLeaseAuthority.for({}).forDomain("web-automation");
+  return new AutomationStudioHostLeaseScope(new AutomationStudioHostResourceScheduler({ capacity: 1,
+    acquire: () => ({ resourceKey: "browser-one", epoch: 1, sessionId }), release: () => undefined }), { binding });
+}
+
+test("a lease bound to its instance's domain picks its own browser, as an unbound one does", async () => {
+  await boundScope("leased").run({ role: "builder", briefId: "brief-1" }, async () => {
+    assert.equal(pickWebAutomationSession([session("leased"), session("personal")])?.sessionId, "leased");
+    assert.equal(pickWebAutomationSession([session("leased"), session("personal")], "personal"), undefined);
+  });
+});
+
+test("a callback from a released bound lease cannot fall back to a personal browser", async () => {
+  let resume = (): void => undefined;
+  const gate = new Promise<void>((resolve) => { resume = resolve; });
+  let late: Promise<unknown>;
+  await boundScope("managed").run({ role: "builder", briefId: "old-brief" }, async () => {
+    late = gate.then(() => pickWebAutomationSession([session("personal")]));
+  });
+  resume();
+  assert.equal(await late!, undefined);
 });

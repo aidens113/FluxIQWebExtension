@@ -160,3 +160,43 @@ test("the actual passive binding contributes semantic state from one capture, wi
   assert.doesNotMatch(JSON.stringify(projected), /"page"|"selector"|"target"|#updates|#notice/u);
   assert.equal(calls, 1);
 });
+
+// A Flow attempt's evidence is the client's own result, read beneath Core's dispatch record. A press that flipped its
+// own control answers its toggle there as the signature itself, with its reverse beside it as `toggleBefore`; only the
+// shape Core is told (`signature`, `beforeSignature`) was read, so every such press left its trial unconfirmed (t1029).
+test("a Flow press's toggle is read in the shape the client answers it, as in the shape Core is told it", () => {
+  const gains = { via: "class", gains: ["is-on"], loses: [] };
+  const loses = { via: "class", gains: [], loses: ["is-on"] };
+  const attempt = (result: JsonObject) => projectWebJudgeEvidence({ source: "flow-attempt", definitionId: "web.output.dom-click", evidence: { source: { entry: 6 }, evidence: { status: "succeeded", result: { status: "succeeded", result } } } });
+  const answered = attempt({ actionType: "web.dom.click", status: "succeeded", toggle: gains, toggleBefore: loses, snapshot: "RAW_PAGE_SENTINEL" });
+  assert.equal(answered.missing, undefined);
+  assert.deepEqual(((answered.evidence as JsonObject).action as JsonObject).toggle, { signature: gains, beforeSignature: loses });
+  const told = attempt({ actionType: "web.dom.click", status: "succeeded", toggle: { signature: gains, beforeSignature: loses } });
+  assert.deepEqual(((told.evidence as JsonObject).action as JsonObject).toggle, ((answered.evidence as JsonObject).action as JsonObject).toggle);
+  const attribute = attempt({ status: "succeeded", toggle: { via: "attribute", attribute: "aria-pressed", to: true } });
+  assert.deepEqual(((attribute.evidence as JsonObject).action as JsonObject).toggle, { signature: { via: "attribute", attribute: "aria-pressed", to: true }, idempotentWith: "web.output.dom-check" });
+  for (const broken of [{ toggle: { via: "class", gains: [], loses: [] } }, { toggle: gains, toggleBefore: { via: "class", gains: "is-on" } }, { toggle: { signature: gains, idempotentWith: "elsewhere" } }]) {
+    assert.deepEqual(attempt({ status: "succeeded", ...broken }).missing, ["web_judge.action_invalid"]);
+  }
+  assert.doesNotMatch(JSON.stringify(answered), /RAW_PAGE_SENTINEL/u);
+});
+
+// A step of Core's own control flow or timing carries Core's bookkeeping, which no web projection reads: counted as
+// unrecognized, a wait, a merge or a For Each pass made every trial with one unconfirmed (t1029). Content this projector
+// cannot read on any other node still fails closed: a data node's, a recorded action's, a web step's, or a step of no node.
+test("Core's control-flow and timing steps miss nothing web; unreadable content anywhere else still does", () => {
+  const step = (definitionId: string | undefined, evidence: JsonObject) => definitionId === undefined
+    ? projectWebJudgeEvidence({ source: "flow-attempt", evidence: { source: { entry: 5 }, evidence } })
+    : projectWebJudgeEvidence({ source: "flow-attempt", definitionId, evidence: { source: { entry: 5 }, evidence } });
+  const wait = step("builtin.timing.wait", { data: null });
+  assert.equal(wait.missing, undefined);
+  assert.equal(wait.role, "observation");
+  assert.equal(step("builtin.control.merge", { next: true, mergeMode: "first" }).missing, undefined);
+  assert.equal(step("builtin.control.for-each", { item: { $datasetRow: { datasetId: "rows", ordinal: 1 } }, index: 0, count: 3 }).missing, undefined);
+  for (const [definitionId, evidence] of [
+    ["builtin.data.filter-list", { data: { opaque: "UNREAD" } }],
+    ["builtin.policy.action", { data: { opaque: "UNREAD" } }],
+    ["web.output.dom-click", { data: null }],
+    [undefined, { data: null }]
+  ] as const) assert.deepEqual(step(definitionId, evidence).missing, ["web_judge.evidence_unrecognized"], String(definitionId));
+});
