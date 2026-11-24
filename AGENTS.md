@@ -526,6 +526,13 @@ page once the attempt has reached it: every round continues from the page as it 
 repeat is handled by loop detection and the model's own loop decision; only the result or the
 purse ends a task. Raising such a number is not a fix; remove it.
 
+**Fix an obvious shared problem before running more** (user, 2026-11-24): "dont just spam fucking
+runs next time when an obvious problem that will effect other runs severely. FIX THE PROBLEM FIRST.
+Then do more runs". When a run shows a defect that plainly will hit the other runs (the agent
+loop, the round, the reader, the judge, the Lab itself), launch nothing more and stop runs already
+showing it. Diagnose it from the recorded run, fix it, prove the fix offline on that recording,
+and only then launch again. Never run more tasks "to see whether it is general".
+
 **Every node retries automatically** (user, 2026-10-07): the first attempt plus
 3 retries on every path (exploration, mid-build tests, candidate trials,
 playback), waiting for the target first; only a lasting act whose effect is
