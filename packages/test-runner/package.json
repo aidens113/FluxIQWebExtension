@@ -19,11 +19,11 @@
     "./windows-acl": "./dist/windows-acl.js"
   },
   "scripts": {
-    "domain:dist": "node scripts/domain-dist.mjs",
+    "workspace-dists": "node ../../scripts/build-cache/cli.mjs domain:build browser-host:build",
     "clean": "node scripts/clean-dist.mjs",
-    "build": "node ../../scripts/check/core-build.mjs && node scripts/domain-dist.mjs && node ../../scripts/build-cache/cli.mjs test-runner:build -- \"node scripts/clean-dist.mjs && tsc -p tsconfig.json\"",
-    "check": "node ../../scripts/check/core-build.mjs && node scripts/domain-dist.mjs && node ../../scripts/build-cache/cli.mjs test-runner:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check.tsbuildinfo\"",
-    "test": "node ../../scripts/check/core-build.mjs && node scripts/domain-dist.mjs && node ../../scripts/build-cache/cli.mjs test-runner:build && node --test \"dist/**/*.test.js\"",
+    "build": "node ../../scripts/check/core-build.mjs && node ../../scripts/build-cache/cli.mjs domain:build browser-host:build && node ../../scripts/build-cache/cli.mjs test-runner:build -- \"node scripts/clean-dist.mjs && tsc -p tsconfig.json\"",
+    "check": "node ../../scripts/check/core-build.mjs && node ../../scripts/build-cache/cli.mjs domain:build browser-host:build && node ../../scripts/build-cache/cli.mjs test-runner:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check.tsbuildinfo\"",
+    "test": "node ../../scripts/check/core-build.mjs && node ../../scripts/build-cache/cli.mjs domain:build browser-host:build test-contracts:build test-evidence:build && node ../../scripts/build-cache/cli.mjs test-runner:build && node --test \"dist/**/*.test.js\"",
     "extension-chat-check": "node dist/extension-chat-check/cli.js"
   },
   "dependencies": {
