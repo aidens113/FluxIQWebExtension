@@ -1,7 +1,6 @@
 // The group an option sits in when the page draws its option set as an ARIA
-// group rather than a fieldset (t610), as a description and a search say it:
-// a raw capture through the sanitizer into `web.describe_element` and
-// `web.find_on_page`. The capture carries no `fieldsetLegend` here; the group
+// group rather than a fieldset (t610), as a description says it: a raw
+// capture through the sanitizer into `web.describe_element`. The capture carries no `fieldsetLegend` here; the group
 // is read from the packet's tree.
 //
 // The page is a bicycle-hire booking form, not one of the realistic scenarios.
@@ -10,7 +9,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { webLlmDescribeElement } from "../description";
-import { webLlmFindOnPage } from "../search";
 
 type Raw = Record<string, unknown>;
 
@@ -44,17 +42,4 @@ test("a description names the ARIA group an option sits in, and an unnamed group
   assert.match(webLlmDescribeElement(evidence(), "t5").element.split("\n")[3]!, / group="Add-ons"/u);
   assert.doesNotMatch(webLlmDescribeElement(evidence(), "t8").element, /group=/u, "an unnamed group names nothing");
   assert.doesNotMatch(webLlmDescribeElement(evidence(), "t1").element, /group=/u, "the label is outside the group it names");
-});
-
-test("a search for an ARIA group's name finds every element in the group, and a control prints its group", () => {
-  assert.deepEqual(webLlmFindOnPage(evidence(), "add-ons", 0).found.split("\n"), [
-    "3 matches for \"add-ons\"",
-    "t4 div \"Add-ons\" on screen",
-    "t5 checkbox \"Helmet\" group=\"Add-ons\" on screen",
-    "t6 span \"One size fits most\" (group=\"Add-ons\") on screen"
-  ]);
-  assert.deepEqual(webLlmFindOnPage(evidence(), "medium", 0).found.split("\n"), [
-    "1 match for \"medium\"",
-    "t3 radio \"Medium\" group=\"Frame size\" on screen"
-  ]);
 });

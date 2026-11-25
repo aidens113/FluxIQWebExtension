@@ -1,7 +1,7 @@
 // What a `web.dom.capture_snapshot` may ask of the capture, read once from the
 // command and handed to every frame that captures for it (t223).
 //
-// `includeHidden` is a search's look: `web.find_on_page` and
+// `includeHidden` is the whole page's look: `core.full_page` and
 // `web.describe_element` capture with it so words in a closed menu or a
 // collapsed panel can be found, each such element flagged `hidden`
 // (`content/rendered-elements.ts`). Without it -- every look a model is given

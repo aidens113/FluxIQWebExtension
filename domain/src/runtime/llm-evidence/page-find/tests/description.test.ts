@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, WEB_LLM_FIND_ON_PAGE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import type { WebLlmPageEvidence } from "../../sanitize";
+import { shownPageText } from "../../page-view/tests/shown-page-lines";
 import { RecoverableToolRejection } from "../../tool-rejection";
 import { webLlmDescribeElement } from "../description";
 
@@ -35,7 +36,7 @@ test("describes one element whole: its line, every attribute, its box and where,
   ]);
 });
 
-test("a hidden element a search found, and one with nothing to say, are described as they are", () => {
+test("a hidden element the full page lists, and one with nothing to say, are described as they are", () => {
   assert.deepEqual(webLlmDescribeElement(page(), "t2").element.split("\n").slice(0, 3), ["t2 <a> link \"Your orders\"", "attributes: none", "box: none, not rendered"]);
   assert.deepEqual(webLlmDescribeElement(page(), "target.3").element.split("\n"), ["t3 <span>", "attributes: none", "box: none, on screen", "context: none"]);
 });
@@ -60,20 +61,20 @@ function site(): { gateway: WebLlmEvidenceGateway; captures: JsonObject[] } {
   return { gateway, captures };
 }
 
-test("describe_element is offered, captures with hidden elements, and describes a handle a search printed", async () => {
+test("describe_element is offered, captures with hidden elements, and describes a hidden element by a handle after an ordinary read kept the visible one's", async () => {
   const { gateway, captures } = site();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const tool = runtime.tools.find((candidate) => candidate.toolId === WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID);
   assert.ok(tool && tool.effect === "observe" && tool.description.length <= 2_000);
-  const found = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.find", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "orders" } });
-  const handle = /^(t\d+) link "Your orders"/mu.exec((found.evidence as { found: string }).found)?.[1];
-  assert.equal(handle, "t2");
+  const read = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.read", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  assert.match(shownPageText(read.evidence), /^t1 button "Account"/mu);
+  const handle = "t2";
   const described = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.describe", toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, value: { target: handle } });
   assert.equal(described.resultCode, "web.inspect.succeeded");
   const element = (described.evidence as { schemaVersion: string; element: string }).element;
   assert.match(element, /^t2 <a> link "Your orders"$/mu);
   assert.match(element, /^attributes: href="https:\/\/shop\.test\/orders" data-testid="menu-orders"$/mu);
-  assert.deepEqual(captures, [{ includeHidden: true, checkWaitMs: 15_000 }, { includeHidden: true, checkWaitMs: 15_000 }]);
+  assert.deepEqual(captures.at(-1), { includeHidden: true, checkWaitMs: 15_000 });
   assert.equal(JSON.stringify(described.evidence).includes("#orders"), false, "no selector reaches the model");
 
   const refused = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.describe.bad", toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, value: { target: "#orders" } });

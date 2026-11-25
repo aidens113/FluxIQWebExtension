@@ -4,6 +4,7 @@ import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import { observeWebLlmResult } from "..";
 import { captureEvidence, selectSession, type WebLlmEvidenceGateway } from "../../capture";
 import type { JsonObject } from "fluxiq/core";
+import { webLlmShownPageText } from "../../page-view";
 
 const capture = (gateway: WebLlmEvidenceGateway) => (request: Parameters<typeof observeWebLlmResult>[1]) => captureEvidence(
   gateway, selectSession(gateway.eligibleSessionIds()), { ...request, toolId: "passive", value: {} }, request.signal, undefined, { includeHidden: true });
@@ -22,11 +23,11 @@ test("publishes hidden ledger state with visibility preserved and no hidden loca
     ] } } };
   } };
   const view = await observeWebLlmResult(capture(gateway), request);
-  assert.match(String(view.page), /Visible status: nine available/u);
-  assert.match(String(view.page), /Ledger: eight available/u);
-  assert.match(String(view.page), /"hidden":true/u);
+  assert.match(String(webLlmShownPageText(view)), /Visible status: nine available/u);
+  assert.match(String(webLlmShownPageText(view)), /Ledger: eight available/u);
+  assert.match(String(webLlmShownPageText(view)), /"hidden":true/u);
   assert.doesNotMatch(JSON.stringify(view), /#ledger|#password|#form-token|#credential|private-marker|hidden-form-marker|abcdefghijklmnopqrstuvwxyz123456/u);
-  const passive = String(view.page).split("PASSIVE NON-RENDERED STATE")[1]!;
+  const passive = String(webLlmShownPageText(view)).split("PASSIVE NON-RENDERED STATE")[1]!;
   assert.doesNotMatch(passive, /"target"|"selector"|"attributes"|\bt\d+\b/u);
   assert.equal(commands.length, 1);
   assert.deepEqual((commands[0] as { parameters: unknown }).parameters, { includeHidden: true });

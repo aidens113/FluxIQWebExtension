@@ -36,9 +36,10 @@ test("repair intent comes only from the exact runtime-retained packet binding, n
   const offer = await resolve(later, shownHandle(later, "Buy now"));
   assert.equal(offer.status, "resolved", JSON.stringify(offer));
   if (offer.status === "resolved") assert.deepEqual(offer.controlIntent, { intent: "accept" });
+  const view = before.pageView as { key: string; lines: Array<{ key: string; text: string }> };
   for (const packet of [
-    { ...before, page: `${String(before.page)}\n(edited)` },
-    { ...before, page: String(before.page).replace("Accept all", "Buy now") },
+    { ...before, pageView: { ...view, lines: [...view.lines, { key: "edited", text: "(edited)" }] } },
+    { ...before, pageView: { ...view, lines: view.lines.map((line) => ({ ...line, text: line.text.replace("Accept all", "Buy now") })) } },
     { schemaVersion: "web-llm-page.v3", page: "PAGE unretained\nURL https://example.test/\nt2 button Accept all" }
   ]) assert.deepEqual(await resolve(packet), { status: "refused", issueCodes: ["web.handle.unknown"] });
 });

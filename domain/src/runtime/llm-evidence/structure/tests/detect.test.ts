@@ -146,7 +146,7 @@ async function detect(runtime: WebAutomationLlmEvidenceRuntime, value: JsonObjec
  */
 /**
  * A stale handle's refusal (t477): the reason and handle, a `next` that says to
- * use the newest view or look again -- or the handle in `instead` when one is
+ * use the newest view or the whole page -- or the handle in `instead` when one is
  * named -- and the page as this call captured it, at `location`.
  */
 function assertStale(result: Awaited<ReturnType<typeof detect>>, reason: string, target: string, location: string, instead: string | undefined) {
@@ -157,7 +157,7 @@ function assertStale(result: Awaited<ReturnType<typeof detect>>, reason: string,
   assert.equal(detail.reason, reason);
   assert.equal(detail.target, target);
   assert.deepEqual(detail.instead, instead === undefined ? undefined : [instead]);
-  assert.match(String(detail.next), instead === undefined ? /look at the page again/u : /handle in instead/u);
+  assert.match(String(detail.next), instead === undefined ? /core\.full_page captures/u : /handle in instead/u);
   assert.equal((evidence.page as JsonObject).location, location);
 }
 
@@ -315,7 +315,7 @@ test("a target handle an inspect issued is bound through its selector, even one 
 
   // A handle the model was never shown.
   assert.deepEqual(await detect(runtime, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9", next: notInPacketNext("t9") }));
-  // The element has left the page. The refusal carries the page as it is now, and says to use its handles or look again (t477).
+  // The element has left the page. The refusal carries the page as it is now, and says to use its handles or the whole page (t477).
   page = { ...page, elements: [next] };
   assertStale(await detect(runtime, { target: "t2" }), "handle_no_longer_on_page", "t2", page.url, undefined);
   // The page itself has moved on. Two elements there have the old one's selector, so no handle is named for it.
@@ -349,28 +349,45 @@ test("a target handle an inspect issued is bound through its selector, even one 
 // Lane C round 10 (`run-mv5uu9g1-9d80deea`, 0034-0044, t477): a trial moved the browser from the unfiltered results to a
 // filtered page, and the model sent the handle of the first result's label from the page before four times, refused
 // `page_moved_since_packet` with nothing more. The same place on the page now had its own handle, which was never named.
-test("a handle from a page the browser has left is refused with the page now and the handle the same place has there", async () => {
-  const label = (href: string): JsonObject => ({ tagName: "a", selector: '[data-testid="card-label"]', accessibleName: "Featured", attributes: { href, "data-testid": "card-label" } });
-  const next: JsonObject = { tagName: "button", selector: '[data-testid="pagination-next"]', visibleText: "Next" };
-  let page: FakePage = withElements(captured("product-catalog-largest"), [next, label("/p/a")]);
-  const { gateway } = fakeGateway(() => page);
+// Since page-diff D2 the same element keeps its handle across pages, and since t1036 a handle the page now still gives
+// to an element binds to it there with no refusal; one the page gives to nothing is refused with the handle the same
+// place has now.
+const cardLabel = (name: string, href: string): JsonObject => ({ tagName: "a", selector: '[data-testid="card-label"]', accessibleName: name, attributes: { href, "data-testid": "card-label" } });
+const pagerNext: JsonObject = { tagName: "button", selector: '[data-testid="pagination-next"]', visibleText: "Next" };
+const MOVED = "http://127.0.0.1:4173/scenarios/product-catalog/?filter=rated";
+
+/** A runtime shown a page with one card label, then moved to MOVED where `after` stands at the label's place; the label's handle. */
+async function movedFrom(after: JsonObject) {
+  let page: FakePage = withElements(captured("product-catalog-largest"), [pagerNext, cardLabel("Featured", "/p/a")]);
+  const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.before", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const old = shownPageLines(inspected.evidence).find((line) => line.kind === "link")!.target;
+  page = withElements(captured("product-catalog-largest"), [pagerNext, after]);
+  page.url = MOVED;
+  commands.length = 0;
+  return { runtime, commands, old };
+}
 
-  // The browser is now on another page whose one element at that selector is another control: another number.
-  const moved = "http://127.0.0.1:4173/scenarios/product-catalog/?filter=rated";
-  const after = withElements(captured("product-catalog-largest"), [next, label("/p/b")]);
-  after.url = moved;
-  page = after;
+test("a handle from a page the browser has left binds where the page now still gives it, with no refusal", async () => {
+  const { runtime, commands, old } = await movedFrom(cardLabel("Featured", "/p/b"));
+  const detected = await detect(runtime, { target: old });
+  assert.equal(detected.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE, JSON.stringify(detected.evidence).slice(0, 600));
+  assert.equal((detected.evidence as WebLlmRepeatingStructure).target, old);
+  // Bound through the page as it is now: the detection is aimed at the element's selector there.
+  assert.deepEqual(commands.at(-1)?.parameters.detectStructure, { selector: '[data-testid="card-label"]' });
+});
+
+test("a handle the page now gives to no element is refused with the page now and the handle the same place has there", async () => {
+  const { runtime, old } = await movedFrom({ tagName: "a", selector: '[data-testid="card-label"]', visibleText: "Clearance outlet", attributes: { href: "/outlet", "data-testid": "card-label", role: "tab" } });
   const refused = await detect(runtime, { target: old });
   const fresh = (((refused.evidence as JsonObject).detail as JsonObject).instead as string[] | undefined)?.[0];
-  assert.ok(fresh !== undefined && fresh !== old, `a fresh handle is named, not ${old}`);
-  assertStale(refused, "page_moved_since_packet", old, moved, fresh);
+  assert.ok(fresh !== undefined && fresh !== old, `another element stands at that place under its own handle, not ${old}`);
+  assertStale(refused, "page_moved_since_packet", old, MOVED, fresh);
   // The handle named is the one the page carried with the refusal shows for that element.
   assert.equal(shownPageLines(refused.evidence).find((line) => line.target === fresh)?.kind, "link");
 
-  // The refusal's page was shown like a look, so the handle it named binds: the detection runs.
+  // The refusal's page was shown like any other, so the handle it named binds: the detection runs.
   const detected = await detect(runtime, { target: fresh! });
   assert.equal(detected.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
   assert.equal((detected.evidence as WebLlmRepeatingStructure).target, fresh);
@@ -523,7 +540,7 @@ test("a page refusal about the target says which way the handle stopped naming o
   page = refusing("target_not_found", { url: LISTING, elements: page.elements! });
   const gone = await detect(runtime, { target });
   assert.deepEqual(gone, rejection("target_unobserved", { reason: "handle_no_longer_on_page", target, next: ((gone.evidence as JsonObject).detail as JsonObject).next! }));
-  assert.match(String(((gone.evidence as JsonObject).detail as JsonObject).next), /look at the page again/u);
+  assert.match(String(((gone.evidence as JsonObject).detail as JsonObject).next), /core\.full_page captures/u);
   page = refusing("ambiguous_target", { url: LISTING, elements: page.elements! });
   assert.deepEqual(await detect(runtime, { target }), rejection("target_unobserved", { reason: "handle_names_several_now", target }));
 
@@ -760,5 +777,5 @@ test("an inferred scroll feed is told as Next page too, and its binding keeps th
 
 /** What a handle no view of this page printed is told (`../rejection-next/next-sentence.ts`, t1034). */
 function notInPacketNext(handle: string): string {
-  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
+  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints -- the page every result carries, with its changes applied, or the whole page core.full_page captures; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
 }

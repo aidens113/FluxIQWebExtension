@@ -345,7 +345,8 @@ test("a press with a handle from before the check's reload is witnessed by the c
   state.cleared = true;
   state.location = FILTERED;
   const fresh = await call(runtime, SNAPSHOT, {});
-  assert.notEqual(shownHandle(fresh.evidence, "Price ↑"), stale, "the filtered page numbers its controls anew");
+  // Page-diff D2: a control that keeps its address and words keeps its handle across the reload, so the handle from before the check is the fresh page's own.
+  assert.equal(shownHandle(fresh.evidence, "Price ↑"), stale, "the reloaded control keeps its handle");
   // The model presses "Price ↑" by the handle the page before the check showed, as Core's stale current view offers it.
   const sorted = await call(runtime, CLICK, { target: { handle: stale } });
   assert.equal(sorted.effectApplied, true, JSON.stringify(sorted.evidence));

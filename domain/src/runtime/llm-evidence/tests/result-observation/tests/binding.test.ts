@@ -4,6 +4,7 @@ import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import { bindWebAutomationLlmEvidenceRuntime, type WebAutomationLlmEvidenceRuntime } from "../../..";
+import { webLlmShownPageText } from "../../../page-view";
 
 test("production binding carries a passive result reader while ordinary snapshots remain rendered-only", async () => {
   let bound: WebAutomationLlmEvidenceRuntime | undefined;
@@ -24,10 +25,10 @@ test("production binding carries a passive result reader while ordinary snapshot
   const result = bound;
   assert.equal(typeof result.observeResult, "function", "bound runtime must carry passive result observation");
   const view = await result.observeResult!({ projectId: "project", flowId: "flow", callId: "result", permission: automationStudioActionPermissionDenied });
-  assert.match(String(view?.page), /Ledger: eight available/u);
+  assert.match(String(webLlmShownPageText(view)), /Ledger: eight available/u);
   assert.deepEqual(commands.map(x => [x.actionType, x.parameters]), [["web.dom.capture_snapshot", { includeHidden: true }]]);
   const ordinary = await bound.executeTool({ projectId: "project", flowId: "flow", callId: "ordinary", toolId: "core.run_node", value: bound.runsNodes!.initial! });
-  assert.doesNotMatch(String((ordinary.evidence as JsonObject).page), /Ledger/u);
+  assert.doesNotMatch(String(webLlmShownPageText(ordinary.evidence)), /Ledger/u);
   // The model's own look carries the check allowance; the passive reader above does not (t885).
   assert.deepEqual(commands[1]?.parameters, { checkWaitMs: 15_000 });
   const refused = await bound.executeTool({ projectId: "project", flowId: "flow", callId: "unissued", toolId: "core.run_node", value: { node: "web.output.dom-click", parameters: { target: { handle: "t2" } }, consequences: [] } });

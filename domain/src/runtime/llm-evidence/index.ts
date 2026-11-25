@@ -52,7 +52,7 @@ export type { WebLlmEvidenceBlocker, WebLlmEvidenceDialog, WebLlmEvidenceFrame, 
 // than by moving it (t200, `./layers.ts`).
 export type { WebLlmLayerMarks } from "./layer-marks";
 // The page as a model reads it (t223): the compact view every page leaves the
-// domain as, `web-llm-page.v3`, and the pieces it is written from.
+// domain as, `web-llm-page.v4` (keyed lines since t1036), and the pieces it is written from.
 export * from "./page-view";
 // Searching the whole page: hidden, off-screen and text-less elements, and any attribute (t223).
 export * from "./page-find";
@@ -144,5 +144,7 @@ export { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 export { WEB_FLOW_SCRIPT_EXAMPLES } from "./script-examples";
 
 export { observeWebLlmResult } from "./result-observation";
+// The whole page on request, as extra lines beside the view (t1036, D5): Core's full-page hook.
+export { webLlmFullPage, type WebLlmFullPageRequest, type WebLlmFullPageRun } from "./full-page";
 // What Core's step log writes to `page.txt`, given to it through the implementation bundle.
 export { webLlmEvidencePageText, webLlmEvidenceSummary } from "./evidence-summary";

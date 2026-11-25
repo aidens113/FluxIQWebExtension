@@ -13,7 +13,7 @@ test("a page with nothing else to say has its title, its URL and its view", () =
     "PAGE \"Kettles \\\"on sale\\\"\"",
     // No link line shares a prefix of the path, so ~ is the origin.
     "URL ~/store/s?k=kettle   (~ = https://shop.test)",
-    "VIEW 1280x720 at the top · 1 elements with visible words or a control, in page order · find_on_page searches the rest"
+    "VIEW 1280x720 at the top · 1 elements with visible words or a control, in page order"
   ]);
   assert.equal(text.split("\n\n")[1], "t1 button \"Go\"", "one blank line, then the element lines");
 });
@@ -24,7 +24,7 @@ test("the view says where the window is scrolled, or nothing of its size without
   const sideways = webLlmPageText(fixturePacket([], { viewport: { width: 390, height: 844, scrollX: 40, scrollY: 0 } }));
   assert.match(sideways, /^VIEW 390x844 scrolled to x=40 y=0 · /mu);
   const unmeasured = webLlmPageText(fixturePacket([{ tag: "span", text: "a" }, { tag: "span", text: "b" }]));
-  assert.match(unmeasured, /^VIEW · 2 elements with visible words or a control, in page order · find_on_page searches the rest$/mu);
+  assert.match(unmeasured, /^VIEW · 2 elements with visible words or a control, in page order$/mu);
   assert.doesNotMatch(unmeasured, /^PAGE/mu, "no title, no PAGE line");
 });
 

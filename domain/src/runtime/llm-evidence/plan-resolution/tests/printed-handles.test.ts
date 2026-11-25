@@ -20,14 +20,13 @@ import { webAutomationOutputNodeId } from "../../../../output-nodes";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID,
-  WEB_LLM_FIND_ON_PAGE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   type WebLlmEvidenceGateway
 } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { createWebLlmStableTargetHandles } from "../../stable-handles";
 import { createWebLlmExtractionHandles } from "../../structure";
-import { webLlmPageText } from "../../page-view";
+import { webLlmPageText, webLlmShownPageText } from "../../page-view";
 import { createWebLlmTargetPackets, resolveWebPlanNodeParameters, type WebPlanNodeResolutionInput } from "..";
 
 const SCOPE = { projectId: "project.printed", flowId: "flow.printed" };
@@ -119,19 +118,19 @@ function site(): WebLlmEvidenceGateway {
   };
 }
 
-test("a handle a search or a description printed is one a candidate may name; one the same capture held unprinted is not", async () => {
+test("a handle a page line or a description printed is one a candidate may name; one the same capture held unprinted is not", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(site());
   const call = (callId: string, toolId: string, value: JsonObject) => runtime.executeTool({ ...SCOPE, callId, toolId, value });
   const candidate = (handle: string) => runtime.resolvePlanNodeParameters(input(CLICK, { target: { handle } }, { handleReach: "view_history" }));
 
   const looked = await call("call.look", WEB_LLM_RUN_NODE_TOOL_ID, { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] });
-  assert.match(String((looked.evidence as { page: string }).page), /^t1 button "Account"$/mu);
-  const found = await call("call.find", WEB_LLM_FIND_ON_PAGE_TOOL_ID, { query: "your orders" });
-  assert.match((found.evidence as { found: string }).found, /^t3 link "Your orders"/mu);
-  assert.doesNotMatch((found.evidence as { found: string }).found, /\bt4\b/u, "the search printed only its match");
-
+  assert.match(String(webLlmShownPageText(looked.evidence)), /^t1 button "Account"$/mu);
   assert.equal((await candidate("t1")).status, "resolved", "printed by the page view");
-  assert.equal((await candidate("t3")).status, "resolved", "printed by the search");
+  assert.equal((await candidate("t3")).status, "refused", "a hidden element the view leaves out is not printed");
+  const hiddenDescribed = await call("call.describe.orders", WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, { target: "t3" });
+  assert.match((hiddenDescribed.evidence as { element: string }).element, /^t3 <a> link "Your orders"/mu);
+  assert.doesNotMatch((hiddenDescribed.evidence as { element: string }).element, /\bt4\b/u, "the description printed only its element");
+  assert.equal((await candidate("t3")).status, "resolved", "printed by the description");
   const unprinted = await candidate("t4");
   assert.equal(unprinted.status, "refused", JSON.stringify(unprinted));
   if (unprinted.status === "refused") assert.equal(unprinted.issueCodes[0], "web.handle.unknown");

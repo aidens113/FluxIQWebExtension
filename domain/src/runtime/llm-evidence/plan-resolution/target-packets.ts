@@ -13,7 +13,8 @@
 //   a bare handle `ambiguous`, never a guess at the newer one.
 //
 // The authoring tools number handles for the whole Flow (`../stable-handles.ts`).
-// Ambiguity checks still apply to packets whose numbering restarted.
+// Ambiguity checks still apply to packets whose numbering restarted. Selectors
+// that differ only in positions are one element moved (`view-merge/`, t1036).
 //
 // A selector the page gave to more than one described element -- every product
 // card's link can share one -- names none of them in particular, so resolving
@@ -182,7 +183,7 @@ import { webLlmPressableTargets } from "./pressable-targets";
 import { webLlmPrintedTargetHandles } from "./printed-handles";
 import { webLlmNotAFieldTargets, type WebLlmNotAFieldKind } from "./typing-targets";
 import { createWebLlmStepViews, webLlmDialogControlPlaces, type WebLlmPlanStepMove, type WebLlmStepViews } from "./step-views";
-import { webPlanAcrossViews } from "./view-merge";
+import { webPlanAcrossViews, webPlanMovedTarget } from "./view-merge";
 import { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
 
 const RETAINED_PAGES_PER_FLOW = 8;
@@ -570,8 +571,9 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
       observedElement: target.observedElement
     });
   }
-  if (seen.size > 1) return { ok: false, code: "ambiguous" };
-  const only = [...seen.values()][0];
+  const moved = seen.size > 1 ? webPlanMovedTarget([...flow.pages.values()].flatMap((page) => page.get(handle) ?? [])) : undefined;
+  if (seen.size > 1 && moved === undefined) return { ok: false, code: "ambiguous" };
+  const only = moved ?? [...seen.values()][0];
   if (only?.shared) return { ok: false, code: "not_unique" };
   if (only !== undefined) return resolved(only, flow.learned);
   return missing(flow.letGo.size > 0 ? "stale" : "unknown", [...flow.renumbered.values()].some((marked) => marked.has(handle)));

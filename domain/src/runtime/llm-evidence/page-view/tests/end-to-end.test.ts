@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { publishedWebLlmPage } from "../published-page";
+import { webLlmPageViewText } from "../joined-text";
 
 const ORIGIN = "http://127.0.0.1:58717";
 const STORE = "/scenarios/everything-store";
@@ -94,10 +95,10 @@ const snapshot = {
 test("a realistic capture becomes the approved compact page", () => {
   const binding = sanitizeWebLlmSnapshotWithBindings(snapshot);
   const published = publishedWebLlmPage(binding.evidence);
-  assert.equal(published.page, [
+  assert.equal(webLlmPageViewText(published.pageView), [
     "PAGE \"Brightaisle.com : wireless earbuds\"",
     "URL ~/s?k=wireless+earbuds   (~ = http://127.0.0.1:58717/scenarios/everything-store)",
-    "VIEW 1280x720 at the top · 22 elements with visible words or a control, in page order · find_on_page searches the rest",
+    "VIEW 1280x720 at the top · 22 elements with visible words or a control, in page order",
     "COVERING t37 \"Cookie preferences\" consent covers 1",
     "DIALOG t37 \"Cookie preferences\" modal consent",
     "",
@@ -136,7 +137,7 @@ test("a realistic capture becomes the approved compact page", () => {
 });
 
 test("each lesson of the format example holds", () => {
-  const page = publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings(snapshot).evidence).page;
+  const page = webLlmPageViewText(publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings(snapshot).evidence).pageView);
   assert.equal(page.split(TITLE).length - 1, 1, "the title once: not as the image's alt, the heading and the link");
   assert.equal(page.split("$39.99").length - 1, 1, "the price once");
   assert.doesNotMatch(page, /"\$"|"39\."|"99"/u, "no price fragments");
@@ -149,7 +150,7 @@ test("the hidden elements did not move a visible element's handle", () => {
   const withoutHidden = { ...snapshot, interactiveElements: snapshot.interactiveElements.filter((element) => element.hidden !== true) };
   // Parents past the two hidden elements point at the same elements as before, so only the hidden ones are removed.
   const shifted = withoutHidden.interactiveElements.map((element) => typeof element.parent === "number" && element.parent > 36 ? { ...element, parent: element.parent - 2 } : element);
-  const plain = publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings({ ...withoutHidden, interactiveElements: shifted }).evidence).page;
-  const searched = publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings(snapshot).evidence).page;
+  const plain = webLlmPageViewText(publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings({ ...withoutHidden, interactiveElements: shifted }).evidence).pageView);
+  const searched = webLlmPageViewText(publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings(snapshot).evidence).pageView);
   assert.equal(searched, plain);
 });

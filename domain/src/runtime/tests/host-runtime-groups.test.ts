@@ -9,6 +9,7 @@ import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../output-nodes";
 import { createWebAutomationHostRuntime, type WebAutomationHostRuntimeGateway } from "../host-runtime";
+import { webLlmShownPageText } from "../llm-evidence";
 
 const CLICK_NODE_ID = webAutomationOutputNodeId("web.dom.click");
 
@@ -45,7 +46,7 @@ test("a snapshot's summary carries each option group and the page's result count
   const ref = await captured(createWebAutomationHostRuntime(seam(snapshot(LIBRARY))), { node: { id: "node.1", definitionId: CLICK_NODE_ID, parameterValues: {} }, attemptId: "a.1", inputs: {}, point: "after_action" });
   assert.deepEqual(ref.summary?.groups, [{ name: "Format", options: [{ words: "Hardcover", count: 40, chosen: true }, { words: "Paperback", count: 12, chosen: false }] }]);
   assert.equal(ref.summary?.resultCount, 40);
-  assert.equal(typeof ref.summary?.page, "string");
+  assert.equal(typeof webLlmShownPageText(ref.summary), "string");
 });
 
 test("a page that shows no group and states no count adds neither key", async () => {

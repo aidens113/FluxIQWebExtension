@@ -21,8 +21,8 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../../output-nodes";
 import {
   createWebAutomationLlmEvidenceRuntime,
+  WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-  WEB_LLM_FIND_ON_PAGE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_STRUCTURE_RESULT_CODE,
   type WebAutomationLlmEvidenceRuntime,
@@ -109,7 +109,7 @@ test("a detection's column `at` that the page view never printed is one a candid
   }
 });
 
-test("a held handle a search only echoed mid-line is not printed by it", async () => {
+test("a held handle a refused description named is not printed by it", async () => {
   const runtime = runtimeOver();
   const looked = await runtime.executeTool({ ...SCOPE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   // Without the view history it is exploration's own resolution, which gates
@@ -134,9 +134,9 @@ test("a held handle a search only echoed mid-line is not printed by it", async (
   }
   assert.ok(unprinted, "some held handle is left out of the view");
 
-  // A search for its spelling echoes it in "N matches for '...'", mid-line, and prints nothing of it.
-  const found = await runtime.executeTool({ ...SCOPE, callId: "call.find", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: unprinted } });
-  assert.match(JSON.stringify(found.evidence), new RegExp(unprinted, "u"), "the search echoed the query");
+  // A description refused for its input names the handle and prints nothing of it.
+  const refused = await runtime.executeTool({ ...SCOPE, callId: "call.describe.bad", toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, value: { target: unprinted, selector: "#x" } });
+  assert.equal(refused.resultCode, "web.action.rejected.invalid_input", JSON.stringify(refused.evidence));
   const answer = await resolve(unprinted, "view_history");
   assert.equal(answer.status, "refused", `${unprinted}: ${JSON.stringify(answer)}`);
   if (answer.status === "refused") assert.equal(answer.issueCodes[0], "web.handle.unknown");

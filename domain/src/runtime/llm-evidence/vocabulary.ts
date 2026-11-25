@@ -27,7 +27,8 @@ export const WEB_LLM_RUN_NODE_TOOL_ID = AUTOMATION_STUDIO_LLM_RUN_NODE_TOOL_ID;
 /**
  * Every tool id this domain puts on the wire.
  *
- * Two are offered today. `core.run_node` runs whichever node of the library the
+ * Two are offered today, and `web.describe_element` beside them (page-diff D15: `web.find_on_page` is retired, the
+ * whole page being the full-page request's). `core.run_node` runs whichever node of the library the
  * call names -- which is now the whole of how a build acts on a page, because
  * the exploratory verbs and the Flow's nodes were made the same thing on
  * 2026-09-22. `web.detect_repeating_structure` stays beside it because an
@@ -59,10 +60,9 @@ export const WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
 export const WEB_LLM_PRESS_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[4];
 export const WEB_LLM_ENTER_FIELD_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[5];
 /**
- * Search the whole page, hidden and off-screen elements included, for words or
- * any attribute, and get the matches as the page view prints them (t223,
- * `./page-find/`). The page view shows what has visible words or is a control;
- * this finds the rest.
+ * Retired (page-diff D15, user 2026-11-25: "completely drop the search command"): the search of the whole page. Kept in the
+ * list like the other retired ids, so a run recorded before still reads (`packages/test-runner`), and offered by nothing
+ * once `./tools.ts` stops registering it. The full-page request shows hidden elements and attributes now.
  */
 export const WEB_LLM_FIND_ON_PAGE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[6];
 /** Everything the page holds about one element, named by its handle (t223, `./page-find/`). */

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { webActionFailureRejectionCode } from "../action-failure";
-import { shownHandle, shownPageLines } from "../page-view/tests/shown-page-lines";
+import { shownHandle, shownPageLines, shownPageText } from "../page-view/tests/shown-page-lines";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import {
   createWebAutomationLlmEvidenceRuntime,
@@ -97,11 +97,11 @@ test("a press behind a modal is refused blocked_by_dialog with the page, whose d
   // The dialog's own control is on the page where the page put it -- last,
   // after forty-five others -- because the page is the whole page (t200), and
   // it is read as the compact view (t223).
-  assert.equal(refusal.page.schemaVersion, "web-llm-page.v3");
+  assert.equal(refusal.page.schemaVersion, "web-llm-page.v4");
   const lines = shownPageLines(refusal);
   assert.equal(lines.length, 46);
   assert.equal(lines[45]!.words, "Not now");
-  assert.match(refusal.page.page, /^DIALOG /mu);
+  assert.match(shownPageText(refusal.page), /^DIALOG /mu);
   assert.equal(JSON.stringify(refused).includes("ember789"), false);
   assert.equal(JSON.stringify(refused).includes("Download"), false);
 

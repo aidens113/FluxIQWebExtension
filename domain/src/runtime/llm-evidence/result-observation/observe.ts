@@ -4,7 +4,7 @@ import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceToolRequest } from "../capture";
 import type { WebLlmSnapshotBinding } from "../sanitize";
-import { publishedWebLlmPage } from "../page-view";
+import { publishedWebLlmPage, type WebLlmPageLine } from "../page-view";
 import { boundedIdentifier } from "../untrusted-json";
 
 type ResultRequest = Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & { permission: AutomationStudioActionPermissionCheck };
@@ -30,5 +30,12 @@ export async function observeWebLlmResult(capture: (request: ResultRequest) => P
     checked: element.checked,
     selectedValue: element.selectedValue
   }));
-  return { ...published, page: hidden.length ? `${published.page}\n\nPASSIVE NON-RENDERED STATE\n${hidden.map((row) => JSON.stringify(row)).join("\n")}` : published.page } as unknown as JsonObject;
+  // Its lines follow the view as extra lines (`../page-view/keyed-line.ts`):
+  // shown with this result, never part of a base a later view is compared with.
+  const passive: WebLlmPageLine[] = hidden.length === 0 ? [] : [
+    { key: "PASSIVE-", text: "", extra: true },
+    { key: "PASSIVE", text: "PASSIVE NON-RENDERED STATE", extra: true },
+    ...hidden.map((row, index) => ({ key: `PASSIVE.${index + 1}`, text: JSON.stringify(row), extra: true as const }))
+  ];
+  return { ...published, pageView: { ...published.pageView, lines: [...published.pageView.lines, ...passive] } } as unknown as JsonObject;
 }

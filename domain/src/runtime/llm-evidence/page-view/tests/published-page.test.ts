@@ -6,21 +6,23 @@ import test from "node:test";
 import { publishedWebLlmPage } from "../published-page";
 import { webLlmPageRetentionKey } from "../retention-key";
 import { WEB_LLM_PAGE_SCHEMA_VERSION } from "../schema-version";
+import { webLlmPageViewText } from "../joined-text";
 import { fixturePacket } from "./packet-fixture";
 
 test("an observation keeps its location and truncated flag, and says everything else in its page", () => {
   const published = publishedWebLlmPage(fixturePacket([{ tag: "button", name: "Go" }], {
     title: "Kettles", frame: { isTop: true }, selectedText: "Gooseneck", dialogs: [{ name: "Cookies", modal: true }]
   }));
-  assert.equal(WEB_LLM_PAGE_SCHEMA_VERSION, "web-llm-page.v3");
-  assert.deepEqual(Object.keys(published), ["schemaVersion", "trust", "location", "truncated", "page", "judgeState"]);
-  assert.equal(published.schemaVersion, "web-llm-page.v3");
+  assert.equal(WEB_LLM_PAGE_SCHEMA_VERSION, "web-llm-page.v4");
+  assert.deepEqual(Object.keys(published), ["schemaVersion", "trust", "location", "truncated", "pageView", "judgeState"]);
+  assert.equal(published.schemaVersion, "web-llm-page.v4");
+  assert.equal(published.pageView.key, "https://shop.test/store/s", "keyed by the normalized location, without its query");
   assert.equal(published.trust, "untrusted-page-evidence");
   assert.equal(published.location, "https://shop.test/store/s?k=kettle", "the exact screened location, which plan resolution compares");
   assert.equal(published.truncated, false);
-  assert.match(published.page, /^PAGE "Kettles"$/mu);
-  assert.match(published.page, /^DIALOG "Cookies" modal$/mu);
-  assert.match(published.page, /^SELECTED "Gooseneck"$/mu);
+  assert.match(webLlmPageViewText(published.pageView), /^PAGE "Kettles"$/mu);
+  assert.match(webLlmPageViewText(published.pageView), /^DIALOG "Cookies" modal$/mu);
+  assert.match(webLlmPageViewText(published.pageView), /^SELECTED "Gooseneck"$/mu);
   for (const dropped of ["title", "frame", "loading", "navigation", "dialogs", "blockedBy", "selectedText", "captureTruncated", "elements"]) {
     assert.equal(dropped in published, false, `${dropped} is no longer a key`);
   }
@@ -62,9 +64,9 @@ test("a failure packet's marks are carried as they are", () => {
   assert.equal(unknown.failedTargetUnknown, true);
 });
 
-test("the retention key is the location, a space, and the page", () => {
+test("the retention key is the location, a space, and the page text", () => {
   const published = publishedWebLlmPage(fixturePacket([{ tag: "button", name: "Go" }]));
-  assert.equal(webLlmPageRetentionKey(published), `${published.location} ${published.page}`);
+  assert.equal(webLlmPageRetentionKey(published), `${published.location} ${webLlmPageViewText(published.pageView)}`);
   const other = publishedWebLlmPage(fixturePacket([{ tag: "button", name: "Stop" }]));
   assert.notEqual(webLlmPageRetentionKey(other), webLlmPageRetentionKey(published));
 });

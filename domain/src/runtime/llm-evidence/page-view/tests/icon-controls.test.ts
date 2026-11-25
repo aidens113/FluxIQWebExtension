@@ -15,6 +15,7 @@ import test from "node:test";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { webLlmLineFacts } from "../line";
 import { publishedWebLlmPage } from "../published-page";
+import { webLlmPageViewText } from "../joined-text";
 import { bodyLines, type FixtureElement } from "./packet-fixture";
 
 const ORIGIN = "http://127.0.0.1:58800";
@@ -52,7 +53,7 @@ function viewBody(page: string): string[] {
 
 test("an unlabelled pressable span holding an svg, after a card's title link, gets a clickable icon line", () => {
   const evidence = sanitizeWebLlmSnapshotWithBindings(snapshot).evidence;
-  const page = publishedWebLlmPage(evidence).page;
+  const page = webLlmPageViewText(publishedWebLlmPage(evidence).pageView);
   const icon = evidence.elements.find((element) => element.tag === "span")!;
   assert.deepEqual(viewBody(page), [
     "[main]",
@@ -69,7 +70,7 @@ test("without its own cursor the same span has no line, which is what the captur
   const before = { ...snapshot, interactiveElements: snapshot.interactiveElements.map((element, index) => (index === 6 ? { ...element, cursor: undefined } : element)) };
   const evidence = sanitizeWebLlmSnapshotWithBindings(before).evidence;
   const icon = evidence.elements.find((element) => element.tag === "span")!;
-  assert.ok(!viewBody(publishedWebLlmPage(evidence).page).some((line) => line.startsWith(`${icon.target} `)));
+  assert.ok(!viewBody(webLlmPageViewText(publishedWebLlmPage(evidence).pageView)).some((line) => line.startsWith(`${icon.target} `)));
 });
 
 test("an icon control is described by the best words the page offers before any class", () => {

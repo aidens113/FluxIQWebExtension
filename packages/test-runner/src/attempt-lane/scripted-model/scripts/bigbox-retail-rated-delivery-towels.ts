@@ -8,7 +8,9 @@ import { scriptedJudgement } from "./judgement.js";
 const READ = "web.output.dom-extract_list";
 const NEXT = "web.output.dom-next_page";
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-type Step = { step: number; actionId: string; callId?: string; input?: unknown };
+type Step = { step: number; actionId: string; callId?: string; disposition?: string; input?: unknown };
+/** The first-visit detours: the framework drafts every act that landed, so these come out of the Flow by an edit. */
+const DETOURS: ReadonlySet<string> = new Set(["consent", "offer", "not-now"]);
 
 type Row = Readonly<Record<string, unknown>>;
 
@@ -109,6 +111,8 @@ const decide: ScriptedReply = (request) => {
   const read = steps.find((step) => step.actionId === READ && step.callId === "read-first");
   const next = steps.find((step) => step.actionId === NEXT);
   if (!read || !next) throw new Error("The draft does not hold its read and next-page steps");
+  const detours = steps.filter((step) => step.callId !== undefined && DETOURS.has(step.callId) && step.disposition === "kept");
+  if (detours.length) return { kind: "evidence_tool_decision", summary: "Take the first-visit detours out of the Flow.", decision: { kind: "amend_draft", amendments: detours.map((step) => ({ step: step.step, change: "drop" })) } };
   if (!JSON.stringify(steps).includes("repeats through")) return { kind: "evidence_tool_decision", summary: "Read and advance until the list itself ends.", decision: { kind: "amend_draft", amendments: [{ step: read.step, change: "repeat", while: next.step, through: next.step }] } };
   if (!made.has("read-rest")) return toolCall("Read from the current page through the end using that loop.", "read-rest", "core.run_flow", { from: read.step });
   const ran = evidence.find((entry) => entry.callId === "read-rest");

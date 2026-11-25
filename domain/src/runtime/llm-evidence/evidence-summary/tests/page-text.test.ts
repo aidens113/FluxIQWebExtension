@@ -70,3 +70,11 @@ test("a registered web bundle is what gives Core's step log its page.txt", async
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("a keyed page view is read back as its lines' text, wherever a result nests it (t1036)", () => {
+  const pageView = { key: "https://shop.example/cart", lines: [{ key: "URL", text: "URL https://shop.example/cart" }, { key: "-", text: "" }, { key: "t1", text: "t1 button \"Checkout\"" }] };
+  const text = "URL https://shop.example/cart\n\nt1 button \"Checkout\"";
+  assert.equal(webLlmEvidencePageText({ schemaVersion: "web-llm-page.v4", pageView }), text);
+  assert.equal(webLlmEvidencePageText({ ok: true, value: { page: { schemaVersion: "web-llm-page.v4", pageView } } }), text);
+  assert.equal(webLlmEvidencePageText({ pageView: { key: "k", lines: [{ key: "t1" }] } }), undefined, "a line without text is no page view");
+});

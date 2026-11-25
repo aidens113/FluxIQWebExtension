@@ -70,9 +70,10 @@ import {
   webLlmPacketTargets,
   WEB_LLM_ROW_CONTEXT_KEYS
 } from "./plan-resolution";
-import { runWebDescribeElement, runWebFindOnPage } from "./page-find";
+import { runWebDescribeElement } from "./page-find";
 import { publishedWebLlmPage, webLlmPageRetentionKey, webLlmResultRetentionKey } from "./page-view";
 import { present } from "./present";
+import { webLlmFullPage } from "./full-page";
 import { observeWebLlmResult } from "./result-observation";
 import { observeWebStartState } from "./start-state";
 import { webLlmClearedControlHandles } from "./way-out-handles";
@@ -101,7 +102,6 @@ import { createWebNodeFrozenExecution, webNodeFinalGateway } from "./node-run/fr
 import {
   webLlmToolRejectionResultCode,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-  WEB_LLM_FIND_ON_PAGE_TOOL_ID,
   WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID
 } from "./vocabulary";
@@ -240,6 +240,21 @@ export function createWebAutomationLlmEvidenceRuntime(
     judgeEvidenceVersion: 1,
     // The page and a read's rows, each replaced only by a newer one of its kind (`./observed-state/`).
     observedStateKeys: WEB_LLM_VIEW_KEYS,
+    // The page itself rides Core's page channel (t1036, D1-D7): whole the first time a window meets its page key, then
+    // only the lines that changed, and `core.full_page` for the whole page with hidden elements and attributes
+    // (`./full-page/`), captured, restamped and kept as every authoring capture is.
+    pageChannel: {
+      member: "pageView",
+      fullPage: webLlmFullPage({
+        capture: (request) => captureEvidence(gateway, selectSession(gateway.eligibleSessionIds()), { ...request, toolId: "core.full_page", value: {} }, request.signal, undefined, { includeHidden: true }),
+        restamp: (request, binding) => stable({ ...request, toolId: "core.full_page", value: {} }, binding),
+        keep: (request, binding, shownPage) => {
+          retain(binding, shownPage);
+          looked({ ...request, toolId: "core.full_page", value: {} }, binding);
+          targetPackets.printed({ projectId: request.projectId, flowId: request.flowId }, shownPage);
+        }
+      })
+    },
     // A live read's kept rows, so a repair's rerun of a blamed read is compared
     // with the rows Core's check named, not only a replay's (R3-3, live run `run-mux6naez-6c20f26e`).
     readRowsKey: "read.extracted",
@@ -322,23 +337,9 @@ export function createWebAutomationLlmEvidenceRuntime(
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "observe",
       },
-      // The page view's other half (t223): the page is shown as one line per
-      // element with visible words or a control, and this finds the rest.
-      // Held to Core's 2,000 characters like the description above.
-      {
-        toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID,
-        description: "Reads only the page you are on, and is not the site's search (the site's own search is a field[search] line). Search this page for any words or attribute, and get every element that matches. The page you are shown is one line per element that has visible words or is a control, in page order: its handle (tN, copied exactly to act on it), its kind (link, button, field, select, checkbox, img, h2, ...), its words in quotes, and its state (=\"value\", checked, open, disabled, covered-by). A link's address follows it, ~ standing for the base the URL line names, and lines such as [main], - 3/16 (an item of a list) and --- below the fold --- say where things are. Everything else -- a closed menu's items, a collapsed panel, an icon with no words, text off screen, an id, class, name, test id, placeholder or any other attribute -- is found here: query is matched, ignoring case, against every element's words, label, value, options and address and every attribute's name and value, hidden elements included. Each match is one line: handle, kind, words, the attribute that matched when the words did not, and where it is (on screen, above, below, off-page, not rendered). Fifty matches to a page, in page order; the last line says how to ask for the next fifty with after. After the exact matches come the close ones, on the same pages, marked near: elements holding most or part of the query's words but not as written, each saying which words it lacks (a shorter name lacking a size is often the item, with the size as an option control). Observes only, and is never a step of the Flow.",
-        inputSchema: {
-          type: "object",
-          properties: { query: { type: "string", minLength: 1, maxLength: 200 }, after: { type: "integer", minimum: 0 } },
-          required: ["query"],
-          additionalProperties: false
-        },
-        effect: "observe",
-      },
       {
         toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID,
-        description: "Everything the page holds about one element, named by the handle a page line or a find_on_page match printed (tN, copied exactly): its line, every attribute whole (id, class, name, test id, aria-*, ...), its box and where that is, and every other field the capture keeps (role, label, value, options, the list item or table cell it sits in, what covers it, ...). Use it when a line is not enough to tell two alike elements apart or to see why a control behaves as it does. Hidden elements a search found can be described too. Observes only, and is never a step of the Flow.",
+        description: "Everything the page holds about one element, named by the handle printed on a page line (tN, copied exactly): its line, every attribute whole (id, class, name, test id, aria-*, ...), its box and where that is, and every other field the capture keeps (role, label, value, options, the list item or table cell it sits in, what covers it, ...). Use it when a line is not enough to tell two alike elements apart or to see why a control behaves as it does. Hidden elements the full page lists can be described too. Observes only, and is never a step of the Flow.",
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, required: ["target"], additionalProperties: false },
         effect: "observe",
       },
@@ -419,7 +420,7 @@ export function createWebAutomationLlmEvidenceRuntime(
             sessionId,
             request: input,
             returned: returnedEvidence.get(evidenceScope(input, sessionId)),
-            // A handle a search or a description printed binds through the views and looks of this page, as a press's does (`./structure/detect.ts`, t903).
+            // A handle a page line or a description printed binds through the views and looks of this page, as a press's does (`./structure/detect.ts`, t903).
             targets: (handle, location) => targetPackets.resolve({ projectId: input.projectId, flowId: input.flowId }, handle, location),
             handles: extractionHandles,
             restamp: (page) => stable(input, page), // A stale handle's refusal names the element's current handle as shown (`./structure/detect.ts`, t477).
@@ -427,17 +428,6 @@ export function createWebAutomationLlmEvidenceRuntime(
           });
           // It only observes, so the state it found is the state it left.
           return answered(withCallStates(detected, observed, observed));
-        }
-        if (input.toolId === WEB_LLM_FIND_ON_PAGE_TOOL_ID) {
-          // A search's capture is restamped and kept as a look, so a handle it
-          // prints is one a press binds (`./page-find/`).
-          return answered(await runWebFindOnPage({
-            gateway,
-            sessionId,
-            request: input,
-            restamp: (binding) => retain(stable(input, binding)),
-            looked: (binding) => looked(input, binding)
-          }));
         }
         if (input.toolId === WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID) {
           return answered(await runWebDescribeElement({

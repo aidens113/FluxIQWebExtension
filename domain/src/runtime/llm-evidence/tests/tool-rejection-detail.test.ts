@@ -284,7 +284,7 @@ test("no refusal carries a word of the page outside the page it hands back, what
   // none.
   const said = refusals.map((refusal) => {
     const { routeState: _left, evidence, ...rest } = refusal as { routeState?: unknown; evidence: { page?: { schemaVersion?: string } } };
-    if (evidence.page !== undefined) assert.equal(evidence.page.schemaVersion, "web-llm-page.v3");
+    if (evidence.page !== undefined) assert.equal(evidence.page.schemaVersion, "web-llm-page.v4");
     const { page: _page, ...spoken } = evidence;
     return { ...rest, evidence: spoken };
   });
@@ -344,12 +344,12 @@ test("the reason is the first the refusal names, and nothing but a code can beco
  * itself without this becoming a second, disagreeing copy.
  */
 // Lane C round 10 (`run-mv5uu9g1-9d80deea`, 0034-0044, t477): a handle from the page before a trial was refused
-// `page_moved_since_packet` four times with no `next`, though the documented move for it is to look again.
-test("a stale handle is told to use the newest view or look again, and to use the handle in instead when one is named", () => {
+// `page_moved_since_packet` four times with no `next`, though the documented move for it is the newest view of the page.
+test("a stale handle is told to use the newest view or the whole page, and to use the handle in instead when one is named", () => {
   for (const reason of ["page_moved_since_packet", "handle_no_longer_on_page"] as const) {
     const bare = rejectionDetail({ reason, target: "t230", instead: undefined, missing: undefined, requestId: undefined });
     assert.match(bare.next ?? "", /names nothing now/u, reason);
-    assert.match(bare.next ?? "", /look at the page again/u, reason);
+    assert.match(bare.next ?? "", /core\.full_page captures/u, reason);
     const named = rejectionDetail({ reason, target: "t230", instead: ["t912"], missing: undefined, requestId: undefined });
     assert.match(named.next ?? "", /handle in instead/u, reason);
     // Passed back through, as a repeated refusal does (`../repeated-refusal.ts`), it says the same.
@@ -361,7 +361,7 @@ test("a stale handle is told to use the newest view or look again, and to use th
 
 test("a detail carrying the resolver's codes is sharpened once, and sharpening it again does not move it", () => {
   const first = rejectionDetail({ reason: "parameters_not_resolved", target: "t3", instead: ["web.handle.stale", "web.handle.stale:target"], missing: undefined, requestId: undefined, startLocation: undefined });
-  // A stale handle says to look again (t477); the resolver's codes in instead are no handle, so it names none.
+  // A stale handle says to use the newest view or the whole page (t477); the resolver's codes in instead are no handle, so it names none.
   assert.match(first.next ?? "", /names nothing now/u);
   assert.deepEqual(first, { reason: "page_moved_since_packet", target: "t3", instead: ["web.handle.stale", "web.handle.stale:target"], next: first.next });
   assert.deepEqual(rejectionDetail({ ...first, instead: first.instead, missing: undefined, requestId: undefined, startLocation: undefined }), first);
@@ -444,7 +444,7 @@ test("a node is named only beside the wrong-control reason, and only from a code
 // and 0067). The reason stays `handle_not_in_packet` -- Core reads that word
 // (its repeat guard and its activity wording) -- and the resolver's code says
 // the rest, which `next` puts in a sentence the model can act on.
-test("a handle the page renumbered by reloading is told the page was reloaded and to look again, and a handle never shown is not", () => {
+test("a handle the page renumbered by reloading is told the page was reloaded and to use the current handle, and a handle never shown is not", () => {
   const renumbered = rejectionDetail({ reason: "parameters_not_resolved", target: "t985", instead: ["web.handle.renumbered_by_reload", "web.handle.renumbered_by_reload:target", 'target: {"handle": "tN"}'] });
   assert.equal(renumbered.reason, "handle_not_in_packet");
   assert.equal(renumbered.target, "t985");
@@ -543,5 +543,5 @@ test("a refusal carrying the site's wait and a returned tab says both after its 
 
 /** What a handle no view of this page printed is told (`../rejection-next/next-sentence.ts`, t1034). */
 function notInPacketNext(handle: string): string {
-  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
+  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints -- the page every result carries, with its changes applied, or the whole page core.full_page captures; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
 }
