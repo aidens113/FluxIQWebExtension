@@ -309,10 +309,10 @@ test("a target handle an inspect issued is bound through its selector, even one 
     { actionType: "web.dom.capture_snapshot", parameters: { checkWaitMs: 15_000 } },
     { actionType: "web.dom.capture_snapshot", parameters: { checkWaitMs: 15_000, detectStructure: { selector: '[data-testid="product-link"]' } } }
   ]);
-  assert.deepEqual(await detect(runtime, { target: "target.8" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t8" }));
+  assert.deepEqual(await detect(runtime, { target: "target.8" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t8", next: notInPacketNext("t8") }));
 
   // A handle the model was never shown.
-  assert.deepEqual(await detect(runtime, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9" }));
+  assert.deepEqual(await detect(runtime, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9", next: notInPacketNext("t9") }));
   // The element has left the page. The refusal carries the page as it is now, and says to use its handles or look again (t477).
   page = { ...page, elements: [next] };
   assertStale(await detect(runtime, { target: "t2" }), "handle_no_longer_on_page", "t2", page.url, undefined);
@@ -755,3 +755,8 @@ test("an inferred scroll feed is told as Next page too, and its binding keeps th
   const kept = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
   assert.deepEqual(kept.ok && kept.binding.extractList.paginate, { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES });
 });
+
+/** What a handle no view of this page printed is told (`../rejection-next/next-sentence.ts`, t1034). */
+function notInPacketNext(handle: string): string {
+  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
+}

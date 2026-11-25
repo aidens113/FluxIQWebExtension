@@ -144,7 +144,7 @@ test("refuses a target no recovery packet issued, or whose page has moved on, wi
   const { registry, commands, setPage } = harness();
   await run(registry, "web.recovery.inspect", {});
 
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9" }));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9", next: notInPacketNext("t9") }));
   // Another Flow's exploration issued nothing this one can name.
   assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" }, "flow.two"), rejection("target_unobserved", { reason: "nothing_observed_yet" }));
   setPage({ url: `${CATALOG.url}page/2`, elements: [LINK], structure: CATALOG.structure });
@@ -224,3 +224,8 @@ test("a page with no list there is an answer, not a stop, and says which kind of
   const unable = harness(undefined, false);
   await assert.rejects(run(unable.registry, WEB_RECOVERY_DETECT_OPTION_ID, {}), /does not declare repeating-structure detection/u);
 });
+
+/** What a handle no view of this page printed is told (`../rejection-next/next-sentence.ts`, t1034). */
+function notInPacketNext(handle: string): string {
+  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
+}
