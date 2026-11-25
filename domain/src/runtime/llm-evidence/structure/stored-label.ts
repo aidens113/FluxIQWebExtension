@@ -4,8 +4,11 @@
 // own label is a generated class path, what the element is and its first
 // item's value -- `link: '<a product title>'`. That label is evidence for one
 // call. A stored schema outlives the call: it is copied into every dataset the
-// read writes, a declaration binds a column by it, and an answer heads its
-// column with it. So it holds no page value (`docs/architecture/retained-extraction.md`):
+// read writes and an answer heads its column with it: it is the column's human
+// name, as Core defines a label. For a column the plan renames the label is the
+// plan's own name (`../plan-resolution/extraction/retained-schema.ts`, t1041,
+// the lead's decision of 2026-11-25, reversing t997); the site's words bind
+// through the name rewrite (`../plan-resolution/extraction/stored-columns.ts`). So it holds no page value (`docs/architecture/retained-extraction.md`):
 // it is the page's own column words where the detection has them -- a header, a
 // test id, an attribute's name, a badge's name -- screened as every page string
 // the domain publishes, and the column's key where the page's label is a

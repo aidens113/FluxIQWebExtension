@@ -129,17 +129,45 @@ export function webAutomationStoredColumnIssues(unread: readonly WebAutomationSt
 
 /** Every distinct name the record output writes for a column, in the order it is written: the schema first, then `process`. */
 function recordOutputNames(recordOutput: JsonValue | undefined): WebAutomationStoredColumnName[] {
-  if (!isJsonObject(recordOutput)) return [];
   const names = new Map<string, WebAutomationStoredColumnName>();
+  visitRecordOutputNames(recordOutput, (written, path) => {
+    if (!names.has(written)) names.set(written, { written, path });
+  });
+  return [...names.values()];
+}
+
+/**
+ * The record output with each name `rename` gives a column (the name written, to the column it means) put where it is written, at
+ * every position `webAutomationStoredColumns` reads a name from. Used to say a column by the key the plan keeps it
+ * under where the record output wrote a name the site gave it (`number_2` for `rating`, t1041), so one reading of
+ * names stays here. The record output given is not changed.
+ */
+export function webAutomationRecordOutputWithNames(recordOutput: JsonValue, rename: (written: string) => string | undefined): JsonValue {
+  const output = structuredClone(recordOutput);
+  visitRecordOutputNames(output, (written, path) => {
+    const to = rename(written);
+    if (to === undefined) return;
+    let holder: JsonValue | undefined = output;
+    for (const step of path.slice(0, -1)) holder = isJsonObject(holder) ? holder[step as string] : Array.isArray(holder) ? holder[step as number] : undefined;
+    const last = path[path.length - 1]!;
+    if (Array.isArray(holder)) holder[last as number] = to;
+    else if (isJsonObject(holder)) holder[last as string] = to;
+  });
+  return output;
+}
+
+/** Calls `visit` with every name the record output writes for a column, repeats included, and where it is written. */
+function visitRecordOutputNames(recordOutput: JsonValue | undefined, visit: (written: string, path: WebAutomationStoredColumnPath) => void): void {
+  if (!isJsonObject(recordOutput)) return;
   const add = (written: JsonValue | undefined, path: WebAutomationStoredColumnPath) => {
-    if (typeof written === "string" && written.trim() !== "" && !names.has(written)) names.set(written, { written, path });
+    if (typeof written === "string" && written.trim() !== "") visit(written, path);
   };
   const schema = recordOutput.schema;
   if (isJsonObject(schema) && Array.isArray(schema.fields)) {
     for (const [index, field] of schema.fields.entries()) if (isJsonObject(field)) add(field.id, ["schema", "fields", index, "id"]);
   }
   const process = recordOutput.process;
-  if (!isJsonObject(process)) return [...names.values()];
+  if (!isJsonObject(process)) return;
   // Core's computed columns (t970), which no read reads.
   const derived = new Set(listed(process.derive).flatMap(([, field]) => (isJsonObject(field) && typeof field.id === "string" ? [field.id] : [])));
   const addRead = (written: JsonValue | undefined, path: WebAutomationStoredColumnPath) => {
@@ -157,7 +185,6 @@ function recordOutputNames(recordOutput: JsonValue | undefined): WebAutomationSt
     for (const key of ["field", "atLeast", "atMost", "lessThan", "greaterThan", "equals"]) addRead(comparison[key], ["process", "compare", index, key]);
   }
   for (const [index, field] of listed(process.derive)) if (isJsonObject(field)) addRead(field.from, ["process", "derive", index, "from"]);
-  return [...names.values()];
 }
 
 /** The read with each column of `names` (field key to author's name) under its new name, everywhere the read names it. */

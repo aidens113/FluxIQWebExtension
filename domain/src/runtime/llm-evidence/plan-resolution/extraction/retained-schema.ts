@@ -6,10 +6,11 @@ import type { WebExtractionColumns } from "./columns";
 /**
  * Structural metadata rebased onto the complete read, without copying samples.
  *
- * A field that reads what a detected column reads keeps that column's stored label -- the page's column words, or
- * the detected key (`../../structure/stored-label.ts`) -- under whatever id the read keeps it: a model's own name for
- * the column (`plus` for `brightaisle_plus`) is its id, and its label is still the site's, so a declaration binds it
- * by either (Core binds an exact id, then a unique label). A field that reads something else is labelled by its id.
+ * A field that reads what a detected column reads and keeps the site's name for it keeps that column's stored label --
+ * the page's column words, or the detected key (`../../structure/stored-label.ts`). A field the plan renames
+ * (`plus` for `brightaisle_plus`), and a field that reads something else, is labelled by its id: the name the person
+ * asked for is the column's human name, and a declaration naming the site's word is rewritten to it
+ * (`./stored-columns.ts`).
  */
 export function webPlanRetainedExtractionSchema(binding: WebLlmExtractionBinding, columns: Extract<WebExtractionColumns, { ok: true }>): AutomationStudioRecordSchema {
   const known = new Map(binding.recordSchema?.fields.map((field) => [field.id, field]));
@@ -23,10 +24,13 @@ export function webPlanRetainedExtractionSchema(binding: WebLlmExtractionBinding
     const handling = metadata?.handling === "exclude" || spec?.handling === "exclude" ? "exclude" : spec?.handling ?? metadata?.handling;
     const semanticType = metadata?.semanticType ?? (spec === undefined ? undefined : webLlmColumnType(id, spec, undefined).type);
     if (same && handling !== "exclude" && handling !== "encrypt" && !identities.has(source)) identities.set(source, id);
-    // A stored label that is only the detected key (a generated class path) gives way to the column's readable name
-    // (`../../structure/column-names.ts`, t1038), so a declaration binds it by that name as well as by its id.
+    // A column `fields` renames is labelled by the plan's own name, the human column name Core heads an answer with
+    // (lead's decision 2026-11-25, which reverses t997); the site's key and readable name bind through the name
+    // rewrite (`./stored-columns.ts`). A column kept under the site's name keeps the page's words, or its readable
+    // name where the stored label is only the detected key (`../../structure/column-names.ts`, t1038).
+    const renamed = id !== source && id !== binding.names?.[source];
     const readable = metadata?.label === source ? binding.names?.[source] : undefined;
-    const label = readable ?? metadata?.label ?? id;
+    const label = renamed ? id : readable ?? metadata?.label ?? id;
     const retained: AutomationStudioRecordField = { id, label, valueType: "string" };
     if (semanticType !== undefined) retained.semanticType = semanticType;
     const mark = metadata?.mark ?? spec?.mark;

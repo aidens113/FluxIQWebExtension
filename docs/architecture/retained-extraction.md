@@ -27,20 +27,25 @@ and its first item's value (`link: '<a title>'`, `structure/field-sample.ts`).
 That label stays in the packet. The stored `recordSchema` label is the page's own
 column words where the detection has non-generated ones (a header, a test id, an
 attribute's name, a badge's name), screened; otherwise it is the field key
-(`structure/stored-label.ts`). A column the model renames that reads the same
-detected column keeps that column's stored label under the model's id: `plus` for
-a detected `brightaisle_plus` is stored with id `plus` and label `brightaisle_plus`,
-or the page's words for that column when it has them. Core binds a declaration's
-name to an exact id first and then to the one field whose label folds to it
-(case and whitespace ignored), so a declaration may name the model's key or the
-site's label, with no Core change. A field whose reading differs from every
-detected column (an alias reading another attribute) is labelled by its id.
+(`structure/stored-label.ts`). A column the model renames is labelled by the model's own name (the label it
+wrote for that id, else the id): Core defines a field's `label` as the human
+column name, the CSV header, and an answer heads its column with it, so the
+person sees `name | price | rating` rather than the site's `link_text | price |
+number_2` (t1041; the lead's decision of 2026-11-25, which reverses the t997
+choice of keeping the site's word in a renamed column's label). A column kept
+under the site's name keeps its stored label as above. The site's words still
+bind: the domain's name rewrite (`plan-resolution/extraction/stored-columns.ts`,
+`webPlanStoredColumns`, with the names from `site-names.ts`) reads a record
+output name that is a renamed column's detected key, readable name or page words
+(case and spacing folded) as the key the plan keeps it under, before any guess,
+so Core binds by id and needs no change. A field whose reading differs from
+every detected column (an alias reading another attribute) is labelled by its id.
 Labels are made unique by `structure/stored-labels.ts`: a label that folds to a
 label already given, or to another field's id, becomes `<label> (<id> <n>)`, so
 a name always binds one field and no value is added to tell two apart. A saved
 read from before t997 may still hold a sample-built label; its reader
 (`plan-resolution/extraction/saved-list.ts`) replaces each one with the field's
-key. Datasets Core already stored keep the labels they were created with.
+key, and a saved step holding a renamed column's old site label re-resolves to the plan's name when it is read. Datasets Core already stored keep the labels they were created with.
 
 Saved bindings without the new schema metadata retain the legacy handle fallback
 when unreadable. An explicitly present invalid or null schema refuses at the
