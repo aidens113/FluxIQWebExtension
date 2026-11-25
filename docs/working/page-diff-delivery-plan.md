@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W3 t1037 phase 1 verified on its branch; W2 t1038 reported (Partial, waits on W1's before-state fix); W1 t1036 finishing (the held-unconfirmed completion). t1034 integrated first.
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W2 t1038 integrated (fluxiq 0.54.20); W1 t1036 reported and being combined with W2 for its merge; W3 t1037 phase 1 verified on its branch, phase 2 after W1.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -43,7 +43,7 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
     - Built. Its P4 replay is in its report, `reports/t1036-page-diff-delivery.md`. Long runs carry 35-45% less input per request (peak 309.5k to 132.8k tokens) and 16-21% fewer uncached tokens.
     - Its scripted bigbox Lab runs showed a blocker: the judge says yes, yet the completion is held unconfirmed (`answer_first.judged_unsure`, with `web_judge.read_invalid` and `judge_evidence.before_state_missing`), so the run repeats its work and never finishes.
     - The lead routed `before_state_missing` to W1. Core `judge-evidence/summary.ts` wants a before state after any act, while `answer-first/witnesses` reads one only before a lasting act. Fix: require it only when a lasting act ran. W1 now owns `answer-first/witnesses/**` and `result-verification/judge-evidence/**`.
-  - **W2, t1038** `native-decisions-one-read`: report in at Partial, nothing committed. Its report is `reports/t1038-native-decisions-one-read.md` in its tree.
+  - **W2, t1038: integrated 2026-11-25 (fluxiq 0.54.20; see the ledger).** Its report as it stood: Its report is `reports/t1038-native-decisions-one-read.md` in its tree.
     - **D12:** decisions go as native tool calls. Anthropic uses tool choice "auto" with one call (forcing is refused with Sonnet/Opus thinking); DeepSeek uses "required". The withdrawn-action allowance is gone from `decision-check.ts`.
     - **D13:** a read detects its own list.
     - **Replay over the 467 recorded decisions:** refusals fall from 25 to 4, and 23 can't be tool calls (18 named a tool that wasn't offered).
@@ -120,6 +120,23 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - W2 (t1038) integrated (fluxiq 0.54.20); lanes merged with dev
+- **Changed:**
+  - D12: decisions go as native tool calls (Anthropic auto with one call, DeepSeek required); `outputSchema` is gone from the user message; the withdrawn-action allowance is gone from `decision-check.ts`.
+  - D13: a read detects its own list and keeps every column.
+  - Older fixes: the read payload kept `rejectedObservations` without their samples (the cause of `web_judge.read_invalid`); the scripted server misrouted a continued judge.
+  - At integration the lead applied W2's replacement for `judge-continues-decider.test.ts`, and updated `read-columns/tests/split-rows-read.test.ts`, which still expected the old refusal words ("this read's handle names" is now "this read names").
+- Validation: the lead's run on the t1038 trees with `dev` merged in.
+  - Core `vitest-groups --groups=parallel,real-sql` over `runtime/llm runtime/models runtime/result-verification framework/automation-service runtime/flow-authoring/bootstrap runtime/project-agents` printed `all groups passed: parallel, real-sql` (real-sql `Test Files 256 passed`, `Tests 1611 passed | 1 skipped`).
+  - `pnpm --filter fluxiq check` exit 0; Core audit `passed (574 warning(s), 903 baselined)`; Core libraries built.
+  - Domain `llm-evidence output-nodes actions/extraction extraction`: first `# tests 2265 # pass 2264 # fail 1` (the split-rows wording), then after the fix `# pass 2265 # fail 0`.
+  - Domain check exit 0, after the first attempt refused on a partly rebuilt Core; test-runner build exit 0; scripted-model and flow-chart tests `# tests 131 # pass 131`.
+  - Downstream audit passed; model-text ok.
+  - `pnpm task finish t1038`: downstream audit passed; Core `pnpm check` passed with its contract tests (`system-prompt`, `extraction-vocabulary`, `issue-feedback`).
+  - Core version bumped to 0.54.20; both `dev`s pushed (Core `3078cc4a3`, downstream `6f32a792b`); shared Core synced to `3078cc4a3` and built.
+- **Then:** `git merge dev` into t1015 (fast-forward) and into t1037 on both sides; each printed `contains dev: yes`. The t1036 lane holds W2 through the branch merge and takes `dev` once its combining worker stops before its Lab run.
+- **Not verified live:** strict-tool limits, how often Sonnet makes no tool call under auto, real token counts.
 
 ### 2026-11-25 - Every lane merged with dev; W2 committed on its branch; t1040 opened
 - Why: the user (angry): "merge all test runs before doing more tests ... MERGE TO DEV AND MERGE TEST LANES AFTER ANY SERIOUS UPDATES". t1039 had reached `dev` while W1 kept running scripted Lab runs on a tree without it.
