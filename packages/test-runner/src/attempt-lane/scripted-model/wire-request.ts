@@ -1,6 +1,9 @@
 /** What a request asks of the model, in the words Core's task kinds use. Anything else is a kind no script expects. */
 export type ScriptedModelKind = string;
 
+/** One decision tool of a request, as the wire carries it. */
+export type ScriptedModelTool = Readonly<{ name: string; description: string }>;
+
 /**
  * One Anthropic Messages request as a script reads it, from the wire and nothing else:
  * `payload` is the task's whole user message (`runtime/llm/provider-task/request-messages.ts`
@@ -14,6 +17,8 @@ export type ScriptedModelRequest = Readonly<{
   /** The output schema asks for the answer as JSON text in `result_json`. */
   jsonText: boolean;
   message: string;
+  /** The tools the request offers, in its order; none for a chat turn. */
+  tools?: readonly ScriptedModelTool[];
   payload: Readonly<Record<string, unknown>> | undefined;
 }>;
 
@@ -62,12 +67,14 @@ export function readScriptedModelRequest(body: string, ordinalOf: (kind: Scripte
   if (wire.stream !== true) throw new Error("The request does not ask for a stream, which every Core call does");
   const last: unknown = wire.messages.at(-1);
   const message = wordsOf(isRecord(last) ? last.content : undefined);
-  // A judge's first ask is the attempt's own conversation with the judge's task as the last block of an earlier
-  // message and a closing word of prose after it: the task is then read from there, never taken for a chat turn.
+  // A judge that continues the decider (`models/providers/anthropic/continuation.ts` in Core) sends the attempt's own
+  // conversation with the judge's task as the last block of an earlier message and a closing word of prose (a `system`
+  // turn) after it: the task is then read from there, never taken for a chat turn.
   const payload = payloadOf(message) ?? continuedPayload(wire.messages.slice(0, -1));
   const kind = payload === undefined ? "panel_command" : typeof payload.taskKind === "string" ? payload.taskKind : "unknown";
   const format = isRecord(wire.output_config) && isRecord(wire.output_config.format) ? wire.output_config.format : undefined;
   const schema = format && isRecord(format.schema) ? format.schema : undefined;
   const properties = schema && isRecord(schema.properties) ? schema.properties : undefined;
-  return Object.freeze({ kind, ordinal: ordinalOf(kind), model: wire.model, jsonText: properties !== undefined && "result_json" in properties, message, payload });
+  const tools = Array.isArray(wire.tools) ? wire.tools.flatMap((tool): ScriptedModelTool[] => (isRecord(tool) && typeof tool.name === "string" ? [{ name: tool.name, description: typeof tool.description === "string" ? tool.description : "" }] : [])) : [];
+  return Object.freeze({ kind, ordinal: ordinalOf(kind), model: wire.model, jsonText: properties !== undefined && "result_json" in properties, message, tools, payload });
 }

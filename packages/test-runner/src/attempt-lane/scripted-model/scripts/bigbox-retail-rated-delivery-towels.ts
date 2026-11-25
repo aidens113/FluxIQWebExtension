@@ -7,15 +7,46 @@ import { scriptedJudgement } from "./judgement.js";
 
 const READ = "web.output.dom-extract_list";
 const NEXT = "web.output.dom-next_page";
-type Field = { key: string; sample?: string; type?: string; kind?: string };
-type Step = { step: number; actionId: string; callId?: string; disposition?: string };
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+type Step = { step: number; actionId: string; callId?: string; disposition?: string; input?: unknown };
 /** The first-visit detours: the framework drafts every act that landed, so these come out of the Flow by an edit. */
 const DETOURS: ReadonlySet<string> = new Set(["consent", "offer", "not-now"]);
 
-function field(fields: readonly Field[], test: (candidate: Field) => boolean, name: string): string {
-  const found = fields.find(test);
-  if (!found) throw new Error(`The product detection has no ${name} field`);
-  return found.key;
+type Row = Readonly<Record<string, unknown>>;
+
+/** The rows a list read answered, wherever its answer holds them: the first list of records with several columns. */
+function columnsOf(value: unknown): readonly Row[] {
+  const seen = (node: unknown): readonly Row[] | undefined => {
+    if (Array.isArray(node)) {
+      if (node.length > 0 && node.every((row) => isRecord(row) && Object.keys(row).length > 1)) return node as readonly Row[];
+      for (const child of node) {
+        const found = seen(child);
+        if (found) return found;
+      }
+    } else if (isRecord(node)) {
+      for (const child of [node.extracted, ...Object.values(node)]) {
+        const found = seen(child);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
+  const rows = seen(value);
+  if (!rows) throw new Error(`The product read answered no rows: ${JSON.stringify(value).slice(0, 400)}`);
+  return rows;
+}
+
+function column(rows: readonly Row[], test: (sample: string) => boolean, name: string): string {
+  for (const row of rows) for (const [key, value] of Object.entries(row)) if (typeof value === "string" && test(value)) return key;
+  throw new Error(`The product read has no ${name} column`);
+}
+
+/** The `extraction.N` the draft's step for the read holds as its list: the one the read issued by detecting it. */
+function extractionOf(steps: readonly Step[]): string {
+  const read = steps.find((step) => step.callId === "read-first");
+  const found = /extraction\.\d+/u.exec(JSON.stringify(read?.input ?? null))?.[0];
+  if (!found) throw new Error(`The draft's read step names no extraction: ${JSON.stringify(read ?? null).slice(0, 400)}`);
+  return found;
 }
 
 function press(request: ScriptedModelRequest, callId: string, words: RegExp, add = true) {
@@ -49,32 +80,35 @@ const decide: ScriptedReply = (request) => {
     if (!sort) throw new Error("The page shows no sort control");
     return toolCall("Choose the store's Highest rating order.", "sort", "core.run_node", { node: "web.output.dom-select", parameters: { target: { handle: sort.handle }, value: "rating_high" }, consequences: [] }, true);
   }
-  const detected = latestOf(request, "web.detect_repeating_structure");
-  if (!detected) {
-    const card = pageLine(page, /link ".*Paper Towels/iu);
-    if (!card) throw new Error("The results show no paper-towel card");
-    return toolCall("Read the shape of the product cards.", "detect", "web.detect_repeating_structure", { target: card.handle });
+  const card = pageLine(page, /link ".*Paper Towels.*\/ip\//iu) ?? pageLine(page, /link ".*Paper Towels/iu);
+  if (!card) throw new Error("The results show no paper-towel card");
+  // One call reads the list the card sits in and keeps every column; this reading only learns the columns' names and records nothing.
+  if (!made.has("columns")) {
+    return toolCall("Read every column of the product list once.", "columns", "core.run_node", {
+      node: READ,
+      parameters: { extractList: { handle: card.handle, minItems: 0 } },
+      consequences: []
+    });
   }
-  if (!Array.isArray(detected.value.fields)) throw new Error(`The product detection failed: ${JSON.stringify(detected.value)}`);
+  const columns = columnsOf(evidence.find((entry) => entry.callId === "columns")?.value);
   if (!made.has("read-first")) {
-    const fields = detected.value.fields as readonly Field[];
-    const name = field(fields, (candidate) => candidate.kind !== "link" && /paper towels/iu.test(candidate.sample ?? ""), "name");
-    const price = field(fields, (candidate) => candidate.type === "currency", "price");
-    const rating = field(fields, (candidate) => /^\d\.\d$/u.test(candidate.sample ?? ""), "rating");
-    const ad = field(fields, (candidate) => /^(?:Sponsored|Ad)$/u.test(candidate.sample ?? ""), "advertisement mark");
-    // The task's processing names these two columns too (`processing-declarations.ts`), so the read keeps them beside the asked ones.
-    const fulfillment = field(fields, (candidate) => /Delivery/u.test(candidate.sample ?? ""), "fulfilment line");
+    const name = column(columns, (sample) => /paper towels/iu.test(sample) && !/^(?:https?:|\/)/u.test(sample), "name");
+    const price = column(columns, (sample) => /^\$\d/u.test(sample), "price");
+    const rating = column(columns, (sample) => /^\d\.\d$/u.test(sample), "rating");
+    const ad = column(columns, (sample) => /^(?:Sponsored|Ad)$/u.test(sample), "advertisement mark");
+    const fulfillment = column(columns, (sample) => /Delivery .*·|· .*Delivery/u.test(sample), "fulfillment");
     return toolCall("Read eligible packs on this page, excluding advertisements and accessories.", "read-first", "core.run_node", {
       node: READ,
       parameters: {
-        extractList: { handle: detected.value.extraction, fields: { name, price, rating, ad, fulfillment }, where: [{ field: ad, is: "present", not: true }, { field: rating, atLeast: 4.5 }, { field: name, contains: ["holder", "dispenser"], not: true }], minItems: 0 },
+        extractList: { handle: card.handle, fields: { name, price, rating, ad, fulfillment }, where: [{ field: ad, is: "present", not: true }, { field: rating, atLeast: 4.5 }, { field: name, contains: ["holder", "dispenser"], not: true }], minItems: 0 },
         recordOutput: { datasetId: "rated-delivery-towels", schema: { schemaVersion: "0.1", fields: ["name", "price", "rating"].map((id) => ({ id, label: id, valueType: "string" })) }, writeMode: "append" }
       }, consequences: []
     }, true);
   }
-  if (!made.has("next")) return toolCall("Move this product list to its next page.", "next", "core.run_node", { node: NEXT, parameters: { nextPage: { list: detected.value.extraction } }, consequences: [] }, true);
+  const extraction = extractionOf(stepsOf(request));
+  if (!made.has("next")) return toolCall("Move this product list to its next page.", "next", "core.run_node", { node: NEXT, parameters: { nextPage: { list: extraction } }, consequences: [] }, true);
   const steps = stepsOf(request);
-  const read = steps.find((step) => step.actionId === READ);
+  const read = steps.find((step) => step.actionId === READ && step.callId === "read-first");
   const next = steps.find((step) => step.actionId === NEXT);
   if (!read || !next) throw new Error("The draft does not hold its read and next-page steps");
   const detours = steps.filter((step) => step.callId !== undefined && DETOURS.has(step.callId) && step.disposition === "kept");

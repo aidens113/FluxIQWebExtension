@@ -236,7 +236,7 @@ its locator `conditions` form is not described. The wait node keeps its id,
 `web.output.dom-wait_for_selector`, because saved Flows name it; its label is
 **Wait For Element** and its description names the element by its target
 handle. The list read's grammar and example and the Next page's grammar and
-example are the handle form only (`extraction.N`, `{list, control?}`); the
+example are the handle form only (a line of the list, `tN`, which the read detects itself since t1038, or `extraction.N`; `{list, control?}`); the
 literal `{item: css, ...}` requests stay valid for a hand-authored Flow and are
 no longer offered. A guard test fails if any catalog text asks for a selector,
 a locator, CSS or XPath (`domain/src/output-nodes/tests/model-facing-catalog.test.ts`).

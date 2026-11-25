@@ -5,7 +5,7 @@ import { scriptedModelScriptFor, type ScriptedModelRequest } from "../../index.j
 const script = scriptedModelScriptFor("bigbox-retail-rated-delivery-towels");
 const reply = script.replies.evidence_tool_decision![0]!;
 type Decision = { kind: string; callId?: string; toolId?: string; input?: { node?: string; parameters?: Record<string, any> }; add?: boolean; amendments?: Array<Record<string, unknown>>; result?: Record<string, unknown> };
-const made = (...ids: string[]) => ids.map((callId) => ({ callId, toolId: "core.run_node", value: { ok: true } }));
+const made = (...ids: string[]) => ids.map((callId) => ({ callId, toolId: "core.run_node", value: { ok: true, extraction: "extraction.2" } }));
 const page = 'URL ~/search?q=paper+towels\nt10 field "Search everything at ValueRidge"\nt11 checkbox "Paper Towels"\nt12 checkbox "Delivery"\nt13 select "Sort by" options "Best match|Highest rating"\nt20 link "Hearthside Paper Towels"';
 
 function decide(shown = page, extra: readonly Record<string, unknown>[] = []): Decision {
@@ -14,8 +14,9 @@ function decide(shown = page, extra: readonly Record<string, unknown>[] = []): D
 }
 
 const reached = () => made("search", "department", "delivery", "sort");
-const detection = { callId: "detect", toolId: "web.detect_repeating_structure", value: { extraction: "extraction.1", fields: [{ key: "title", sample: "Hearthside Paper Towels", type: "text" }, { key: "cost", sample: "$14.47", type: "currency" }, { key: "stars", sample: "4.9", type: "number" }, { key: "paid", sample: "Sponsored", type: "text" }, { key: "lines", sample: "Pickup today · Delivery today", type: "text" }] } };
-const draft = (repeats = false) => ({ callId: "core.flow_draft", toolId: "core.flow_draft", value: { steps: [{ step: 5, actionId: "web.output.dom-extract_list", ...(repeats ? { routing: "repeats through step 6 while step 6 succeeds" } : {}) }, { step: 6, actionId: "web.output.dom-next_page" }] } });
+const COLUMNS = ["text", "price", "number", "text_2", "lines"];
+const detection = { callId: "columns", toolId: "core.run_node", value: { columns: COLUMNS, read: { extracted: [{ text: "Hearthside Paper Towels", price: "$14.47", number: "4.9", text_2: "Sponsored", lines: "Pickup today · Delivery today" }, { text: "Other Paper Towels", price: "$9.00", number: "4.7", text_2: "", lines: "Pickup today" }] }, extraction: "extraction.1" } };
+const draft = (repeats = false) => ({ callId: "core.flow_draft", toolId: "core.flow_draft", value: { steps: [{ step: 5, actionId: "web.output.dom-extract_list", callId: "read-first", input: { parameters: { extractList: { handle: "extraction.2" } } }, ...(repeats ? { routing: "repeats through step 6 while step 6 succeeds" } : {}) }, { step: 6, actionId: "web.output.dom-next_page" }] } });
 
 test("the unchanged realistic task has four chat turns and two judge slots for each attempt", () => {
   assert.equal(script.taskId, "bigbox-retail-rated-delivery-towels");
@@ -48,32 +49,35 @@ test("search, department, delivery and the native Highest rating option are ordi
   assert.equal(sort.add, true);
 });
 
-test("detection uses the current card handle and a failure retains its actual cause", () => {
-  assert.equal(decide(page, reached()).input?.parameters, undefined);
-  assert.equal(decide(page, reached()).toolId, "web.detect_repeating_structure");
+test("one call reads the card's list and keeps every column, and a failure retains its actual cause", () => {
+  const probe = decide(page, reached());
+  assert.equal(probe.callId, "columns");
+  assert.deepEqual(probe.input?.parameters?.extractList, { handle: "t20", minItems: 0 });
+  assert.equal(probe.add, undefined);
   assert.throws(() => decide(page, [...reached(), { ...detection, value: { ok: false, code: "target_unobserved" } }]), /target_unobserved/u);
 });
 
-test("the read keeps the requested columns and the two the task's processing names, and filters by actual detected field keys", () => {
+test("the read keeps the requested columns and the two the task's processing names, and filters by the column names the first read answered", () => {
   const result = decide(page, [...reached(), detection]);
   assert.equal(result.callId, "read-first");
-  assert.deepEqual(result.input?.parameters?.extractList.fields, { name: "title", price: "cost", rating: "stars", ad: "paid", fulfillment: "lines" });
-  assert.deepEqual(result.input?.parameters?.extractList.where, [{ field: "paid", is: "present", not: true }, { field: "stars", atLeast: 4.5 }, { field: "title", contains: ["holder", "dispenser"], not: true }]);
+  assert.deepEqual(result.input?.parameters?.extractList.handle, "t20");
+  assert.deepEqual(result.input?.parameters?.extractList.fields, { name: "text", price: "price", rating: "number", ad: "text_2", fulfillment: "lines" });
+  assert.deepEqual(result.input?.parameters?.extractList.where, [{ field: "text_2", is: "present", not: true }, { field: "number", atLeast: 4.5 }, { field: "text", contains: ["holder", "dispenser"], not: true }]);
   assert.equal(result.input?.parameters?.extractList.paginate, undefined);
   assert.deepEqual(result.input?.parameters?.recordOutput.schema.fields.map((field: { id: string }) => field.id), ["name", "price", "rating"]);
 });
 
 test("the first-visit detours the framework drafted are dropped before the read and next-page steps are repeated", () => {
-  const steps = { callId: "core.flow_draft", toolId: "core.flow_draft", value: { steps: [{ step: 2, actionId: "web.output.dom-click", callId: "consent", disposition: "kept" }, { step: 5, actionId: "web.output.dom-extract_list", callId: "read-first", disposition: "kept" }, { step: 6, actionId: "web.output.dom-click", callId: "offer", disposition: "kept" }, { step: 7, actionId: "web.output.dom-next_page", callId: "next", disposition: "kept" }] } };
+  const steps = { callId: "core.flow_draft", toolId: "core.flow_draft", value: { steps: [{ step: 2, actionId: "web.output.dom-click", callId: "consent", disposition: "kept" }, { step: 5, actionId: "web.output.dom-extract_list", callId: "read-first", disposition: "kept", input: { parameters: { extractList: { handle: "extraction.2" } } } }, { step: 6, actionId: "web.output.dom-click", callId: "offer", disposition: "kept" }, { step: 7, actionId: "web.output.dom-next_page", callId: "next", disposition: "kept" }] } };
   const result = decide(page, [...reached(), detection, ...made("read-first", "next"), steps]);
   assert.deepEqual(result.amendments, [{ step: 2, change: "drop" }, { step: 6, change: "drop" }]);
 });
 
 test("authors read/next as a while-loop that ends only at the list's ended output", () => {
   const first = [...reached(), detection, ...made("read-first")];
-  const next = decide(page, first);
+  const next = decide(page, [...first, draft()]);
   assert.equal(next.input?.node, "web.output.dom-next_page");
-  assert.deepEqual(next.input?.parameters?.nextPage, { list: "extraction.1" });
+  assert.deepEqual(next.input?.parameters?.nextPage, { list: "extraction.2" });
   const loop = decide(page, [...first, ...made("next"), draft()]);
   assert.deepEqual(loop.amendments, [{ step: 5, change: "repeat", while: 6, through: 6 }]);
   assert.equal(Object.hasOwn(loop.amendments?.[0] ?? {}, "most"), false);

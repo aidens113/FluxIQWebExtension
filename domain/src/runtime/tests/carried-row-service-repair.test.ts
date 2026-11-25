@@ -16,6 +16,7 @@ import {
 import { webAutomationManifestOutputs } from "../../io/manifest-definitions";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { currentPageLines } from "./current-page";
+import { deepSeekDecisionReply } from "./deepseek-decision-reply";
 
 const EXTRACT = "web.output.dom-extract_list";
 const TYPE = "web.output.dom-type";
@@ -189,7 +190,7 @@ async function fixture(root: string) {
         assert.equal(typeof faulty?.step, "number");
         decision = { kind: "amend_draft", amendments: [{ step: Number(faulty?.step), change: "drop" }] };
       } else decision = { kind: "complete", result: { summary: "The editor message is right." } };
-      return reply({ kind: "evidence_tool_decision", summary: "Repair only the message.", decision });
+      return deepSeekDecisionReply(body, { kind: "evidence_tool_decision", summary: "Repair only the message.", decision });
     }
   });
   const native = new AutomationStudioNativeNodeRuntime({ permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS, runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES })

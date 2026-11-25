@@ -42,6 +42,8 @@ const COLUMNS: Array<[string, JsonObject]> = [
   ["div_x0531l50_x1r2vv8_x4q0id2_div_x07beeli_x1ksheh_x4q0id2", { kind: "text", selector: `${CARD} > div.x07beeli.x1ksheh.x4q0id2`, required: true }]
 ];
 const LABELS = ["a.x1cf2e2r url", "link: 'Tom Becker'", "a.x0ybvghy url", "text: '1 mutual friend'", "text: '2w'", "button: 'Confirm'", "button: 'Delete'"];
+/** The read keeps each column under its readable name: the two class-path link columns get one, the rest keep keys their labels gave (t1038, `structure/column-names.ts`). */
+const KEPT = COLUMNS.map(([key]) => key === COLUMNS[0]![0] ? "url" : key === `${NAME}_url` ? "url_2" : key);
 const REQUESTS: WebAutomationStructureDetection = {
   ok: true,
   proposal: {
@@ -98,7 +100,7 @@ test("run mv66sc3c's revision 4 is refused at submit, naming mutualFriends and l
     "web.handle.expected.extract_list.handle_fields",
     "web.handle.unknown_field:recordOutput.schema.fields.1.id"
   ]);
-  assert.deepEqual(answer.issues, [{ code: "web.handle.unknown_field", field: "mutualFriends", valid: COLUMNS.map(([key]) => key) }]);
+  assert.deepEqual(answer.issues, [{ code: "web.handle.unknown_field", field: "mutualFriends", valid: KEPT }]);
   // The same field and keys the dispatch gives at run time, as `{code, field, valid}`.
   const bare = await resolve(shown, { extractList: { handle, minItems: 0 } });
   const read = bare.status === "resolved" ? bare.parameters.extractList as JsonObject : {};
@@ -106,7 +108,7 @@ test("run mv66sc3c's revision 4 is refused at submit, naming mutualFriends and l
   assert.equal(dispatch.ok, false);
   if (dispatch.ok) return;
   const issues = (dispatch.result.outputs?.error as JsonObject).issues as JsonObject[];
-  assert.deepEqual(issues, [{ code: "record_output.column_not_read", field: "mutualFriends", valid: COLUMNS.map(([key]) => key) }]);
+  assert.deepEqual(issues, [{ code: "record_output.column_not_read", field: "mutualFriends", valid: KEPT }]);
   assert.deepEqual(answer.issues.map((issue) => [issue.field, issue.valid]), issues.map((issue) => [issue.field, issue.valid]));
 });
 
@@ -134,7 +136,7 @@ test("Core's submit tells the model that revision 4 names mutualFriends, and lis
   assert.ok(told, JSON.stringify(said));
   const sentence = told.message as string;
   assert.match(sentence, /"mutualFriends"/u);
-  for (const [key] of COLUMNS) assert.ok(sentence.includes(`"${key}"`), `${key} in ${sentence}`);
+  for (const key of KEPT) assert.ok(sentence.includes(`"${key}"`), `${key} in ${sentence}`);
   // Structure only: no label, sample or other page text the detection read.
   assert.doesNotMatch(sentence, /Tom Becker|mutual friend\b|Confirm|Delete/u);
 });
@@ -190,7 +192,7 @@ test("the author's names become the read's columns at submit, so the Flow saves 
   assert.equal(dispatch.ok, true);
   if (dispatch.ok) {
     const saved = dispatch.payload.recordOutput as JsonObject;
-    assert.deepEqual(Object.keys(fields), COLUMNS.map(([key]) => key === NAME ? "name" : key));
+    assert.deepEqual(Object.keys(fields), KEPT.map((key) => key === NAME ? "name" : key));
     assert.deepEqual((saved.schema as { fields: { id: string }[] }).fields.map((field) => field.id), Object.keys(fields));
     assert.deepEqual((saved.process as JsonObject).columns, ["name", MUTUAL]);
   }

@@ -62,7 +62,7 @@ test("the record's handle with two of its columns resolves to the card's item an
   assert.notEqual(record.handle, packet.extraction);
 
   const resolved = await resolve(runtime, { handle: record.handle, fields: { item: "span_1", price: "span_2" } });
-  const NOTE = "span_x1s0c7au_x1xkdpo7_xdd3vo9";
+  // The note column's key is a class path, so the read keeps it under its readable name, `text` (t1038).
   assert.deepEqual(resolved, {
     status: "resolved",
     parameters: {
@@ -72,25 +72,26 @@ test("the record's handle with two of its columns resolves to the card's item an
         fields: {
           item: { kind: "text", selector: REPLY_CARD.name, required: false },
           price: { kind: "text", selector: REPLY_CARD.price, required: false },
-          // Retained beside them, optional, under the key the detection gave it.
-          [NOTE]: { kind: "text", selector: REPLY_CARD.note, required: false }
+          // Retained beside them, optional, under its readable name: its key is a class path (t1038, `structure/column-names.ts`).
+          text: { kind: "text", selector: REPLY_CARD.note, required: false }
         },
         // One record reads one row, though the plan wrote no bound.
         maxItems: 1
       },
       recordOutput: {
-        datasetId: `extracted-list-item-price-${NOTE}:459b840cd2b62a0e`,
+        datasetId: "extracted-list-item-price-text:72f515cd266c0e07",
         recordsPath: "result.extracted",
         schema: {
           schemaVersion: "0.1",
           fields: [
             { id: "item", label: "span:1", valueType: "string", required: false },
             { id: "price", label: "span:2", valueType: "string", required: false },
-            { id: NOTE, label: NOTE, valueType: "string", required: false }
+            // Its stored label was its key, which gives way to its readable name.
+            { id: "text", label: "text", valueType: "string", required: false }
           ]
         },
         writeMode: "append",
-        label: `Extracted list: item, price, ${NOTE}`,
+        label: "Extracted list: item, price, text",
         maxRecords: 1000,
         // The answer is the one row, in the two columns the plan asked for.
         process: { limit: 1, columns: ["item", "price"] }
@@ -109,7 +110,7 @@ test("the record's handle with two of its columns resolves to the card's item an
   // The Flow keeps the resolved request; read back as a draft, with each
   // selector withheld, it is the Flow's own list and gets them back.
   const kept = (resolved as { parameters: { extractList: JsonObject } }).parameters.extractList;
-  const draft = { item: kept.item as string, fields: { item: { kind: "text", required: false }, price: { kind: "text", required: false }, [NOTE]: { kind: "text", required: false } }, maxItems: 1 };
+  const draft = { item: kept.item as string, fields: { item: { kind: "text", required: false }, price: { kind: "text", required: false }, text: { kind: "text", required: false } }, maxItems: 1 };
   // It names all three columns, so all three are asked (t1033): the same request, with nothing kept only.
   const { askedFields: _kept, ...asAllAsked } = kept;
   assert.deepEqual(await resolve(runtime, draft), { status: "resolved", parameters: { extractList: asAllAsked } });

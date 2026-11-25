@@ -120,6 +120,13 @@
 // whether the binding kept a pager, so Core's result can say a step whose list
 // shows no pager holds one page instead of its paging being not yet checked
 // (`./list-paging.ts`).
+//
+// **Every column has a readable name a read keeps it under (t1038, D13).** A
+// key the page's words gave is its own name; a class-path key gets one from
+// what its element is and what of it is read (`./column-names.ts`), shown as
+// the field's `name` and kept in the binding's `names`, so a read with no
+// `fields` keeps every column under a name a person would use, and a read may
+// name a column by its name or its key. `readNote` says so.
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -133,6 +140,7 @@ import { screenedPageText } from "../withheld";
 import type { WebLlmEvidenceElement } from "../elements";
 import { webLlmViewTraits } from "../page-view";
 import { webLlmColumnType, type WebLlmColumnType } from "./column-type";
+import { webLlmReadableColumnNames } from "./column-names";
 import { webLlmShownColumn } from "./field-sample";
 import { webLlmCaptureWalk, webLlmFirstItemElements, webLlmFirstItemHandles, webLlmFirstItemLines, type WebLlmFirstItemPages } from "./first-item";
 import type { WebLlmExtractionBinding } from "./handles";
@@ -185,7 +193,8 @@ function nextPageNote(handle: string): string {
  * around the list's own handle. No key, sample or page word: the keys are the packet's own fields.
  */
 function readNote(handle: string): string {
-  return `read this list by naming "${handle}" in extractList with fields written as {your name: key}, each key one listed under fields above; `
+  return `read this list by naming "${handle}" in extractList; it keeps every field above, each under its name (its key where it has no name), `
+    + "and fields, written as {your name: name or key}, is optional and only picks the columns you ask for; "
     + "a key is read only through the handle it is listed under, so a key under cells or record needs that handle. "
     + "To replace a read the draft already holds, run this read as a new step and drop the old read step";
 }
@@ -198,6 +207,11 @@ function continuesNote(label: string): string {
 export type WebLlmStructureField = {
   /** The record field key the handle's extraction writes this column under (D16). */
   key: string;
+  /**
+   * The readable name a read keeps this column under when its `fields` does not name it (`./column-names.ts`, t1038):
+   * present only where the key is a generated class path, and then a read may name the column by either.
+   */
+  name?: string;
   /**
    * What the column is called: a test id, a column header, an attribute name,
    * or an icon badge's accessible name when every item that has the badge gives
@@ -346,7 +360,7 @@ export type WebLlmStructurePacketInput = {
 };
 
 /** A field a handle may read: `shown` is the model's, `stored` the label its stored schema keeps (`./stored-label.ts`). */
-type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; coverage: number; shown: WebLlmStructureField; stored: string };
+type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; coverage: number; shown: WebLlmStructureField; stored: string; name: string };
 
 /**
  * The packet and the bindings, or `undefined` when no field of the run is left
@@ -441,7 +455,7 @@ function readableFields(proposal: WebAutomationExtractionProposal, firstItem: We
   const elements = firstItem === undefined ? new Map<string, WebLlmEvidenceElement>() : webLlmFirstItemElements(proposal, firstItem.detected);
   // A `lines` column's sample is its container's lines joined, as the page reads it.
   const lines = firstItem === undefined ? new Map<string, readonly WebLlmEvidenceElement[]>() : webLlmFirstItemLines(proposal, firstItem.detected);
-  return proposal.fields
+  const fields = proposal.fields
     .filter((field) => field.spec.handling !== "exclude")
     .map((field) => {
       const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec, lines.get(field.key), firstItem?.detected.evidence.elements);
@@ -452,9 +466,18 @@ function readableFields(proposal: WebAutomationExtractionProposal, firstItem: We
         spec: field.spec,
         coverage: field.coverage,
         shown: shownField(field.key, column.label, field.spec.kind, field.coverage, handle, controlItem(firstItem, handle), column.sample, typed),
-        stored: webLlmStoredColumnLabel(field.key, field.label)
+        stored: webLlmStoredColumnLabel(field.key, field.label),
+        page: field.label
       };
     });
+  // Each column's readable name, unique within this list and never another column's key (`./column-names.ts`).
+  const names = webLlmReadableColumnNames(fields.map((field) => ({ key: field.key, pageLabel: field.page, shownLabel: field.shown.label, spec: field.spec })));
+  return fields.map((field): ReadableField => {
+    const name = names[field.key] ?? field.key;
+    const was = field.shown;
+    const shown = name === field.key ? was : present<WebLlmStructureField>({ key: was.key, name, label: was.label, kind: was.kind, coverage: was.coverage, at: was.at, atItem: was.atItem, sample: was.sample, type: was.type, parsed: was.parsed });
+    return { key: field.key, spec: field.spec, coverage: field.coverage, shown, stored: field.stored, name };
+  });
 }
 
 /**
@@ -509,6 +532,8 @@ function boundList(
       now: undefined
     }),
     itemCount: proposal.itemCount,
+    // The readable name a read keeps each column under, where it is not the key (`./column-names.ts`).
+    names: namesOf(readable),
     recordSchema: present<NonNullable<WebLlmExtractionBinding["recordSchema"]>>({
       schemaVersion: "0.1",
       fields: readable.map((field, index) => present<NonNullable<WebLlmExtractionBinding["recordSchema"]>["fields"][number]>({
@@ -526,6 +551,12 @@ function boundList(
   });
 }
 
+/** The names of the columns whose name is not their key, by key; `undefined` when every column's key is its name. */
+function namesOf(readable: readonly ReadableField[]): Record<string, string> | undefined {
+  const renamed = readable.filter((field) => field.name !== field.key);
+  return renamed.length === 0 ? undefined : Object.fromEntries(renamed.map((field) => [field.key, field.name]));
+}
+
 function shownField(
   key: string,
   label: string,
@@ -538,6 +569,8 @@ function shownField(
 ): WebLlmStructureField {
   return present<WebLlmStructureField>({
     key,
+    // Its readable name is given once every column of the list is known (`readableFields`).
+    name: undefined,
     // A label is page structure, but it is still page text: one line,
     // screened, and the key when nothing readable is left of it.
     label: screenedPageText(label) ?? key,

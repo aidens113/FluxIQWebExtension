@@ -339,7 +339,7 @@ test("the list extraction describes its request for a model to write one", () =>
   assert.equal(grammar.includes(String(WEB_AUTOMATION_EXTRACT_MAX_ITEMS)), true);
   // Its example is the handle form a model writes (t432), which plan resolution
   // makes the request the page runs; it is not itself a literal request.
-  assert.equal((extractList?.example as { handle?: unknown } | undefined)?.handle, "extraction.1");
+  assert.equal((extractList?.example as { handle?: unknown } | undefined)?.handle, "t12");
   assert.equal(webAutomationExtractListRequestValue(extractList?.example), undefined);
   // Every definition gets its own copy, so no caller can change another's.
   const again = createWebAutomationOutputNodeDefinition(webAutomationActionDefinitions.find((candidate) => candidate.actionType === "web.dom.extract_list")!);

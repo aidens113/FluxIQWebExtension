@@ -86,7 +86,7 @@ import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRe
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
-import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused, webListReadRecordSchema } from "./list-read";
+import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused, webListReadOwnDetection, webListReadRecordSchema } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNextPageListNamed } from "../action-failure";
 import { webNodeListReadGuard } from "./list-pages";
@@ -302,7 +302,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       ran = prepared.parameters;
       handle = prepared.handle;
     } else {
-    const shaped = webNodeWithHandleShape(parameters);
+    const shaped = await webListReadOwnDetection(run, node.definitionId, webNodeWithHandleShape(parameters), current); // A read names its list by a line of it and detects it itself (`./list-read/own-detection.ts`, t1038).
     // `gatedByCaller`, because this call's permission is decided a few lines
     // below against the page the model is looking at, with a refusal that
     // carries that page back to it. Resolution gates a *step of a Flow*, which

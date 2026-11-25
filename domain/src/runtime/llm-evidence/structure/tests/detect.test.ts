@@ -47,6 +47,8 @@ const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one",
 const PACKET_KEYS = new Set([
   "schemaVersion", "trust", "location", "extraction", "target", "list", "sample", "itemCount", "fields", "pagination", "confidence",
   "key", "label", "kind", "coverage", "at", "atNote", "nextPageNote",
+  // The readable name a read keeps a column under where its key is a class path (t1038, `../column-names.ts`).
+  "name",
   // How the handle is read, and how its read replaces one the draft holds (t1020, `../packet.ts`).
   "readNote",
   // What a column holds and what a list's rows carry (t800, CC1-CC3: `../column-type.ts`, `../list-items/`).
@@ -347,6 +349,8 @@ test("a target handle an inspect issued is bound through its selector, even one 
 // Lane C round 10 (`run-mv5uu9g1-9d80deea`, 0034-0044, t477): a trial moved the browser from the unfiltered results to a
 // filtered page, and the model sent the handle of the first result's label from the page before four times, refused
 // `page_moved_since_packet` with nothing more. The same place on the page now had its own handle, which was never named.
+// Since page-diff D2 (t1036) the same element keeps its handle across pages, so the handle named is the one sent, now
+// printed by the page the refusal carries, and it binds on the next call.
 test("a handle from a page the browser has left is refused with the page now and the handle the same place has there", async () => {
   const label = (href: string): JsonObject => ({ tagName: "a", selector: '[data-testid="card-label"]', accessibleName: "Featured", attributes: { href, "data-testid": "card-label" } });
   const next: JsonObject = { tagName: "button", selector: '[data-testid="pagination-next"]', visibleText: "Next" };
@@ -356,14 +360,14 @@ test("a handle from a page the browser has left is refused with the page now and
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.before", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const old = shownPageLines(inspected.evidence).find((line) => line.kind === "link")!.target;
 
-  // The browser is now on another page whose one element at that selector is another control: another number.
+  // The browser is now on another page whose one element at that selector is the same place: under D2, the same number.
   const moved = "http://127.0.0.1:4173/scenarios/product-catalog/?filter=rated";
   const after = withElements(captured("product-catalog-largest"), [next, label("/p/b")]);
   after.url = moved;
   page = after;
   const refused = await detect(runtime, { target: old });
   const fresh = (((refused.evidence as JsonObject).detail as JsonObject).instead as string[] | undefined)?.[0];
-  assert.ok(fresh !== undefined && fresh !== old, `a fresh handle is named, not ${old}`);
+  assert.equal(fresh, old, "the same place keeps its handle on the new page (page-diff D2)");
   assertStale(refused, "page_moved_since_packet", old, moved, fresh);
   // The handle named is the one the page carried with the refusal shows for that element.
   assert.equal(shownPageLines(refused.evidence).find((line) => line.target === fresh)?.kind, "link");

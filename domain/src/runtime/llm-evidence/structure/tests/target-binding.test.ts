@@ -1,7 +1,8 @@
 // A detection's target, bound and named as a press's is (t903, F2).
 //
 // On `run-mwbkuxqt-c57f42cb` the line the task asked for sat in a closed
-// account menu. A search printed its handle, a read of that handle ran, and
+// account menu. A search printed its handle (since page-diff D15 the whole page
+// does: there is no search), a read of that handle ran, and
 // three detections of it were refused `handle_not_in_packet` (0041, 0058,
 // 0095): detection bound handles only through the last page view. Aimed at the
 // visible account control, detection answered lists nowhere near it -- the home
@@ -16,13 +17,13 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-  WEB_LLM_FIND_ON_PAGE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_STRUCTURE_RESULT_CODE,
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmRepeatingStructure
 } from "../..";
 import { shownHandle } from "../../page-view/tests/shown-page-lines";
+import { webLlmShownPageText } from "../../shown-page";
 
 const SCOPE = { projectId: "project.one", flowId: "flow.one" };
 const URL_ = "http://127.0.0.1:4173/scenarios/catalog/home";
@@ -80,13 +81,14 @@ async function detect(runtime: WebAutomationLlmEvidenceRuntime, target: string) 
   return runtime.executeTool({ ...SCOPE, callId: `call.detect.${calls}`, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target } });
 }
 
-test("a handle only a search printed binds a detection, as it binds a press or a read", async () => {
+test("a handle only the whole page printed binds a detection, as it binds a press or a read", async () => {
   const sent: JsonObject[] = [];
   const runtime = runtimeOver(sent);
   await look(runtime);
-  const found = await runtime.executeTool({ ...SCOPE, callId: "call.find", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "saved lists" } });
-  const line = /^(t\d+) p "Saved lists/mu.exec(String((found.evidence as JsonObject).found))?.[1];
-  assert.ok(line !== undefined, String((found.evidence as JsonObject).found));
+  const full = await runtime.pageChannel?.fullPage?.({ ...SCOPE, callId: "call.full", permission: async () => ({ permitted: true as const }) });
+  const text = webLlmShownPageText(full) ?? "";
+  const line = /^(t\d+) hidden <p> "Saved lists/mu.exec(text)?.[1];
+  assert.ok(line !== undefined, text);
 
   sent.length = 0;
   const detected = await detect(runtime, line);

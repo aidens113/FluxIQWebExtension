@@ -105,6 +105,11 @@ export type WebLlmExtractionBinding = {
   /** How many items the structure held when it was detected. */
   itemCount: number;
   /**
+   * The readable name a read keeps a column under, by detected key, for each column whose key is a generated class
+   * path (`./column-names.ts`, t1038); a column absent here is kept under its key. A read may name a column by either.
+   */
+  names?: Record<string, string>;
+  /**
    * Set when the handle names one record: the record beside a run, a label/value
    * receipt, or a lone record where nothing repeats (`./packet.ts`). A plan that
    * names it reads at most one row (`plan-resolution/extraction/slot.ts`): two
@@ -269,6 +274,7 @@ function withoutHandle(binding: Omit<WebLlmExtractionBinding, "handle">): Omit<W
     extractList: binding.extractList,
     recordSchema: binding.recordSchema,
     itemCount: binding.itemCount,
+    names: binding.names,
     oneRecord: binding.oneRecord
   });
 }
@@ -287,6 +293,7 @@ function copyBinding(binding: WebLlmExtractionBindingRetained): WebLlmExtraction
     extractList: structuredClone(binding.extractList),
     recordSchema: binding.recordSchema === undefined ? undefined : structuredClone(binding.recordSchema),
     itemCount: binding.itemCount,
+    names: binding.names === undefined ? undefined : { ...binding.names },
     oneRecord: binding.oneRecord,
     container: binding.container,
     listKey: binding.listKey ?? webLlmExtractionListKey(binding)
