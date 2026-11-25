@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16, three workstreams). Dispatching: briefs written, W3 (t1037) opening first, W1 (t1036) and W2 (t1038) after t1034 merges.
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W3 t1037 phase 1 verified on its branch; W2 t1038 reported (Partial, waits on W1's before-state fix); W1 t1036 finishing (the held-unconfirmed completion). t1034 integrated first.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -25,28 +25,36 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - **Replies fail to parse.** 25 were unreadable (5.4%), because the reply is a JSON string inside JSON.
   - **Withdrawing looks changes the offered tools.** That happened 18 times, breaking the cache each time.
   - **Judging.** 22 judge calls cost $1.29 and accepted nothing; 7 judged a state unchanged since the last no.
-- **State at the end of 2026-11-25:**
-  - Planned and decided; nothing of W1-W3 is built or dispatched.
-  - Nothing paid is running. Every leftover shell and `tail` of the session was stopped.
-  - Round spend of 11-24/25 is about $9.20 of $50: five Haiku bigbox runs and one Sonnet run.
+- **State (2026-11-25, second session): all three workstreams dispatched.**
+  - **t1034 integrated** (fluxiq 0.54.19; both `dev`s pushed; ledger in the data-first plan). The shared Core sync followed.
+  - **W1, t1036** `page-diff-delivery`: sub-supervisor (Opus) running in `fxwork/t1036/{!FluxIQWebExtension,!FluxIQ}`, moved to both `dev` heads (Core 0.54.19) before dispatch.
+    - Built. Its P4 replay is in its report, `reports/t1036-page-diff-delivery.md`. Long runs carry 35-45% less input per request (peak 309.5k to 132.8k tokens) and 16-21% fewer uncached tokens.
+    - Its scripted bigbox Lab runs showed a blocker: the judge says yes, yet the completion is held unconfirmed (`answer_first.judged_unsure`, with `web_judge.read_invalid` and `judge_evidence.before_state_missing`), so the run repeats its work and never finishes.
+    - The lead routed `before_state_missing` to W1. Core `judge-evidence/summary.ts` wants a before state after any act, while `answer-first/witnesses` reads one only before a lasting act. Fix: require it only when a lasting act ran. W1 now owns `answer-first/witnesses/**` and `result-verification/judge-evidence/**`.
+  - **W2, t1038** `native-decisions-one-read`: report in at Partial, nothing committed. Its report is `reports/t1038-native-decisions-one-read.md` in its tree.
+    - **D12:** decisions go as native tool calls. Anthropic uses tool choice "auto" with one call (forcing is refused with Sonnet/Opus thinking); DeepSeek uses "required". The withdrawn-action allowance is gone from `decision-check.ts`.
+    - **D13:** a read detects its own list.
+    - **Replay over the 467 recorded decisions:** refusals fall from 25 to 4, and 23 can't be tool calls (18 named a tool that wasn't offered).
+    - **Scripted run-mwvu78hj:** 33 decisions on one fixed tool list, 12 reads, no detections, judges yes. It still ends unjudged on `before_state_missing`, which is W1's fix above.
+    - **Fixed two older defects:** the read payload kept `rejectedObservations` without their samples (the cause of `read_invalid`; `node-run/rejected-rows.ts`), and the scripted server misrouted a continued judge.
+    - **At its integration:** apply its replacement for W1's `judge-continues-decider.test.ts` (`test-runs/t1038/a1-judge-continues-decider.patch-target.ts`).
+    - **For W3 phase 2:** `EXTRACTION_FROM` in `flow-authoring/bootstrap/plan/issue-feedback.ts` still says "Detect the structure first", and an auto-drafted read must copy the stored handle and binding.
+  - **t1039 integrated** (data-first ledger): every Lab attempt writes `flow.png` of its Flow or draft, with input, real examples and output.
+  - **W3, t1037** `auto-draft`: **phase 1 done, lead-verified and committed on its branch, with both `dev` heads merged in; not merged into `dev`** (inert until wired, so not yet a complete unit). `draft/compose/` drafts from the calls that worked, with reasons for each step left out. `draft/amendment/edits/` holds six edits (keep, drop, result, repeat, unrepeat, bind), only under `draftEdits: "framework"`, which nothing sets yet. Replay: every landed act is in the framework draft on all five runs, and two runs gain the result read the model lacked. Phase 2 hook points are in its report `reports/t1037-auto-draft.md` (in its tree), "Where phase 2 hooks in": mostly W1's `evidence-loop.ts`, plus `loop-configuration.ts`, `evidence-loop-decision.ts` and W1's `result-columns.ts`; after the switch, delete the 13-edit grammar. Its open questions: no host signal for "lasting" (it errs toward keeping), and looks still listed in the draft entry. Phase 2 starts when W1 merges: the lead merges `dev` in and resumes the same sub-supervisor.
+  - Briefs: `page-diff-delivery-plan/briefs/` (`common.md` binds all three). Ids follow `pnpm task start`'s order, so W3 is t1037 and W2 is t1038.
+  - Nothing paid is running. Round spend of 11-24/25 is about $9.20 of $50: five Haiku bigbox runs and one Sonnet run.
   - **The Sonnet run** (run-mwvgjb8c, $0.80, 90 s, 22 calls) set the store, read the cart as the result, and the product check accepted it. But the oracle marked the answer wrong: it added "Loftwell 1 Roll $1.97, 4.6 stars", which is not the cheapest towel that qualifies for pickup today at that store (`missingActs`, `unaskedChanges: cart:5520104:pickup`). Our judge, on Sonnet, accepted it, so judging pickup availability is an open defect.
-  - Open task trees:
-    - **t1034** (done by its worker, not yet lead-verified: the lead's check run was stopped at wrap-up; the worker's checks passed). It covers the asked table's own list, 3 unreadable-reply causes, and no judge over a table that cannot be the asked one. Trees `fxwork/t1034/{!FluxIQWebExtension,!FluxIQ}`; report `reports/t1034-asked-table-own-list.md` in that tree.
-    - **t1036** `page-diff-delivery`: created for W1 at dev 63ba8dc13-era with its own Core; empty.
-    - **t1015** `paid-bigbox`: the live lane, slot 1.
-    - **t1035**: the audit tree; its files are on dev; to abandon.
-- **Dispatch (2026-11-25, second session):** briefs written under `page-diff-delivery-plan/briefs/`. W3 opens first as t1037 `auto-draft`, since it shares no file with t1034; W2 becomes t1038 `native-decisions-one-read` (ids follow `pnpm task start`'s order). t1034 is under the lead's own check run (Core consumers of every changed module, both typechecks, both audits, domain `llm-evidence`, model text).
+  - Other open trees: **t1015** `paid-bigbox` (the live lane, slot 1); **t1035** (the audit tree; its files are on dev; to abandon).
 - **Next (in order):**
-  1. Verify t1034 (Core groups over `completion`, `tests/endings`, `llm/{anthropic,decision-handlers,decision-reading,verification-defects}`, `result-verification`; domain `llm-evidence`; both checks; audits), merge Core dev into it (bump to 0.54.19), finish both, push, sync the shared Core.
-  2. Merge dev into t1036 (both sides); start t1038 (W2) with `--core`.
-  3. Dispatch W1 (t1036) and W2 (t1038) sub-supervisors (Opus); W3 (t1037) is dispatched as soon as its tree opens. W3 builds its own paths now and wires into the loop after W1 merges.
-  4. Integrate, offline proof (P4), then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others.
-  5. Also open: the judge accepting a wrong item on pickup availability (above); the answer-contract column reader misreading "columns title only"; fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`; `pinned-calls-job-board` setup wait; `tool-rejection.ts` at 799 lines; a Flow playback guard for list location (a wire change); a second full sweep and `main` promotion (`main` has not moved).
+  1. Verify each sub-supervisor's report and re-run its acceptance checks; commit on its branch.
+  2. Integrate W1 first (merge `dev`, narrow checks, finish both sides, bump Core), then tell W3 to wire in; then W2 merges `dev` (it drops `withdrawn-actions.ts`'s last import) and integrates; then W3.
+  3. Offline proof across the integrated tree (P4), then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others.
+  4. Also open: the judge accepting a wrong item on pickup availability (above); the answer-contract column reader misreading "columns title only"; fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`; `pinned-calls-job-board` setup wait; `tool-rejection.ts` at 799 lines; a Flow playback guard for list location (a wire change); a second full sweep and `main` promotion (`main` has not moved).
 - **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
 
 ## Decisions
 
-- **D1. One page channel, owned by Core, domain-neutral.** Core keeps, per run (never persisted across runs), the last page state it delivered to the model for each page key. The domain names the key (its normalized address; the domain decides what is "the same page") and supplies a page view as keyed lines: each line is a stable element key plus its text. Core diffs keyed lines (added, removed, changed) and never parses page words.
+- **D1. One page channel, owned by Core, domain-neutral.** Core keeps, per run (never persisted across runs), the last page state it delivered to the model for each page key. The domain names the key (its normalized address; the domain decides what is "the same page"; on the web the address is the URL "not including the ? params" (user, 2026-11-25), so a filter, sort or page change on the same path arrives as a diff, and a route fragment `#/` stays (lead's reading)) and supplies a page view as keyed lines: each line is a stable element key plus its text. Core diffs keyed lines (added, removed, changed) and never parses page words.
 - **D2. Stable element keys across captures within a run.** A diff is only meaningful if an element keeps its key from capture to capture. The domain and content script give an element the same handle for the whole run when it is the same element (by its fingerprint and place, never by its words alone). This also ends stale-handle refusals (`target_unobserved`) for elements that never left the page.
 - **D3. Delivery rides on every result.**
   - A round opening carries the page: the whole view the first time the run meets that key, otherwise the diff since the last delivery.
@@ -100,6 +108,19 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - t1037 (W3) phase 1 verified on its branch
+- Changed: Core `runtime/flow-authoring/draft/{compose,amendment/edits}/**` (new), draft `step`/`entry`/amendment files, `decision-handlers/amendment.ts` (gated on `draftEdits: "framework"`), `draft-amendment-feedback`, `held-amendments.ts`, `ui/activity-action/refusal-words.ts`; reports `reports/t1037-auto-draft.md` and `reports/t1037/{compose,edits,replay}.md`. Committed as Core `adbafa688` and merged with Core dev (`8a3e79572`); downstream reports merged with dev (`c14eccd4b`).
+- Validation: the lead's run on the merged tree. Core groups over `flow-authoring`, `runtime/llm`, `ui/activity-action` and `answer-first`: parallel `Tests  8230 passed | 2 skipped (8232)`, real-sql `Tests  526 passed (526)`, "all groups passed". `pnpm --filter fluxiq check` exit 0. Core audit `passed (573 warning(s), 903 baselined)`. Downstream audit `passed (261 warning(s), 551 baselined)`. `model-text: ok`.
+- Follow-up: phase 2 after W1 merges.
+
+### 2026-11-25 - Dispatch: briefs, t1034 first, three sub-supervisors
+- Changed:
+  - Briefs `page-diff-delivery-plan/briefs/{common,t1036-page-diff-delivery,t1037-auto-draft,t1038-native-decisions-one-read}.md`. A read-only search mapped each workstream's files. One file was shared, `anthropic/decision-check.ts`, and was given to W2, with the look-withdrawal interface fixed in both briefs.
+  - t1034 verified and integrated first, because it touched the decision reading, the adapter and look withdrawal that W1 and W2 rebuild (ledger in the data-first plan).
+  - W3 (t1037) opened and was dispatched before t1034 merged, since it shares no file with it. W1 (t1036) and W2 (t1038) started from the post-t1034 heads.
+- Validation: `node scripts/structure-audit.mjs` on dev after the briefs: `structure-audit: passed (261 warning(s), 551 baselined)`.
+- Follow-up: the sub-supervisors' reports; integration order W1, W2, W3.
 
 ### 2026-11-25 - Handoff: decided and planned, not dispatched
 - Changed:

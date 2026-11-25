@@ -27,6 +27,8 @@ export type LabCommand =
   | { command: "auth"; operation: "status" | "clear" }
   | { command: "clone-cache"; operation: "status" | "refresh" | "clear" }
   | { command: "inspect"; runId: string }
+  // The Flow of an existing run directory drawn as flow.png and flow.svg beside its evidence (`flow-chart/`, t1039).
+  | { command: "flow-chart"; runDirectory: string; outDirectory?: string }
   | { command: "compare"; baselineReport: string; candidateReport: string; sharedLoad: boolean }
   | { command: "compare"; halvesReport: string }
   | { command: "interactive"; scenarioId: string; seed?: number; target?: TargetMode; workspace?: string; freshLogin?: true; livePanel?: false }
@@ -171,6 +173,11 @@ export function parseLabCommand(argv: string[]): LabCommand {
   }
   if (command === "attempt") return parseAttemptCommand(args);
   if (command === "inspect") return { command, runId: positional(args, 0, "run ID") };
+  if (command === "flow-chart") {
+    rejectUnknownOptions(args, ["--out"]);
+    const out = option(args, "--out");
+    return { command, runDirectory: positional(args, 0, "run directory"), ...(out === undefined ? {} : { outDirectory: out }) };
+  }
   if (command === "recovery-matrix") return parseRecoveryMatrixCommand(args);
   if (command === "compare") {
     rejectUnknownOptions(args, ["--halves", "--sequential"]);
@@ -185,7 +192,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] [--model-reset-only (with --llm-task create-flow --authoring-mode candidate: no Lab fixture reset between trials)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--variant ID] [--seed N] [--no-tracing] | attempt <scenario> --task ID --authoring-mode answer-first (--scripted-model | --live-llm --llm-max-cost-usd N) [--attempts N (default 4: one exploring attempt and three deterministic; 1 is diagnosis only and never passes) [--restart-between (N >= 2)]] [--dry-run] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] [--model-reset-only (with --llm-task create-flow --authoring-mode candidate: no Lab fixture reset between trials)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--variant ID] [--seed N] [--no-tracing] | attempt <scenario> --task ID --authoring-mode answer-first (--scripted-model | --live-llm --llm-max-cost-usd N) [--attempts N (default 4: one exploring attempt and three deterministic; 1 is diagnosis only and never passes) [--restart-between (N >= 2)]] [--dry-run] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | flow-chart <run-dir> [--out DIR] | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
 }
 
 /**

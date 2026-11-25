@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_LLM_MODEL, llmProviderForModel, resolveScenarioWorkflow, type AttemptStandIn } from "@fluxiq-web-extension/test-contracts";
 import type { LabCommand } from "../../commands.js";
@@ -30,6 +30,7 @@ import { offlineSourceFingerprint } from "../scoreboard/index.js";
 import { readRecordedArtifact, recordedModelSide, type ReplayDivergence } from "../../recorded-attempt-replay/index.js";
 import { awaitPanelAnswerTurn } from "./panel-answer-port.js";
 import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
+import { writeFlowChart } from "../../flow-chart/index.js";
 import { writeUnscoredAttemptEvidence, type ScoredAttempt } from "./unscored-attempt-evidence.js";
 import { AttemptCostReporter } from "./cost-progress/index.js";
 
@@ -255,6 +256,8 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
         // What the Lab's person did at each check this attempt handed it, or nothing where the scenario declares none.
         await writeFile(path.join(folder, "person-hand-offs.json"), JSON.stringify(person.snapshotOf(attempt.ordinal) ?? null, null, 2));
         await pictureOfAnswer(opened, attempt, folder, log);
+        // This attempt's Flow as it stands now (the saved Flow, or the newest draft), from the shared step files; it never fails or holds up the attempt.
+        await writeFlowChart(folder, { runDirectory: evidence, evidenceDirectory: folder, attempt: attempt.ordinal, saved: attempt.outcome.saved?.flowId !== undefined }).catch(/* best-effort: a picture never decides the run */ () => undefined);
       },
     });
     // Each attempt's score is kept as it ends, so a series that ends early still keeps what its earlier attempts were judged to be.
@@ -337,6 +340,11 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     process.stdout.write(`${JSON.stringify({ status: "not_judged", task: command.taskId, why: personFailed ? "LabPersonAnswerFailed" : error instanceof Error ? error.name : "Error", evidence })}\n`);
     if (session) await captureBrowserWindows(session.browser.browser, session.browser.profileDir).then((taken) => (taken.bytes ? writeFile(path.join(evidence, "stopped.jpg"), taken.bytes) : undefined)).catch(/* best-effort: a picture never decides the run */ () => undefined);
   } finally {
+    // The Flow as it stands, drawn from the step files before the run ends, whatever ended it; it never fails or holds up the run.
+    await Promise.resolve().then(async () => {
+      const line = await writeFlowChart(evidence);
+      await appendFile(path.join(evidence, "attempt-report.txt"), `${line}\n`).catch(/* best-effort: the report may not exist on a run that stopped early */ () => undefined);
+    }).catch(/* best-effort: a picture never decides the run */ () => undefined);
     try {
       await session?.close();
       if (side.replay) await writeFile(path.join(evidence, "recorded-replay.json"), JSON.stringify({ proof: "recorded_model_fixture_runtime", ...side.replay(), domainEvidenceReplayed: false, fullAttemptAccepted: false }, null, 2));

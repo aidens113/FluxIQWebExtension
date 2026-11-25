@@ -76,7 +76,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
     - **t1027/t1028 integrated (0.54.15):** the durable-reconcile failure was a Core race, not a regression. The answer timer kept running after a required command's answer was accepted and, on a busy machine, revoked the proof as "Outcome uncertain" though the browser had answered. It is now cancelled on acceptance (`client-gateway/service/command-ledger/dispatch.ts`). No press is sent twice, and an answer that never came still ends unknown. `main` is promoted after a clean full sweep.
 - **Next: the work continues in [page-diff-delivery-plan.md](./page-diff-delivery-plan.md)** (2026-11-25: Sonnet for Lab runs, page diffs and no look, no page search, the framework drafting the Flow), whose Current State "Next" lists every resume step. A Sonnet bigbox run (run-mwvgjb8c, $0.80) reached a result the oracle marked wrong (an item not ready for pickup today). The round total is about $9.20 of $50.
 - **Fourth bigbox run (run-mwv5m906, on fluxiq 0.54.16): stopped by the lead at step 142, $0.20, with 0 unreadable replies.** It set the store, found the cheapest qualifying item (Softerra 6 Double Rolls, $9.47), added it, kept the dish soap and answered the table. Two judges said yes (0.8, no defects), but each completion was `judged_unsure`: the Flow's result was the 14-row product listing (step 6), not the cart. The result line also said "paging after unplaced read 1 not yet checked" for a list that cannot page, and the model chased it for 24 decisions. t1032 is diagnosing. t1031 (merged) makes a model-sent Flow run explain its own start-page landing to the watcher. Round total about $5.20 of $50.
-- **Fifth bigbox run (run-mwveg5ls, on fluxiq 0.54.18 with t1029-t1033): stopped by the lead at step 291, $3.15.** It got the furthest yet: the store set, and Kindleaf Unbleached 4 Rolls ($7.48, 4.5 stars, pickup today) added. Two judges said no, fairly: the cheapest was not established from the reads, and no cart table was produced. The model then read the cart with a search-results handle, was refused as a repeat and `target_unobserved`, never detected the cart's own list, and circled (8 identical detections, 40 decisions without an act). There were 11 judge calls and 6 unreadable replies. t1034 is diagnosing. Round total about $8.40 of $50.
+- **Fifth bigbox run (run-mwveg5ls, on fluxiq 0.54.18 with t1029-t1033): stopped by the lead at step 291, $3.15.** It got the furthest yet: the store set, and Kindleaf Unbleached 4 Rolls ($7.48, 4.5 stars, pickup today) added. Two judges said no, fairly: the cheapest was not established from the reads, and no cart table was produced. The model then read the cart with a search-results handle, was refused as a repeat and `target_unobserved`, never detected the cart's own list, and circled (8 identical detections, 40 decisions without an act). There were 11 judge calls and 6 unreadable replies. t1034 fixed the cart-list, unreadable-reply and judge-cost causes offline (integrated 2026-11-25, fluxiq 0.54.19; see the ledger). Round total about $8.40 of $50.
 - **Open (t1020):** a rerun in attempt 2 onward that changes a read's handle, when the draft comes from a saved Flow, may resolve against the step's saved binding (`plan-resolution/extraction/slot.ts`); untested.
 - **Open follow-ups, not blocking:**
   - narrow the P4 memory tolerance to store I/O errors;
@@ -224,6 +224,38 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-25 - t1039 integrated: a chart of the Flow for every Lab attempt
+- Why: the user asked (2026-11-25) for "a flow chart type thing saved as a png for each run", showing "the CURRENT draft/finalized flow that it created regardless of whether it works or not, with each node shown", and "the input and (a real example) output through the system".
+- Changed: `packages/test-runner/src/flow-chart/` draws from the run's step files. Every `lab attempt` writes `flow.png` and `flow.svg` per attempt (`attempt-N/`) and at the run's end, whatever ended it. The chart shows:
+  - the instruction and its parameters;
+  - every node, with a real example of what passed through it;
+  - loops and the result read;
+  - the output: the answer shown to the person, or else the answer offered and the completion check's outcome.
+
+  `pnpm lab flow-chart <run dir>` charts any past run. Report: `data-first-simplification-plan/reports/t1039.md`.
+- Validation: the lead's run on the t1039 tree:
+  - Flow-chart, lab-attempt-command and attempt-series tests: `# tests 40 # pass 40 # fail 0`.
+  - test-runner `tsc --noEmit` exit 0; structure audit passed.
+  - `time pnpm lab flow-chart <t1036 run-mwvsbihx>` drew 13 nodes in `real 0m1.600s`.
+  - The lead viewed the charts of mwveg5ls and run-mwvsbihx.
+  - `pnpm task finish` audit passed.
+- Not verified: the hook inside a real `lab attempt` (the first Lab run on a tree with it shows it).
+- Already visible in the charts:
+  - mwveg5ls's result read is the search list, not the cart.
+  - The scripted run's draft holds the same page read three times, and its offered rows hold a duplicate.
+
+### 2026-11-25 - t1034 integrated (fluxiq 0.54.19): the asked table is read from its own list; three unreadable replies; no judge over another table
+- Changed (from run-mwveg5ls, debug `language-driven-flow-loop-plan/debugs/run-mwveg5ls-0266dfe0.md`):
+  - Core result-columns words: the asked table is a list of its own, detected on the page that shows it and read through that detection's handle. Domain `rejection-next`: an element handle names one element; `handle_not_in_packet` now has a `next`.
+  - Unreadable replies: a call's `add`/`act`/`place` written inside `input` is lifted out (`decision-reading/own-keys-lifted.ts`); a look named while looks are withdrawn reaches the loop's named refusal (`decision-handlers/withdrawn-actions.ts`, `anthropic/decision-check.ts`; both go with the page-diff plan's W1/W2); a blank `column`, `value` or `step` in a judge defect is not written (`verification-defects/well-formed.ts`).
+  - Rows lacking a named column are refused before any judge (`completion/asked-table.ts`, `answer_first.not_asked_table`).
+- Validation: the lead's run on the t1034 trees:
+  - Core groups over every consumer of the changed modules (`runtime/llm`, `runtime/result-verification`, `answer-first`, `runtime/project-agents`, `models/providers/anthropic`): parallel `Tests  1 failed | 6339 passed (6340)`, real-sql `Tests  525 passed (525)`. The one failure, `diagnosis-channel.test.ts` "drops a malformed defect...", asserted the old blank-column rule, outside the folders the worker ran; the lead kept the malformed case with a value and added the blank-column case: `Tests  43 passed (43)` over it and `verification-defects`.
+  - `pnpm --filter fluxiq check` exit 0; Core audit passed; domain `llm-evidence` `# tests 1778 # pass 1778 # fail 0`; domain check exit 0; downstream audit passed; model-text ok.
+  - `pnpm task finish` both sides: downstream audit passed; Core `pnpm check` passed with its contract tests.
+- Follow-up: an enum miss's rule can run past `MISS_RULE`'s bound (`models/providers/anthropic/schema-misses.ts`, `models/failures/reply-account.ts`): handed to the page-diff plan's W2 (t1038). Untested live: whether the model now detects the cart's own list.
+
 
 ### 2026-11-24 - t1033 integrated: a kept column nobody asked for never makes a read press or refuse
 - Changed: the read request carries `askedFields` (domain `actions/extraction/{request,read-request,schema}.ts`, `output-nodes/extract-list/declared-columns.ts`, `plan-resolution/extraction/slot.ts`, `structure/packet.ts`). The content reader (`list-reader.ts`, `item-record/`) expands and requires full text only for asked fields and those a where, dedupe or sort names; kept fields are read as shown. Saved Flows without `askedFields` are unchanged. In the merge with t1029's spec edit, the lead kept the stricter oracle (beside `identity`, only detection-offered keys).
