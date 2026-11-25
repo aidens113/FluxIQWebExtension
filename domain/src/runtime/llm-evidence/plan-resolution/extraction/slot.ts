@@ -160,7 +160,8 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (elsewhere) return refused("web.handle.unknown", [...elsewhere.path, "location"]);
 
   const fieldsKey = value.columns !== undefined ? "columns" : "fields";
-  const columns = keptWebExtractionColumns(value[fieldsKey], binding.extractList.fields, [fieldsKey]);
+  // Every column is kept, those `fields` does not ask for under their readable names (`../../structure/column-names.ts`, t1038).
+  const columns = keptWebExtractionColumns(value[fieldsKey], binding.extractList.fields, [fieldsKey], binding.names);
   if (!columns.ok) return refusedWith(columns);
   // Conditions are read against the columns the *detection* found, because the
   // mark that tells a sponsored card from an organic one is exactly the column
@@ -169,7 +170,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   // `{field: "rating", atLeast: 4}` in the words it has itself just written.
   const where = value.where === undefined
     ? undefined
-    : keptWebExtractionConditions(value.where, { detected: binding.extractList.fields, kept: columns.fields }, ["where"]);
+    : keptWebExtractionConditions(value.where, { detected: binding.extractList.fields, kept: columns.fields, names: binding.names }, ["where"]);
   if (where !== undefined && !where.ok) return refusedWith(where);
 
   const request: JsonObject = { item: binding.extractList.item, fields: columns.fields as unknown as JsonObject };

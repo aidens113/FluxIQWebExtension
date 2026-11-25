@@ -37,6 +37,6 @@ export const webLlmListMadeOn = {
     const list = target === undefined ? "the list this read names" : `the list ${target}`;
     const where = path === undefined ? "its own page" : `the page it was detected on (${path})`;
     return `Nothing was kept: ${list} is not on this page, so the rows the read found here belong to another list. `
-      + `Go back to ${where} and read it there; or, for a list this page shows, detect it here and read it by the handle that detection issues.`;
+      + `Go back to ${where} and read it there; or, for a list this page shows, read it here by the handle of a line inside it.`;
   }
 };

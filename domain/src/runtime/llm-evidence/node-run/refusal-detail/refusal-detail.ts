@@ -10,8 +10,8 @@ import { webLlmUnknownColumn } from "../../rejection-next";
 import { rejectionDetail } from "../../tool-rejection";
 import { webRunnableNodeIds } from "../catalog";
 
-/** The shapes a handle is written in, as a refusal names them (`../handle-shape/` puts a bare one into the first). */
-const HANDLE_SHAPE = ['target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'];
+/** The shapes a handle is written in, as a refusal names them (`../handle-shape/` puts a bare one into the first); a read names its list by a line of it (`../list-read/own-detection.ts`, t1038). */
+const HANDLE_SHAPE = ['target: {"handle": "tN"}', 'extractList: {"handle": "tN"}'];
 
 /** The details a node run's refusal of its own call carries. */
 export const webNodeRefusalDetail = {

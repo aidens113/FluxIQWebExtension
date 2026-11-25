@@ -78,7 +78,8 @@ test("the record beside the run gets a second handle, and the packet names it wi
     fields: [
       { key: "span_1", label: "span:1", kind: "text", coverage: 1 },
       { key: "span_2", label: "span:2", kind: "text", coverage: 1 },
-      { key: "span_x1s0c7au_x1xkdpo7_xdd3vo9", label: "span.x1s0c7au.x1xkdpo7.xdd3vo9", kind: "text", coverage: 1 }
+      // A class-path column is read under a readable name (t1038, `../column-names.ts`).
+      { key: "span_x1s0c7au_x1xkdpo7_xdd3vo9", name: "text", label: "span.x1s0c7au.x1xkdpo7.xdd3vo9", kind: "text", coverage: 1 }
     ],
     note: "record is the one item you aimed at, read as a one-row table; name its handle in extractList when the instruction is about that item"
   });
@@ -105,6 +106,7 @@ test("the record beside the run gets a second handle, and the packet names it wi
       }
     },
     itemCount: 1,
+    names: { span_x1s0c7au_x1xkdpo7_xdd3vo9: "text" },
     recordSchema: { schemaVersion: "0.1", fields: [
       { id: "span_1", label: "span:1", valueType: "string" },
       { id: "span_2", label: "span:2", valueType: "string" },

@@ -38,6 +38,7 @@ import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import { canonicalWebLlmTargetHandle } from "../../handle-spelling";
 import { webPlanHandleKind } from "../handle-tokens";
+import { isWebAutomationExtractFieldKey } from "../../../../actions/extraction";
 
 /** Where a saved read keeps what its handle stood for. A denied evidence key (`../../denied-keys.ts`). */
 export const WEB_PLAN_EXTRACTION_BINDING_KEY = "extractionBinding";
@@ -63,8 +64,25 @@ export function webPlanSavedExtractionBinding(value: Record<string, unknown>, ha
     extractList: structuredClone(list) as unknown as WebLlmExtractionBinding["extractList"],
     recordSchema: schema?.ok ? withoutSampledLabels(schema.schema) : undefined,
     itemCount: saved.itemCount,
+    names: savedNames(saved.names, list.fields),
     oneRecord: saved.oneRecord === true ? true : undefined
   });
+}
+
+/**
+ * The readable column names a saved read holds (`../../structure/column-names.ts`, t1038): each a well-formed key for
+ * a column the list holds, none naming two columns or another column's key. Anything else -- or none, as every read
+ * saved before t1038 holds -- is no names, and the read keeps its columns under their keys as it did.
+ */
+function savedNames(names: unknown, fields: Record<string, unknown>): Record<string, string> | undefined {
+  if (!isJsonRecord(names)) return undefined;
+  const entries = Object.entries(names);
+  const given = new Set<string>();
+  for (const [key, name] of entries) {
+    if (!Object.hasOwn(fields, key) || typeof name !== "string" || !isWebAutomationExtractFieldKey(name) || given.has(name) || (name !== key && Object.hasOwn(fields, name))) return undefined;
+    given.add(name);
+  }
+  return entries.length === 0 ? undefined : Object.fromEntries(entries) as Record<string, string>;
 }
 
 /**
@@ -92,7 +110,7 @@ export function webPlanWithExtractionBinding(parameters: JsonObject, scope: WebL
   const found = extractions.resolve(scope, handle);
   if (!found.ok) return parameters;
   const { binding } = found;
-  const held = present<Omit<WebLlmExtractionBinding, "handle">>({ location: binding.location, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, extractList: binding.extractList, recordSchema: binding.recordSchema, itemCount: binding.itemCount, oneRecord: binding.oneRecord });
+  const held = present<Omit<WebLlmExtractionBinding, "handle">>({ location: binding.location, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, extractList: binding.extractList, recordSchema: binding.recordSchema, itemCount: binding.itemCount, names: binding.names, oneRecord: binding.oneRecord });
   const saved = structuredClone(parameters);
   const savedList = saved[LIST_PARAMETER] as JsonObject;
   if (record !== undefined) {

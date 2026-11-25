@@ -6,3 +6,5 @@ export { webListReadCode } from "./code";
 export { webListReadConditionAccount } from "./condition-account";
 export { webListReadFlowRefused } from "./flow-refused";
 export { webListReadRecordSchema } from "./record-schema";
+// A read that names its list by a line of it, its words or nothing detects that list itself (t1038, D13).
+export { webListReadOwnDetection } from "./own-detection";

@@ -12,7 +12,7 @@ import test from "node:test";
 import { automationStudioRecordConditionHolds } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListDispatch } from "../../../../output-nodes/extract-list";
-import type { WebAutomationExtractItemCondition } from "../../../../actions/extraction";
+import { webAutomationExtractionSummaryValue, type WebAutomationExtractItemCondition } from "../../../../actions/extraction";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -284,4 +284,23 @@ test("the rejected-rows note says a row that only mentions an excluded thing is 
   assert.match(WEB_NODE_REJECTED_ROWS_NOTE, /is the excluded kind of thing, not one whose text only mentions it/u);
   assert.match(WEB_NODE_REJECTED_ROWS_NOTE, /an item sold with or including an excluded part is still the item/u);
   assert.doesNotMatch(WEB_NODE_REJECTED_ROWS_NOTE, /earbud|charging/iu);
+});
+
+test("the recorded payload leaves the observations out with their samples, so its summary stays readable (t1038)", () => {
+  // run-mwvsd9t9-bb5ae1fe: observations left behind without the samples they are indexed by made the whole summary
+  // unreadable, and the judge held the read as `web_judge.read_invalid`.
+  const payload: JsonObject = {
+    extracted: [{ name: "kept one", rating: "4.9" }],
+    extraction: {
+      recordCount: 1, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["name", "rating", "ad"],
+      conditions: { applied: 3, kept: 1, rejected: [2, 0], unfiltered: false },
+      rejectedSamples: [[{ name: "sponsored one", rating: "4.1", ad: "Sponsored" }, { name: "sponsored two", rating: "4.0", ad: "Sponsored" }], []],
+      rejectedSamplesAlone: [2, 0],
+      rejectedObservations: [[{ conditionIndex: 0, state: "present", source: "field", page: 1, item: 2, readKind: "text", value: "Sponsored" }, { conditionIndex: 0, state: "present", source: "field", page: 1, item: 3, readKind: "text", value: "Sponsored" }], []]
+    }
+  };
+  const { recorded } = webNodeReadWithRejectedRows(payload);
+  const extraction = (recorded as JsonObject).extraction as JsonObject;
+  assert.equal(Object.hasOwn(extraction, "rejectedObservations"), false);
+  assert.notEqual(webAutomationExtractionSummaryValue(extraction), undefined);
 });

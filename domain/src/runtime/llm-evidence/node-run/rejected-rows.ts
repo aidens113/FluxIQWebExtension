@@ -56,7 +56,8 @@ import {
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY,
   webAutomationExtractListRequestRead,
   type WebAutomationExtractItemCondition,
-  type WebAutomationExtractionRejectedRow
+  type WebAutomationExtractionRejectedRow,
+  type WebAutomationExtractionSummary
 } from "../../../actions/extraction";
 import { webNodeNumericTextFilterSentence } from "./numeric-text-filter";
 import { present } from "../present";
@@ -165,7 +166,10 @@ export function webNodeReadWithRejectedRows(payload: JsonValue | undefined, para
 
 /** The summary members that carry the samples, which the recorded payload leaves out. */
 // The marks go the same way: page words that reach Core's verdict (`rejectedMarks`, t810), not the recorded payload the builder's evidence keeps.
-const SAMPLE_KEYS: readonly string[] = [WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY, WEB_AUTOMATION_EXTRACT_REJECTED_MARKS_KEY];
+// So do the observations: each is indexed by its sample (`actions/extraction/summary.ts` reads them only against
+// `rejectedSamples`), so left behind without them they made the whole summary unreadable, and the judge held every
+// read whose conditions turned rows down as `web_judge.read_invalid` (t1038, run-mwvsd9t9-bb5ae1fe).
+const SAMPLE_KEYS: readonly string[] = [WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY, WEB_AUTOMATION_EXTRACT_REJECTED_MARKS_KEY, "rejectedObservations" satisfies keyof WebAutomationExtractionSummary];
 
 /** The payload with `extraction.rejectedSamples` and its alone counts removed, and unchanged when it carries neither. */
 function withoutSamples(payload: JsonValue | undefined): JsonValue | undefined {

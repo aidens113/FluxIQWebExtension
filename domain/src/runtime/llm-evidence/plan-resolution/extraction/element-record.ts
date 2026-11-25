@@ -90,6 +90,8 @@ export function webPlanElementRecord(
     extractList: { item: bound.selector, fields: elementColumns(bound.element) },
     recordSchema: undefined,
     itemCount: 1,
+    // An element's columns are named text, value and link already.
+    names: undefined,
     oneRecord: true
   }));
   const written: JsonObject = {};
