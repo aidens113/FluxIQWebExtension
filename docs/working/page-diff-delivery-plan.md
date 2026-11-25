@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W3 t1037 phase 1 verified on its branch; W1 t1036 and W2 t1038 building (Opus sub-supervisors). t1034 integrated first.
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W3 t1037 phase 1 verified on its branch; W2 t1038 reported (Partial, waits on W1's before-state fix); W1 t1036 finishing (the held-unconfirmed completion). t1034 integrated first.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -28,7 +28,18 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
 - **State (2026-11-25, second session): all three workstreams dispatched.**
   - **t1034 integrated** (fluxiq 0.54.19; both `dev`s pushed; ledger in the data-first plan). The shared Core sync followed.
   - **W1, t1036** `page-diff-delivery`: sub-supervisor (Opus) running in `fxwork/t1036/{!FluxIQWebExtension,!FluxIQ}`, moved to both `dev` heads (Core 0.54.19) before dispatch.
-  - **W2, t1038** `native-decisions-one-read`: sub-supervisor (Opus) running in `fxwork/t1038/{...}`, opened from both `dev` heads (Core 0.54.19).
+    - Built. Its P4 replay is in its report, `reports/t1036-page-diff-delivery.md`. Long runs carry 35-45% less input per request (peak 309.5k to 132.8k tokens) and 16-21% fewer uncached tokens.
+    - Its scripted bigbox Lab runs showed a blocker: the judge says yes, yet the completion is held unconfirmed (`answer_first.judged_unsure`, with `web_judge.read_invalid` and `judge_evidence.before_state_missing`), so the run repeats its work and never finishes.
+    - The lead routed `before_state_missing` to W1. Core `judge-evidence/summary.ts` wants a before state after any act, while `answer-first/witnesses` reads one only before a lasting act. Fix: require it only when a lasting act ran. W1 now owns `answer-first/witnesses/**` and `result-verification/judge-evidence/**`.
+  - **W2, t1038** `native-decisions-one-read`: report in at Partial, nothing committed. Its report is `reports/t1038-native-decisions-one-read.md` in its tree.
+    - **D12:** decisions go as native tool calls. Anthropic uses tool choice "auto" with one call (forcing is refused with Sonnet/Opus thinking); DeepSeek uses "required". The withdrawn-action allowance is gone from `decision-check.ts`.
+    - **D13:** a read detects its own list.
+    - **Replay over the 467 recorded decisions:** refusals fall from 25 to 4, and 23 can't be tool calls (18 named a tool that wasn't offered).
+    - **Scripted run-mwvu78hj:** 33 decisions on one fixed tool list, 12 reads, no detections, judges yes. It still ends unjudged on `before_state_missing`, which is W1's fix above.
+    - **Fixed two older defects:** the read payload kept `rejectedObservations` without their samples (the cause of `read_invalid`; `node-run/rejected-rows.ts`), and the scripted server misrouted a continued judge.
+    - **At its integration:** apply its replacement for W1's `judge-continues-decider.test.ts` (`test-runs/t1038/a1-judge-continues-decider.patch-target.ts`).
+    - **For W3 phase 2:** `EXTRACTION_FROM` in `flow-authoring/bootstrap/plan/issue-feedback.ts` still says "Detect the structure first", and an auto-drafted read must copy the stored handle and binding.
+  - **t1039 integrated** (data-first ledger): every Lab attempt writes `flow.png` of its Flow or draft, with input, real examples and output.
   - **W3, t1037** `auto-draft`: **phase 1 done, lead-verified and committed on its branch, with both `dev` heads merged in; not merged into `dev`** (inert until wired, so not yet a complete unit). `draft/compose/` drafts from the calls that worked, with reasons for each step left out. `draft/amendment/edits/` holds six edits (keep, drop, result, repeat, unrepeat, bind), only under `draftEdits: "framework"`, which nothing sets yet. Replay: every landed act is in the framework draft on all five runs, and two runs gain the result read the model lacked. Phase 2 hook points are in its report `reports/t1037-auto-draft.md` (in its tree), "Where phase 2 hooks in": mostly W1's `evidence-loop.ts`, plus `loop-configuration.ts`, `evidence-loop-decision.ts` and W1's `result-columns.ts`; after the switch, delete the 13-edit grammar. Its open questions: no host signal for "lasting" (it errs toward keeping), and looks still listed in the draft entry. Phase 2 starts when W1 merges: the lead merges `dev` in and resumes the same sub-supervisor.
   - Briefs: `page-diff-delivery-plan/briefs/` (`common.md` binds all three). Ids follow `pnpm task start`'s order, so W3 is t1037 and W2 is t1038.
   - Nothing paid is running. Round spend of 11-24/25 is about $9.20 of $50: five Haiku bigbox runs and one Sonnet run.
