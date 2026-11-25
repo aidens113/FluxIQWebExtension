@@ -29,7 +29,7 @@ test("settings-only probe cannot load provider secrets or reach generation", asy
 });
 test("readiness-only command strips provider secrets and stops at the exact GET gate", async () => {
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as { scripts?: Record<string, string> };
-  assert.equal(packageJson.scripts?.["demo:llm:readiness"], "node scripts/run-demo-llm-creation-readiness.mjs");
+  assert.equal(packageJson.scripts?.["demo:llm:readiness"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/run-demo-llm-creation-readiness.mjs");
   const source = await readFile(path.join(root, "scripts", "run-demo-llm-creation-readiness.mjs"), "utf8");
   assert.match(source, /withoutProviderSecrets\(process\.env\)/u);
   assert.match(source, /runDemoLlmCreationReadinessProbe/u);
@@ -47,7 +47,7 @@ test("pending-proposal inspection is provider-free and uses the exact scoped con
 });
 test("applied bootstrap revert is an explicit provider-free repair command", async () => {
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as { scripts?: Record<string, string> };
-  assert.equal(packageJson.scripts?.["demo:llm:revert"], "node scripts/revert-demo-llm-applied-creation.mjs");
+  assert.equal(packageJson.scripts?.["demo:llm:revert"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/revert-demo-llm-applied-creation.mjs");
   const source = await readFile(path.join(root, "scripts", "revert-demo-llm-applied-creation.mjs"), "utf8");
   assert.match(source, /withoutProviderSecrets\(process\.env\)/u);
   assert.match(source, /runDemoLlmAppliedCreationRevertProbe/u);

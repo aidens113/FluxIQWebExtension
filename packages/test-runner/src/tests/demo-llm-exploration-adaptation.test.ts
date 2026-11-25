@@ -105,7 +105,7 @@ test("rejects reused, applied, cross-scope, and over-budget proposals", () => {
 
 test("command targets exact exploration readiness and excludes creation, apply, and replay", async () => {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
-  assert.equal(manifest.scripts["demo:llm:explore:adapt"], "node scripts/run-demo-llm-exploration-adaptation.mjs");
+  assert.equal(manifest.scripts["demo:llm:explore:adapt"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/run-demo-llm-exploration-adaptation.mjs");
   const source = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/exploration-adaptation.ts"), "utf8");
   const start = source.indexOf("export async function runDemoLlmExplorationAdaptationProposal");
   assert.notEqual(start, -1);
@@ -161,7 +161,7 @@ test("apply evaluation rejects extra adaptations, assisted validation, and uncha
 
 test("apply launcher is secret-stripped and workspace command performs only one validation", async () => {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
-  assert.equal(manifest.scripts["demo:llm:explore:adapt:apply"], "node scripts/apply-demo-llm-exploration-adaptation.mjs");
+  assert.equal(manifest.scripts["demo:llm:explore:adapt:apply"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/apply-demo-llm-exploration-adaptation.mjs");
   const launcher = await readFile(path.join(repositoryRoot, "scripts/apply-demo-llm-exploration-adaptation.mjs"), "utf8");
   assert.match(launcher, /withoutProviderSecrets/u);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|error\.message|String\(error\)/u);
@@ -209,7 +209,7 @@ test("validation rejects assisted runs, non-six-action runs, and adaptation-set 
 
 test("validate launcher is secret-stripped and command is one provider-free exact-ID run", async () => {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
-  assert.equal(manifest.scripts["demo:llm:explore:adapt:validate"], "node scripts/validate-demo-llm-exploration-adaptation.mjs");
+  assert.equal(manifest.scripts["demo:llm:explore:adapt:validate"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/validate-demo-llm-exploration-adaptation.mjs");
   const launcher = await readFile(path.join(repositoryRoot, "scripts/validate-demo-llm-exploration-adaptation.mjs"), "utf8");
   assert.match(launcher, /withoutProviderSecrets/u);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|error\.message|String\(error\)/u);

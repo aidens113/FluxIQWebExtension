@@ -81,7 +81,7 @@ test("allowlisted preparation environment never imports provider secrets", async
 
 test("demo:llm:prepare is a provider-free real-UI blank Flow lane", async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
-  assert.equal(packageJson.scripts?.["demo:llm:prepare"], "node scripts/prepare-demo-llm-workspace.mjs");
+  assert.equal(packageJson.scripts?.["demo:llm:prepare"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/prepare-demo-llm-workspace.mjs");
   const launcher = await readFile(path.join(repositoryRoot, "scripts/prepare-demo-llm-workspace.mjs"), "utf8");
   assert.match(launcher, /prepareDemoLlmBlankWorkspace/u);
   assert.match(launcher, /withoutProviderSecrets\(process\.env\)/u);
