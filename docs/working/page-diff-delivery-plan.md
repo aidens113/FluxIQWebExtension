@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W2 t1038 integrated (fluxiq 0.54.20); W1 t1036 reported and being combined with W2 for its merge; W3 t1037 phase 1 verified on its branch, phase 2 after W1.
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W1 t1036 and W2 t1038 integrated (fluxiq 0.54.21); the scripted bigbox run passes 4 of 4. W3 t1037 phase 2, t1041 (asked column names) and t1042 (W1 leftovers) running in parallel.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -58,9 +58,13 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - **The Sonnet run** (run-mwvgjb8c, $0.80, 90 s, 22 calls) set the store, read the cart as the result, and the product check accepted it. But the oracle marked the answer wrong: it added "Loftwell 1 Roll $1.97, 4.6 stars", which is not the cheapest towel that qualifies for pickup today at that store (`missingActs`, `unaskedChanges: cart:5520104:pickup`). Our judge, on Sonnet, accepted it, so judging pickup availability is an open defect.
   - Other open trees: **t1015** `paid-bigbox` (the live lane, slot 1); **t1035** (the audit tree; its files are on dev; to abandon).
 - **Next (in order):**
-  1. Verify each sub-supervisor's report and re-run its acceptance checks; commit on its branch.
-  2. Integrate W1 first (merge `dev`, narrow checks, finish both sides, bump Core), then tell W3 to wire in; then W2 merges `dev` (it drops `withdrawn-actions.ts`'s last import) and integrates; then W3.
-  3. Offline proof across the integrated tree (P4), then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others.
+  1. W1 and W2 are integrated (ledger). Running in parallel:
+     - W3 phase 2 (t1037; sub-supervisor; Lab slot 2);
+     - t1041, the asked column names (worker; slot 4);
+     - t1042, W1's leftovers (worker-heavy; slot 3).
+     Verify each, integrate it, and merge `dev` into every lane after each merge (AGENTS.md).
+  2. Then remove `maxStepsWithoutProgress` from every loop (AGENTS.md: no count ends a round). It crosses W3's files, so it comes after W3.
+  3. A P4 offline proof across the integrated tree. Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
   4. Also open: the judge accepting a wrong item on pickup availability (above); the answer-contract column reader misreading "columns title only"; fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`; `pinned-calls-job-board` setup wait; `tool-rejection.ts` at 799 lines; a Flow playback guard for list location (a wire change); a second full sweep and `main` promotion (`main` has not moved).
 - **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
 
@@ -120,6 +124,43 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - W1 (t1036) integrated with W2 combined (fluxiq 0.54.21); the scripted bigbox run passes 4 of 4; t1041, t1042 and W3 phase 2 dispatched
+- Changed:
+  - **W1's D1-D8, D10, D11, D14, D15:**
+    - page deltas keyed by the URL without its query, within a 20,000-character page budget;
+    - `core.full_page` and stable `tN` handles;
+    - no look withdrawal, no `web.find_on_page`, no capture node;
+    - earlier rounds carried as compact state;
+    - no judge call on an unchanged state;
+    - the judge wants a before state only after a lasting act.
+  - **Combining with W2 in W1's lane** (worker t1036-g):
+    - three conflicts in the scripted model resolved;
+    - handles in tests now come from `pageChannel.fullPage`;
+    - the carried-repair tests answer DeepSeek's required decision tool call;
+    - the dead `withdrawn-actions.ts` is deleted.
+  - **Round 2 of the same worker:**
+    - the refusal words no longer tell the model to look;
+    - `detect` binds a handle that is still on the page.
+- Validation: the lead's run on the t1036 trees, with W2 and `dev` merged in.
+  - Core: `pnpm --filter fluxiq check` exit 0. `vitest-groups --groups=parallel,real-sql` over `runtime/llm runtime/models runtime/result-verification runtime/answer-first framework/automation-service/service/answer-first runtime/project-agents runtime/adaptation` printed `Test Files 890 passed (890)`, `Tests 7884 passed (7884)`, then `Test Files 77 passed (77)`, `Tests 525 passed (525)`, `all groups passed`. Core audit `passed (577 warning(s), 903 baselined)`; Core libraries built.
+  - Domain: `llm-evidence output-nodes actions/extraction extraction runtime/tests element-fingerprint target-reacquire state-diff` printed `# tests 2558 # pass 2558 # fail 0`; domain check exit 0.
+  - Extension: `# tests 4168 # pass 4168 # fail 0`.
+  - Test-runner build exit 0; scripted-model and flow-chart tests `# tests 138 # pass 138`; downstream audit passed; model-text ok.
+  - `pnpm task finish t1036`: downstream audit passed; Core `pnpm check` passed with its contract tests.
+  - Core bumped to 0.54.21; both `dev`s pushed (Core `9b44c1dc6`, downstream `3ccaca97d`); shared Core synced and built.
+- Evidence (the worker's run, which the lead read): the scripted bigbox run `run-mww1qgyl-bf8909a0` printed `status: passed`.
+  - Attempt 1 explored and was confirmed: 16 rows, 15 calls, 32 s.
+  - Attempts 2-4 ran `flow.f9e2d740` with each continuation held: 1, 0 and 0 calls, about 14 s each.
+  - No file in the run carries `read_invalid`, `before_state_missing` or `judged_unsure`.
+  - `attempt-1/flow.png` shows the expected Flow: navigate, type, category, Delivery, sort, then a loop of read and next page. The consent and offer detours are left out.
+- Found:
+  - **The answer's column headers are the site's words (`link_text | price | number_2`), not the asked names.** Diagnosed in `reports/t1036/h-column-names-diagnosis.md`: `retained-schema.ts` labels a renamed column with the site word, a behaviour from t982/t997 → t1041.
+- Then:
+  - `git merge dev` into t1015 (fast-forward) and t1037 on both sides, each `contains dev: yes`.
+  - Opened t1041 (asked column names, worker) and t1042 (W1 leftovers: recovery gets the page channel and loses its look; no look wording in `tool-failure.ts`; reads and presses bind a handle still on the page; worker-heavy).
+  - Resumed W3 for phase 2, which also owns the fixed tool list (`core.run_flow` from the first decision), the look phrasings in its files, `EXTRACTION_FROM`, and drafted reads keeping their stored handle.
+  - The `maxStepsWithoutProgress` removal follows W3, since it crosses W3's files.
 
 ### 2026-11-25 - W2 (t1038) integrated (fluxiq 0.54.20); lanes merged with dev
 - **Changed:**
