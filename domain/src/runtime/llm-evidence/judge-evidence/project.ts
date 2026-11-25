@@ -1,16 +1,14 @@
 import type { AutomationStudioJudgeEvidenceProjector } from "fluxiq/automation";
-import { getAutomationNodeDefinition, parseAutomationStudioRecordSchema } from "fluxiq/components/automation";
+import { parseAutomationStudioRecordSchema } from "fluxiq/components/automation";
 import type { JsonObject } from "fluxiq/core";
 import { webNodeReadResult, webRunnableNode } from "../node-run";
 import { isJsonRecord } from "../untrusted-json";
 import { webJudgeActionFacts } from "./action";
 import { webJudgeReadFacts } from "./read";
 import { webJudgeStateValue } from "./state-value";
+import { webJudgeStructureFacts } from "./structure";
 import { screenedEvidenceUrl } from "../location";
 import { present } from "../present";
-
-/** Core's own node classes whose outputs are its routing and timing bookkeeping, never anything read off a page. */
-const CORE_BOOKKEEPING_CLASSES: ReadonlySet<string> = new Set(["control-flow", "timing"]);
 
 /** Core's projector result, written key by key so a renamed contract field fails to compile here. */
 type WebJudgeProjection = ReturnType<AutomationStudioJudgeEvidenceProjector>;
@@ -90,6 +88,9 @@ export const projectWebJudgeEvidence: AutomationStudioJudgeEvidenceProjector = (
   // A focused search/description is semantic evidence from its real call,
   // unlike a full page view or an arbitrary raw DOM payload.
   if (typeof evidence.found === "string") finding.found = evidence.found;
+  // A structure detection's list, as facts: its size, its column keys and how it continues (`./structure.ts`, t1032).
+  const structure = webJudgeStructureFacts(evidence);
+  if (structure !== undefined) finding.structure = structure;
   if (isJsonRecord(evidence.element)) finding.element = pick(evidence.element, ["tag", "role", "name", "label", "text", "value", "checked", "selectedValue", "marked", "group", "within"]);
   const after = isJsonRecord(envelope.after) ? envelope.after : undefined;
   const stateHolder = Object.hasOwn(evidence, "judgeState") ? evidence : after;
@@ -101,20 +102,16 @@ export const projectWebJudgeEvidence: AutomationStudioJudgeEvidenceProjector = (
     else finding.state = parsed;
   }
   const page = typeof evidence.page === "string" || Array.isArray(evidence.elements) || isJsonRecord(evidence.snapshot);
-  const known = data || Object.keys(action).length > 0 || finding.found !== undefined || finding.element !== undefined || hasState;
-  // A step of Core's own control flow or timing (a wait's `{ data: null }`, a merge's `{ next, mergeMode }`, a For Each's
-  // `{ item, index, count }`) carries Core's bookkeeping, which no web projection reads, so nothing web is missing from it.
-  // Counted as unrecognized, it left every trial with a wait, a loop or a branch unconfirmed whatever the judge said
-  // (t1029). Content this projector cannot read on any other node still fails closed.
-  const bookkeeping = typeof input.definitionId === "string" && CORE_BOOKKEEPING_CLASSES.has(getAutomationNodeDefinition(input.definitionId)?.class ?? "");
-  if (!known && !page && !bookkeeping) missing.push("web_judge.evidence_unrecognized");
+  const known = data || Object.keys(action).length > 0 || finding.found !== undefined || finding.element !== undefined || hasState || structure !== undefined;
+  if (!known && !page) missing.push("web_judge.evidence_unrecognized");
   if (input.source === "state" && !known && page) missing.push("web_judge.semantic_state_missing");
   if (page) finding.captureOmitted = true;
   // An intentional capture omission is not a required-evidence gap. No
   // succeeded status or empty semantic state is promoted to proof of effect.
   const node = input.definitionId === undefined ? undefined : webRunnableNode(input.definitionId);
   const acted = node?.effect === "mutate" || action.changed !== undefined || action.notice !== undefined || action.effectUncertain !== undefined || action.control !== undefined;
-  return present<WebJudgeProjection>({ role: data ? "data" : acted ? "action" : "observation", evidence: webNodeReadResult(finding) ?? {}, missing: missing.length ? missing : undefined });
+  // A detection only looks at the page, whatever node its tool id might be taken for (t1032).
+  return present<WebJudgeProjection>({ role: data ? "data" : acted && structure === undefined ? "action" : "observation", evidence: webNodeReadResult(finding) ?? {}, missing: missing.length ? missing : undefined });
 };
 
 function pick(value: JsonObject, keys: readonly string[]): JsonObject {

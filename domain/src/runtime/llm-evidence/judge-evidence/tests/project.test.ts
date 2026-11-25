@@ -181,22 +181,6 @@ test("a Flow press's toggle is read in the shape the client answers it, as in th
   assert.doesNotMatch(JSON.stringify(answered), /RAW_PAGE_SENTINEL/u);
 });
 
-// A step of Core's own control flow or timing carries Core's bookkeeping, which no web projection reads: counted as
-// unrecognized, a wait, a merge or a For Each pass made every trial with one unconfirmed (t1029). Content this projector
-// cannot read on any other node still fails closed: a data node's, a recorded action's, a web step's, or a step of no node.
-test("Core's control-flow and timing steps miss nothing web; unreadable content anywhere else still does", () => {
-  const step = (definitionId: string | undefined, evidence: JsonObject) => definitionId === undefined
-    ? projectWebJudgeEvidence({ source: "flow-attempt", evidence: { source: { entry: 5 }, evidence } })
-    : projectWebJudgeEvidence({ source: "flow-attempt", definitionId, evidence: { source: { entry: 5 }, evidence } });
-  const wait = step("builtin.timing.wait", { data: null });
-  assert.equal(wait.missing, undefined);
-  assert.equal(wait.role, "observation");
-  assert.equal(step("builtin.control.merge", { next: true, mergeMode: "first" }).missing, undefined);
-  assert.equal(step("builtin.control.for-each", { item: { $datasetRow: { datasetId: "rows", ordinal: 1 } }, index: 0, count: 3 }).missing, undefined);
-  for (const [definitionId, evidence] of [
-    ["builtin.data.filter-list", { data: { opaque: "UNREAD" } }],
-    ["builtin.policy.action", { data: { opaque: "UNREAD" } }],
-    ["web.output.dom-click", { data: null }],
-    [undefined, { data: null }]
-  ] as const) assert.deepEqual(step(definitionId, evidence).missing, ["web_judge.evidence_unrecognized"], String(definitionId));
-});
+// t1029 found Core's control-flow and timing steps (a wait, a merge, a For Each pass) named missing web evidence. Core now
+// never hands its own steps to a host's projector (Core's `runtime/result-verification/judge-evidence/core-call.ts`, t1032),
+// so that is proved through Core's trail in `./recorded-gaps.test.ts`, not on this projector, which is never given them.
