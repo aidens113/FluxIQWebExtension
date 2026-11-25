@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W1 t1036 and W3 t1037 (phase 1) dispatched to Opus sub-supervisors; W2 t1038 dispatched once its tree opens. t1034 integrated first.
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). All three workstreams dispatched to Opus sub-supervisors: W1 t1036, W2 t1038, W3 t1037 (phase 1). t1034 integrated first.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -28,7 +28,7 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
 - **State (2026-11-25, second session): all three workstreams dispatched.**
   - **t1034 integrated** (fluxiq 0.54.19; both `dev`s pushed; ledger in the data-first plan). The shared Core sync followed.
   - **W1, t1036** `page-diff-delivery`: sub-supervisor (Opus) running in `fxwork/t1036/{!FluxIQWebExtension,!FluxIQ}`, moved to both `dev` heads (Core 0.54.19) before dispatch.
-  - **W2, t1038** `native-decisions-one-read`: tree opening from both `dev` heads (`fxwork/t1038/{...}`); its sub-supervisor (Opus) is dispatched as soon as it is ready.
+  - **W2, t1038** `native-decisions-one-read`: sub-supervisor (Opus) running in `fxwork/t1038/{...}`, opened from both `dev` heads (Core 0.54.19).
   - **W3, t1037** `auto-draft`: sub-supervisor (Opus) running phase 1 (design, and the parts inside its own paths) in `fxwork/t1037/{...}`. It opened from Core 0.54.18, before t1034, which touched none of its files. Phase 2 (wiring into the loop) waits for W1's merge, when the lead merges `dev` in and tells it.
   - Briefs: `page-diff-delivery-plan/briefs/` (`common.md` binds all three). Ids follow `pnpm task start`'s order, so W3 is t1037 and W2 is t1038.
   - Nothing paid is running. Round spend of 11-24/25 is about $9.20 of $50: five Haiku bigbox runs and one Sonnet run.
