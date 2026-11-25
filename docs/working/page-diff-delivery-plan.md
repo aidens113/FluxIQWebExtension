@@ -63,7 +63,14 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
      - t1041, the asked column names (worker; slot 4);
      - t1042, W1's leftovers (worker-heavy; slot 3).
      Verify each, integrate it, and merge `dev` into every lane after each merge (AGENTS.md).
+     - **W3 phase 2 (2026-11-25, hand-back at Partial):** the loop now redrafts in place under `draftEdits: "framework"`, with `rerun` kept as a seventh edit. `core.run_flow` is offered from the first decision and refused by name with no draft. The result read is chosen by the asked columns. The look wording is gone from its files.
+       - **20 real-sql tests fail because of the switch.** They are in 12 files, in answer-first, service-bootstrap and sdk-acceptance.
+       - Three are regressions the later attempts depend on: a hand step counted as a repair; a saved Flow no longer running as `run_flow`; a repaired row repeat pressing only some rows.
+       - The wiring worker (Opus) is fixing them at their causes. It also owns t1042's two recovery tests, which need `core.run_flow` added to their offered-tool assertions. A text worker is fixing the remaining stale words.
+       - Still to do: delete the 13-edit grammar, rebuild after 0.54.22, and the scripted bigbox run, 4 of 4.
+     - **t1043:** the self-changing-page race (worker-heavy, slot 4).
   2. Then remove `maxStepsWithoutProgress` from every loop (AGENTS.md: no count ends a round). It crosses W3's files, so it comes after W3.
+  - Tracked: Core `route-state/build-routing` "run-munneauy-de8663ed, rebuilt" fails at Core HEAD, independent of this plan (W3 found it). Fix it in the next sweep, or as its own task.
   3. A P4 offline proof across the integrated tree. Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
   4. Also open: the judge accepting a wrong item on pickup availability (above); the answer-contract column reader misreading "columns title only"; fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`; `pinned-calls-job-board` setup wait; `tool-rejection.ts` at 799 lines; a Flow playback guard for list location (a wire change); a second full sweep and `main` promotion (`main` has not moved).
 - **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
@@ -124,6 +131,27 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - t1042 (W1 leftovers) and t1041 (asked column names) integrated (fluxiq 0.54.22); t1043 opened
+- t1042 changed:
+  - Recovery carries the page channel and `core.full_page`. Its opening capture rides navigate with no url, and `web.recovery.inspect` is withdrawn.
+  - `core.full_page` had answered "unavailable" for the web domain, because Core read a bare view where the domain publishes it under its member. Core now reads both.
+  - No model text says to look (`tool-failure.ts`, `failure-brief.ts`, `no-effect.ts`).
+  - `structure/held-now.ts` binds a handle the page still gives an element, for both detect and the recovery press.
+- t1041 changed: a renamed column takes the asked name as its label. Site-word matching moves into the name rewrite, and saved steps re-resolve.
+- Validation: the lead's runs.
+  - **t1042:**
+    - `pnpm --filter fluxiq check` exit 0.
+    - Core groups over `runtime/adaptation runtime/llm answer-first` printed `Tests 4784 passed (4784)`, then `Tests 508 passed (508)`, `all groups passed`.
+    - Core audit passed; domain `llm-evidence runtime/tests output-nodes` `# tests 2321 # pass 2321 # fail 0`; domain check exit 0; extension `# tests 4168 # pass 4168`; downstream audit passed; model-text ok.
+    - The worker's scripted run-mww7zdb0 passed 4 of 4.
+  - **t1041:**
+    - Domain `llm-evidence output-nodes actions/extraction extraction runtime/tests` `# tests 2457 # pass 2457 # fail 0`; domain check exit 0; extension `# tests 4168 # pass 4168`; audit passed; model-text ok.
+    - Its scripted run-mww8s1va passed 4 of 4, with `"columns":["name","price","rating"]` in the answer turns (the lead read attempts 1 and 2).
+  - **Merges:** `pnpm task finish` both: audits passed, and Core `pnpm check` passed for t1042. Core bumped to 0.54.22; both `dev`s pushed (Core `75cb3957d`, downstream `14151363b`); shared Core synced; `git merge dev` into t1015 and t1037 both sides, each `contains dev: yes`.
+- Found by t1041's Opus retry: a carousel flipping during a press makes the press look lasting. The act is then carried, and Core projects its own not-held before-placeholder through the domain projector, so a right answer stays unconfirmed. Dev's baseline passed only by timing.
+  - The cause is in domain `press-effect/change/statement.ts:58` and Core `judge-evidence/summary.ts:107` and `witnesses.ts:127`.
+  - t1043 is opened for it (worker-heavy, slot 4; proof: a forced-race test plus three clean scripted runs) and must land before any live run.
 
 ### 2026-11-25 - W1 (t1036) integrated with W2 combined (fluxiq 0.54.21); the scripted bigbox run passes 4 of 4; t1041, t1042 and W3 phase 2 dispatched
 - Changed:

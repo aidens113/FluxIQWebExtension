@@ -14,7 +14,9 @@
 // left elements out, and the look after is not still loading or navigating.
 // So a toggle whose only change is `aria-pressed`, a disclosure that only
 // opened, a counter whose words moved by one are all effects, and a press that
-// changed any of them stays a success.
+// changed any of them stays a success. What the page changes by itself while the
+// press is made -- a carousel turning to its next slide -- is not an effect of it
+// (`./self-change/`, t1043).
 //
 // Anything that cannot be judged -- a node other than a press, a page missing
 // on either side -- is not said to have had no effect.
@@ -25,6 +27,7 @@ import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../../sanitize";
 import type { WebRunnableNode } from "../catalog";
 import { webPressedControlWords } from "./press-words";
 import { webPageUnchanged } from "./unchanged-page";
+import { webPageOwnChanges } from "./self-change";
 
 /** The gateway command a press runs; any node that dispatches it is a press. */
 const PRESS_ACTION_TYPE = "web.dom.click";
@@ -43,7 +46,7 @@ export function webPressNoEffect(
   presses = 1
 ): string | undefined {
   if (node.actionType !== PRESS_ACTION_TYPE || before === undefined || after === undefined) return undefined;
-  if (!judgeable(before.evidence, after.evidence) || !webPageUnchanged(before.evidence, after.evidence)) return undefined;
+  if (!judgeable(before.evidence, after.evidence) || !webPageUnchanged(before.evidence, after.evidence, webPageOwnChanges(before, after, handle))) return undefined;
   return sentence(after, handle, presses);
 }
 

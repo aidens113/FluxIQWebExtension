@@ -14,10 +14,16 @@
 // is stated with its words now: `rose` when they differ only in one number and
 // it went up (`./rose.ts`), `reads` otherwise. Never a state-token
 // change, never a line without words.
+//
+// Never a line the page changes by itself (`byPage`, `../self-change/`, t1043): Core
+// reads a line that `reads` otherwise as a change the step made that stays, and run
+// `run-mww6euuw-ecdb20f8` carried a cookie banner's "Accept all" into the next attempt
+// as an act because a carousel turned to its next slide while it was pressed. The
+// outcome's change list still shows the model such a line, as the page's own.
 
 import type { WebLlmSnapshotBinding } from "../../../sanitize";
 import type { WebRunnableNode } from "../../catalog";
-import { webPageChangeWalk, type WebPageChange } from "./walk";
+import { webPageChangeWalk, type WebPageChange, type WebPressMade } from "./walk";
 import { webChangeWords } from "./words";
 import { webIsTextLine as isText } from "../text-line";
 import { webWordsRose } from "./rose";
@@ -31,15 +37,17 @@ const MOST_LINES = 16;
 /**
  * What a call changed on the page it found, at most sixteen lines in page
  * order; `undefined` where the outcome says no change list either, or where no
- * changed line is one a statement says.
+ * changed line is one a statement says. `press`: the control a press was made
+ * on, so the page's own changes are left out (header).
  */
 export function webNodePageChangeStatement(
   node: WebRunnableNode,
   before: WebLlmSnapshotBinding | undefined,
-  after: WebLlmSnapshotBinding | undefined
+  after: WebLlmSnapshotBinding | undefined,
+  press?: WebPressMade
 ): WebNodePageChangeLine[] | undefined {
-  const lines = (webPageChangeWalk(node, before, after) ?? []).flatMap((change) => {
-    const line = stated(change);
+  const lines = (webPageChangeWalk(node, before, after, press) ?? []).flatMap((change) => {
+    const line = change.byPage ? undefined : stated(change);
     return line === undefined ? [] : [line];
   });
   return lines.length === 0 ? undefined : lines.slice(0, MOST_LINES);

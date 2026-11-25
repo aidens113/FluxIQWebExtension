@@ -11,19 +11,29 @@
 // Walked only where the two pages are the same page: a call that moved the page
 // elsewhere changed everything, and the page it left says so. Not for a look,
 // a navigation, a read or a replay, none of which change the page in place.
+//
+// For a press told which control it was made on (`press`), a change on an element
+// the page changes by itself is marked `byPage` (`../self-change/own-changes.ts`,
+// t1043): the page did it while the press was made, and the press is never credited
+// with it.
 
 import type { WebLlmSnapshotBinding } from "../../../sanitize";
 import { webLlmLineFacts, type WebLlmLineFact } from "../../../page-view";
 import type { WebRunnableNode } from "../../catalog";
 import { webMovesThePage } from "../../start-location";
+import { webPageOwnChanges } from "../self-change";
 
 /**
  * One changed line: one that `appeared` or `went`, or one on both pages
- * (`both`) whose state tokens or words differ.
+ * (`both`) whose state tokens or words differ. `byPage`: the page changes that
+ * line by itself (header).
  */
 export type WebPageChange =
-  | { kind: "appeared" | "went"; line: WebLlmLineFact }
-  | { kind: "both"; was: WebLlmLineFact; now: WebLlmLineFact };
+  | { kind: "appeared" | "went"; line: WebLlmLineFact; byPage?: true }
+  | { kind: "both"; was: WebLlmLineFact; now: WebLlmLineFact; byPage?: true };
+
+/** The control a press was made on, which says which of the page's own changes it reached. */
+export type WebPressMade = { handle: string | undefined };
 
 /**
  * Every line a call changed on the page it found, in page order; `undefined`
@@ -33,12 +43,16 @@ export type WebPageChange =
 export function webPageChangeWalk(
   node: WebRunnableNode,
   before: WebLlmSnapshotBinding | undefined,
-  after: WebLlmSnapshotBinding | undefined
+  after: WebLlmSnapshotBinding | undefined,
+  press?: WebPressMade
 ): WebPageChange[] | undefined {
   if (node.effect !== "mutate" || webMovesThePage(node)) return undefined;
   if (before === undefined || after === undefined) return undefined;
   if (before.evidence.location !== after.evidence.location) return undefined;
-  return walk(webLlmLineFacts(before.evidence), webLlmLineFacts(after.evidence));
+  const changes = walk(webLlmLineFacts(before.evidence), webLlmLineFacts(after.evidence));
+  if (press === undefined) return changes;
+  const own = webPageOwnChanges(before, after, press.handle);
+  return own.size === 0 ? changes : changes.map((change) => (own.has(change.kind === "both" ? change.now.handle : change.line.handle) ? { ...change, byPage: true as const } : change));
 }
 
 function walk(before: readonly WebLlmLineFact[], after: readonly WebLlmLineFact[]): WebPageChange[] {

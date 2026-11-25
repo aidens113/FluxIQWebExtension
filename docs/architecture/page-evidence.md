@@ -526,6 +526,55 @@ as a dialog's Close, is dispatched unchanged on every pass.
   rest of the diff, all of them stay under Core's withholding of `stateDiff` in
   a saved trace.
 
+## What The Page Changes By Itself
+
+A press is credited only with what it changed (t1043). Run
+`run-mww6euuw-ecdb20f8` pressed a cookie banner's "Accept all" while the home
+page's carousel turned to its next slide; the press's draft statement said the
+slide's heading and text `reads` otherwise, Core read that as a change the press
+made that stays, carried the press into the next attempt, and that attempt's
+judge was held unsure. Any page with a carousel, a ticker, a clock or a live
+region can do the same, so the domain tells the page's own changes apart from
+the press's (`llm-evidence/node-run/press-effect/self-change/`), from two
+signals that are honest on any site and with no wait or timeout:
+
+- **The page's own markup** (`markers.ts`). Everything inside an element whose
+  `aria-roledescription` says carousel or slide, whose role is `marquee` or
+  `timer`, or that is a `<marquee>`, is the page's to change. A live region
+  (`aria-live` polite or assertive, role `status`, `alert` or `log`) is not by
+  its markup alone, because a page announces a press's own result into one
+  ("Added to cart", a cart total); it counts only when the run has also seen a
+  line in it change with nothing done.
+- **What the run has seen** (`memory.ts`). Each Flow keeps, per location, the
+  page-view lines (by their stable handles) whose words changed between two
+  captures that nothing came between: no act since the first (the target
+  packets' `acting`, called before every command and around every replay), one
+  document (location and `navigation.timeOrigin`), both whole. A line counts
+  once it has done so in two such pairs: a change an act caused that lands
+  after the look following it is seen once per act, while what a page changes
+  by itself keeps changing. The memory is fed with every capture the target
+  packets record (`watch.ts`) and keeps what it saw on the capture
+  (`webPressSeenChanging`), so a press reads it from its own two looks.
+
+Neither applies where the press reached the element: a press on a control
+inside it, or one whose `aria-controls` names it (a carousel's next arrow), is
+credited with the slide it turned; a line seen changing by itself is the
+press's when the press was made on it or on a control around or inside it.
+
+What the page changed by itself (`own-changes.ts`) is then left out of the
+draft statement Core reads acts from (`change/statement.ts`), set aside when a
+press is judged to have changed the page at all (`unchanged-page.ts`, so
+`pageChanged` and a press's no-effect retry read only the press's own effect),
+and still shown to the model in the outcome's `changed` list, after the
+press's own entries and marked `(changes by itself)` (`page-changes.ts`). A
+replay's change list does not classify: it is told no pressed control.
+
+Core's side of the same run is its own before-side note (Core
+`runtime/result-verification/judge-evidence/earlier-before-note.ts`): when acts
+an earlier attempt made are carried in and no reading from before them is held,
+the judge is told so in Core's words and the note is never handed to this
+domain's judge-evidence projector, which could not read it.
+
 ## What A Model Reads: The Compact Page View
 
 The user's order of 2026-09-30 (t223): only elements with visible text or that
