@@ -87,11 +87,11 @@ test("adaptation launcher exposes normal and no-build focused commands without e
     readFile(path.join(root, "package.json"), "utf8"),
   ]);
   const manifest = JSON.parse(manifestText) as { scripts?: Record<string, string> };
-  assert.equal(manifest.scripts?.["demo:llm:adapt"], "node scripts/run-demo-llm-adaptation.mjs");
-  assert.equal(manifest.scripts?.["demo:llm:adapt:focused"], "node scripts/run-demo-llm-adaptation.mjs --no-build");
-  assert.equal(manifest.scripts?.["demo:llm:adapt:control"], "node scripts/control-demo-llm-adaptation.mjs");
-  assert.equal(manifest.scripts?.["demo:llm:adapt:continue"], "node scripts/control-demo-llm-adaptation.mjs continue");
-  assert.equal(manifest.scripts?.["demo:llm:adapt:revert"], "node scripts/control-demo-llm-adaptation.mjs revert");
+  assert.equal(manifest.scripts?.["demo:llm:adapt"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/run-demo-llm-adaptation.mjs");
+  assert.equal(manifest.scripts?.["demo:llm:adapt:focused"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/run-demo-llm-adaptation.mjs --no-build");
+  assert.equal(manifest.scripts?.["demo:llm:adapt:control"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/control-demo-llm-adaptation.mjs");
+  assert.equal(manifest.scripts?.["demo:llm:adapt:continue"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/control-demo-llm-adaptation.mjs continue");
+  assert.equal(manifest.scripts?.["demo:llm:adapt:revert"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/control-demo-llm-adaptation.mjs revert");
   const controlLauncher = await readFile(path.join(root, "scripts", "control-demo-llm-adaptation.mjs"), "utf8");
   assert.match(controlLauncher, /process\.stdout\.write\([^;]+process\.exit\(0\)/s);
   assert.match(controlLauncher, /process\.stderr\.write\([^;]+process\.exit\(1\)/s);

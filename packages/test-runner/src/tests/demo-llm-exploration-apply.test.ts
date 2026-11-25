@@ -96,7 +96,7 @@ test("bound continuations select only the persisted Flow and Adaptation identiti
 
 test("package command is provider-free and delegates only to the apply checkpoint", async () => {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
-  assert.equal(manifest.scripts?.["demo:llm:explore:apply"], "node scripts/apply-demo-llm-exploration-proposal.mjs");
+  assert.equal(manifest.scripts?.["demo:llm:explore:apply"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/apply-demo-llm-exploration-proposal.mjs");
   const launcher = await readFile(path.join(repositoryRoot, "scripts/apply-demo-llm-exploration-proposal.mjs"), "utf8");
   assert.match(launcher, /runDemoLlmExplorationApplyCheckpoint/u);
   assert.doesNotMatch(launcher, /runDemoLlmExplorationCheckpoint|generate-flow-bootstrap-adaptation|runDemoFlow|replay|DEEPSEEK_API_KEY/u);

@@ -78,9 +78,9 @@ test("persists only an exact secret-free proposal binding", async () => {
 
 test("bound continuation commands are provider-free and separate from legacy checkpoint commands", async () => {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
-  assert.equal(manifest.scripts["demo:llm:explore:apply"], "node scripts/apply-demo-llm-exploration-proposal.mjs");
-  assert.equal(manifest.scripts["demo:llm:explore:request:apply"], "node scripts/apply-demo-llm-exploration-request.mjs");
-  assert.equal(manifest.scripts["demo:llm:explore:request:run"], "node scripts/run-demo-llm-exploration-request-flow.mjs");
+  assert.equal(manifest.scripts["demo:llm:explore:apply"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/apply-demo-llm-exploration-proposal.mjs");
+  assert.equal(manifest.scripts["demo:llm:explore:request:apply"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/apply-demo-llm-exploration-request.mjs");
+  assert.equal(manifest.scripts["demo:llm:explore:request:run"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/run-demo-llm-exploration-request-flow.mjs");
   for (const script of ["scripts/apply-demo-llm-exploration-request.mjs", "scripts/run-demo-llm-exploration-request-flow.mjs"]) {
     const source = await readFile(path.join(repositoryRoot, script), "utf8");
     assert.doesNotMatch(source, /DEEPSEEK_API_KEY|runDemoLlmExplorationCheckpoint|generate-flow-bootstrap-adaptation/u);

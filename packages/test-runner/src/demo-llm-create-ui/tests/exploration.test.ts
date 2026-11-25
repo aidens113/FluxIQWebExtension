@@ -47,7 +47,7 @@ test("no creation profile types a call count into Flow Settings", async () => {
 
 test("proposal-only exploration launcher and UI driver stop before review mutation", async () => {
   const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as { scripts?: Record<string, string> };
-  assert.equal(manifest.scripts?.["demo:llm:explore"], "node scripts/run-demo-llm-exploration.mjs");
+  assert.equal(manifest.scripts?.["demo:llm:explore"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/run-demo-llm-exploration.mjs");
   const launcher = await readFile(path.join(root, "scripts", "run-demo-llm-exploration.mjs"), "utf8");
   assert.match(launcher, /runDemoLlmExplorationCheckpoint/u);
   assert.match(launcher, /reviewOutcome: "pending"/u);

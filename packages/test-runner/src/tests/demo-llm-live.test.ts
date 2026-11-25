@@ -62,7 +62,7 @@ test("fails closed on provider, prompt, usage, mutation, ordering, and replay vi
 
 test("live command is real-UI, credential-boundary safe, and provider-secret free", async () => {
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
-  assert.equal(packageJson.scripts["demo:llm:diagnose"], "node scripts/run-demo-llm-diagnosis.mjs");
+  assert.equal(packageJson.scripts["demo:llm:diagnose"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/run-demo-llm-diagnosis.mjs");
   const launcher = await readFile(path.join(root, "scripts/run-demo-llm-diagnosis.mjs"), "utf8");
   assert.equal(launcher.includes("withoutProviderSecrets(process.env)"), true);
   assert.doesNotMatch(launcher, /CLAUDE_API_KEY|ANTHROPIC_API_KEY|DEEPSEEK_API_KEY|setupDemoWorkspaceDeepSeekKey|deepSeekSecretFromDriverEnvironment/u);
