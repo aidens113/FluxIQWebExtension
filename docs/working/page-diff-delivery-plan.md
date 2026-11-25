@@ -132,6 +132,20 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-25 - t1045 (build-routing) and t1044 (judge continuation) integrated (fluxiq 0.54.24); t1044's main cause queued; sweep running
+- t1045: Core `route-state/tests/build-routing.test.ts` was stale after t1036 withdrew the look. Its scripted build ends at 15 decisions, not 18, and captures 11 times, not 12. The test now asserts the 15 decisions and the totals `[11, 0, 9]`. Not a product regression; t1036 updated only the sibling `state-digest-cost.test.ts`. The lead's W1 checks missed it because `route-state` was not in its folder list.
+- t1044 (run-mwvgjb8c, where the judge accepted a wrong pickup item):
+  - **The cause.** The judge never saw the cheaper qualifying row. It sat in page 1's read, which reached the judge as `working: [{step, kept: 15}]`, a count only (`answer-first/result-feed/feed.ts:269`), while page 2's rows came whole.
+  - **The decider picked wrong for a related reason.** Every read shares one `holder:read` group (`runtime/llm/decision-context/current-view.ts:28`), so page 2's read dropped page 1's rows from its view.
+  - **Merged now:** a judge continuation no longer claims a call is shown above when its view reference resolves outside the prefix (`models/providers/anthropic/continuation.ts`, with `judge-held-whole.test.ts`).
+  - **Queued as t1047 after W3:** both main causes, which are in W3's files. W3 was told; its "rows from every read that ran" design may cover them.
+- Validation: the lead's runs.
+  - t1045's folder: `vitest run src/framework/automation-service/route-state` printed `Test Files 7 passed (7)`, `Tests 49 passed (49)`.
+  - t1044: anthropic, llm/anthropic and judge-continues-decider printed `Tests 158 passed (158)`. After `dev` (t1045) was merged into its Core branch, anthropic, llm/anthropic and route-state printed `Tests 206 passed (206)`.
+  - `pnpm task finish` both. Core `pnpm check` for t1044 first failed 2 of 529 script tests while the full sweep loaded the machine. A re-run printed `# tests 529 # pass 529 # fail 0`, and the finish then printed `"validation":{"ran":true,"command":"pnpm check","passed":true}`. The two tests' names were not captured; the next such failure keeps its log.
+  - Core bumped to 0.54.24; both `dev`s pushed (Core `2af56a961`, downstream `67f779182`); `git merge dev` into t1015 and t1037 both sides, each `contains dev: yes`.
+- A full sweep on `dev` (t1046, the first of the day) is running in its own worktree; it started before t1044 and t1045.
+
 ### 2026-11-25 - t1043 (self-changing page) integrated (fluxiq 0.54.23)
 - Changed:
   - **Domain (`press-effect/self-change/`):** a press is credited only with its own changes. What the page changes by itself is told apart by two signals:
