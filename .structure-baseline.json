@@ -58,7 +58,6 @@
       "domain/src/output-nodes/tests/recorded-element-key.test.ts": 1,
       "domain/src/output-nodes/tests/secret-binding.test.ts": 1,
       "domain/src/runtime/llm-evidence/node-run/tests/numeric-text-filter.test.ts": 1,
-      "domain/src/runtime/llm-evidence/page-find/tests/search.test.ts": 1,
       "domain/src/runtime/llm-evidence/page-view/tests/published-page.test.ts": 1,
       "domain/src/runtime/llm-evidence/structure/tests/detect.test.ts": 1,
       "domain/src/runtime/llm-evidence/tests/vocabulary.test.ts": 1,
