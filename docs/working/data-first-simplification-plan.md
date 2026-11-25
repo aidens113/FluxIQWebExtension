@@ -225,6 +225,19 @@ Lead owns shared-state updates, exact observed acceptance, commits, pushes and p
 
 ## Work Ledger
 
+### 2026-11-25 - t1040 integrated: the Lab refuses every test run on a tree that lacks dev
+- Why: the user, angry: "merge all test runs before doing more tests ... MERGE TO DEV AND MERGE TEST LANES AFTER ANY SERIOUS UPDATES". A lane kept running scripted Lab runs without a merge `dev` already had, because the behind-dev rule guarded only live runs.
+- Changed:
+  - `scripts/lab/live-guards/admit-dev-ancestry.mjs` applies the same `behind-dev` rule to every `run-lab` run that is not live, before any build. Read-only commands are not asked.
+  - `cli/behind-dev.mjs` puts the check first in `ui:e2e`, `demo:run`, `demo:record`, the `demo:llm` run and apply scripts, and both `test:e2e` scripts.
+  - The override file and the refusal text are the Lab's own. Report: `data-first-simplification-plan/reports/t1040.md`.
+- Validation: the lead's run.
+  - The real check, against real git: `t1016` returned `exit 1` with "run refused by rule "behind-dev": ... lacks 68 commit(s) of its local dev (2db09ca)", while the t1040 tree returned `exit 0`.
+  - `node scripts/lab/live-guards/cli/behind-dev.mjs` exited 0.
+  - Guard and Lab tests: `# tests 83 # pass 82 # fail 1`. The one failure, `facility-failure-run` "a Core refusal ... screened sentence", needs a built screen module that the unbuilt worktree lacks; the same file gives `# pass 4 # fail 0` on dev's built checkout.
+  - Structure audit passed, and the `pnpm task finish` audit passed.
+- Then: `git merge dev` into t1015, t1036, t1037 and t1038, which all printed `contains dev: yes` with no unmerged files.
+
 ### 2026-11-25 - t1039 integrated: a chart of the Flow for every Lab attempt
 - Why: the user asked (2026-11-25) for "a flow chart type thing saved as a png for each run", showing "the CURRENT draft/finalized flow that it created regardless of whether it works or not, with each node shown", and "the input and (a real example) output through the system".
 - Changed: `packages/test-runner/src/flow-chart/` draws from the run's step files. Every `lab attempt` writes `flow.png` and `flow.svg` per attempt (`attempt-N/`) and at the run's end, whatever ended it. The chart shows:
