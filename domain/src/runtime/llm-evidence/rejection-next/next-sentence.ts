@@ -231,7 +231,7 @@ function isHandle(value: string | undefined): value is string {
 function notInPacketNext(target: string | undefined): string {
   const named = isHandle(target) ? `${target} is` : "The handle in target is";
   return `Nothing was done: ${named} not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. `
-    + "Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.";
+    + "Use a handle the newest view of this page prints -- the page every result carries, with its changes applied, or the whole page core.full_page captures; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.";
 }
 
 /**
@@ -239,19 +239,19 @@ function notInPacketNext(target: string | undefined): string {
  * its page before it runs, so the model's correction -- the handle from the page
  * it was just shown -- missed again (`run-musq0b1m-0472cfa0`, steps 0063, 0067).
  */
-const RENUMBERED_NEXT = "Nothing was done. The page was reloaded (put back) since the view this handle came from, and the reload renumbered its controls, so the handle names nothing now. Look at the page again and use the control's current handle from that view.";
+const RENUMBERED_NEXT = "Nothing was done. The page was reloaded (put back) since the view this handle came from, and the reload renumbered its controls, so the handle names nothing now. Use the control's current handle from the page as it now stands -- the page with this answer, when it carries one, else the whole page core.full_page captures.";
 
 /**
  * What to do about a lasting act whose outcome is uncertain (t359, t361): it
  * was sent, nothing showed whether it took effect, and it was not made again.
  */
-const UNCERTAIN_NEXT = "Outcome uncertain: this step was sent to the page, but its answer does not show whether it took effect, so it was not made again automatically -- making it twice could do it twice. Look at the page to see whether it took effect before making the same call again.";
+const UNCERTAIN_NEXT = "Outcome uncertain: this step was sent to the page, but its answer does not show whether it took effect, so it was not made again automatically -- making it twice could do it twice. Check the page with this answer, or the whole page core.full_page captures, for whether it took effect before making the same call again.";
 
 /**
  * What to do about a handle from a view of another page, or of a control that
  * has left the page (t477): the handle names nothing now.
  */
-const STALE_NEXT = "Nothing was done. The handle in target came from a view of a page that is no longer the one loaded, or named a control that has since left it, so it names nothing now. Use a handle from the newest view of the page you are on -- the page with this answer, when it carries one -- or look at the page again; where the tool's target is optional, it can be called without one.";
+const STALE_NEXT = "Nothing was done. The handle in target came from a view of a page that is no longer the one loaded, or named a control that has since left it, so it names nothing now. Use a handle from the newest view of the page you are on -- the page with this answer, when it carries one, else the whole page core.full_page captures; where the tool's target is optional, it can be called without one.";
 /** The same, when the caller found the element at the same place on the page now: `instead` is its handle. */
 const STALE_NEXT_INSTEAD = "Nothing was done. The handle in target came from a view of a page that is no longer the one loaded, or named a control that has since left it. The element at the same place on the page now has the handle in instead, shown in the page with this answer: if it is what you meant, make the call again with that handle.";
 

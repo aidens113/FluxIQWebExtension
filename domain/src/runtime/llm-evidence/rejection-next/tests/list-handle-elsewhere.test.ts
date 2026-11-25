@@ -94,7 +94,7 @@ test("a detection at a handle another page printed is told the handle names noth
   const detected = await runtime.executeTool({ ...PROJECT, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: label } });
   const refusal = detected.evidence as unknown as Refusal;
   assert.equal(refusal.detail.reason, "handle_not_in_packet", JSON.stringify(detected.evidence).slice(0, 600));
-  assert.equal(refusal.detail.next, `Nothing was done: ${label} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`);
+  assert.equal(refusal.detail.next, `Nothing was done: ${label} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints -- the page every result carries, with its changes applied, or the whole page core.full_page captures; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`);
 });
 
 test("a read of a detected list naming a column it lacks is told as before (t1020)", async () => {
