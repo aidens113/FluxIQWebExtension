@@ -76,7 +76,7 @@ import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
 import { webNodeShownControlWords } from "./control-words";
-import { webAnsweredLayer, webPressClearedLayer, webNodeActedOn, webNodeActedOnCard, webNodeActedOnItem, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle, webPressToggleSignature } from "./press-effect";
+import { webAnsweredLayer, webPressClearedLayer, webNodeActedOn, webNodeActedOnCard, webNodeActedOnItem, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageOwnChanges, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle, webPressToggleSignature } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow, webNodeOpeningPlaces, webNodePreparedEntry, webNodeRepairedFlow } from "./arrival";
 import { webNodeBuildOf, type WebNodeBuildKey } from "./build-state";
@@ -526,7 +526,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // page that could not be read was not compared, so it is not said. Where the
     // page is drawn and where focus sits are not a change (`./press-effect/unchanged-page.ts`,
     // t511): a 19-pixel scroll once answered a press that did nothing `pageChanged: true`.
-    const changed = after === undefined ? undefined : current === undefined || !webPageUnchanged(current.evidence, after.evidence);
+    const changed = after === undefined ? undefined : current === undefined || !webPageUnchanged(current.evidence, after.evidence, webPageOwnChanges(current, after, handle)); // Never what the page changed by itself meanwhile (`./press-effect/self-change/`, t1043).
     // The control this call acted on, named on its result by handle (`./outcome.ts` `controlHandle`, t442). A press that changed the page acts on what it
     // pressed, whatever that prints as (`../plan-resolution/target-packets.ts` `pressed`, t378 W13); and a step later written for any control acted on
     // saves it as this act found it, never as the act left it, with what the act made true as its effect (`acted`, t442 F1, t447 F2).
@@ -561,7 +561,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       choice: webPressChoice(node, current, after, handle), toggle: webPressToggleSignature(node, current, after, handle, { targets: run.stores.targets, scope: buildOf(run) }),
       layerCleared: webPressClearedLayer(node, current, after, handle, (layer) => run.layers.owns(buildOf(run), layer)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
-      changed: webNodePageChanges(node, current, after),
+      changed: webNodePageChanges(node, current, after, { handle }), // What the page changed by itself is said as its own, after the rest (t1043).
       control: control.name, controlHandle: named,
       stoodChosen: webStandingChoicesUnshown(stood, after?.evidence), // Those standing out of view, so their words reach the model (t1023).
       read, addable: node.proposes, listMove: webAutomationNextPageListMove(ran, result.payload as JsonValue | undefined), // Which list a Next page moved, for Core's paging (t1013).
@@ -640,7 +640,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // What it changed on the page it stayed on, from the same walk as the outcome's
         // `changed` above: Core reads which step did an act from it, not from the
         // model's label (`./press-effect/change/statement.ts`, week report W1).
-        changed: webNodePageChangeStatement(node, current, after),
+        changed: webNodePageChangeStatement(node, current, after, { handle }), // Never a line the page changes by itself (t1043).
         // What each `where` condition of a list read kept and rejected, with a few values it read on the kept rows
         // (`./list-read/condition-account.ts`, t693): Core names a condition that left out no row when the model
         // reruns the read unchanged. Absent on every other node.

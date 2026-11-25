@@ -5,5 +5,5 @@
 
 export { webWordsRose } from "./rose";
 export { webNodePageChangeStatement, type WebNodePageChangeLine } from "./statement";
-export { webPageChangeWalk, type WebPageChange } from "./walk";
+export { webPageChangeWalk, type WebPageChange, type WebPressMade } from "./walk";
 export { webChangeWords } from "./words";

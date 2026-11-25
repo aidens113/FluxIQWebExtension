@@ -21,15 +21,22 @@
 // a navigation, a read or a replay, none of which change the page in place.
 // Read from the one walk (`./change/walk.ts`) the draft statement's change list
 // is read from too (`./change/statement.ts`, t285), so the two never disagree.
+//
+// A line the page changes by itself (`byPage`, `./self-change/`, t1043) is still said,
+// since the model should see the page move, but as the page's own -- `(changes by
+// itself)` -- and after what the press itself changed, so a carousel's slide or a
+// ticker never crowds the press's own changes out of the entries named.
 
 import type { WebLlmSnapshotBinding } from "../../sanitize";
 import { quotedWords, type WebLlmLineFact } from "../../page-view";
 import type { WebRunnableNode } from "../catalog";
-import { webChangeWords, webPageChangeWalk, type WebPageChange } from "./change";
+import { webChangeWords, webPageChangeWalk, type WebPageChange, type WebPressMade } from "./change";
 import { webIsTextLine as isText } from "./text-line";
 
 /** At most this many changes are named; the rest are counted. */
 const MOST_CHANGES = 8;
+/** What an entry adds for a line the page changes by itself (header). */
+const BY_PAGE = "(changes by itself)";
 
 /**
  * The state tokens a change is said of. A paired state says only where it now
@@ -42,14 +49,17 @@ const LONE: readonly string[] = ["selected", "pressed", "marked", "disabled"];
  * What a call changed on the page it found, as at most nine short entries in
  * page order; `undefined` where it is not said: a node that does not change
  * the page in place, a page missing on either side, a different location, or
- * nothing changed in these terms.
+ * nothing changed in these terms. `press`: the control a press was made on, so the
+ * page's own changes are said as its own (header).
  */
 export function webNodePageChanges(
   node: WebRunnableNode,
   before: WebLlmSnapshotBinding | undefined,
-  after: WebLlmSnapshotBinding | undefined
+  after: WebLlmSnapshotBinding | undefined,
+  press?: WebPressMade
 ): string[] | undefined {
-  const entries = (webPageChangeWalk(node, before, after) ?? []).flatMap((change) => {
+  const changes = webPageChangeWalk(node, before, after, press) ?? [];
+  const entries = [...changes.filter((change) => !change.byPage), ...changes.filter((change) => change.byPage)].flatMap((change) => {
     const said = entryOf(change);
     return said === undefined ? [] : [said];
   });
@@ -60,20 +70,21 @@ export function webNodePageChanges(
 
 /** The entry for one changed line, or nothing where it is not a change said here: only text and states are. */
 function entryOf(change: WebPageChange): string | undefined {
-  if (change.kind === "both") return changed(change.was, change.now);
-  return isText(change.line) ? entry(change.line, change.kind === "went" ? "gone" : "appeared") : undefined;
+  const by = change.byPage ? ` ${BY_PAGE}` : "";
+  if (change.kind === "both") return changed(change.was, change.now, by);
+  return isText(change.line) ? entry(change.line, `${change.kind === "went" ? "gone" : "appeared"}${by}`) : undefined;
 }
 
 /** A line on both pages: the states it gained or lost, or, for text, the words it now reads. */
-function changed(was: WebLlmLineFact, now: WebLlmLineFact): string | undefined {
+function changed(was: WebLlmLineFact, now: WebLlmLineFact, by: string): string | undefined {
   const states = stateChanges(was.tokens, now.tokens);
   if (states.length > 0) {
     // A line whose words went with the change is named by the words it had.
     const named: WebLlmLineFact = now.words === undefined && was.words !== undefined ? { ...now, words: was.words } : now;
-    return entry(named, states.join(", "));
+    return entry(named, `${states.join(", ")}${by}`);
   }
   if (isText(was) && isText(now) && was.words !== now.words && now.words !== undefined) {
-    return entry(now, webChangeWords.was(was.words));
+    return entry(now, `${webChangeWords.was(was.words)}${by}`);
   }
   return undefined;
 }

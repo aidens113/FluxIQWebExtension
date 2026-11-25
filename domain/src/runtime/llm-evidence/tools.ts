@@ -99,6 +99,7 @@ import { createWebLlmRepeatedRefusals } from "./repeated-refusal";
 import { recoverable, RecoverableToolRejection, rejectionDetail, toolRejection } from "./tool-rejection";
 import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import { createWebNodeFrozenExecution, webNodeFinalGateway } from "./node-run/frozen-execution";
+import { webPressSelfChangeWatch } from "./node-run/press-effect";
 import {
   webLlmToolRejectionResultCode,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -154,7 +155,8 @@ export function createWebAutomationLlmEvidenceRuntime(
   const arrivalNode = webRunnableNodeIds().find((id) => webRunnableNode(id)?.actionType === WEB_NAVIGATION_ACTION);
   const returnedEvidence = new Map<string, WebLlmSnapshotBinding>();
   const extractionHandles = createWebLlmExtractionHandles();
-  const targetPackets = createWebLlmTargetPackets();
+  // Every capture and act it records also feeds what the run sees a page change by itself (`./node-run/press-effect/self-change/`, t1043).
+  const targetPackets = webPressSelfChangeWatch(createWebLlmTargetPackets());
   // A handle keeps naming the control it named across recaptures of one page
   // (see ./stable-handles.ts). Every authoring capture goes through it, including
   // the ones the model is not shown, so a press's before-and-after comparison

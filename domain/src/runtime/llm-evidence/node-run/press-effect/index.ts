@@ -15,7 +15,8 @@
 // (`./uncertain.ts`), and the sentence that says it had no effect
 // (`./no-effect.ts`, t511), naming the control one way (`./press-words.ts`),
 // all read from whether the page stayed the same page apart from where it is
-// drawn (`./unchanged-page.ts`), which `pageChanged` reads too.
+// drawn (`./unchanged-page.ts`), which `pageChanged` reads too -- and never crediting a
+// press with what the page changes by itself while it is made (`./self-change/`, t1043).
 
 export { webNodeActedOn, webNodeActedOnItem } from "./acted-on";
 export { webNodeActedOnCard } from "./acted-on-card";
@@ -24,12 +25,13 @@ export { webPressClearedLayer, type WebPressClearedLayer } from "./cleared-layer
 export { webPressChoice } from "./choice";
 export { webPressChosenState, type WebPressChosenState } from "./chosen-state";
 export { webNodeNoticedDetail, webNodePageNotice, type WebNodeNoticedDetail } from "./notice";
-export { webNodePageChangeStatement, type WebNodePageChangeLine } from "./change";
+export { webNodePageChangeStatement, type WebNodePageChangeLine, type WebPressMade } from "./change";
 export { webNodePageChanges } from "./page-changes";
 export { webPressNoEffect } from "./no-effect";
 export { webPressSettled, type WebPressSettled, type WebPressSettleSteps } from "./settled";
 export { webPressedControlWords } from "./press-words";
 export { webPageUnchanged } from "./unchanged-page";
+export { webPageOwnChanges, webPressSelfChangeWatch } from "./self-change";
 export { webPressToggle } from "./toggle";
 export { webPressToggleSignature, type WebPressToggleOutput } from "./toggle-signature";
 export { webPressMayRepeat } from "./repeat-press";
