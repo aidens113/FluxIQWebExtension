@@ -239,8 +239,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // *is* the snapshot node running, so taking one before it and one after it
     // would make the cheapest thing a build does cost three.
     if (node.actionType === WEB_LLM_OBSERVATION_NODE_ACTION) {
-      // A look reads the page as it stands, arrived or not, as find_on_page
-      // does (`run-muqc07fh-eeffbc86` refused it on the start location). It is
+      // Core's own capture (the round's opening, the full-page request) reads the
+      // page as it stands, arrived or not (page-diff D4; the model asks for no look). `run-muqc07fh-eeffbc86` refused it on the start location. It is
       // never a step of the Flow, so it cannot stand in for arriving. Only an
       // unreadable page, the blank tab, answers it with where to go.
       capture = frozen.kind === "ordinary" && adapterValue !== undefined ? await run.frozenExecution?.capture({ run, node, value, adapterValue, written: parameters, parameters: {}, look: (options) => readablePage(run, run.request, options) }) : undefined;

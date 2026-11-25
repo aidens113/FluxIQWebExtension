@@ -108,7 +108,7 @@ test("binds from the production host seam and selects the sole trusted web clien
   bindWebAutomationLlmEvidenceRuntime(fluxiq as never);
   // One tool of this domain's own. Everything else a build does is a node of
   // the library, which Core offers because Core is what enumerates the registry.
-  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, "web.find_on_page", "web.describe_element"]);
+  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, "web.describe_element"]);
   // `runnable` names what this domain will actually run, and Core narrows the
   // library it offers the model to it. Without that the enum held Core's
   // built-ins too -- available in every scope -- and every call naming one
@@ -119,17 +119,14 @@ test("binds from the production host seam and selects the sole trusted web clien
   // location into, so a build's opening call is the Flow's first kept step
   // (F31): found by what the node runs, so it is the navigation node.
   assert.deepEqual(bound?.runsNodes?.arrival, { node: "web.output.browser-navigate", parameter: "url" });
-  const findDescription = bound?.tools.find(tool => tool.toolId === "web.find_on_page")?.description ?? "";
-  // F32: twelve searches of the home page for a product the site's own search
-  // would have found. It opens by saying which page it reads.
-  assert.match(findDescription, /^Reads only the page you are on, and is not the site's search \(the site's own search is a field\[search\] line\)\./u);
-  assert.equal(findDescription.length <= 2_000, true, `${findDescription.length} characters, over Core's 2,000`);
+  assert.equal(bound?.tools.some(tool => tool.toolId === "web.find_on_page"), false, "the page search is retired (page-diff D15)");
+  const describeDescription = bound?.tools.find(tool => tool.toolId === "web.describe_element")?.description ?? "";
+  assert.match(describeDescription, /printed on a page line/u);
+  assert.equal(describeDescription.length <= 2_000, true, `${describeDescription.length} characters, over Core's 2,000`);
   assert.ok(!bound?.runsNodes?.runnable?.some(id => id.startsWith("builtin.")), "only this domain's own nodes are offered");
   assert.deepEqual(bound?.tools.map(tool => ({ toolId: tool.toolId, effect: tool.effect, repeatPolicy: tool.repeatPolicy, initialObservation: tool.initialObservation })), [
     // Observe-only, and deliberately without a repeat policy: a second target is a different request, and Core refuses an identical one.
     { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
-    // The search the page view points to (t223); a second query is a different request.
-    { toolId: "web.find_on_page", effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
     { toolId: "web.describe_element", effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
   ]);
   // The detection tool states the shape its handle is written in, because a
@@ -248,7 +245,7 @@ test("captures the whole sanitized post-failure page without returning the raw s
   });
 
   // The page as the model reads every page (t223), with no element objects.
-  assert.equal(evidence.schemaVersion, "web-llm-page.v3");
+  assert.equal(evidence.schemaVersion, "web-llm-page.v4");
   assert.equal(Object.hasOwn(evidence, "elements"), false);
   // The query is kept and its secret withheld; nothing is left out.
   assert.equal(evidence.location, "https://example.test/form?token=(withheld)#secret");

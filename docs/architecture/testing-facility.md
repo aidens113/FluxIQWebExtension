@@ -94,9 +94,9 @@ those registered nodes, `core.describe_nodes` to read their full definitions
 has described; a describe call costs no page capture) and `core.flow_draft` to
 author the Flow. The domain's
 additional `web.detect_repeating_structure` observation names an extraction structure
-without publishing selectors or values; `web.find_on_page` searches the whole
-page, hidden elements and every attribute included, and `web.describe_element`
-prints one element in full (`page-find/`). All three observe only. A free
+without publishing selectors or values; the whole page on request (`core.full_page`)
+lists hidden elements and every attribute, and `web.describe_element`
+prints one element in full (`page-find/`). Both tools observe only. A free
 initial observation gives the first decision the page already in front of it
 (`tools.ts`, `runsNodes.initial`).
 These operations use the production gateway bridge and require exactly one
@@ -104,7 +104,7 @@ ready, trusted extension with an idle recorder, failing closed on ambiguity.
 The old inspect/navigate/press-only catalog is no longer the build's surface:
 typing, selecting and reading are available through the registered nodes too.
 
-The model receives every page as the compact view, `web-llm-page.v3` (t223):
+The model receives every page as the compact view, `web-llm-page.v4` (t223; keyed lines under the page's key since t1036, which Core delivers whole once per key and then as what changed):
 header lines (`PAGE`, `URL` on a `~` base, `VIEW`, and `COVERING`, `DIALOG`,
 `LOADING` for what stands in front of the page), then one line per element
 that has visible words or is a control, in document order, across every
@@ -112,8 +112,8 @@ responding frame and open shadow root: `<handle> <kind> "<words>" <state>`,
 with `[landmark]`, `- i/n` item and `--- below the fold ---` markers. The
 look merges all frames unless a frame is explicitly addressed; a frame that
 does not answer is named in a `FRAMES` header line. No element that qualifies
-is capped, ranked or cut, and everything else on the page is reached through
-`web.find_on_page` and `web.describe_element`. The structured packet the view
+is capped, ranked or cut, and everything else on the page is reached through the whole page on request (`core.full_page`, t1036: hidden elements and attributes as extra lines),
+and `web.describe_element`. The structured packet the view
 is written from (`web-llm-evidence.v2`) stays in the domain, where plan
 resolution, stable handles, the state digest and the repair check read it;
 the same screens apply to both: sensitive controls, secret-shaped strings,

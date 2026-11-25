@@ -43,7 +43,7 @@
 // `<div>` with no name. Whether a reader can use an element is the reader's
 // question; this only says what is on the page.
 //
-// **`includeHidden`** (t223) is a search's capture: `web.find_on_page` and
+// **`includeHidden`** (t223) is the whole page's capture: `core.full_page` and
 // `web.describe_element` look for words a closed menu or a collapsed panel
 // holds. With it, the walk also lists what it would skip as not rendered -- a
 // `display: none` subtree, `hidden` ones included, a hidden-visibility element, an element

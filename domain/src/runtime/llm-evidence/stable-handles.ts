@@ -106,6 +106,38 @@
 // is the same control. Across documents the serials mean nothing, and the
 // tiers stand as they were.
 //
+// **The same element keeps its number for the whole run (t1036, D2).** The
+// model now gets a page once whole and then only what changed, keyed by handle
+// (`./page-view/keyed-line.ts`), and a diff means something only if an element
+// keeps its handle from capture to capture. Two gaps remained: 38 of 136 page
+// handles the model used in the 2026-11-24 bigbox runs named a handle no longer
+// on the page, and all failed -- in `run-mwuuo3zk` the model named `t1446` 20
+// times after a filter changed the address and the page numbered the same cards
+// afresh (t1035 audit, "Handles"). So:
+//
+// - *Within one document, the element itself* (tier 0). The capture says which
+//   element of its document each one is (`nodeToken`, a serial the content
+//   script keeps per element while it lives). In the same document, an element
+//   with the serial a number was last seen with keeps that number -- through an
+//   insertion above it, a change of its words, or a filter the page applied
+//   without loading anew -- as long as it is still the same kind of element at
+//   the same loose address (its record included, so a node a list recycles for
+//   another item is not the item it showed). The top frame only: the capture
+//   names the top document, and a child frame's serials are its own.
+// - *Across pages of one path, an unambiguous match* (tier 2b). The loose
+//   address and the place name the page by its document path -- origin, path
+//   and a route fragment -- not its whole address, so the same card under
+//   another query (a filter, a sort, a search's second page of the same list)
+//   is found again by its loose address and its words. Only where exactly one
+//   element of the capture has them and exactly one number last seen under
+//   another query has them: two look-alikes, or two candidate numbers, get a
+//   new number, never a guess. The tiers above it stay within one address, as
+//   before; a control on another path is another page's control.
+//
+// A number is never given to another element: each tier only ever hands a
+// number to the element it last named, and a match it cannot make alone is a
+// new number.
+//
 // Handles were spelled `target.N` until t223, which is how the runs above
 // recorded them.
 //
@@ -178,7 +210,16 @@ type FlowHandles = {
  * which document it was last seen in (`navigation.timeOrigin`), where the
  * capture said: tier 4 never moves a number within one document.
  */
-type Seen = { loose: string; words: string; place: string; document?: number; node?: number };
+type Seen = {
+  loose: string; words: string; place: string;
+  /** The exact page address it was last seen at (a digest): tiers 2 to 4 match only there, tier 2b only elsewhere. */
+  at: string;
+  document?: number;
+  /** A layer root's serial in its document (t897). */
+  node?: number;
+  /** Any top-frame element's serial in its document (tier 0, t1036). */
+  identity?: number;
+};
 
 function emptyFlow(): FlowHandles {
   return { byAddress: new Map<string, number>(), spent: 0, seen: new Map(), byLoose: new Map() };
@@ -220,7 +261,11 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
       const documentOrigin = binding.evidence.navigation?.timeOrigin;
       // A layer root's serial in its document (header, t897); every other element is matched as before.
       const nodes = binding.evidence.elements.map((element) => (isLayer(element) ? binding.nodeTokens?.get(element.target) : undefined));
-      const numbers = rebound(flow, order, addresses, loose, words, places, documentOrigin, nodes);
+      // Every top-frame element's serial in its document, for tier 0 (header, t1036).
+      const identities = binding.evidence.elements.map((element) => ((element.frameId ?? 0) === 0 ? binding.nodeTokens?.get(element.target) : undefined));
+      const at = digest(binding.evidence.location);
+      const hidden = binding.evidence.elements.map((element) => element.hidden === true);
+      const numbers = rebound(flow, order, { addresses, loose, words, places, at, documentOrigin, nodes, identities, hidden });
       const assigned: string[] = [];
       for (const index of order) {
         let number = numbers[index];
@@ -235,9 +280,10 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
         if (!given.includes(number)) given.push(number);
         flow.byLoose.set(loose[index] as string, given);
         flow.byAddress.set(addresses[index] as string, number);
-        const seen: Seen = { loose: loose[index] as string, words: words[index] as string, place: places[index] as string };
+        const seen: Seen = { loose: loose[index] as string, words: words[index] as string, place: places[index] as string, at };
         if (documentOrigin !== undefined) seen.document = documentOrigin;
         if (nodes[index] !== undefined) seen.node = nodes[index];
+        if (identities[index] !== undefined) seen.identity = identities[index];
         flow.seen.set(number, seen);
         assigned[index] = `t${number}`;
       }
@@ -298,31 +344,43 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
 
 /**
  * The number each element already has in this Flow, where it has one, or
- * `undefined` for a control the Flow has not seen. Five tiers, each over what
- * the one before left unmatched, and no number is given to two elements:
+ * `undefined` for a control the Flow has not seen. Seven tiers, each over what
+ * the ones before left unmatched, and no number is given to two elements:
  *
+ * 0. Its own node, in the same document (top frame only): the number last seen
+ *    with this element's serial in this document, where it is still the same
+ *    kind of element at the same loose address (header, t1036). Its words may
+ *    have changed and anything may have been inserted around it.
  * 1. Its exact address, where the control remembered under that address has
  *    the same loose address and the same words. A popup's button that now
  *    sits at the main column's old position is not the button that was there.
  * 2. Its loose address and its words: the selector with every `nth-of-type`
- *    and `nth-child` taken out, the tag, the record, the frame and the page.
- *    A popup inserted before the main column moves every position after it,
- *    and the controls behind it are found again here, in document order.
- * 3. Its loose address alone, where one element is left and one number was
- *    given under it: a button whose label changed after a press ("Add to
- *    cart" to "Added") keeps its number. A list whose items changed is not
- *    paired up by count -- sixteen new results are not the sixteen old ones.
- * 4. Its place and its words, the selector left out entirely, where exactly
- *    one element of this capture has them, exactly one unclaimed number was
- *    last seen with them, and that number's control is not standing at its own
- *    old address on some other element: a reload that rewrote the selector's
- *    shape (see the header). Words are required -- a wordless control is told
- *    apart only by where it is -- and two look-alikes are left unmatched. A
- *    number last seen in this very document is never taken here: without a
- *    load, a control that vanished is gone and one that appeared is new.
+ *    and `nth-child` taken out, the tag, the record, the frame and the page's
+ *    path, among numbers last seen at this same address. A popup inserted
+ *    before the main column moves every position after it, and the controls
+ *    behind it are found again here, in document order.
+ * 3. Its loose address alone, among numbers last seen at this address, where
+ *    one element is left and one number was given under it: a button whose
+ *    label changed after a press ("Add to cart" to "Added") keeps its number. A
+ *    list whose items changed is not paired up by count -- sixteen new results
+ *    are not the sixteen old ones.
+ * 4. Its place and its words, the selector left out entirely, among numbers
+ *    last seen at this address, where exactly one element of this capture has
+ *    them, exactly one unclaimed number was last seen with them, and that
+ *    number's control is not standing at its own old address on some other
+ *    element: a reload that rewrote the selector's shape (see the header).
+ *    Words are required -- a wordless control is told apart only by where it
+ *    is -- and two look-alikes are left unmatched. A number last seen in this
+ *    very document is never taken here: without a load, a control that
+ *    vanished is gone and one that appeared is new.
+ * 2b. Its loose address and its words, among numbers last seen at another
+ *    address of the same path (another query), where exactly one element of
+ *    this capture has them and exactly one such number does: the same card
+ *    after a filter (header, t1036). Never in order, never a guess.
  * 5. Nothing: a control the page added, or one this cannot tell apart.
  */
-function rebound(flow: FlowHandles, order: readonly number[], addresses: readonly string[], loose: readonly string[], words: readonly string[], places: readonly string[], documentOrigin: number | undefined, nodes: ReadonlyArray<number | undefined>): Array<number | undefined> {
+function rebound(flow: FlowHandles, order: readonly number[], capture: ReboundCapture): Array<number | undefined> {
+  const { addresses, loose, words, at, documentOrigin, nodes } = capture;
   const numbers: Array<number | undefined> = [];
   const claimed = new Set<number>();
   // Within one document a layer's number is never given to another layer (header, t897).
@@ -335,40 +393,102 @@ function rebound(flow: FlowHandles, order: readonly number[], addresses: readonl
     numbers[index] = number;
     claimed.add(number);
   };
+  const seenHere = (number: number): boolean => flow.seen.get(number)?.at === at;
+  reboundByNode(flow, order, capture, numbers, claimed, take);
   for (const index of order) {
+    if (numbers[index] !== undefined) continue;
     const known = flow.byAddress.get(addresses[index] as string);
     const seen = known === undefined ? undefined : flow.seen.get(known);
     if (known !== undefined && !claimed.has(known) && seen !== undefined && seen.loose === loose[index] && seen.words === words[index]) take(index, known);
   }
   // Tier 2, in document order within each group of one loose address and words.
   pairInOrder(order.filter((index) => numbers[index] === undefined), (index) => `${loose[index]}\0${words[index]}`,
-    (key) => (flow.byLoose.get(key.slice(0, key.indexOf("\0"))) ?? []).filter((number) => !claimed.has(number) && `${flow.seen.get(number)?.loose}\0${flow.seen.get(number)?.words}` === key),
+    (key) => (flow.byLoose.get(key.slice(0, key.indexOf("\0"))) ?? []).filter((number) => !claimed.has(number) && seenHere(number) && `${flow.seen.get(number)?.loose}\0${flow.seen.get(number)?.words}` === key),
     false, take);
   // Tier 3, only where one element and one number leave nothing to choose.
   pairInOrder(order.filter((index) => numbers[index] === undefined), (index) => loose[index] as string,
-    (key) => (flow.byLoose.get(key) ?? []).filter((number) => !claimed.has(number)),
+    (key) => (flow.byLoose.get(key) ?? []).filter((number) => !claimed.has(number) && seenHere(number)),
     true, take);
-  reboundByPlace(flow, order, addresses, words, places, documentOrigin, numbers, claimed, take);
+  reboundByPlace(flow, order, capture, numbers, claimed, take);
+  reboundAcrossQueries(flow, order, capture, numbers, claimed, take);
   return numbers;
+}
+
+/** What `rebound` reads of one capture, index by index over its elements. */
+type ReboundCapture = {
+  addresses: readonly string[];
+  loose: readonly string[];
+  words: readonly string[];
+  places: readonly string[];
+  /** The capture's exact address, as `Seen.at` keeps it. */
+  at: string;
+  documentOrigin: number | undefined;
+  /** A layer root's serial (t897). */
+  nodes: ReadonlyArray<number | undefined>;
+  /** A top-frame element's serial (tier 0). */
+  identities: ReadonlyArray<number | undefined>;
+  /** Whether each element is one a capture with hidden elements listed as not rendered. */
+  hidden: readonly boolean[];
+};
+
+type Take = (index: number, number: number) => void;
+
+/** Tier 0 of `rebound`: the number this very element was last seen with in this document, at its loose address (header, t1036). */
+function reboundByNode(flow: FlowHandles, order: readonly number[], capture: ReboundCapture, numbers: ReadonlyArray<number | undefined>, claimed: ReadonlySet<number>, take: Take): void {
+  const { documentOrigin, identities, loose } = capture;
+  if (documentOrigin === undefined) return;
+  const byIdentity = new Map<number, number[]>();
+  for (const [number, seen] of flow.seen) {
+    if (seen.document !== documentOrigin || seen.identity === undefined) continue;
+    byIdentity.set(seen.identity, [...(byIdentity.get(seen.identity) ?? []), number]);
+  }
+  if (byIdentity.size === 0) return;
+  for (const index of order) {
+    const identity = identities[index];
+    if (identity === undefined || numbers[index] !== undefined) continue;
+    const candidates = (byIdentity.get(identity) ?? []).filter((number) => !claimed.has(number) && flow.seen.get(number)?.loose === loose[index]);
+    if (candidates.length === 1) take(index, candidates[0] as number);
+  }
+}
+
+/**
+ * Tier 2b of `rebound`: the same element under another query of its page's
+ * path, by its loose address and its words, only where one element of this
+ * capture and one number last seen elsewhere have them (header, t1036).
+ * Rendered elements only: a capture that also lists hidden ones must give a
+ * visible element the handle an ordinary capture would (t223), so a hidden
+ * look-alike neither takes a number here nor makes a visible one ambiguous.
+ */
+function reboundAcrossQueries(flow: FlowHandles, order: readonly number[], capture: ReboundCapture, numbers: ReadonlyArray<number | undefined>, claimed: ReadonlySet<number>, take: Take): void {
+  const { loose, words, at, hidden } = capture;
+  const keyOf = (index: number): string => `${loose[index]}\0${words[index]}`;
+  const rendered = order.filter((index) => hidden[index] !== true);
+  // Over the whole rendered capture, matched or not: a look-alike already matched still makes the key ambiguous.
+  const inCapture = new Map<string, number>();
+  for (const index of rendered) inCapture.set(keyOf(index), (inCapture.get(keyOf(index)) ?? 0) + 1);
+  const unmatched = rendered.filter((index) => numbers[index] === undefined && inCapture.get(keyOf(index)) === 1);
+  if (!unmatched.length) return;
+  const elsewhere = new Map<string, number[]>();
+  for (const [number, seen] of flow.seen) {
+    if (claimed.has(number) || seen.at === at) continue;
+    const key = `${seen.loose}\0${seen.words}`;
+    elsewhere.set(key, [...(elsewhere.get(key) ?? []), number]);
+  }
+  for (const index of unmatched) {
+    const candidates = (elsewhere.get(keyOf(index)) ?? []).filter((number) => !claimed.has(number));
+    if (candidates.length === 1) take(index, candidates[0] as number);
+  }
 }
 
 /**
  * Tier 4 of `rebound`: an element whose selector changed shape, found by its
- * place and words alone, only where nothing else could have them, and only for
- * a number last seen in another document. Where either capture did not say
- * which document it was, a reload is not ruled out and the tier stands.
+ * place and words alone, only where nothing else could have them, only among
+ * numbers last seen at this address, and only for a number last seen in
+ * another document. Where either capture did not say which document it was, a
+ * reload is not ruled out and the tier stands.
  */
-function reboundByPlace(
-  flow: FlowHandles,
-  order: readonly number[],
-  addresses: readonly string[],
-  words: readonly string[],
-  places: readonly string[],
-  documentOrigin: number | undefined,
-  numbers: ReadonlyArray<number | undefined>,
-  claimed: ReadonlySet<number>,
-  take: (index: number, number: number) => void
-): void {
+function reboundByPlace(flow: FlowHandles, order: readonly number[], capture: ReboundCapture, numbers: ReadonlyArray<number | undefined>, claimed: ReadonlySet<number>, take: Take): void {
+  const { addresses, words, places, at, documentOrigin } = capture;
   const keyOf = (index: number): string | undefined => (words[index] ? `${places[index]}\0${words[index]}` : undefined);
   // Over the whole capture, matched or not: a look-alike already matched still makes the key ambiguous.
   const inCapture = new Map<string, number>();
@@ -386,7 +506,7 @@ function reboundByPlace(
   }
   const lastSeen = new Map<string, number[]>();
   for (const [number, seen] of flow.seen) {
-    if (claimed.has(number) || !seen.words) continue;
+    if (claimed.has(number) || !seen.words || seen.at !== at) continue;
     if (documentOrigin !== undefined && seen.document === documentOrigin) continue;
     const key = `${seen.place}\0${seen.words}`;
     lastSeen.set(key, [...(lastSeen.get(key) ?? []), number]);
@@ -428,7 +548,8 @@ function pairInOrder(
  * it.
  */
 function looseAddressesOf(binding: WebLlmSnapshotBinding): string[] {
-  const location = binding.evidence.location;
+  // The page by its path, not its whole address: the same card under another query is the same loose address (tier 2b).
+  const location = documentPathOf(binding.evidence.location);
   return binding.evidence.elements.map((element) => {
     const selector = unpositioned(binding.selectors.get(element.target) ?? "");
     const hosts = binding.shadowHosts?.get(element.target)?.map(unpositioned).join("\u001f") ?? "";
@@ -447,7 +568,7 @@ function looseAddressesOf(binding: WebLlmSnapshotBinding): string[] {
  * widget's shadow root. Matched only together with its words (tier 4).
  */
 function placesOf(binding: WebLlmSnapshotBinding): string[] {
-  const location = binding.evidence.location;
+  const location = documentPathOf(binding.evidence.location);
   return binding.evidence.elements.map((element) => {
     const record = binding.records.get(element.target) ?? "";
     const depth = String(binding.shadowHosts?.get(element.target)?.length ?? 0);
@@ -544,4 +665,25 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
   // reads no handle), so both travel as they were taken, and so does the query.
   return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: binding.captureProvenance === undefined ? undefined : structuredClone(binding.captureProvenance), shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, cardWords, resetResource: binding.resetResource, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery, nodeTokens: binding.nodeTokens === undefined ? undefined : nodeTokens });
+}
+
+/** A short digest of a string, as the Flow's memory keeps addresses. */
+function digest(value: string): string {
+  return createHash("sha256").update(value).digest("base64url");
+}
+
+/**
+ * The page a location is on, for the loose address and the place: its origin
+ * and path, and a fragment only where it is a route (`#/...`, `#!...`), as the
+ * page key keeps one (`./page-view/location-key.ts`) -- the query left out, so the
+ * same card under another filter is at the same loose address (tier 2b). A
+ * location that is not a URL is its own page.
+ */
+function documentPathOf(location: string): string {
+  try {
+    const url = new URL(location);
+    return `${url.origin}${url.pathname}${/^#[/!]/u.test(url.hash) ? url.hash : ""}`;
+  } catch {
+    return location;
+  }
 }

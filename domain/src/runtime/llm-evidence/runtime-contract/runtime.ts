@@ -27,6 +27,20 @@ export type WebAutomationLlmEvidenceRuntime = {
   observeResult?(input: Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & {
     permission: AutomationStudioActionPermissionCheck;
   }): Promise<JsonObject | undefined>;
+  /**
+   * The result member that carries a page's keyed view (`pageView`, `../page-view/keyed-view.ts`), which Core's page
+   * channel delivers whole once per page key in a window and then as the lines that changed (t1036, D1, P-b);
+   * `budgetChars` overrides Core's page budget per delivery (P-c); `fullPage` is Core's `core.full_page` hook, the
+   * whole page with hidden elements and attributes as extra lines (D5, `../full-page/`), `undefined` when no page can
+   * be read now. Shaped as Core's binding declares it, so the runtime is handed to Core as it is.
+   */
+  pageChannel?: {
+    member: string;
+    budgetChars?: number;
+    fullPage?(input: Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & {
+      permission: AutomationStudioActionPermissionCheck;
+    }): Promise<JsonObject | undefined>;
+  };
   /** The handle each way out a trial's run pressed is named by in this Flow (t470, `./way-out-handles/`). */
   clearedControlHandles?(input: WebLlmClearedControlHandlesInput): Promise<Record<string, string>>;
   /** Where the page stands against where a build began (t462, `./start-state/`): passive, the same capture as `observeResult`. */

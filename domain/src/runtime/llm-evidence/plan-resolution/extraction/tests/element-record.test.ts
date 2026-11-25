@@ -2,7 +2,7 @@
 //
 // On `run-mwbkuxqt-c57f42cb` the asked table was one row: the account menu's
 // "Followed stores" line under a column the task named. The line sat in a
-// closed menu, so only a search printed its handle. A read of that handle ran
+// closed menu, so only the whole page printed its handle. A read of that handle ran
 // four times and made no row; Extract List made rows only of a detected list,
 // and detection refused the handle. The page below has that shape, with other
 // words: a header line listed only when a capture asks for hidden elements.
@@ -10,7 +10,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_FIND_ON_PAGE_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../../..";
+import { webLlmShownPageText } from "../../../shown-page";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../../..";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const READ = "web.output.dom-extract_list";
@@ -36,12 +37,13 @@ function runtimeOver(sent: Sent[]): WebAutomationLlmEvidenceRuntime {
   });
 }
 
-/** The handle a search printed for the hidden line. */
+/** The handle the whole page printed for the hidden line. */
 async function lineHandle(runtime: WebAutomationLlmEvidenceRuntime): Promise<string> {
   await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const found = await runtime.executeTool({ ...PROJECT, callId: "call.find", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "saved lists" } });
-  const handle = /^(t\d+) p "/mu.exec(String((found.evidence as JsonObject).found))?.[1];
-  assert.ok(handle !== undefined, String((found.evidence as JsonObject).found));
+  const full = await runtime.pageChannel?.fullPage?.({ ...PROJECT, callId: "call.full", permission: READ_PERMITTED });
+  const text = webLlmShownPageText(full) ?? "";
+  const handle = /^(t\d+) hidden <p> "/mu.exec(text)?.[1];
+  assert.ok(handle !== undefined, text);
   return handle;
 }
 

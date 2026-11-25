@@ -26,6 +26,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { automationStudioLlmLoopDigest, automationStudioLlmLoopMeaningfulInput, automationStudioLlmLoopRowBound, automationStudioLlmLoopRowDigests, type AutomationStudioLlmLoopReplayEvent } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { webLlmShownPageText } from "@fluxiq-web-extension/domain/node";
 
 /** One loop's events, and who ran it. */
 export type LoopReplayLoop = { role: string | null; briefId: string | null; events: AutomationStudioLlmLoopReplayEvent[] };
@@ -64,7 +65,7 @@ function viewDigest(location: string | undefined, page: string): string {
 /** The page a result leaves, when it says; `current` when it says nothing. */
 function stateAfterOf(result: Record<string, unknown> | undefined, current: { state: string | undefined; location: string | undefined }): { state: string | undefined; location: string | undefined } {
   const location = text(result?.location);
-  const page = text(result?.page);
+  const page = text(webLlmShownPageText(result));
   if (page !== undefined) return { state: viewDigest(location, page), location };
   if (location !== undefined && location !== current.location) return { state: digest(location), location };
   return current;
@@ -190,7 +191,8 @@ export async function readLoopReplayLoops(stepsDirectory: string, options: { byH
       const before = current.page;
       const targetWords = viewedTarget(current.view, input);
       current.page = stateAfterOf(result, before);
-      if (typeof result?.page === "string") current.view = handlesOf(result.page);
+      const shownPage = webLlmShownPageText(result);
+      if (shownPage !== undefined) current.view = handlesOf(shownPage);
       // A trial moved the page and reports none, so what stands now is not known until a call says.
       if (gateOwned) current.page = { state: undefined, location: undefined };
       const context = KEYED_ON_THE_BUILD.has(toolId) ? current.build : undefined;

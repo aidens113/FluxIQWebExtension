@@ -11,6 +11,7 @@ import { webLlmElementDescription } from "../../look-alikes";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { webLlmStateDigest } from "../../state-digest";
 import { publishedWebLlmPage } from "../published-page";
+import { webLlmPageViewText } from "../joined-text";
 
 type Raw = Record<string, unknown>;
 
@@ -45,7 +46,7 @@ test("an ARIA-grouped option's packet group is the group its view line ends with
   const groupOf = (target: string) => evidence.elements.find((element) => element.target === target)?.group;
   assert.deepEqual(["t3", "t4", "t6", "t7"].map(groupOf), ["Extra shot", "Extra shot", "Syrup", "Syrup"]);
   assert.equal(groupOf("t1"), undefined, "the label is outside the group it names");
-  const page = publishedWebLlmPage(evidence).page.split("\n");
+  const page = webLlmPageViewText(publishedWebLlmPage(evidence).pageView).split("\n");
   for (const target of ["t3", "t4", "t6", "t7"]) {
     const line = page.find((candidate) => candidate.startsWith(`${target} `));
     assert.ok(line?.endsWith(` group="${groupOf(target)}"`), `${target}: ${line}`);

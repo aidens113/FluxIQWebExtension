@@ -1,7 +1,7 @@
 // What the page view says about one element, piece by piece: whether it gets a
 // line and as what, its kind word, its words, its state tokens and where it is
-// on the page. Exported so a search over the page (`web.find_on_page`) prints
-// an element exactly as the view would.
+// on the page. Exported so a description of one element (`web.describe_element`)
+// prints an element exactly as the view would.
 
 export { attributeValue } from "./attribute-value";
 export { undoubledWords } from "./doubling";

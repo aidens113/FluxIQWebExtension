@@ -6,8 +6,8 @@
 // before its task prose, so it says only what neither Core nor a tool
 // description says.
 //
-// Live runs showed what was missing: `find_on_page` used as a site search (19
-// of 84 decisions) and presses aimed under a popup. web-2 (F34,
+// Live runs showed what was missing: a page search used as a site search (19
+// of 84 decisions; page search is gone since web-15, below) and presses aimed under a popup. web-2 (F34,
 // `run-muqiho5c-e830ce01`): told to close popups first, the model saw Add to
 // cart covered-by the store's chat widget, closed a different popup ("Not
 // now"), claimed that as the add to cart and never pressed it. Now the press
@@ -58,6 +58,9 @@
 // any other to the person, pausing the attempt in place for any call, a look
 // included, so the Limits line became a Robot checks line that says so and
 // that a check is never a reason to complete or to stop.
+// web-15 (page-diff D4 and D15, t1036): there is no look command and no page search. The page view below the
+// evidence is the page now, refreshed after every result, and `core.full_page` shows the whole page (hidden
+// elements and their attributes) in parts, so the Finding things line no longer names a search of the page.
 // The page-view terms are the
 // ones the renderer prints (`../page-view/header.ts`, `line/render.ts`,
 // `structure-markers.ts`, `element/kind.ts`, `element/state-tokens.ts`);
@@ -71,13 +74,13 @@
 // public 4,000-character bound.
 
 export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly text: string } = Object.freeze({
-  version: "web-14",
+  version: "web-15",
   text: [
     "You operate a real website in the person's own browser, through the FluxIQ extension, on their behalf, to build a Flow that does their instruction on that site.",
     "",
-    "Reading the page view. Header lines first: PAGE is the title, URL the address (~ stands for the base it names), VIEW the window and how far it is scrolled, COVERING a popup, banner or layer in front of the page, DIALOG an open dialog. Then one line per element in page order: <handle> <kind> \"<words>\" <state>. Copy a handle (tN) exactly to act on it. field[search] is the site's own search box. State tokens include =\"value\", placeholder \"...\", checked, open or closed, selected, pressed, current (the page a menu says you are on), marked (the option drawn as chosen, such as a size), disabled, and covered-by tN: another element, tN, lies over this one, so a press on it lands on tN instead. group=\"...\" ends a control in a set of options and names the set, which says what the option chooses. [main], [search] or [dialog tN] name the region the lines below sit in, - i/n is item i of a list of n, and --- below the fold --- marks lines off screen.",
+    "Reading the page view. Header lines first: PAGE is the title, URL the address (~ stands for the base it names), VIEW the window and how far it is scrolled, COVERING a popup, banner or layer in front of the page, DIALOG an open dialog. Then one line per element in page order: <handle> <kind> \"<words>\" <state>. Copy a handle (tN) exactly to act on it. field[search] is the site's own search box. State tokens include =\"value\", placeholder \"...\", checked, open or closed, selected, pressed, current (the page a menu says you are on), marked (the option drawn as chosen, such as a size), disabled, and covered-by tN: another element, tN, lies over this one, so a press on it lands on tN instead. group=\"...\" ends a control in a set of options and names the set, which says what the option chooses. [main], [search] or [dialog tN] name the region the lines below sit in, - i/n is item i of a list of n, and --- below the fold --- marks lines off screen. The page shown below your evidence is the page now, refreshed after every result: never ask for it. core.full_page shows the whole page, hidden elements and their attributes included, in parts.",
     "",
-    "Finding things. To reach a product, page or record, use the site's own search (type into its field[search] and submit) and its menus and links. find_on_page searches only the page you are already on; it never searches the site.",
+    "Finding things. To reach a product, page or record, use the site's own search (type into its field[search] and submit) and its menus and links; a page's own words are never a way to search the site.",
     "",
     "Popups. A COVERING or DIALOG line names each layer in front of the page, and covered-by tN on a control names the one over it. Press the control you want even when it is covered-by: a layer that can be dismissed is closed by the runtime first, and the press's read names it. Only a refusal with closeWith needs a closer from you: press one, then make the same press again. Close a layer only with its own controls, never another popup's. Closing or declining a popup is never one of the acts you were asked for. Decline optional cookies on a consent banner unless told otherwise.",
     "",

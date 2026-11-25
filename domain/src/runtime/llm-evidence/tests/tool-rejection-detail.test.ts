@@ -284,7 +284,7 @@ test("no refusal carries a word of the page outside the page it hands back, what
   // none.
   const said = refusals.map((refusal) => {
     const { routeState: _left, evidence, ...rest } = refusal as { routeState?: unknown; evidence: { page?: { schemaVersion?: string } } };
-    if (evidence.page !== undefined) assert.equal(evidence.page.schemaVersion, "web-llm-page.v3");
+    if (evidence.page !== undefined) assert.equal(evidence.page.schemaVersion, "web-llm-page.v4");
     const { page: _page, ...spoken } = evidence;
     return { ...rest, evidence: spoken };
   });

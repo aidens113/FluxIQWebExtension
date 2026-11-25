@@ -9,6 +9,7 @@ import { webJudgeStateValue } from "./state-value";
 import { webJudgeStructureFacts } from "./structure";
 import { screenedEvidenceUrl } from "../location";
 import { present } from "../present";
+import { webLlmShownPageText } from "../shown-page";
 
 /** Core's projector result, written key by key so a renamed contract field fails to compile here. */
 type WebJudgeProjection = ReturnType<AutomationStudioJudgeEvidenceProjector>;
@@ -101,7 +102,7 @@ export const projectWebJudgeEvidence: AutomationStudioJudgeEvidenceProjector = (
     if (parsed === undefined) missing.push("web_judge.state_invalid");
     else finding.state = parsed;
   }
-  const page = typeof evidence.page === "string" || Array.isArray(evidence.elements) || isJsonRecord(evidence.snapshot);
+  const page = webLlmShownPageText(evidence) !== undefined || Array.isArray(evidence.elements) || isJsonRecord(evidence.snapshot);
   const known = data || Object.keys(action).length > 0 || finding.found !== undefined || finding.element !== undefined || hasState || structure !== undefined;
   if (!known && !page) missing.push("web_judge.evidence_unrecognized");
   if (input.source === "state" && !known && page) missing.push("web_judge.semantic_state_missing");

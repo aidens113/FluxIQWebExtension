@@ -24,7 +24,7 @@
 
 import { writeFile } from "node:fs/promises";
 import type { JsonObject } from "fluxiq/core";
-import { publishedWebLlmPage, sanitizeWebLlmSnapshotWithBindings } from "@fluxiq-web-extension/domain";
+import { publishedWebLlmPage, sanitizeWebLlmSnapshotWithBindings, webLlmPageViewText } from "@fluxiq-web-extension/domain";
 import { expect, test } from "../../../index.js";
 import type { ContentHarness } from "../../../index.js";
 
@@ -167,7 +167,7 @@ async function viewAndOperables(harness: ContentHarness): Promise<{ lines: strin
   const binding = sanitizeWebLlmSnapshotWithBindings(snapshot);
   const addresses: Array<[string, string, string[]]> = [...binding.selectors].map(([target, selector]) => [target, selector, [...(binding.shadowHosts?.get(target) ?? [])]]);
   const operables = await page.evaluate(resolveOperables, addresses);
-  return { lines: publishedWebLlmPage(binding.evidence).page.split("\n"), operables };
+  return { lines: webLlmPageViewText(publishedWebLlmPage(binding.evidence).pageView).split("\n"), operables };
 }
 
 /** Every way the view misses or misreports an operable element, one line each. */

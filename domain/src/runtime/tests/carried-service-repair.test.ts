@@ -7,7 +7,7 @@ import { AutomationStudioService, createAutomationStudioSessionKeyProviderResolv
 import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
 import { IoRegistry, defineDomainIo, defineOutput } from "fluxiq/io";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "../llm-evidence";
+import { createWebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway, webLlmShownPageText } from "../llm-evidence";
 import { createWebAutomationHostRuntime, type WebAutomationHostRuntimeGateway } from "../host-runtime";
 import {
   createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle,
@@ -348,7 +348,7 @@ async function observedOpener(harness: Awaited<ReturnType<typeof fixture>>) {
   assert.ok(initial, "public runtime must provide its ordinary initial observation");
   const look = await harness.runtime.executeTool({ projectId: harness.projectId, flowId: harness.flowId, callId: "fixture.look", toolId: "core.run_node", value: initial });
   const evidence = record(look.evidence);
-  const page = typeof evidence.page === "string" ? evidence.page : record(evidence.page).page;
+  const page = webLlmShownPageText(evidence) ?? webLlmShownPageText(evidence.page);
   assert.equal(typeof page, "string");
   const handle = String(page).split("\n").flatMap((line) => /^(t[1-9][0-9]*) button(?: |$)/u.exec(line)?.[1] ?? []).at(0);
   assert.ok(handle, "the authored opener must be published by the actual observation");

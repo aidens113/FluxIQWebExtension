@@ -63,6 +63,7 @@ type Element = { accessibleName?: unknown; visibleText?: unknown; inputType?: un
 /** A control a handle names on a page this build was shown: its identity, and the words a person reads for it when they are spelled otherwise. */
 type Shown = { element: Element; words: string | undefined; resolved: Extract<WebLlmTargetResolution, { ok: true }> };
 
+/** The retired page search (page-diff D15): kept so a run recorded before still reads in words. */
 const FIND_TOOL_IDS: ReadonlySet<string> = new Set(["web.find_on_page", "web.recovery.find_on_page"]);
 /** Tools whose `target` is one handle and that type nothing: looks at a control, and the repair harness's press. */
 const HANDLE_TOOL_IDS: ReadonlySet<string> = new Set([

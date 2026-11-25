@@ -40,7 +40,7 @@ import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "@fluxiq-web-extension/domain";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID } from "@fluxiq-web-extension/domain";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, webLlmShownPageText } from "@fluxiq-web-extension/domain";
 import { outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAutomationOutputNodeId } from "@fluxiq-web-extension/domain/client";
 import { accessibleNameFor, boundedText, implicitRole, recordIdentity } from "../../identity";
 import { selectorFor, shadowHostChain } from "../../selector";
@@ -93,7 +93,7 @@ async function recordSteps(t: TestContext): Promise<RecordedSteps> {
   });
   const shown = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: webAutomationOutputNodeId("web.dom.capture_snapshot"), parameters: {}, consequences: [] } });
   // The page as the model reads it: one line per element, in page order.
-  const view = String((shown.evidence as JsonObject | undefined)?.page ?? "");
+  const view = webLlmShownPageText(shown.evidence) ?? "";
   const lines = view.split("\n").flatMap((line) => {
     const parsed = /^(t[1-9][0-9]*) (?:(button) )?"((?:[^"\\]|\\.)*)"/u.exec(line);
     return parsed ? [{ target: parsed[1]!, button: parsed[2] === "button", words: parsed[3]! }] : [];

@@ -10,6 +10,7 @@ import type { JsonObject } from "fluxiq/core";
 import { captured } from "./host/captured";
 import { webAutomationOutputNodeId } from "../../output-nodes";
 import { createWebAutomationHostRuntime, type WebAutomationHostRuntimeGateway } from "../host-runtime";
+import { webLlmShownPageText } from "../llm-evidence";
 
 const CLICK_NODE_ID = webAutomationOutputNodeId("web.dom.click");
 
@@ -33,7 +34,7 @@ test("a state capture for a Flow run records its send and the page's share in th
   const runtime = createWebAutomationHostRuntime(seam);
   const collected = automationStudioLlmStepLogSpans.collect(async () => await captured(runtime, { node: { id: "node.1", definitionId: CLICK_NODE_ID, parameterValues: {} }, attemptId: "a.1", inputs: {}, point: "after_action" }));
   const ref = await collected.done;
-  assert.equal(typeof ref.summary?.page, "string");
+  assert.equal(typeof webLlmShownPageText(ref.summary), "string");
   const spans = collected.spans();
   assert.deepEqual(spans.map((span) => span.name), ["send.capture_snapshot", "page.capture_snapshot"]);
   assert.equal(spans[0]!.detail, "succeeded");

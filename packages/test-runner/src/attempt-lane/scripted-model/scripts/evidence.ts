@@ -1,4 +1,6 @@
+import { webLlmShownPageText } from "@fluxiq-web-extension/domain/node";
 import type { ScriptedModelRequest } from "../wire-request.js";
+import { applyPageChanges } from "./page-changes.js";
 
 /** One entry of a decision's evidence window, as Core wrote it into the request. */
 export type EvidenceEntry = Readonly<{ callId: string; toolId: string; value: Readonly<Record<string, unknown>> }>;
@@ -13,18 +15,42 @@ export function evidenceOf(request: ScriptedModelRequest): readonly EvidenceEntr
   return Array.isArray(evidence) ? evidence.filter((entry): entry is EvidenceEntry => isRecord(entry) && typeof entry.toolId === "string" && isRecord(entry.value)) : [];
 }
 
-/** The page as it stands now, the words a model would read it from: the newest whole page in `core.current_view`. */
+/**
+ * The page as it stands now, rebuilt as a model would from the deliveries the request carries (page-diff D1): the
+ * newest whole delivery of the newest result's page key, then the `changes` after it, applied in order. A delivery
+ * that is a reference (`replacedBy`, `droppedAt`), a recalled page or unchanged adds nothing. A request from before
+ * the page channel holds the page itself, or `core.current_view`'s, and is read as it always was.
+ */
 export function currentPageOf(request: ScriptedModelRequest): string {
+  const pages = new Map<string, string[]>();
+  let current: string | undefined;
+  for (const entry of evidenceOf(request)) {
+    const delivery = entry.value.pageView;
+    if (!isRecord(delivery) || typeof delivery.key !== "string" || delivery.recalled === true) continue;
+    if (typeof delivery.whole === "string") {
+      pages.set(delivery.key, delivery.whole.split("\n"));
+      current = delivery.key;
+    } else if (typeof delivery.changes === "string") {
+      const before = pages.get(delivery.key);
+      if (before === undefined) throw new Error(`The request carries changes to page ${delivery.key} without its whole page`);
+      pages.set(delivery.key, applyPageChanges(before, delivery.changes.split("\n")));
+      current = delivery.key;
+    } else if (delivery.unchanged === true && pages.has(delivery.key)) current = delivery.key;
+  }
+  if (current !== undefined) return pages.get(current)!.join("\n");
   const view = [...evidenceOf(request)].reverse().find((entry) => entry.toolId === "core.current_view");
   const groups = view && Array.isArray(view.value.groups) ? view.value.groups : [];
   for (const group of groups) {
-    const held = isRecord(group) && isRecord(group.value) ? group.value.page : undefined;
-    // A call's answer holds the page's words directly, or the whole page answer around them.
-    const page = isRecord(held) ? held.page : held;
-    if (typeof page === "string") return page;
+    const value = isRecord(group) && isRecord(group.value) ? group.value : undefined;
+    // A call's answer is the page itself, or holds the whole page answer as its `page`.
+    const page = webLlmShownPageText(value) ?? webLlmShownPageText(value?.page);
+    if (page !== undefined) return page;
   }
   // Before any newer result, the first call's page is the only one.
-  for (const entry of [...evidenceOf(request)].reverse()) if (typeof entry.value.page === "string") return entry.value.page;
+  for (const entry of [...evidenceOf(request)].reverse()) {
+    const page = webLlmShownPageText(entry.value);
+    if (page !== undefined) return page;
+  }
   throw new Error("The request holds no page to read");
 }
 

@@ -406,7 +406,7 @@ test("a failed command carries the sanitized evidence packet, digest-bound to it
   const metadata = result.metadata as JsonObject;
   const evidence = metadata.failureEvidence as JsonObject;
   // The page as the model reads every page (t223), never the structured packet.
-  assert.equal(evidence.schemaVersion, "web-llm-page.v3");
+  assert.equal(evidence.schemaVersion, "web-llm-page.v4");
   assert.equal(Object.hasOwn(evidence, "elements"), false);
   assert.equal(evidence.trust, "untrusted-page-evidence");
   assert.equal(evidence.location, "https://fixture.test/checkout/pay?session=(withheld)", "the packet's location keeps the query and withholds the session token's value");

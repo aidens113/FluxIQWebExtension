@@ -3,7 +3,7 @@
 //
 //   PAGE "<title>"
 //   URL <location written with ~>   (~ = <base>)
-//   VIEW <w>x<h> at the top · <n> elements with visible words or a control, in page order · find_on_page searches the rest
+//   VIEW <w>x<h> at the top · <n> elements with visible words or a control, in page order
 //   COVERING <handle> "<name>" <kind> covers <n> close <handle> "<words>" · ...
 //   DIALOG <handle> "<name>" modal <kind> · ...
 //   LOADING <readyState> busy <kind> "<label>" ... pending-navigation
@@ -14,6 +14,10 @@
 //
 // These say what the dropped packet keys said: the title, the frame, loading,
 // navigation, dialogs, blockers, selection and a short capture.
+//
+// Each line is keyed by its label (`PAGE`, `URL`, `VIEW`, ...), which a view
+// prints at most once, so Core's page channel tells a header line that changed
+// from one that stayed (t1036, P-b).
 //
 // **A cover is named from its own element (t486, N5).** Lane D's round 12
 // build 2 (`run-mv636xyp-2e4fe54d`) said `COVERING t692` and nothing more: the
@@ -32,9 +36,10 @@ import type { WebLlmPageEvidence } from "../sanitize";
 import { quotedWords, webLlmReadableWords } from "./element";
 import { webLlmPageTree, type WebLlmPageTree } from "./page-tree";
 import type { WebLlmLinkWriter } from "./link-writer";
+import type { WebLlmPageLine } from "./keyed-line";
 
-/** The header lines for a page whose view has `lineCount` element lines. */
-export function webLlmPageHeader(evidence: WebLlmPageEvidence, links: WebLlmLinkWriter, lineCount: number): string[] {
+/** The header lines for a page whose view has `lineCount` element lines, each keyed by its label. */
+export function webLlmPageHeader(evidence: WebLlmPageEvidence, links: WebLlmLinkWriter, lineCount: number): WebLlmPageLine[] {
   const lines: Array<string | undefined> = [
     evidence.title === undefined ? undefined : `PAGE ${quotedWords(evidence.title)}`,
     `URL ${links.write(evidence.location)}   (~ = ${links.base})`,
@@ -47,11 +52,17 @@ export function webLlmPageHeader(evidence: WebLlmPageEvidence, links: WebLlmLink
     evidence.selectedText === undefined ? undefined : `SELECTED ${quotedWords(evidence.selectedText)}`,
     evidence.captureTruncated === true ? "CAPTURE incomplete: the browser left elements out" : undefined
   ];
-  return lines.filter((line): line is string => line !== undefined);
+  return lines.filter((line): line is string => line !== undefined).map((text) => ({ key: labelOf(text), text }));
+}
+
+/** A header line's label: its first word. */
+function labelOf(text: string): string {
+  const space = text.indexOf(" ");
+  return space < 0 ? text : text.slice(0, space);
 }
 
 function viewLine(evidence: WebLlmPageEvidence, lineCount: number): string {
-  const scope = `${lineCount} elements with visible words or a control, in page order · find_on_page searches the rest`;
+  const scope = `${lineCount} elements with visible words or a control, in page order`;
   const viewport = evidence.viewport;
   if (viewport === undefined) return `VIEW · ${scope}`;
   const scrolled = viewport.scrollX === 0 && viewport.scrollY === 0 ? "at the top"

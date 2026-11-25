@@ -8,7 +8,9 @@ import { scriptedJudgement } from "./judgement.js";
 const READ = "web.output.dom-extract_list";
 const NEXT = "web.output.dom-next_page";
 type Field = { key: string; sample?: string; type?: string; kind?: string };
-type Step = { step: number; actionId: string };
+type Step = { step: number; actionId: string; callId?: string; disposition?: string };
+/** The first-visit detours: the framework drafts every act that landed, so these come out of the Flow by an edit. */
+const DETOURS: ReadonlySet<string> = new Set(["consent", "offer", "not-now"]);
 
 function field(fields: readonly Field[], test: (candidate: Field) => boolean, name: string): string {
   const found = fields.find(test);
@@ -40,8 +42,8 @@ const decide: ScriptedReply = (request) => {
     if (!box) throw new Error("The page shows no search field");
     return toolCall("Search for paper towels.", "search", "core.run_node", { node: "web.output.dom-type", parameters: { target: { handle: box.handle }, text: "paper towels", submit: true }, consequences: [] }, true);
   }
-  if (!made.has("department")) return press(request, "department", /(?:checkbox|clickable|field).*"Paper Towels"(?:\s|$)/u);
-  if (!made.has("delivery")) return press(request, "delivery", /(?:checkbox|clickable|field).*"Delivery"(?:\s|$)/u);
+  if (!made.has("department")) return press(request, "department", /(?:checkbox|clickable|field).*"Paper Towels(?: \(\d+\))?"(?:\s|$)/u);
+  if (!made.has("delivery")) return press(request, "delivery", /(?:checkbox|clickable|field).*"Delivery(?: \(\d+\))?"(?:\s|$)/u);
   if (!made.has("sort")) {
     const sort = pageLine(page, /(?:select|combobox).*Sort/iu) ?? pageLine(page, /\b(?:select|combobox)\b/u);
     if (!sort) throw new Error("The page shows no sort control");
@@ -60,10 +62,12 @@ const decide: ScriptedReply = (request) => {
     const price = field(fields, (candidate) => candidate.type === "currency", "price");
     const rating = field(fields, (candidate) => /^\d\.\d$/u.test(candidate.sample ?? ""), "rating");
     const ad = field(fields, (candidate) => /^(?:Sponsored|Ad)$/u.test(candidate.sample ?? ""), "advertisement mark");
+    // The task's processing names these two columns too (`processing-declarations.ts`), so the read keeps them beside the asked ones.
+    const fulfillment = field(fields, (candidate) => /Delivery/u.test(candidate.sample ?? ""), "fulfilment line");
     return toolCall("Read eligible packs on this page, excluding advertisements and accessories.", "read-first", "core.run_node", {
       node: READ,
       parameters: {
-        extractList: { handle: detected.value.extraction, fields: { name, price, rating }, where: [{ field: ad, is: "present", not: true }, { field: rating, atLeast: 4.5 }, { field: name, contains: ["holder", "dispenser"], not: true }], minItems: 0 },
+        extractList: { handle: detected.value.extraction, fields: { name, price, rating, ad, fulfillment }, where: [{ field: ad, is: "present", not: true }, { field: rating, atLeast: 4.5 }, { field: name, contains: ["holder", "dispenser"], not: true }], minItems: 0 },
         recordOutput: { datasetId: "rated-delivery-towels", schema: { schemaVersion: "0.1", fields: ["name", "price", "rating"].map((id) => ({ id, label: id, valueType: "string" })) }, writeMode: "append" }
       }, consequences: []
     }, true);
@@ -73,6 +77,8 @@ const decide: ScriptedReply = (request) => {
   const read = steps.find((step) => step.actionId === READ);
   const next = steps.find((step) => step.actionId === NEXT);
   if (!read || !next) throw new Error("The draft does not hold its read and next-page steps");
+  const detours = steps.filter((step) => step.callId !== undefined && DETOURS.has(step.callId) && step.disposition === "kept");
+  if (detours.length) return { kind: "evidence_tool_decision", summary: "Take the first-visit detours out of the Flow.", decision: { kind: "amend_draft", amendments: detours.map((step) => ({ step: step.step, change: "drop" })) } };
   if (!JSON.stringify(steps).includes("repeats through")) return { kind: "evidence_tool_decision", summary: "Read and advance until the list itself ends.", decision: { kind: "amend_draft", amendments: [{ step: read.step, change: "repeat", while: next.step, through: next.step }] } };
   if (!made.has("read-rest")) return toolCall("Read from the current page through the end using that loop.", "read-rest", "core.run_flow", { from: read.step });
   const ran = evidence.find((entry) => entry.callId === "read-rest");

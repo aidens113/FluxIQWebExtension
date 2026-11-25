@@ -32,6 +32,24 @@ function payloadOf(message: string): Record<string, unknown> | undefined {
   return isRecord(parsed) ? parsed : undefined;
 }
 
+/** The task a conversation continues: the newest earlier message whose last text block is a task's JSON object, naming its `taskKind`. */
+function continuedPayload(earlier: readonly unknown[]): Record<string, unknown> | undefined {
+  for (const message of [...earlier].reverse()) {
+    const content = isRecord(message) ? message.content : undefined;
+    const blocks = Array.isArray(content) ? content : [];
+    const text = blocks.length === 0 ? "" : wordsOf([blocks.at(-1)]).trim();
+    if (!text.startsWith("{")) continue;
+    try {
+      const parsed = payloadOf(text);
+      if (parsed !== undefined && typeof parsed.taskKind === "string") return parsed;
+    } catch (error) {
+      // A block that opens as an object and is not JSON is no task: the next earlier message is tried. Any other failure is not that.
+      if (!(error instanceof SyntaxError)) throw error;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Reads a request's kind and contents off the wire. A task's user message is JSON
  * naming its `taskKind`; a chat turn is the person's words, which carry none
@@ -44,7 +62,9 @@ export function readScriptedModelRequest(body: string, ordinalOf: (kind: Scripte
   if (wire.stream !== true) throw new Error("The request does not ask for a stream, which every Core call does");
   const last: unknown = wire.messages.at(-1);
   const message = wordsOf(isRecord(last) ? last.content : undefined);
-  const payload = payloadOf(message);
+  // A judge's first ask is the attempt's own conversation with the judge's task as the last block of an earlier
+  // message and a closing word of prose after it: the task is then read from there, never taken for a chat turn.
+  const payload = payloadOf(message) ?? continuedPayload(wire.messages.slice(0, -1));
   const kind = payload === undefined ? "panel_command" : typeof payload.taskKind === "string" ? payload.taskKind : "unknown";
   const format = isRecord(wire.output_config) && isRecord(wire.output_config.format) ? wire.output_config.format : undefined;
   const schema = format && isRecord(format.schema) ? format.schema : undefined;

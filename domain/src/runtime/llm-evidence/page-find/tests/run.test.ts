@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_FIND_ON_PAGE_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { shownPageText } from "../../page-view/tests/shown-page-lines";
 
-const PROJECT = { projectId: "project.find", flowId: "flow.find" } as const;
+const PROJECT = { projectId: "project.describe", flowId: "flow.describe" } as const;
 
 /**
  * A page whose account menu is closed: its items are listed only when a capture
@@ -36,47 +37,44 @@ function site(): { gateway: WebLlmEvidenceGateway; captures: JsonObject[]; click
   return { gateway, captures, clicks };
 }
 
-test("find_on_page is offered with the view described, searches a capture that includes hidden elements, and answers web-llm-find.v1", async () => {
+test("describe_element is offered with the view described, describes a capture that includes hidden elements, and answers web-llm-describe.v1", async () => {
   const { gateway, captures } = site();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const tool = runtime.tools.find((candidate) => candidate.toolId === WEB_LLM_FIND_ON_PAGE_TOOL_ID);
+  const tool = runtime.tools.find((candidate) => candidate.toolId === WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID);
   assert.ok(tool, "the tool is registered");
   assert.equal(tool.effect, "observe");
   assert.ok(tool.description.length <= 2_000, "within Core's description bound");
-  assert.match(tool.description, /handle \(tN/u);
+  assert.match(tool.description, /printed on a page line/u);
 
-  const found = await runtime.executeTool({ ...PROJECT, callId: "call.find", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "menu-orders" } });
+  const described = await runtime.executeTool({ ...PROJECT, callId: "call.describe", toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, value: { target: "t3" } });
   assert.deepEqual(captures, [{ includeHidden: true, checkWaitMs: 15_000 }]);
-  assert.equal(found.resultCode, "web.inspect.succeeded");
-  assert.equal(found.effectApplied, false);
-  const evidence = found.evidence as { schemaVersion: string; location: string; found: string };
-  assert.equal(evidence.schemaVersion, "web-llm-find.v1");
+  assert.equal(described.resultCode, "web.inspect.succeeded");
+  assert.equal(described.effectApplied, false);
+  const evidence = described.evidence as { schemaVersion: string; location: string; element: string };
+  assert.equal(evidence.schemaVersion, "web-llm-describe.v1");
   assert.equal(evidence.location, "https://shop.test/home");
-  assert.deepEqual(evidence.found.split("\n"), ["1 match for \"menu-orders\"", "t3 link \"Your orders\" (data-testid=\"menu-orders\") not rendered"]);
-  assert.equal(JSON.stringify(found.evidence).includes("#orders"), false, "no selector reaches the model");
+  assert.match(evidence.element, /^t3 <a> link "Your orders"$/mu);
+  assert.equal(JSON.stringify(described.evidence).includes("#orders"), false, "no selector reaches the model");
 });
 
-test("a handle a search printed is one a press binds, and a hidden element never takes a visible one's handle", async () => {
+test("a hidden element a description captured never takes a visible one's handle, and a press binds the visible handle", async () => {
   const { gateway, clicks } = site();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  assert.match(String((looked.evidence as { page: string }).page), /^t1 button "Account"$/mu);
+  assert.match(shownPageText(looked.evidence), /^t1 button "Account"$/mu);
 
-  const found = await runtime.executeTool({ ...PROJECT, callId: "call.find", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "account" } });
-  assert.match((found.evidence as { found: string }).found, /^t1 button "Account" on screen$/mu);
-  const orders = await runtime.executeTool({ ...PROJECT, callId: "call.find.orders", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "your orders" } });
-  const handle = /^(t\d+) link "Your orders"/mu.exec((orders.evidence as { found: string }).found)?.[1];
-  assert.equal(handle, "t3");
+  const described = await runtime.executeTool({ ...PROJECT, callId: "call.describe", toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, value: { target: "t3" } });
+  assert.match((described.evidence as { element: string }).element, /^t3 <a> link "Your orders"$/mu);
 
   const pressed = await runtime.executeTool({ ...PROJECT, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
   assert.deepEqual(clicks, ["#account"]);
 });
 
-test("a search with bad input is refused with the domain's input reasons, and captures nothing", async () => {
+test("a description with bad input is refused with the domain's input reasons, and captures nothing", async () => {
   const { gateway, captures } = site();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.find.bad", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "x", selector: "#orders" } });
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.describe.bad", toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, value: { target: "t1", selector: "#orders" } });
   assert.equal(refused.resultCode, "web.action.rejected.invalid_input");
   assert.equal((refused.evidence as { detail: { reason: string } }).detail.reason, "unexpected_input_keys");
   assert.deepEqual(captures, []);

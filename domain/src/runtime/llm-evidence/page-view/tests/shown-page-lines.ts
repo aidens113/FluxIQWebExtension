@@ -1,12 +1,13 @@
 // Test support: the element lines of a page as the model read it (t223).
 //
-// Every page leaves the domain as the compact view (`web-llm-page.v3`), whose
-// `page` is header lines, a blank line, then one line per element that has
+// Every page leaves the domain as the compact view (`web-llm-page.v4`), whose
+// keyed lines read as header lines, a blank line, then one line per element that has
 // visible words or is a control: `<handle> [<heading>] [<kind>] ["<words>"] ...`.
 // A test that once read `elements` off a returned packet reads these instead:
 // the handle the model would copy, the kind word, and the words it saw.
 
 import { present } from "../../present";
+import { webLlmShownPageText } from "../../shown-page";
 
 const KINDS = /^(?:link|button|field(?::[\w-]+|\[search\])?|select|checkbox|radio|switch|toggle|tab|menuitem|option|slider|treeitem|img|clickable|dialog|layer|h[1-6])$/u;
 
@@ -23,12 +24,12 @@ export type ShownPageLine = {
   line: string;
 };
 
-/** The `page` text of a result: the published page itself, or the `page` a refusal carries. */
+/** The page text of a result: the published page itself, or the page a refusal carries. */
 export function shownPageText(result: unknown): string {
-  const record = result as { page?: unknown } | undefined;
-  if (typeof record?.page === "string") return record.page;
-  const inner = (record?.page as { page?: unknown } | undefined)?.page;
-  if (typeof inner === "string") return inner;
+  const own = webLlmShownPageText(result);
+  if (own !== undefined) return own;
+  const inner = webLlmShownPageText((result as { page?: unknown } | undefined)?.page);
+  if (inner !== undefined) return inner;
   throw new Error("the result carries no published page");
 }
 

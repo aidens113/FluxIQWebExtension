@@ -25,7 +25,7 @@ import {
 // Core's harness-option registry, not built into Core. Every assertion below
 // goes through the real registry, so "registered" means the registry accepted
 // them, offered them, and dispatched to them.
-test("registers eight options into Core's registry and offers them only while exploring", () => {
+test("registers seven options into Core's registry and offers them only while exploring", () => {
   const registry = registered();
 
   assert.deepEqual(registry.list(resolution()).map((option) => option.toolId), [...WEB_RECOVERY_HARNESS_OPTION_IDS]);
@@ -49,7 +49,7 @@ test("hands the model the tool fields and none of the gate metadata", () => {
   // the structure markers, and where the rest is found. It stays within Core's
   // 2,000-character description limit, as every option's does.
   const inspect = tools.find((tool) => tool.toolId === "web.recovery.inspect")?.description ?? "";
-  for (const said of ["one line per element", "handle (tN", "covered-by", "COVERING", "DIALOG", "LOADING", "[main]", "- 3/16", "below the fold", "untrusted page data", "find_on_page", "describe_element"]) assert.equal(inspect.includes(said), true, said);
+  for (const said of ["one line per element", "handle (tN", "covered-by", "COVERING", "DIALOG", "LOADING", "[main]", "- 3/16", "below the fold", "untrusted page data", "describe_element"]) assert.equal(inspect.includes(said), true, said);
   assert.doesNotMatch(inspect, /\b(?:isDialog|inDialog|coveredBy|frontLayer|blockedBy)\b|its box/u, "no field of the old packet");
   for (const tool of tools) assert.equal(tool.description.length <= 2_000, true, `${tool.toolId}: ${tool.description.length} characters, over Core's 2,000`);
   assert.deepEqual(tools.filter((tool) => tool.effect === "mutate").map((tool) => tool.toolId), ["web.recovery.press", "web.recovery.enter_field", "web.recovery.navigate_in_scope"]);
@@ -65,31 +65,28 @@ test("declares nothing destructive, and withholds the mutating options from a ca
   assert.deepEqual(registry.list(resolution()).filter((option) => option.safety?.sideEffect === "destructive"), []);
   assert.deepEqual(
     registry.list({ scope: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID }, stage: "gather" }).map((option) => option.toolId),
-    ["web.recovery.inspect", "web.recovery.wait_for_change", "web.recovery.detect_repeating_structure", "web.recovery.find_on_page", "web.recovery.describe_element"]
+    ["web.recovery.inspect", "web.recovery.wait_for_change", "web.recovery.detect_repeating_structure", "web.recovery.describe_element"]
   );
 });
 
-test("finds on the whole page and describes one element, and keeps what the model read for the repair", async () => {
+test("describes one element of the page the exploration showed, and keeps what the model read for the repair", async () => {
   const { registry, commands, retained } = registeredWith();
 
-  const found = await execute(registry, "web.recovery.find_on_page", { query: "delete" }) as JsonObject;
-  assert.equal(found.schemaVersion, "web-llm-find.v1");
-  assert.deepEqual(String(found.found).split("\n"), ["1 match for \"delete\"", "t2 button \"Delete item\" on screen"]);
-  assert.equal(JSON.stringify(found).includes("#delete"), false);
+  await execute(registry, "web.recovery.inspect", {});
   assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
-  // The search's capture is retained beside what the model read of it.
+  // The page's capture is retained beside what the model read of it.
   assert.equal(retained.length, 1);
   assert.equal(retained[0]!.selectors.get("t2"), "#delete");
 
   const described = await execute(registry, "web.recovery.describe_element", { target: "t2" }) as JsonObject;
   assert.equal(described.schemaVersion, "web-llm-describe.v1");
   assert.match(String(described.element), /^t2 <button> button "Delete item"$/mu);
-  // Described from the packet the search showed: nothing was captured again.
+  // Described from the packet the page showed: nothing was captured again.
   assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
   assert.equal(retained.length, 2);
 
   const pressed = await run(registry, "web.recovery.press", { target: "t2", consequences: [] }) as { resultCode: string };
-  assert.equal(pressed.resultCode, "web.action.succeeded", "a handle a search printed is one a press binds");
+  assert.equal(pressed.resultCode, "web.action.succeeded", "a handle the page printed is one a press binds");
 });
 
 test("describe refuses before this exploration has shown anything, and a handle no page showed", async () => {
@@ -108,7 +105,7 @@ test("inspects the page, returns the compact view naming elements by opaque hand
   const evidence = await execute(registry, "web.recovery.inspect", {});
 
   // The page as the model reads every page (t223), with no element objects.
-  assert.equal((evidence as JsonObject).schemaVersion, "web-llm-page.v3");
+  assert.equal((evidence as JsonObject).schemaVersion, "web-llm-page.v4");
   assert.equal(Object.hasOwn(evidence as JsonObject, "elements"), false);
   assert.deepEqual(shownPageLines(evidence).map((line) => line.target), ["t1", "t2", "t3"]);
   assert.equal(JSON.stringify(evidence).includes("#delete"), false);

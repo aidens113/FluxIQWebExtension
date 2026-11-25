@@ -13,7 +13,7 @@
 // that pressing that "×" and then the answer works. The oracle is the Scenario
 // Lab's own state.
 
-import { publishedWebLlmPage, sanitizeWebLlmSnapshotWithBindings } from "@fluxiq-web-extension/domain";
+import { publishedWebLlmPage, sanitizeWebLlmSnapshotWithBindings, webLlmPageViewText } from "@fluxiq-web-extension/domain";
 import { expect, test } from "../../../index.js";
 import type { ContentHarness } from "../../../index.js";
 
@@ -21,7 +21,7 @@ type SiteState = { consent: string; chat: { greetingDismissed: boolean } };
 
 async function view(harness: ContentHarness) {
   const { evidence } = sanitizeWebLlmSnapshotWithBindings(await harness.capture());
-  return { evidence, page: publishedWebLlmPage(evidence).page };
+  return { evidence, page: webLlmPageViewText(publishedWebLlmPage(evidence).pageView) };
 }
 
 test.describe("company-website: the chat greeting over the consent sheet's answers", () => {

@@ -155,7 +155,7 @@ test("a look's route state is what observeRouteState answers for the same page",
   assert.deepEqual(looked.routeState, answer);
   // What the look returned is the compact view of that page (t223); the route
   // state is of the structured packet behind it, the one the host reads.
-  assert.equal((looked.evidence as JsonObject).schemaVersion, "web-llm-page.v3");
+  assert.equal((looked.evidence as JsonObject).schemaVersion, "web-llm-page.v4");
 });
 
 test("a page with a dialog open and an overlay in front says both, as observeRouteState does", async () => {

@@ -467,7 +467,7 @@ as a dialog's Close, is dispatched unchanged on every pass.
   compact view, below.
 - **The host runtime boundary** (`domain/src/runtime/host-runtime.ts`) reuses
   the packet's sanitizer for the state snapshots Core stores on an attempt, and
-  stores the snapshot as the compact view (`summary`, `web-llm-page.v3`), so a
+  stores the snapshot as the compact view (`summary`, `web-llm-page.v4`), so a
   state ref cannot carry more page data, or more sensitive page data, than a
   page the model is shown; Core returns it to a recovery model as
   `core.state_snapshot`. It snapshots only nodes that act on a page: a web
@@ -530,19 +530,52 @@ as a dialog's Close, is dispatched unchanged on every pass.
 
 The user's order of 2026-09-30 (t223): only elements with visible text or that
 are controls, in the least possible format, and a search over everything else.
-Every page leaves the domain as `web-llm-page.v3`
-(`llm-evidence/page-view/published-page.ts`):
+Every page leaves the domain as `web-llm-page.v4`
+(`llm-evidence/page-view/published-page.ts`; `.v3` carried the same lines as
+one `page` string):
 
 ```text
-{ schemaVersion: "web-llm-page.v3", trust, location, truncated,
+{ schemaVersion: "web-llm-page.v4", trust, location, truncated,
   failedTarget?, failedTargetMissing?, failedTargetUnknown?, repairParameters?, repairCandidates?,
-  page }   // header lines, a blank line, then one line per element, joined by "\n"
+  pageView: { key, lines: [{ key, text, extra? }] } }
+  // the lines' texts joined by "\n": header lines, a blank line, then one line per element
 ```
 
+- **Keyed lines for Core's page channel** (t1036, D1). `pageView.key` is the
+  page's key (`page-view/location-key.ts`): its screened location without the
+  query (user, 2026-11-25: the URL "not including the ? params"), with the scheme
+  and host lower-cased, a default port dropped, the path's trailing slash
+  dropped (not the root's) and the fragment dropped unless it is a route
+  (`#/`, `#!`; the lead's reading). A layer over a page, a filter, a sort and
+  another page of the same list are the same key and arrive as changes; where a
+  query names a different page, Core's channel sends a diff longer than the base
+  as a new base. Each line is keyed (`page-view/keyed-line.ts`): a header
+  line by its label (`PAGE`, `URL`, `VIEW`, ...), the blank line `-`, an
+  element line by its handle (`t49`, its text starting with it), and a marker
+  line by the element line it stands before (`^t62`, then `^t62.2`). Keys are
+  unique in a view. Core keeps the last view it delivered for each key in a
+  run and sends the next as the lines that changed; it never reads a text.
+  `extra: true` marks a line only a full capture shows, never part of the base
+  a later diff compares with. Every domain reader of the text reads it through
+  `webLlmShownPageText` (`llm-evidence/shown-page/`, browser-safe), which also reads a `.v3`
+  page's `page` string, as a stored state summary or a recorded result may
+  carry. The keyed view is not an observed-state key
+  (`observed-state/observed-state-keys.ts`): Core's page channel owns it.
 - **Header lines**, each only when it has something to say: `PAGE "<title>"`,
   `URL <location on a ~ base>   (~ = <base>)`, `VIEW <w>x<h> at the top · <n>
-  elements ...`, `COVERING`, `DIALOG`, `LOADING`, `FRAMES ... did not answer`,
-  `ARRIVED`, `SELECTED`, and `CAPTURE incomplete`.
+  elements with visible words or a control, in page order`, `COVERING`,
+  `DIALOG`, `LOADING`, `FRAMES ... did not answer`, `ARRIVED`, `SELECTED`, and
+  `CAPTURE incomplete`. The view says nothing of a page search (D15).
+- **The whole page on request** (t1036, D5). `webLlmFullPage`
+  (`llm-evidence/full-page/`) is Core's `core.full_page` hook: it takes the
+  capture that also lists what is not rendered (`includeHidden`), restamps it
+  as every authoring capture is, and publishes the ordinary view with, marked
+  `extra`, a `FULL` header line, each hidden element as
+  `tN hidden <kind> "<words>"` (key `tN`) and each element's attributes whole
+  as `tN attributes: name="value" ...` (key `tN.attributes`), in page order
+  (`page-view/full-view.ts`). The lines that are not extra are exactly the
+  ordinary view of the same capture. A page that cannot be read now answers
+  nothing; Core sends a view over its page budget in parts.
 - **Which elements get a line**, in document order (`page-view/line/choice.ts`):
   every visible control, every visible layer, every visible element with
   meaningful words of its own, and an image whose alt says something no line
@@ -589,22 +622,19 @@ Every page leaves the domain as `web-llm-page.v3`
 - **Structure markers** on lines of their own: `[landmark]` (with frame, modal
   dialog and form), `- i/n` for a list item, `- row r`, and
   `--- below the fold ---` and its kin where the screen zone changes.
-- **Search and detail.** `web.find_on_page` (`llm-evidence/page-find/`) takes a
-  fresh capture that also lists what is not rendered (`includeHidden`) and
-  matches a query, case-insensitively, against every element's words, label,
-  group, value, options and address and every attribute's name and value,
-  hidden, off-page and text-less elements included; matches come in page
-  order, fifty to a page, each printed as the view prints it (a control's
-  `group="…"` included) plus the field or attribute that matched and where the
-  element is (`web-llm-find.v1`). Asking for a group's words finds its legend
-  (or the ARIA group itself) and every element in the group.
-  `web.describe_element` prints one element whole: its line, every attribute,
-  its box and where it is, and every other field, `group` among them, read
-  as the view reads it
-  (`web-llm-describe.v1`). Both
-  are authoring tools and recovery options (`web.recovery.find_on_page`,
-  `web.recovery.describe_element`); a hidden element never moves a visible
-  element's handle, and the state digest leaves hidden elements out.
+- **Whole page and detail.** There is no page search (page-diff D15, t1036):
+  the way to see more than the view is the whole page on request
+  (`core.full_page`, `llm-evidence/full-page/`), the view with the hidden
+  elements and every element's attributes as extra lines, captured with
+  `includeHidden`. `web.describe_element` (`llm-evidence/page-find/`) prints one
+  element whole: its line, every attribute, its box and where it is, and every
+  other field, `group` among them, read as the view reads it
+  (`web-llm-describe.v1`), from a fresh capture that also lists what is not
+  rendered. It is an authoring tool and a recovery option
+  (`web.recovery.describe_element`); a hidden element never moves a visible
+  element's handle, and the state digest leaves hidden elements out. The
+  retired ids stay in the vocabulary and the call words only so that recorded
+  runs still read.
 - **Every path a page reaches a model** goes through `publishedWebLlmPage`: a
   node run's look or action result (`node-run/run.ts`), a refusal's `page`
   (`tool-rejection.ts`), a replay or verify answer, every recovery option, the
@@ -622,6 +652,19 @@ Every page leaves the domain as `web-llm-page.v3`
   its tag, record and words, so every control behind the layer keeps its
   handle, and the layer's controls get their own. A changed list is not paired
   up by position: new items get new handles.
+- **The same element keeps its handle for the whole run** (t1036, D2). Within
+  one document, an element keeps the number last seen with its own node
+  (`nodeToken`, the content script's serial per element) while it is the same
+  kind of element at the same address with positions removed, record included:
+  through an insertion above it, a change of its words, or a filter applied
+  without a load (top frame only). The address with positions removed and the
+  place name the page by its path, not its query, so the same card under
+  another query -- a filter, a sort -- is found again by that address and its
+  words, only where exactly one element of the capture and exactly one number
+  last seen under another query have them; look-alikes get new handles, never
+  a guess. A control on another path keeps a number of its own. A bare handle
+  that two remembered pages place at selectors differing only in positions
+  resolves to its newest view (`plan-resolution/target-packets.ts`).
 - **A press through a cover is not sent.** When the look a press takes before
   acting shows its control `coveredBy` a layer, the press is refused
   `target_covered` (`blocked_by_dialog` under a modal) with the reason
@@ -680,7 +723,7 @@ Every page leaves the domain as `web-llm-page.v3`
   (t237; Core's seam is `llm/domain-instructions/`). It says the model operates
   a real website in the person's browser on their behalf, how the header lines,
   element lines, states and markers above read, that the site's own search and
-  navigation find things while `find_on_page` searches only the current page,
+  navigation find things,
   how a covering popup is handled (press the control; the runtime closes a
   dismissable layer first; only a refusal with `closeWith` needs a closer),
   that optional cookies are declined, that a marked option is left alone, that
@@ -855,7 +898,7 @@ The user's order of 2026-09-30 (t200): "Remove ANY AND ALL LIMITS ON THE NUMBER
 OF ELEMENTS PASSED TO MODEL. DO NOT HIDE INFORMATION OR USE ANY RANKING
 ALGORITHM." What the domain does with a capture, as of that task -- the
 structured packet below is what the compact view is written from, and what
-`web.describe_element` and `web.find_on_page` read:
+`web.describe_element` and the whole page read:
 
 - **Every element, in the capture's order.** `sanitize.ts` describes every
   element the capture sent, in document order. There is no element bound (it
