@@ -225,6 +225,26 @@ Lead owns shared-state updates, exact observed acceptance, commits, pushes and p
 
 ## Work Ledger
 
+### 2026-11-25 - t1039 integrated: a chart of the Flow for every Lab attempt
+- Why: the user asked (2026-11-25) for "a flow chart type thing saved as a png for each run", showing "the CURRENT draft/finalized flow that it created regardless of whether it works or not, with each node shown", and "the input and (a real example) output through the system".
+- Changed: `packages/test-runner/src/flow-chart/` draws from the run's step files. Every `lab attempt` writes `flow.png` and `flow.svg` per attempt (`attempt-N/`) and at the run's end, whatever ended it. The chart shows:
+  - the instruction and its parameters;
+  - every node, with a real example of what passed through it;
+  - loops and the result read;
+  - the output: the answer shown to the person, or else the answer offered and the completion check's outcome.
+
+  `pnpm lab flow-chart <run dir>` charts any past run. Report: `data-first-simplification-plan/reports/t1039.md`.
+- Validation: the lead's run on the t1039 tree:
+  - Flow-chart, lab-attempt-command and attempt-series tests: `# tests 40 # pass 40 # fail 0`.
+  - test-runner `tsc --noEmit` exit 0; structure audit passed.
+  - `time pnpm lab flow-chart <t1036 run-mwvsbihx>` drew 13 nodes in `real 0m1.600s`.
+  - The lead viewed the charts of mwveg5ls and run-mwvsbihx.
+  - `pnpm task finish` audit passed.
+- Not verified: the hook inside a real `lab attempt` (the first Lab run on a tree with it shows it).
+- Already visible in the charts:
+  - mwveg5ls's result read is the search list, not the cart.
+  - The scripted run's draft holds the same page read three times, and its offered rows hold a duplicate.
+
 ### 2026-11-25 - t1034 integrated (fluxiq 0.54.19): the asked table is read from its own list; three unreadable replies; no judge over another table
 - Changed (from run-mwveg5ls, debug `language-driven-flow-loop-plan/debugs/run-mwveg5ls-0266dfe0.md`):
   - Core result-columns words: the asked table is a list of its own, detected on the page that shows it and read through that detection's handle. Domain `rejection-next`: an element handle names one element; `handle_not_in_packet` now has a `next`.
