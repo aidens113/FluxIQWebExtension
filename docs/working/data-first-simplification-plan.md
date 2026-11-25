@@ -224,6 +224,12 @@ Lead owns shared-state updates, exact observed acceptance, commits, pushes and p
 
 ## Work Ledger
 
+### 2026-11-24 - t1033 integrated: a kept column nobody asked for never makes a read press or refuse
+- Changed: the read request carries `askedFields` (domain `actions/extraction/{request,read-request,schema}.ts`, `output-nodes/extract-list/declared-columns.ts`, `plan-resolution/extraction/slot.ts`, `structure/packet.ts`). The content reader (`list-reader.ts`, `item-record/`) expands and requires full text only for asked fields and those a where, dedupe or sort names; kept fields are read as shown. Saved Flows without `askedFields` are unchanged. In the merge with t1029's spec edit, the lead kept the stricter oracle (beside `identity`, only detection-offered keys).
+- Validation: the lead's run on the merged tree against the synced shared Core: extension `content/extraction` gave `# pass 562 # fail 0`; domain `actions output-nodes llm-evidence/{plan-resolution,structure,node-run}` gave `# pass 1543 # fail 0`; domain and extension checks exit 0; audit passed; `test-content.mjs social-read-completion --headed` gave `3 passed (4.3m)`.
+- Follow-up: none.
+
+
 ### 2026-11-24 - t1032 integrated (fluxiq 0.54.18): no judge yes could stand since 11-22; the asked table is the result
 - Changed:
   - Since t987 (11-22) the web judge projector marked every structure detection and Core's own calls as evidence gaps, and Core holds any yes unsure while gaps stand, so no yes could stand in a run that detected a list or set result processing. Core now never hands its own calls (`core.*` but the four that run host nodes, and its control-flow and timing nodes) to a host projector (`judge-evidence/core-call.ts`); the domain reads a detection as an observation.
