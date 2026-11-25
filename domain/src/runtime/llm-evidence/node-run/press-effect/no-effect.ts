@@ -64,7 +64,7 @@ function sentence(after: WebLlmSnapshotBinding, handle: string | undefined, pres
     const named = webLlmElementWords(dialog);
     said.push(`The dialog ${dialog.target}${named === undefined ? "" : ` ${quotedWords(named)}`} it is in is still open, so nothing in it has been applied yet.`);
   }
-  said.push("Treat this press as having done nothing: look for what the page still needs, such as a field it wants filled or another control, before pressing it again.");
+  said.push("Treat this press as having done nothing: find on the page this answer carries what it still needs, such as a field it wants filled or another control, before pressing it again.");
   return said.join(" ");
 }
 

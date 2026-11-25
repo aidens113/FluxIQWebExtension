@@ -269,8 +269,9 @@ export function createWebAutomationLlmEvidenceRuntime(
     // Flow authoring. `same_scope` is the safe default and matches what the
     // authoring `navigate` tool below already enforces; a per-run allowlist
     // is per-exploration, so threading one needs the coordinator, not this
-    // line.
-    harnessOptions: webAutomationRecoveryHarnessOptionBundle({ gateway, scopePolicy: { kind: "same_scope" }, retainSelectors: retain, extractionHandles }),
+    // line. Their captures are numbered by the run's stable handles, as every authoring capture is, so a recovery's
+    // pages and `core.full_page` print the same handle for an element (t1042).
+    harnessOptions: webAutomationRecoveryHarnessOptionBundle({ gateway, scopePolicy: { kind: "same_scope" }, retainSelectors: retain, extractionHandles, restamp: (scope, binding) => stableHandles.restamp(scope, binding) }),
     // How Core reads a refusal without learning any of this domain's result
     // codes.
     classifyRefusal: webAutomationExplorationRefusalClassifier,

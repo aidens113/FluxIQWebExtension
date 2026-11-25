@@ -77,12 +77,14 @@ import { webResetResource } from "../control-spot";
 // given the run's handles (`restamp`), prints it. It then binds to that
 // element as it is now, and nothing is refused; before, the refusal named that
 // same handle in `instead` and the model had to send it again. Only a handle
-// the page now gives to no element is refused as stale.
+// the page now gives to no element is refused as stale. The check is
+// `./held-now.ts`, which a recovery's press shares (t1042); a recovery's
+// detection is given the run's handles too, so it binds the same way.
 //
 // **A handle binds here as it binds for a press or a read (t903).** Until t903
 // a target bound only through the last page view the model was shown
 // (`returned`), so a handle a search or a description printed -- a closed
-// menu's line, found only by `web.find_on_page` -- was refused
+// menu's line, found only by the page search since retired -- was refused
 // `handle_not_in_packet` although a press or a read of that same handle ran:
 // those bind through every view and look of the page (`targets`,
 // `../plan-resolution/target-packets.ts`). On `run-mwbkuxqt-c57f42cb`
@@ -92,7 +94,7 @@ import { webResetResource } from "../control-spot";
 // this very page -- never another page's, so a handle from a page the browser
 // has left is still refused as stale (t477) -- and the page itself says whether
 // its selector still names anything (`target_not_found`). Without `targets` --
-// the recovery path -- only the shown packet binds.
+// the recovery path -- the shown packet binds, and else the page now (above).
 //
 // **A list found away from the target names no target (t903).** The content
 // script's outward search can reach a list far from the target, and the packet
@@ -128,6 +130,7 @@ import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import { webAutomationUrlPath } from "../../../output-nodes";
 import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmExtractionHandles } from "./handles";
+import { webLlmElementHeldNow } from "./held-now";
 import { webLlmStructureListName } from "./list-name";
 import { splitDetectedStructure } from "./packet";
 import { webLlmStructureRefusal } from "./refusal";
@@ -321,17 +324,16 @@ function boundTarget(context: WebLlmStructureDetectionContext, current: WebLlmSn
 
 /**
  * The target bound to the element the page now gives its handle (header, t1036): the capture this call took, with the
- * run's stable handles, prints `target` for one element, so that element as it is now is the target. Nothing where the
- * caller gives no handles (the recovery path) or the page gives the handle to no element.
+ * run's stable handles, prints `target` for one element, so that element as it is now is the target (`./held-now.ts`,
+ * the one check a recovery's press shares). Nothing where the caller gives no handles or the page gives the handle to no
+ * element.
  */
 function heldNow(current: WebLlmSnapshotBinding, target: string, restamp: WebLlmStructureDetectionContext["restamp"]): BoundTarget | undefined {
   if (restamp === undefined) return undefined;
-  const now = restamp(current);
-  const element = now.evidence.elements.find((candidate) => candidate.target === target);
-  const selector = element === undefined ? undefined : now.selectors.get(target);
-  if (element === undefined || selector === undefined) return undefined;
-  const frameDocument = frameDocumentOf(element);
-  return { selector, frameId: element.frameId, frameOrigin: frameDocument?.origin, frameUrlPath: frameDocument?.path };
+  const held = webLlmElementHeldNow(restamp(current), target);
+  if (held === undefined) return undefined;
+  const frameDocument = frameDocumentOf(held.element);
+  return { selector: held.selector, frameId: held.element.frameId, frameOrigin: frameDocument?.origin, frameUrlPath: frameDocument?.path };
 }
 
 /**

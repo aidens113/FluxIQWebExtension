@@ -5,10 +5,15 @@
 // How Core is told to read one of this domain's refusals, and what a scope
 // means here, live beside this in `exploration-terms.ts`: those are read while
 // an exploration runs, these are what the bundle is built from.
+//
+// `web.recovery.inspect`, a look the model could ask for, is retired (t1042,
+// the user's "no more look command"): every result carries the page through
+// Core's page channel, `core.full_page` gives it whole, and the opening look is
+// Core's own first call of the navigate option (`./options.ts`). Recorded runs
+// still name it; nothing registers it.
 
 /** Every option this bundle registers, in the order it registers them. */
 export const WEB_RECOVERY_HARNESS_OPTION_IDS = [
-  "web.recovery.inspect",
   "web.recovery.press",
   "web.recovery.enter_field",
   "web.recovery.wait_for_change",
@@ -19,14 +24,13 @@ export const WEB_RECOVERY_HARNESS_OPTION_IDS = [
 
 export type WebRecoveryHarnessOptionId = (typeof WEB_RECOVERY_HARNESS_OPTION_IDS)[number];
 
-export const WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
 // One press option, not two. There used to be `reveal` and `act_safe`, identical
 // in schema and differing only in which controls each refused on its own
 // judgement; with that judgement gone they were the same option twice.
-export const WEB_RECOVERY_PRESS_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
-export const WEB_RECOVERY_ENTER_FIELD_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
-export const WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
-export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
-export const WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
+export const WEB_RECOVERY_PRESS_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
+export const WEB_RECOVERY_ENTER_FIELD_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
+export const WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
+export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
+export const WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 /** One element in full, named by a handle this exploration was shown (t223). */
-export const WEB_RECOVERY_DESCRIBE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[6];
+export const WEB_RECOVERY_DESCRIBE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
