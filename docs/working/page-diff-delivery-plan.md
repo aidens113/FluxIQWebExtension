@@ -125,6 +125,27 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-25 - t1042 (W1 leftovers) and t1041 (asked column names) integrated (fluxiq 0.54.22); t1043 opened
+- t1042 changed:
+  - Recovery carries the page channel and `core.full_page`. Its opening capture rides navigate with no url, and `web.recovery.inspect` is withdrawn.
+  - `core.full_page` had answered "unavailable" for the web domain, because Core read a bare view where the domain publishes it under its member. Core now reads both.
+  - No model text says to look (`tool-failure.ts`, `failure-brief.ts`, `no-effect.ts`).
+  - `structure/held-now.ts` binds a handle the page still gives an element, for both detect and the recovery press.
+- t1041 changed: a renamed column takes the asked name as its label. Site-word matching moves into the name rewrite, and saved steps re-resolve.
+- Validation: the lead's runs.
+  - **t1042:**
+    - `pnpm --filter fluxiq check` exit 0.
+    - Core groups over `runtime/adaptation runtime/llm answer-first` printed `Tests 4784 passed (4784)`, then `Tests 508 passed (508)`, `all groups passed`.
+    - Core audit passed; domain `llm-evidence runtime/tests output-nodes` `# tests 2321 # pass 2321 # fail 0`; domain check exit 0; extension `# tests 4168 # pass 4168`; downstream audit passed; model-text ok.
+    - The worker's scripted run-mww7zdb0 passed 4 of 4.
+  - **t1041:**
+    - Domain `llm-evidence output-nodes actions/extraction extraction runtime/tests` `# tests 2457 # pass 2457 # fail 0`; domain check exit 0; extension `# tests 4168 # pass 4168`; audit passed; model-text ok.
+    - Its scripted run-mww8s1va passed 4 of 4, with `"columns":["name","price","rating"]` in the answer turns (the lead read attempts 1 and 2).
+  - **Merges:** `pnpm task finish` both: audits passed, and Core `pnpm check` passed for t1042. Core bumped to 0.54.22; both `dev`s pushed (Core `75cb3957d`, downstream `14151363b`); shared Core synced; `git merge dev` into t1015 and t1037 both sides, each `contains dev: yes`.
+- Found by t1041's Opus retry: a carousel flipping during a press makes the press look lasting. The act is then carried, and Core projects its own not-held before-placeholder through the domain projector, so a right answer stays unconfirmed. Dev's baseline passed only by timing.
+  - The cause is in domain `press-effect/change/statement.ts:58` and Core `judge-evidence/summary.ts:107` and `witnesses.ts:127`.
+  - t1043 is opened for it (worker-heavy, slot 4; proof: a forced-race test plus three clean scripted runs) and must land before any live run.
+
 ### 2026-11-25 - W1 (t1036) integrated with W2 combined (fluxiq 0.54.21); the scripted bigbox run passes 4 of 4; t1041, t1042 and W3 phase 2 dispatched
 - Changed:
   - **W1's D1-D8, D10, D11, D14, D15:**
