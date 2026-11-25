@@ -125,7 +125,7 @@ test("baseline accepts drift only for one authoritative reverted validated targe
 
 test("exposes separate provider-free baseline and exact readiness commands", async () => {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
-  assert.equal(manifest.scripts?.["demo:llm:explore:baseline"], "node scripts/run-demo-llm-exploration-baseline.mjs");
+  assert.equal(manifest.scripts?.["demo:llm:explore:baseline"], "node scripts/lab/live-guards/cli/behind-dev.mjs && node scripts/run-demo-llm-exploration-baseline.mjs");
   assert.equal(manifest.scripts?.["demo:llm:explore:adapt:readiness"], "node scripts/inspect-demo-llm-exploration-adaptation-readiness.mjs");
   const baseline = await readFile(path.join(repositoryRoot, "scripts/run-demo-llm-exploration-baseline.mjs"), "utf8");
   const readiness = await readFile(path.join(repositoryRoot, "scripts/inspect-demo-llm-exploration-adaptation-readiness.mjs"), "utf8");

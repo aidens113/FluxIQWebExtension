@@ -32,6 +32,17 @@ function linksCore(manifest) {
   return Object.keys({ ...manifest.dependencies, ...manifest.devDependencies }).some((name) => name === "fluxiq" || name.startsWith("@fluxiq/"));
 }
 
+/** The one thing allowed in front of the gate: the dev-ancestry guard, which is asked before anything else. */
+function devGuard(directory) {
+  return `node ${path.posix.relative(directory, "scripts/lab/live-guards/cli/behind-dev.mjs")} && `;
+}
+
+/** True when the script starts with the core-build gate, optionally after exactly the dev-ancestry guard. */
+function startsWithGate(script, directory) {
+  const gate = `node ${path.posix.relative(directory, "scripts/check/core-build.mjs")} && `;
+  return script.startsWith(gate) || script.startsWith(devGuard(directory) + gate);
+}
+
 function gated(name) {
   return !UNGATED.has(name) && (name === "build" || name === "check" || name === "test" || name.startsWith("test:"));
 }
@@ -42,13 +53,22 @@ test("every build, check and test script of a package that links Core refuses a 
   for (const directory of packageDirectories()) {
     const manifest = JSON.parse(readFileSync(path.join(repositoryRoot, directory, "package.json"), "utf8"));
     if (!linksCore(manifest)) continue;
-    const gate = `node ${path.posix.relative(directory, "scripts/check/core-build.mjs")} && `;
     for (const [name, script] of Object.entries(manifest.scripts ?? {})) {
       if (!gated(name)) continue;
       checked += 1;
-      if (!script.startsWith(gate)) ungated.push(`${directory} "${name}": ${script}`);
+      if (!startsWithGate(script, directory)) ungated.push(`${directory} "${name}": ${script}`);
     }
   }
   assert.ok(checked > 0, "found the packages that link Core");
   assert.deepEqual(ungated, [], `these scripts compile or run against Core's dist without the gate (start them with the core-build gate):\n${ungated.join("\n")}`);
+});
+
+test("only the dev-ancestry guard may stand in front of the core-build gate", () => {
+  const directory = "apps/extension";
+  const gate = "node ../../scripts/check/core-build.mjs && tsc";
+  assert.equal(startsWithGate(gate, directory), true);
+  assert.equal(startsWithGate(`node ../../scripts/lab/live-guards/cli/behind-dev.mjs && ${gate}`, directory), true);
+  assert.equal(startsWithGate(`echo hi && ${gate}`, directory), false);
+  assert.equal(startsWithGate(`node ../../scripts/lab/live-guards/cli/behind-dev.mjs && echo hi && ${gate}`, directory), false);
+  assert.equal(startsWithGate("node ../../scripts/lab/live-guards/cli/behind-dev.mjs && tsc", directory), false);
 });

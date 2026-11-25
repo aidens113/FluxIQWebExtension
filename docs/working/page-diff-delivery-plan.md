@@ -58,21 +58,23 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - **The Sonnet run** (run-mwvgjb8c, $0.80, 90 s, 22 calls) set the store, read the cart as the result, and the product check accepted it. But the oracle marked the answer wrong: it added "Loftwell 1 Roll $1.97, 4.6 stars", which is not the cheapest towel that qualifies for pickup today at that store (`missingActs`, `unaskedChanges: cart:5520104:pickup`). Our judge, on Sonnet, accepted it, so judging pickup availability is an open defect.
   - Other open trees: **t1015** `paid-bigbox` (the live lane, slot 1); **t1035** (the audit tree; its files are on dev; to abandon).
 - **Next (in order):**
-  1. W1 and W2 are integrated (ledger). Running in parallel:
-     - W3 phase 2 (t1037; sub-supervisor; Lab slot 2);
-     - t1041, the asked column names (worker; slot 4);
-     - t1042, W1's leftovers (worker-heavy; slot 3).
-     Verify each, integrate it, and merge `dev` into every lane after each merge (AGENTS.md).
-     - **W3 phase 2 (2026-11-25, hand-back at Partial):** the loop now redrafts in place under `draftEdits: "framework"`, with `rerun` kept as a seventh edit. `core.run_flow` is offered from the first decision and refused by name with no draft. The result read is chosen by the asked columns. The look wording is gone from its files.
-       - **20 real-sql tests fail because of the switch.** They are in 12 files, in answer-first, service-bootstrap and sdk-acceptance.
-       - Three are regressions the later attempts depend on: a hand step counted as a repair; a saved Flow no longer running as `run_flow`; a repaired row repeat pressing only some rows.
-       - The wiring worker (Opus) is fixing them at their causes. It also owns t1042's two recovery tests, which need `core.run_flow` added to their offered-tool assertions. A text worker is fixing the remaining stale words.
-       - Still to do: delete the 13-edit grammar, rebuild after 0.54.22, and the scripted bigbox run, 4 of 4.
-     - **t1043:** the self-changing-page race, integrated (fluxiq 0.54.23; see the ledger).
-  2. Then remove `maxStepsWithoutProgress` from every loop (AGENTS.md: no count ends a round). It crosses W3's files, so it comes after W3.
-  - Tracked: Core `route-state/build-routing` "run-munneauy-de8663ed, rebuilt" fails at Core HEAD, independent of this plan (W3 found it). Fix it in the next sweep, or as its own task.
-  3. A P4 offline proof across the integrated tree. Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
-  4. Also open: the judge accepting a wrong item on pickup availability (above); the answer-contract column reader misreading "columns title only"; fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`; `pinned-calls-job-board` setup wait; `tool-rejection.ts` at 799 lines; a Flow playback guard for list location (a wire change); a second full sweep and `main` promotion (`main` has not moved).
+  1. W1, W2, t1041 to t1045 and t1047 (the sweep's guard-test fallout) are integrated (ledger). Running: W3 phase 2 (t1037; sub-supervisor; Lab slot 2). Verify it, integrate it, and merge `dev` into every lane after the merge (AGENTS.md).
+     - **W3 phase 2 (2026-11-25, 14:35):** the 13-edit grammar is deleted and the scripted model no longer sends `reorder`.
+       - **Scripted bigbox run passed 4 of 4 under framework drafting** (run-mwwol1vu-1a8e7146, provider-free). Each attempt read 16 rows and gave the right answer. Model calls per attempt: 14, then 1 (the judge), 0 and 0. Attempts 2 to 4 each ran `flow.b50fa2ca` with continuation held; the saved Flow has 7 nodes.
+       - **Still open:** t1043's `carried-undeclared` test fails under framework drafting; the cause has not been traced yet. About 78 lines of Core's `llm-flow-bootstrap.md` still describe the deleted grammar and need a doc pass.
+  2. Right after W3, each edits W3's files, so none can start before:
+     - remove `maxStepsWithoutProgress` from every loop (AGENTS.md: no count ends a round);
+     - the judge and the decider see every read's rows (t1044's two main causes: `result-feed/feed.ts:269`, `decision-context/current-view.ts:28`). This was to be t1047, but that id went to the sweep fallout, so it takes the next free id;
+     - fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`;
+     - the answer-contract column reader misreading "columns title only".
+  3. Refit and run the other scripted tasks (4 attempts each). Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
+  4. Also open:
+     - the judge accepting a wrong item on pickup availability (above);
+     - `pinned-calls-job-board` setup wait;
+     - `tool-rejection.ts` at 799 lines;
+     - a Flow playback guard for list location (a wire change);
+     - Core `components/automation/tests/ownership.test.ts`, which timed out at 15 s in the first sweep under load and takes 1.4 s alone; act on it only if the second sweep repeats it;
+     - the second full sweep of the day and `main` promotion (`main` has not moved).
 - **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
 
 ## Decisions
@@ -131,6 +133,38 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - First full sweep of the day (t1046) read; its downstream failures fixed as t1047
+- Sweep: `dev` at the start of the sweep (before t1044 and t1045), in `fxwork/t1046`, run through the heavy gate.
+  - Core build passed. Core `pnpm check` passed. Downstream `pnpm build` passed.
+  - Core fluxiq tests had 2 failures:
+    - `route-state/build-routing` "run-munneauy": fixed on `dev` by t1045, which landed after the sweep started;
+    - `components/automation/tests/ownership.test.ts`: `Test timed out in 15000ms` while W3's checks held the other heavy slot. Alone, `vitest run` on it printed `Tests 2 passed (2)` in 1440 ms. Recorded as contention, not changed; act on it only if the second sweep repeats it.
+  - The rest passed: parallel group `Tests 2 failed | 20488 passed | 6 skipped`; real-sql group `Tests 3251 passed | 1 skipped`.
+  - Downstream `pnpm check` had 2 script-test failures out of 834, and downstream `pnpm test` (all 12 packages ran, `--no-bail`) had 14 failures, all in test-runner. All 16 came from t1040: the dev-ancestry guard now stands in front of the Lab entry and the launchers, and those tests pinned the old order or text. t1040's narrow checks never ran them.
+- t1047 (worker, Sonnet; brief `docs/working/data-first-simplification-plan/briefs/t1047-sweep-guard-test-fallout.md`; report `.../reports/t1047.md`):
+  - fixed the tests, not the guard: `package-gates.test.mjs` allows exactly the dev-ancestry guard ahead of the core-build gate and still refuses any other prefix (new case);
+  - `unbuilt.test.mjs` gives its fixture Core a commit and a local `dev`, so the unbuilt-Core refusal is still what stops the run;
+  - 10 test-runner files expect the guarded launcher text.
+  - The `inspect-*` launchers stay unguarded, as t1040 intended (they are read-only).
+- Validation: the lead's re-runs in the t1047 worktree.
+  - `node --test scripts/check/core-build/tests/package-gates.test.mjs` printed `# tests 2 # pass 2 # fail 0`.
+  - `node --test scripts/lab/core/build/tests/unbuilt.test.mjs` printed `# tests 13 # pass 13 # fail 0`.
+  - `heavy-slot.mjs run t1047-lead-runner -- pnpm --filter @fluxiq-web-extension/test-runner test` printed `# tests 3016 # pass 3011 # fail 0 # skipped 5`.
+
+### 2026-11-25 - t1045 (build-routing) and t1044 (judge continuation) integrated (fluxiq 0.54.24); t1044's main cause queued; sweep running
+- t1045: Core `route-state/tests/build-routing.test.ts` was stale after t1036 withdrew the look. Its scripted build ends at 15 decisions, not 18, and captures 11 times, not 12. The test now asserts the 15 decisions and the totals `[11, 0, 9]`. Not a product regression; t1036 updated only the sibling `state-digest-cost.test.ts`. The lead's W1 checks missed it because `route-state` was not in its folder list.
+- t1044 (run-mwvgjb8c, where the judge accepted a wrong pickup item):
+  - **The cause.** The judge never saw the cheaper qualifying row. It sat in page 1's read, which reached the judge as `working: [{step, kept: 15}]`, a count only (`answer-first/result-feed/feed.ts:269`), while page 2's rows came whole.
+  - **The decider picked wrong for a related reason.** Every read shares one `holder:read` group (`runtime/llm/decision-context/current-view.ts:28`), so page 2's read dropped page 1's rows from its view.
+  - **Merged now:** a judge continuation no longer claims a call is shown above when its view reference resolves outside the prefix (`models/providers/anthropic/continuation.ts`, with `judge-held-whole.test.ts`).
+  - **Queued as t1047 after W3:** both main causes, which are in W3's files. W3 was told; its "rows from every read that ran" design may cover them.
+- Validation: the lead's runs.
+  - t1045's folder: `vitest run src/framework/automation-service/route-state` printed `Test Files 7 passed (7)`, `Tests 49 passed (49)`.
+  - t1044: anthropic, llm/anthropic and judge-continues-decider printed `Tests 158 passed (158)`. After `dev` (t1045) was merged into its Core branch, anthropic, llm/anthropic and route-state printed `Tests 206 passed (206)`.
+  - `pnpm task finish` both. Core `pnpm check` for t1044 first failed 2 of 529 script tests while the full sweep loaded the machine. A re-run printed `# tests 529 # pass 529 # fail 0`, and the finish then printed `"validation":{"ran":true,"command":"pnpm check","passed":true}`. The two tests' names were not captured; the next such failure keeps its log.
+  - Core bumped to 0.54.24; both `dev`s pushed (Core `2af56a961`, downstream `67f779182`); `git merge dev` into t1015 and t1037 both sides, each `contains dev: yes`.
+- A full sweep on `dev` (t1046, the first of the day) is running in its own worktree; it started before t1044 and t1045.
 
 ### 2026-11-25 - t1043 (self-changing page) integrated (fluxiq 0.54.23)
 - Changed:

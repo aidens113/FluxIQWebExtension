@@ -161,7 +161,14 @@ test("the Lab entry point refuses an unbuilt Core before it builds or runs anyth
   for (const [directory, manifest] of Object.entries(PACKAGES)) {
     await writeFile(path.join(root, "packages", directory, "package.json"), JSON.stringify({ ...manifest, scripts: { build: "node ../../scripts/build-cache/cli.mjs" } }));
   }
-  execFileSync("git", ["init", "-q"], { cwd: root, stdio: "ignore" });
+  // The dev-ancestry guard runs first and reads this Core's history, so the
+  // fixture has a commit and a local `dev` at it; nothing is behind, and the
+  // only thing that can stop the run is the unbuilt-Core check under test.
+  const git = (...args) => execFileSync("git", ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd: root, stdio: "ignore" });
+  git("init", "-q");
+  git("add", ".gitignore", "pnpm-workspace.yaml");
+  git("commit", "-q", "-m", "fixture");
+  git("branch", "-f", "dev", "HEAD");
   // A stand-in `pnpm` first on PATH records that it was reached and fails, so
   // a regression here fails this test rather than starting a real build or a
   // Lab run. The first thing `run-lab.mjs` does after its Core guards is call
