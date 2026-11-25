@@ -399,6 +399,16 @@ Merge `dev` into the task branch and re-run the narrowest relevant checks before
 merging back. That is what catches two tasks that changed different files and
 still produced an incompatible system, which git cannot detect.
 
+**Every test lane holds the latest `dev` before any test run** (user,
+2026-11-25: "merge all test runs before doing more tests ... MERGE TO DEV AND
+MERGE TEST LANES AFTER ANY SERIOUS UPDATES"). A finished, verified update is
+merged into `dev` promptly, not held on its branch. Right after any merge into
+`dev`, the lead merges `dev` into every open test lane (both repositories),
+reinstalls and rebuilds what changed, and only then lets any further test run
+start, whether scripted, provider-free or live. A lane in the middle of edits
+takes the merge around its uncommitted files. The Lab refuses any run on a
+tree that lacks `dev` (t1040 extends the live-run guard to every run).
+
 ## Committing And Pushing
 
 Only the senior supervisor agent commits or pushes. Workers never do.
