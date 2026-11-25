@@ -1,9 +1,11 @@
 // A state summary read as the lines a diff compares (t223).
 //
 // A web attempt's state summary is the page as the model reads it, the compact
-// view (`web-llm-page.v3`). One stored before t223 is a structured packet
-// (`web-llm-evidence.v2`), which is first written as that same view, so a run
-// recorded either side of the change still diffs.
+// view: `web-llm-page.v4`, keyed lines (t1036), or `web-llm-page.v3`, the same
+// lines as one `page` string, read alike (`webLlmShownPageText`). One stored
+// before t223 is a structured packet (`web-llm-evidence.v2`), which is first
+// written as that same view, so a run recorded either side of either change
+// still diffs.
 //
 // The lines compared are the view's element lines with what is positional
 // taken out, read by the view's own module
@@ -15,7 +17,7 @@
 // summary recorded before it or when it was not a finite number.
 
 import type { JsonObject } from "fluxiq/core";
-import { WEB_LLM_EVIDENCE_SCHEMA_VERSION, webLlmHandleFreeViewLines, webLlmPageText, type WebLlmEvidenceElement, type WebLlmPageEvidence } from "../llm-evidence";
+import { WEB_LLM_EVIDENCE_SCHEMA_VERSION, webLlmHandleFreeViewLines, webLlmPageText, webLlmShownPageText, type WebLlmEvidenceElement, type WebLlmPageEvidence } from "../llm-evidence";
 
 export type WebStateSummaryLines = {
   location: string | undefined;
@@ -31,7 +33,7 @@ export function webStateSummaryLines(summary: JsonObject | undefined): WebStateS
   const location = typeof summary?.location === "string" ? summary.location : undefined;
   const origin = summary?.documentTimeOrigin;
   const documentTimeOrigin = typeof origin === "number" && Number.isFinite(origin) ? origin : undefined;
-  const text = typeof summary?.page === "string" ? summary.page : legacyText(summary, location);
+  const text = webLlmShownPageText(summary) ?? legacyText(summary, location);
   if (text === undefined) return { location, documentTimeOrigin, title: typeof summary?.title === "string" ? summary.title : undefined, lines: [] };
   const { title, lines } = webLlmHandleFreeViewLines(text);
   return { location, documentTimeOrigin, title: title ?? (typeof summary?.title === "string" ? summary.title : undefined), lines };

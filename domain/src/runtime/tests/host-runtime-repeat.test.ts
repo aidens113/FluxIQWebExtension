@@ -150,7 +150,7 @@ test("positive top-only proof requires actual complete frame enumeration and rep
     else evidence.frameCoverage = marker as JsonObject["frameCoverage"];
     const h = host([page]);
     const input = await h.capture();
-    assert.equal(input.stateRef.summary?.schemaVersion, "web-llm-page.v3");
+    assert.equal(input.stateRef.summary?.schemaVersion, "web-llm-page.v4");
     assert.deepEqual(await h.runtime.observeRuntimeRepeat!(input), { kind: "unavailable", reason: "partial" });
     assert.equal(h.commands(), 1);
   }

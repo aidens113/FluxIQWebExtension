@@ -18,7 +18,7 @@
 // packet's selectors out.
 //
 // Since t223 what Core carries is the page as the model read it, the compact
-// view (`web-llm-page.v3`): its handles are in its `page` text, and the
+// view (`web-llm-page.v4`): its handles are in its `pageView` lines, and the
 // structured packet behind it is retained by the domain under that text.
 
 import assert from "node:assert/strict";
@@ -217,7 +217,7 @@ test("a handle no page issued is still refused, and a page this domain never iss
   // An edited page names no packet this runtime kept, and the compact view
   // holds no element to check a handle against, so it is refused outright.
   const altered = structuredClone(explored[1]!.packet);
-  altered.page = String(altered.page).replace("Apply changes", "Apply changes (edited)");
+  Object.assign(altered, editedView(altered, (lines) => lines.map((line) => ({ ...line, text: line.text.replace("Apply changes", "Apply changes (edited)") }))));
   assert.deepEqual(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "t1" } }, asRecorded(altered, "t1")), { status: "absent", reason: "evidence_unrecognized" });
 });
 
@@ -277,20 +277,21 @@ test("a recovery's structure detection is offered while exploring and kept where
   assert.deepEqual(runtime.validateTargetOverrideEvidence(recovery.explored[0]!.packet, { handles: { element: "t1" } }, CLICK), { status: "absent", reason: "evidence_unrecognized" });
 });
 
-test("a repair naming a handle a recovery search printed resolves with the selector behind it", async () => {
+test("a repair naming a handle a recovery description printed resolves with the selector behind it", async () => {
   const { runtime } = site(UNCOVERED);
   const recovery = exploration(runtime);
-  await recovery.call("web.recovery.inspect", {});
-  const found = await recovery.call("web.recovery.find_on_page", { query: "discard" });
-  assert.equal(found.schemaVersion, "web-llm-find.v1");
-  const handle = /^(t\d+) button "Discard changes"/mu.exec(String(found.found))?.[1];
-  assert.ok(handle, String(found.found));
-  const searched = recovery.explored.at(-1)!;
+  const inspected = await recovery.call("web.recovery.inspect", {});
+  const handle = handleNamed(inspected, "Discard changes");
+  const described = await recovery.call("web.recovery.describe_element", { target: handle });
+  assert.equal(described.schemaVersion, "web-llm-describe.v1");
+  assert.match(String(described.element), new RegExp(`^${handle} <button>`, "u"));
+  const explored = recovery.explored.at(-1)!;
   const recorded = { ...CLICK, recordedTarget: { element: { tagName: "button", role: "button", accessibleName: "Discard changes" } } };
-  const target = resolvedTarget(runtime.validateTargetOverrideEvidence(searched.packet, { handles: { element: handle } }, recorded));
+  const target = resolvedTarget(runtime.validateTargetOverrideEvidence(explored.packet, { handles: { element: handle } }, recorded));
   assert.equal(target.selector, "#discard");
-  // An edited search result is not one this runtime kept.
-  const edited = { ...searched.packet, found: `${String(searched.packet.found)}\n(edited)` };
+  // An edited description is not one this runtime kept.
+  const edited = { ...explored.packet, element: `${String(explored.packet.element)}
+(edited)` };
   assert.deepEqual(runtime.validateTargetOverrideEvidence(edited, { handles: { element: handle } }, recorded), { status: "absent", reason: "evidence_unrecognized" });
 });
 
@@ -351,7 +352,7 @@ test("a repair's step naming a handle its packet never gave, or a packet this ru
   const { runtime, failure } = await dismissedDialog();
 
   assert.deepEqual(await askStep(runtime, failure, "t99"), { status: "refused", issueCodes: ["web.handle.unknown", "web.handle.unknown:target"] });
-  const altered = { ...failure, page: `${String(failure.page)}\n(edited)` };
+  const altered = editedView(failure, (lines) => [...lines, { key: "edited", text: "(edited)" }]);
   assert.deepEqual(await askStep(runtime, altered, handleNamed(failure, "Close")), { status: "refused", issueCodes: ["web.handle.unknown"] });
 });
 
@@ -398,3 +399,9 @@ test("a repair's step carries every signal the packet holds for its control, thr
   // What the field holds is never part of who it is.
   assert.doesNotMatch(JSON.stringify(element), /"value"/u);
 });
+
+/** A published page whose keyed view lines `edit` changed: the same page edited, as Core never hands one back. */
+function editedView(packet: JsonObject, edit: (lines: Array<{ key: string; text: string }>) => Array<{ key: string; text: string }>): JsonObject {
+  const view = packet.pageView as { key: string; lines: Array<{ key: string; text: string }> };
+  return { ...packet, pageView: { ...view, lines: edit(view.lines) } };
+}

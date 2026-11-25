@@ -468,13 +468,18 @@ test("a look the capture cut short does not stand in for the page's document: th
 // it needs the view the act was made from (`acted`), and the old handle is not on that view. The witness is then
 // the one control there at the address the act resolved the handle to: never one of several, and never for a
 // handle another document showed, since a wrong witness would aim a saved lasting act at the wrong control.
+//
+// Since t1036 (D2) a control drawn alike under another query keeps its handle, so a reload only renumbers one
+// whose words it also changed -- here the reload adds a count to the sort control's words (`RELOADED_SORT`) --
+// or one with a look-alike beside it, which D2 never guesses between.
 
 const SEARCH = "https://crossborder.test/search?q=hub";
 const SORT_CONTROL: JsonObject = { tagName: "div", selector: "aside > div.sort > div", visibleText: "Price ↑", hasClickHandler: true, attributes: { role: "button" } };
+const RELOADED_SORT: JsonObject = { ...SORT_CONTROL, visibleText: "Price ↑ (12)" };
 const MAX_FIELD: JsonObject = { tagName: "input", selector: "#max", attributes: { placeholder: "Max" } };
 
 /** Show the control on the page before the check, act on it by that page's handle from `actedOn`, then show the sorted page; answer the saved step as assembly resolves it. */
-async function actedAcrossReload(shownOn: string, actedOn: JsonObject[]) {
+async function actedAcrossReload(shownOn: string, actedOn: JsonObject[], sortedOn: JsonObject[] = [MAX_FIELD, RELOADED_SORT]) {
   const { targets, capture, handleOf, stores } = flow();
   const before = capture(shownOn, [MAX_FIELD, SORT_CONTROL]);
   targets.remember(SCOPE, before);
@@ -482,7 +487,7 @@ async function actedAcrossReload(shownOn: string, actedOn: JsonObject[]) {
   const reloaded = capture(`${SEARCH}&max=10`, actedOn);
   targets.rememberLook(SCOPE, reloaded);
   assert.equal(reloaded.selectors.has(stale), false, "the reloaded page numbers its controls anew");
-  const sorted = capture(`${SEARCH}&max=10&sort=price`, [MAX_FIELD, SORT_CONTROL]);
+  const sorted = capture(`${SEARCH}&max=10&sort=price`, sortedOn);
   targets.acted(SCOPE, stale, reloaded, sorted);
   targets.remember(SCOPE, sorted);
   // What the step saved: the control the handle named, as the page that showed it described it.
@@ -495,16 +500,56 @@ async function actedAcrossReload(shownOn: string, actedOn: JsonObject[]) {
 }
 
 test("a handle from before a check's reload is witnessed by the one control the act resolved it to, so its saved press resolves at assembly", async () => {
-  const answer = await actedAcrossReload(`${SEARCH}&free=y`, [MAX_FIELD, SORT_CONTROL]);
+  const answer = await actedAcrossReload(`${SEARCH}&free=y`, [MAX_FIELD, RELOADED_SORT]);
   assert.equal(answer.status, "resolved", JSON.stringify(answer));
   if (answer.status === "resolved") assert.equal(answer.parameters.selector, SORT_CONTROL.selector);
 });
 
 test("a stale handle whose address the acted-on page gives to several controls, or that another document showed, records no witness", async () => {
   // Two controls at the address: the act cannot say which it was, and the step stays refused.
-  const several = await actedAcrossReload(`${SEARCH}&free=y`, [MAX_FIELD, SORT_CONTROL, { ...SORT_CONTROL, visibleText: "Price ↓" }]);
+  const several = await actedAcrossReload(`${SEARCH}&free=y`, [MAX_FIELD, SORT_CONTROL, SORT_CONTROL], [MAX_FIELD, SORT_CONTROL]);
   assert.equal(several.status, "refused", JSON.stringify(several));
   // Shown on another document: `resolveOn` calls it stale, so its control on this page is no witness for it.
-  const elsewhere = await actedAcrossReload("https://crossborder.test/item/42", [MAX_FIELD, SORT_CONTROL]);
+  const elsewhere = await actedAcrossReload("https://crossborder.test/item/42", [MAX_FIELD, SORT_CONTROL], [MAX_FIELD, SORT_CONTROL]);
   assert.deepEqual(elsewhere, { status: "refused", issueCodes: ["web.handle.ambiguous", "web.handle.ambiguous:parameters"] });
+});
+
+// One element under another query (t1036, D2, `../view-merge/moved-target.ts`): the same card keeps
+// its handle after a filter, so two remembered pages can give one handle selectors that differ only in
+// their positions. A bare handle then names that element as the newest view shows it; selectors that
+// differ in anything else still make it ambiguous.
+
+const MOVED_SCOPE = { projectId: "project.moved", flowId: "flow.moved" };
+const RESULTS = "https://shop.test/search?q=towel";
+const FILTERED = "https://shop.test/search?q=towel&pickup=today";
+
+function card(sku: string, title: string, at: number): JsonObject {
+  return { tagName: "a", selector: `main > ul > li:nth-of-type(${at}) > a`, visibleText: title, context: { record: { key: sku, keyAttribute: "data-sku" } } };
+}
+
+test("a card a filter moved keeps its handle, and the handle resolves bare to the newest view and on each page to that page's", () => {
+  const handles = createWebLlmStableTargetHandles();
+  const targets = createWebLlmTargetPackets();
+  const before = handles.restamp(MOVED_SCOPE, sanitizeWebLlmSnapshotWithBindings({ url: RESULTS, interactiveElements: [card("a", "Soft towel", 1), card("c", "Hand towel", 3)] }));
+  targets.remember(MOVED_SCOPE, before);
+  const hand = before.evidence.elements.find((element) => element.text === "Hand towel")!.target;
+  const after = handles.restamp(MOVED_SCOPE, sanitizeWebLlmSnapshotWithBindings({ url: FILTERED, interactiveElements: [card("c", "Hand towel", 1)] }));
+  targets.remember(MOVED_SCOPE, after);
+  assert.equal(after.evidence.elements[0]!.target, hand, "the same card keeps its handle under the filter");
+  const bare = targets.resolve(MOVED_SCOPE, hand, undefined);
+  assert.ok(bare.ok, JSON.stringify(bare));
+  assert.equal(bare.selector, "main > ul > li:nth-of-type(1) > a", "the newest view's place");
+  const onFiltered = targets.resolveOn(MOVED_SCOPE, hand, FILTERED);
+  assert.ok(onFiltered.ok);
+  assert.equal(onFiltered.selector, "main > ul > li:nth-of-type(1) > a");
+  const onResults = targets.resolve(MOVED_SCOPE, hand, RESULTS);
+  assert.ok(onResults.ok);
+  assert.equal(onResults.selector, "main > ul > li:nth-of-type(3) > a");
+});
+
+test("two pages that give one handle selectors of another shape still make it ambiguous", () => {
+  const targets = createWebLlmTargetPackets();
+  targets.remember(MOVED_SCOPE, sanitizeWebLlmSnapshotWithBindings({ url: RESULTS, interactiveElements: [card("a", "Soft towel", 1)] }));
+  targets.remember(MOVED_SCOPE, sanitizeWebLlmSnapshotWithBindings({ url: FILTERED, interactiveElements: [{ tagName: "a", selector: "aside > a", visibleText: "Soft towel" }] }));
+  assert.deepEqual(targets.resolve(MOVED_SCOPE, "t1", undefined), { ok: false, code: "ambiguous" });
 });

@@ -41,7 +41,7 @@ test("it teaches no realistic fixture", () => {
 
 test("the version is one Core's seam accepts, and names the web-only text", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-14");
+  assert.equal(version, "web-15");
 });
 
 // FluxIQ declines optional cookies by default (user, 2026-10-18): a consent
@@ -68,9 +68,11 @@ test("it reads the page view's header lines and the terms the renderer prints", 
   }
 });
 
-test("site search is the site's own search field, and find_on_page reads only the current page", () => {
+test("site search is the site's own search field; the page shown is the page now and core.full_page shows all of it; no page search is named", () => {
   assert.match(text, /use the site's own search/u);
-  assert.match(text, /find_on_page searches only the page you are already on; it never searches the site/u);
+  assert.match(text, /The page shown below your evidence is the page now, refreshed after every result: never ask for it/u);
+  assert.match(text, /core.full_page shows the whole page, hidden elements and their attributes included, in parts/u);
+  assert.doesNotMatch(text, /find_on_page/u);
 });
 
 // F34 (`run-muqiho5c-e830ce01`): told to close popups first, the model closed a

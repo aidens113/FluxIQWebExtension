@@ -1,4 +1,5 @@
 import type { JsonObject } from "fluxiq/core";
+import { webLlmShownPageText } from "@fluxiq-web-extension/domain";
 import type { InstalledBuild } from "./installed-build";
 
 /** One evidence entry the build loop showed the provider. */
@@ -75,7 +76,7 @@ function projectedPage(evidence: readonly ScriptedEntry[]): { page: string; late
   const groups = evidence[at]!.value.groups;
   if (!Array.isArray(groups)) return { page: "", latest: false };
   const top = groups.map(record).find((group) => group.group === "top");
-  const page = record(top?.value).page;
+  const page = webLlmShownPageText(record(top?.value));
   const last = evidence.slice(0, at).reverse().find((entry) => entry.toolId !== "core.route_state" && entry.toolId !== "core.run_nodes");
   return { page: typeof page === "string" ? page : "", latest: typeof top?.callId === "string" && top.callId === last?.callId };
 }
@@ -123,13 +124,13 @@ export function bindScriptedProvider(build: Pick<InstalledBuild, "service">, opt
         }
         return answer({ kind: "complete", result: record(last("project.dispatch")?.complete) });
       }
-      const shown = () => [...evidence].reverse().map(entry => entry.value).find(value => typeof value.page === "string");
+      const shown = () => [...evidence].reverse().map(entry => entry.value).find(value => webLlmShownPageText(value) !== undefined);
       builderStep++;
       return options.builder({
         step: builderStep,
         evidence,
         last,
-        shownPage: () => projectedPage(evidence)?.page ?? String(shown()?.page ?? ""),
+        shownPage: () => projectedPage(evidence)?.page ?? (webLlmShownPageText(shown()) ?? ""),
         shownIsLatest: () => projectedPage(evidence)?.latest ?? (evidence.at(-1)?.value === shown()),
         call,
         node: (callId, name, parameters, consequences = [], extra = {}) => call(callId, "core.run_node", { node: name, parameters, consequences, ...extra }),

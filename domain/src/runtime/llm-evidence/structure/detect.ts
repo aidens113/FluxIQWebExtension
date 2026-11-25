@@ -70,6 +70,15 @@ import { webResetResource } from "../control-spot";
 // element's selector in its frame, that element's current handle in `instead`
 // (`staleTarget`).
 //
+// **A handle still on the page binds, whichever view printed it (t1036).**
+// Under stable handles (page-diff D2) an element keeps its handle across views
+// and pages, so a handle from a view of another page, or whose selector moved,
+// may still name an element of the page now: the capture this call took,
+// given the run's handles (`restamp`), prints it. It then binds to that
+// element as it is now, and nothing is refused; before, the refusal named that
+// same handle in `instead` and the model had to send it again. Only a handle
+// the page now gives to no element is refused as stale.
+//
 // **A handle binds here as it binds for a press or a read (t903).** Until t903
 // a target bound only through the last page view the model was shown
 // (`returned`), so a handle a search or a description printed -- a closed
@@ -300,12 +309,27 @@ function boundTarget(context: WebLlmStructureDetectionContext, current: WebLlmSn
   const looked = shownHere ? undefined : context.targets?.(target, location);
   if (looked?.ok === true) return { selector: looked.selector, frameId: looked.frameId, frameOrigin: undefined, frameUrlPath: looked.frameUrlPath };
   const observed = returned ?? current;
-  if (observed.evidence.location !== current.evidence.location) staleTarget("page_moved_since_packet", observed, current, target, restamp);
+  if (observed.evidence.location !== current.evidence.location) return heldNow(current, target, restamp) ?? staleTarget("page_moved_since_packet", observed, current, target, restamp);
   const element = observedElement(observed.evidence, target);
   const selector = observed.selectors.get(target);
   if (!selector) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
   const stillThere = current.evidence.elements.some((candidate) => candidate.frameId === element.frameId && current.selectors.get(candidate.target) === selector);
-  if (!stillThere) staleTarget("handle_no_longer_on_page", observed, current, target, restamp);
+  if (!stillThere) return heldNow(current, target, restamp) ?? staleTarget("handle_no_longer_on_page", observed, current, target, restamp);
+  const frameDocument = frameDocumentOf(element);
+  return { selector, frameId: element.frameId, frameOrigin: frameDocument?.origin, frameUrlPath: frameDocument?.path };
+}
+
+/**
+ * The target bound to the element the page now gives its handle (header, t1036): the capture this call took, with the
+ * run's stable handles, prints `target` for one element, so that element as it is now is the target. Nothing where the
+ * caller gives no handles (the recovery path) or the page gives the handle to no element.
+ */
+function heldNow(current: WebLlmSnapshotBinding, target: string, restamp: WebLlmStructureDetectionContext["restamp"]): BoundTarget | undefined {
+  if (restamp === undefined) return undefined;
+  const now = restamp(current);
+  const element = now.evidence.elements.find((candidate) => candidate.target === target);
+  const selector = element === undefined ? undefined : now.selectors.get(target);
+  if (element === undefined || selector === undefined) return undefined;
   const frameDocument = frameDocumentOf(element);
   return { selector, frameId: element.frameId, frameOrigin: frameDocument?.origin, frameUrlPath: frameDocument?.path };
 }

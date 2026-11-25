@@ -130,7 +130,7 @@ test("a look's digest is what captureStateDigest answers for the same page", asy
   assert.deepEqual(looked.stateDigests, { before: answer, after: answer });
   // What the look returned is the compact view of that page (t223); the digest
   // is of the structured packet behind it, the one the host reads.
-  assert.equal((looked.evidence as JsonObject).schemaVersion, "web-llm-page.v3");
+  assert.equal((looked.evidence as JsonObject).schemaVersion, "web-llm-page.v4");
 });
 
 test("an action's digests are the page it found and the page it left, as captureStateDigest reads them", async () => {

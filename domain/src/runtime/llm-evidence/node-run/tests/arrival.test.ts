@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { automationStudioHarnessOptionRegistry, runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
+import { shownPageText } from "../../page-view/tests/shown-page-lines";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../constants";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import { coreBuildStateStore } from "../build-state/tests/core-store";
@@ -37,7 +38,7 @@ test("the opening look on an already-open start location reads the page as it st
 
   assert.equal(looked.resultCode, "web.inspect.succeeded");
   assert.equal((looked.evidence as JsonObject).location, START);
-  assert.match(JSON.stringify((looked.evidence as JsonObject).page), /Set as my store/u);
+  assert.match(shownPageText(looked.evidence), /Set as my store/u);
   // Seeing the page is not arriving: a look is never a step of the Flow.
   assert.equal(looked.draft?.proposes, false);
 });
@@ -425,8 +426,8 @@ async function type(runtime: Runtime, handle: string) {
 
 /** The search field's handle, as the look showed it. */
 function fieldHandle(looked: { evidence: unknown }): string {
-  const handle = /\b(t\d+) [a-z]+ "Search"/u.exec(String((looked.evidence as JsonObject).page))?.[1];
-  assert.ok(handle, JSON.stringify((looked.evidence as JsonObject).page));
+  const handle = /\b(t\d+) [a-z]+ "Search"/u.exec(shownPageText(looked.evidence))?.[1];
+  assert.ok(handle, shownPageText(looked.evidence));
   return handle;
 }
 

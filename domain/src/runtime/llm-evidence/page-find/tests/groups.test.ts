@@ -1,14 +1,11 @@
-// The group an option sits in, as a description and a search say it (t605): a
-// raw capture shaped as the extension sends it -- `context.fieldsetLegend` on
-// every element inside a fieldset -- through the sanitizer into
-// `web.describe_element` and `web.find_on_page`. A search for the group's
-// words finds the legend and every option under it.
+// The group an option sits in, as a description says it (t605): a raw capture
+// shaped as the extension sends it -- `context.fieldsetLegend` on every element
+// inside a fieldset -- through the sanitizer into `web.describe_element`.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { webLlmDescribeElement } from "../description";
-import { webLlmFindOnPage } from "../search";
 
 type Raw = Record<string, unknown>;
 
@@ -42,23 +39,4 @@ test("a description names the group an option sits in, and a legend's words, as 
   assert.equal(legend[0], "t2 <legend> \"Format\"");
   assert.match(legend[3]!, /text="Format"/u, "the legend's words are kept beside its name");
   assert.doesNotMatch(legend[3]!, /group=/u, "a legend is not in a group of its own");
-});
-
-test("a search for a group's words finds the legend and every element in the group, and an option prints its group", () => {
-  const found = webLlmFindOnPage(evidence(), "format", 0).found.split("\n");
-  assert.deepEqual(found, [
-    "3 matches for \"format\"",
-    "t2 legend \"Format\" on screen",
-    // Its group, not its `value` attribute, is what matched: the group is searched first.
-    "t3 checkbox \"Audiobook (12)\" group=\"Format\" on screen",
-    "t4 span \"12 titles\" (group=\"Format\") on screen"
-  ]);
-});
-
-test("an option matched by its own words prints its group as its view line does", () => {
-  const found = webLlmFindOnPage(evidence(), "audiobook", 0).found.split("\n");
-  assert.deepEqual(found, [
-    "1 match for \"audiobook\"",
-    "t3 checkbox \"Audiobook (12)\" group=\"Format\" on screen"
-  ]);
 });

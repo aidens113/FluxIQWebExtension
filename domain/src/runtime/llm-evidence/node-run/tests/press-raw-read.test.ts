@@ -146,7 +146,7 @@ test("a click whose payload carries the raw snapshot returns no snapshot, elemen
   assert.deepEqual(packet.read?.validation, VALIDATION);
   assert.equal(packet.read?.url, HOME);
   // And the page, as the compact view (t223), with the banner gone.
-  assert.equal(packet.schemaVersion, "web-llm-page.v3");
+  assert.equal(packet.schemaVersion, "web-llm-page.v4");
   assert.equal(Object.hasOwn(packet, "elements"), false, "no element list");
   const words = shownPageLines(packet).map((line) => line.words);
   assert.equal(words.includes("Accept"), false);

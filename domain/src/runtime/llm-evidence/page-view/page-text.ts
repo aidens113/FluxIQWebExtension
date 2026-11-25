@@ -1,21 +1,13 @@
 // The page as one string: the header lines, a blank line, then the element
-// lines with their markers, joined by "\n" (t223, "The format").
+// lines with their markers, joined by "\n" (t223, "The format"). The text of
+// the keyed view (`./written-lines.ts`), for a domain reader that compares or
+// searches the words rather than delivering them.
 
 import type { WebLlmPageEvidence } from "../sanitize";
-import { webLlmElementKind } from "./element";
-import { webLlmGroupNames } from "./group-names";
-import { webLlmPageHeader } from "./header";
-import { chosenWebLlmLines, renderedWebLlmLines } from "./line";
-import { webLlmLinkWriter } from "./link-writer";
-import { webLlmPageTree } from "./page-tree";
+import { webLlmPageViewLines } from "./written-lines";
+import { webLlmPageViewText } from "./joined-text";
 
 /** The text of the page the model is shown in place of the structured packet. */
 export function webLlmPageText(evidence: WebLlmPageEvidence): string {
-  const tree = webLlmPageTree(evidence.elements);
-  const groups = webLlmGroupNames(evidence.elements, tree);
-  const lines = chosenWebLlmLines(evidence.elements, tree, groups);
-  const linkHrefs = lines.flatMap((line) => line.role !== "image" && webLlmElementKind(line.element) === "link" && line.element.href !== undefined ? [line.element.href] : []);
-  const links = webLlmLinkWriter(evidence.location, linkHrefs);
-  const body = renderedWebLlmLines(lines, tree, evidence.viewport, links, groups);
-  return [...webLlmPageHeader(evidence, links, lines.length), "", ...body].join("\n");
+  return webLlmPageViewText({ lines: webLlmPageViewLines(evidence) });
 }

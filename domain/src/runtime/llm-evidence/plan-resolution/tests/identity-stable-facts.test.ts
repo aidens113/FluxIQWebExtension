@@ -35,6 +35,7 @@ import { elementFingerprint, outputTargetFromPayload, webAutomationOutputNodeId 
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { createWebLlmTargetPackets } from "..";
+import { webLlmShownPageText } from "../../page-view";
 
 const TYPE_NODE = webAutomationOutputNodeId("web.dom.type");
 const ITEM_URL = "http://127.0.0.1:4100/scenarios/crossborder-marketplace/item/1005008123450";
@@ -214,7 +215,7 @@ test("a class an act toggles is dropped across views, and the tokens both views 
 test("the page view the model reads shows no fingerprint: no id, no class, no selector", async () => {
   const runtime = runtimeOver(() => [searchBox, quantityBox("fb1l6ufkg")]);
   const looked = await runtime.executeTool({ projectId: "project.one", flowId: "flow.view", callId: "call.view", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: webAutomationOutputNodeId("web.dom.capture_snapshot"), parameters: {}, consequences: [] } });
-  const view = (looked.evidence as { page?: string }).page ?? "";
+  const view = webLlmShownPageText(looked.evidence) ?? "";
   assert.match(view, /field "Quantity"/u);
   for (const hidden of ["fb1l6ufkg", "q7k2-qty", "#fb1l6ufkg"]) assert.equal(view.includes(hidden), false, `${hidden} is not in the page view`);
 });

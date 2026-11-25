@@ -37,15 +37,22 @@ function payloadOf(message: string): Record<string, unknown> | undefined {
   return isRecord(parsed) ? parsed : undefined;
 }
 
-/**
- * A judge that continues the decider's conversation (`models/providers/anthropic/continuation.ts` in Core) sends the
- * decider's user turn with its own task appended as that turn's last text block, then a `system` turn of instructions.
- * Its task is that last block; read as words, the request named no task and was answered as a chat turn.
- */
-function continuedPayloadOf(turn: unknown): Record<string, unknown> | undefined {
-  const blocks = isRecord(turn) && Array.isArray(turn.content) ? turn.content : [];
-  const lastText: unknown = blocks.at(-1);
-  return isRecord(lastText) && typeof lastText.text === "string" ? payloadOf(lastText.text.trim()) : undefined;
+/** The task a conversation continues: the newest earlier message whose last text block is a task's JSON object, naming its `taskKind`. */
+function continuedPayload(earlier: readonly unknown[]): Record<string, unknown> | undefined {
+  for (const message of [...earlier].reverse()) {
+    const content = isRecord(message) ? message.content : undefined;
+    const blocks = Array.isArray(content) ? content : [];
+    const text = blocks.length === 0 ? "" : wordsOf([blocks.at(-1)]).trim();
+    if (!text.startsWith("{")) continue;
+    try {
+      const parsed = payloadOf(text);
+      if (parsed !== undefined && typeof parsed.taskKind === "string") return parsed;
+    } catch (error) {
+      // A block that opens as an object and is not JSON is no task: the next earlier message is tried. Any other failure is not that.
+      if (!(error instanceof SyntaxError)) throw error;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -60,7 +67,10 @@ export function readScriptedModelRequest(body: string, ordinalOf: (kind: Scripte
   if (wire.stream !== true) throw new Error("The request does not ask for a stream, which every Core call does");
   const last: unknown = wire.messages.at(-1);
   const message = wordsOf(isRecord(last) ? last.content : undefined);
-  const payload = isRecord(last) && last.role === "system" ? continuedPayloadOf(wire.messages.at(-2)) : payloadOf(message);
+  // A judge that continues the decider (`models/providers/anthropic/continuation.ts` in Core) sends the attempt's own
+  // conversation with the judge's task as the last block of an earlier message and a closing word of prose (a `system`
+  // turn) after it: the task is then read from there, never taken for a chat turn.
+  const payload = payloadOf(message) ?? continuedPayload(wire.messages.slice(0, -1));
   const kind = payload === undefined ? "panel_command" : typeof payload.taskKind === "string" ? payload.taskKind : "unknown";
   const format = isRecord(wire.output_config) && isRecord(wire.output_config.format) ? wire.output_config.format : undefined;
   const schema = format && isRecord(format.schema) ? format.schema : undefined;

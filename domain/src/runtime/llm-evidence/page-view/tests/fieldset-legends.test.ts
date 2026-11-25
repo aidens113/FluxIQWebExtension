@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { publishedWebLlmPage } from "../published-page";
+import { webLlmPageViewText } from "../joined-text";
 
 const ORIGIN = "https://library.test";
 
@@ -48,7 +49,7 @@ function snapshot(elements: Raw[]): Raw {
 }
 
 function pageOf(elements: Raw[]): string {
-  const page = publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings(snapshot(elements)).evidence).page;
+  const page = webLlmPageViewText(publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings(snapshot(elements)).evidence).pageView);
   return page.slice(page.indexOf("\n\n") + 2);
 }
 

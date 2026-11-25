@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
-import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { shownHandle, shownPageLines, shownPageText } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.covered", flowId: "flow.covered" } as const;
 const URL = "https://shop.example/store";
@@ -137,10 +137,10 @@ test("a timed popup with no way out the runtime presses opens over the control: 
     + `Do not press ${storeButton} again while ${evidence.detail.instead[0]} covers it: that press is refused the same way. Once the layer is gone, press ${storeButton} again.`);
   assert.equal(evidence.detail.target, storeButton, "the control kept its handle behind the popup (C1)");
   // The page comes back with the popup in it, and names it (C3, C9).
-  assert.equal(evidence.page.schemaVersion, "web-llm-page.v3");
+  assert.equal(evidence.page.schemaVersion, "web-llm-page.v4");
   const cover = evidence.detail.instead[0]!;
-  assert.match(evidence.page.page, new RegExp(`^COVERING ${cover} "Get \\$10 off your first pickup order"`, "mu"));
-  assert.match(evidence.page.page, new RegExp(`^${storeButton} button "Pickup or delivery\\?" covered-by ${cover}$`, "mu"));
+  assert.match(shownPageText(evidence.page), new RegExp(`^COVERING ${cover} "Get \\$10 off your first pickup order"`, "mu"));
+  assert.match(shownPageText(evidence.page), new RegExp(`^${storeButton} button "Pickup or delivery\\?" covered-by ${cover}$`, "mu"));
 
   // The popup's own control, from the page the refusal handed back, is pressed next.
   const dismissed = await call(runtime, CLICK, { target: { handle: shownHandle(evidence, "Apply") } });
@@ -172,7 +172,7 @@ test("a modal dialog over the control whose only control confirms refuses the pr
   assert.equal(refused.resultCode, "web.action.rejected.blocked_by_dialog");
   const evidence = refused.evidence as { detail: { reason: string; instead: string[] }; page: { page: string } };
   assert.equal(evidence.detail.reason, "covered_by_layer");
-  assert.match(evidence.page.page, new RegExp(`^DIALOG ${evidence.detail.instead[0]} "Choose a store" modal`, "mu"));
+  assert.match(shownPageText(evidence.page), new RegExp(`^DIALOG ${evidence.detail.instead[0]} "Choose a store" modal`, "mu"));
   assert.deepEqual(page.clicks, []);
 });
 
@@ -194,7 +194,7 @@ test("a handle the page no longer has is refused with the page as it now stands,
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   const evidence = refused.evidence as { detail: { reason: string }; page?: { schemaVersion: string; location: string } };
   assert.equal(evidence.detail.reason, "handle_not_in_packet");
-  assert.equal(evidence.page?.schemaVersion, "web-llm-page.v3");
+  assert.equal(evidence.page?.schemaVersion, "web-llm-page.v4");
   assert.equal(evidence.page?.location, URL);
   const pressed = await call(runtime, CLICK, { target: { handle: shownHandle(evidence, "Wireless earbuds") } });
   assert.equal(pressed.resultCode, "web.action.succeeded");
@@ -245,7 +245,7 @@ test("a press under a popup the runtime clears is sent, and its answer names the
   assert.equal(pressed.effectApplied, true);
   assert.deepEqual(page.clicks, ["body > div:nth-of-type(2) > header > button"], "the press itself was sent once, never the popup's control");
   // The page and what the node did, side by side (`../run.ts`, `nodeEvidence`).
-  const evidence = pressed.evidence as { status: string; read?: { clearedLayers?: JsonObject[] }; page: string };
+  const evidence = pressed.evidence as { status: string; read?: { clearedLayers?: JsonObject[] }; pageView?: unknown };
   // What the runtime closed reaches the model on the press's own read: kind, word and the two names.
   const cleared = evidence.read?.clearedLayers;
   assert.ok(Array.isArray(cleared) && cleared.length === 1, JSON.stringify(evidence.read));
@@ -258,8 +258,8 @@ test("a press under a popup the runtime clears is sent, and its answer names the
   assert.equal(cleared[0]!.wayOut, undefined, JSON.stringify(cleared[0]));
   assert.doesNotMatch(JSON.stringify(evidence.read), /\/html\/body/u);
   // And the page after it has no popup in it, and the press's own answer.
-  assert.doesNotMatch(evidence.page, /^COVERING /mu);
-  assert.match(evidence.page, /Pickup chosen/u);
+  assert.doesNotMatch(shownPageText(evidence), /^COVERING /mu);
+  assert.match(shownPageText(evidence), /Pickup chosen/u);
 });
 
 test("a press under a robot check is refused, whatever close glyph the check carries: it is a person's", async () => {

@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { publishedWebLlmPage } from "../published-page";
+import { webLlmPageViewText } from "../joined-text";
 
 type Raw = Record<string, unknown>;
 
@@ -59,7 +60,7 @@ function bookingSnapshot(): Raw {
 }
 
 function bodyLines(): string[] {
-  const page = publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings(bookingSnapshot()).evidence).page;
+  const page = webLlmPageViewText(publishedWebLlmPage(sanitizeWebLlmSnapshotWithBindings(bookingSnapshot()).evidence).pageView);
   return page.slice(page.indexOf("\n\n") + 2).split("\n").filter((line) => !line.startsWith("[") && !line.startsWith("-"));
 }
 

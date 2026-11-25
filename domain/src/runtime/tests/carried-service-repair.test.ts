@@ -7,7 +7,7 @@ import { AutomationStudioService, createAutomationStudioSessionKeyProviderResolv
 import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
 import { IoRegistry, defineDomainIo, defineOutput } from "fluxiq/io";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "../llm-evidence";
+import { createWebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway, webLlmShownPageText } from "../llm-evidence";
 import { createWebAutomationHostRuntime, type WebAutomationHostRuntimeGateway } from "../host-runtime";
 import {
   createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle,
@@ -16,6 +16,7 @@ import {
 import { webAutomationManifestOutputs } from "../../io/manifest-definitions";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { currentPageLines } from "./current-page";
+import { deepSeekDecisionReply } from "./deepseek-decision-reply";
 
 const CLICK = "web.output.dom-click";
 const TYPE = "web.output.dom-type";
@@ -167,7 +168,7 @@ async function fixture(root: string, options: { missingDeclaration?: true; missi
         assert.equal(typeof faulty?.step, "number");
         decision = { kind: "amend_draft", amendments: [{ step: Number(faulty?.step), change: "drop" }] };
       } else decision = { kind: "complete", result: { summary: "The editor message is right." } };
-      return reply({ kind: "evidence_tool_decision", summary: "Repair only the message.", decision });
+      return deepSeekDecisionReply(body, { kind: "evidence_tool_decision", summary: "Repair only the message.", decision });
     }
   });
   const native = new AutomationStudioNativeNodeRuntime({ permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS, runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES })
@@ -348,7 +349,7 @@ async function observedOpener(harness: Awaited<ReturnType<typeof fixture>>) {
   assert.ok(initial, "public runtime must provide its ordinary initial observation");
   const look = await harness.runtime.executeTool({ projectId: harness.projectId, flowId: harness.flowId, callId: "fixture.look", toolId: "core.run_node", value: initial });
   const evidence = record(look.evidence);
-  const page = typeof evidence.page === "string" ? evidence.page : record(evidence.page).page;
+  const page = webLlmShownPageText(evidence) ?? webLlmShownPageText(evidence.page);
   assert.equal(typeof page, "string");
   const handle = String(page).split("\n").flatMap((line) => /^(t[1-9][0-9]*) button(?: |$)/u.exec(line)?.[1] ?? []).at(0);
   assert.ok(handle, "the authored opener must be published by the actual observation");

@@ -1,4 +1,5 @@
 import type { JsonObject } from "fluxiq/core";
+import { webLlmShownPageText } from "@fluxiq-web-extension/domain";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test } from "../../fixtures/extension-context";
 import { retiredCodesIn } from "../change-proof";
@@ -48,14 +49,12 @@ for (const retryTransfer of [false, true]) test(retryTransfer
       // its freshly observed control. No selector or raw snapshot picks it.
       const inRow = (label: string, identity?: string) => rowControl(turn.shownPage(), label, identity, facts => {
         const latest = turn.evidence.at(-1);
-        const latestSearch = last("web.find_on_page");
         rowSelectionFailure = {
           builderStep, ...facts, originalIdentityPresent: originalItem.length > 0,
           latestToolId: latest?.toolId ?? null,
-          latestHasFullPage: typeof latest?.value.page === "string",
+          latestHasFullPage: webLlmShownPageText(latest?.value) !== undefined,
           latestHasFound: typeof latest?.value.found === "string",
           latestFoundHasRequestedControl: typeof latest?.value.found === "string" && latest.value.found.includes(JSON.stringify(label)),
-          searchHasRequestedControl: typeof latestSearch?.found === "string" && latestSearch.found.includes(JSON.stringify(label)),
           shownPageSourceIsLatest: turn.shownIsLatest()
         };
       });

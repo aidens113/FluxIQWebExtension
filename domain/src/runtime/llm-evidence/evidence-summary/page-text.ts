@@ -1,11 +1,19 @@
-/** How deep a `page` field is looked for: `value.page.page` is depth 2 (a `web-llm-page.v3` view under a result's `value`). */
+// The page text a tool's evidence carries, for Core's step log (`page.txt`).
+//
+// Since t1036 a page arrives as its keyed view (`pageView`, `web-llm-page.v4`),
+// whose lines are read back as the one text (`../shown-page/`); a
+// result recorded before carries the text itself as `page`.
+
+import { webLlmShownPageText } from "../shown-page";
+
+/** How deep a page is looked for: `value.page.pageView` is depth 2 (a published page under a result's `value`). */
 const MAX_DEPTH = 4;
 
 /**
- * The compact page text a tool's evidence carries: the first string field named
- * `page` within four levels of the evidence, breadth first so the shallowest
- * wins. Undefined when there is none. Core's step log writes this to `page.txt`;
- * no model is ever sent it from here.
+ * The compact page text a tool's evidence carries: the first object within
+ * four levels of the evidence that carries a page view or a string `page`,
+ * breadth first so the shallowest wins. Undefined when there is none. Core's
+ * step log writes this to `page.txt`; no model is ever sent it from here.
  */
 export function webLlmEvidencePageText(evidence: unknown): string | undefined {
   let level: unknown[] = [evidence];
@@ -13,7 +21,8 @@ export function webLlmEvidencePageText(evidence: unknown): string | undefined {
     const next: unknown[] = [];
     for (const value of level) {
       if (typeof value !== "object" || value === null) continue;
-      if (!Array.isArray(value) && typeof (value as Record<string, unknown>).page === "string") return (value as Record<string, string>).page;
+      const text = Array.isArray(value) ? undefined : webLlmShownPageText(value);
+      if (text !== undefined) return text;
       next.push(...(Array.isArray(value) ? value : Object.values(value)));
     }
     level = next;

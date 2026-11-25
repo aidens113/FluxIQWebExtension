@@ -56,6 +56,20 @@ test("a task's kind comes from its user message, in blocks or whole, and a schem
   assert.equal(JSON.parse(text).kind, "evidence_tool_decision");
 });
 
+test("a judge's first ask, whose task is the last block of an earlier message and whose last message is prose, is read as its task and not as a chat turn", async (t) => {
+  const server = await startScriptedModelServer({ script: SCRIPT, key: KEY });
+  t.after(() => server.close());
+  const task = JSON.stringify({ taskKind: "evidence_tool_decision", context: {} });
+  const messages = [
+    { role: "user", content: [{ type: "text", text: "the attempt's own record" }, { type: "text", text: `
+
+${task}` }] },
+    { role: "user", content: "The conversation above is the attempt's own record of deciding. Answer the judge's question." }
+  ];
+  const { text } = await streamed(await post(server.origin, body({ messages, output_config: { format: { type: "json_schema", schema: { type: "object", properties: { kind: {} } } } } })));
+  assert.equal(JSON.parse(text).kind, "evidence_tool_decision");
+});
+
 test("what the script does not expect fails loudly with its kind, and is never answered", async (t) => {
   const server = await startScriptedModelServer({ script: SCRIPT, key: KEY });
   t.after(() => server.close());

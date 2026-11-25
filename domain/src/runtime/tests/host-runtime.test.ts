@@ -21,6 +21,7 @@ import {
 } from "../host-runtime";
 import { compareWebAutomationRouteSignatures, webAutomationRouteEffect, webAutomationRouteEffectHolds, webAutomationRouteSignature } from "../route-state";
 import { WEB_STATE_DIFF_SCHEMA_VERSION } from "../state-diff";
+import { webLlmShownPageText } from "../llm-evidence";
 
 const CLICK_NODE_ID = webAutomationOutputNodeId("web.dom.click");
 /** Core's node definition for a recorded action; its web output is `parameterValues.outputId`. */
@@ -75,8 +76,8 @@ test("a web attempt gets a sanitized state ref sourced from web.dom.capture_snap
   assert.equal(typeof ref.capturedAt, "number");
   // The page as the model reads every page (t223): Core hands this summary to a
   // recovery model as `core.state_snapshot`, so it carries no element objects.
-  assert.equal(ref.summary?.schemaVersion, "web-llm-page.v3");
-  assert.equal(typeof ref.summary?.page, "string");
+  assert.equal(ref.summary?.schemaVersion, "web-llm-page.v4");
+  assert.equal(typeof webLlmShownPageText(ref.summary), "string");
   assert.doesNotMatch(JSON.stringify(ref.summary), /"elements"|"box"|"attributes"|"selector"/u);
   assert.equal(ref.summary?.location, "https://shop.test/cart?token=(withheld)");
   // The sanitized packet's own rules apply, which is the point of reusing it:
@@ -120,7 +121,7 @@ test("a recorded action, Core's policy node naming web.dom.click, gets a state r
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
   assert.equal(calls[0]?.timeoutMs, 5_000);
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
-  assert.equal(ref.summary?.schemaVersion, "web-llm-page.v3");
+  assert.equal(ref.summary?.schemaVersion, "web-llm-page.v4");
   assert.equal(typeof ref.summary?.truncated, "boolean");
 });
 
@@ -213,7 +214,7 @@ test("a summary carries the document's identity beside the view, never in it, an
   const odd = await captured(boundary, captureInput(CLICK_NODE_ID, "after_action"));
 
   assert.equal(was.summary?.documentTimeOrigin, origin);
-  assert.doesNotMatch(String(was.summary?.page), /1759000000123/u);
+  assert.doesNotMatch(String(webLlmShownPageText(was.summary)), /1759000000123/u);
   // Only a finite number is an identity.
   assert.equal(odd.summary?.documentTimeOrigin, undefined);
   const diff = await boundary.inspectStateDiff!({ before: was, after: now, node: { id: "node.1", definitionId: CLICK_NODE_ID }, attemptId: "a" });

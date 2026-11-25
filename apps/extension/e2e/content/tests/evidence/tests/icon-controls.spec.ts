@@ -14,7 +14,7 @@
 // without reading any class name -- must have a line `tN clickable icon ...`
 // in the view built from the real capture.
 
-import { publishedWebLlmPage, sanitizeWebLlmSnapshotWithBindings } from "@fluxiq-web-extension/domain";
+import { publishedWebLlmPage, sanitizeWebLlmSnapshotWithBindings, webLlmPageViewText } from "@fluxiq-web-extension/domain";
 import type { JsonObject } from "fluxiq/core";
 import { expect, test } from "../../../index.js";
 
@@ -43,7 +43,7 @@ test("job board results: each card's icon-only control has a clickable icon line
   await page.waitForLoadState("networkidle");
   const snapshot = JSON.parse(JSON.stringify(await harness.capture())) as JsonObject;
   const binding = sanitizeWebLlmSnapshotWithBindings(snapshot);
-  const lines = publishedWebLlmPage(binding.evidence).page.split("\n");
+  const lines = webLlmPageViewText(publishedWebLlmPage(binding.evidence).pageView).split("\n");
   const { icons, targets } = await page.evaluate(wordlessSvgPointers, [...binding.selectors]);
   expect(icons, "the results page shows icon-only controls").toBeGreaterThan(0);
   expect(targets, "every icon-only control is in the packet").toHaveLength(icons);

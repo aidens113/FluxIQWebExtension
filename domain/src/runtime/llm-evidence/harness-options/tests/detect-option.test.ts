@@ -148,7 +148,7 @@ test("refuses a target no recovery packet issued, or whose page has moved on, wi
   // Another Flow's exploration issued nothing this one can name.
   assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" }, "flow.two"), rejection("target_unobserved", { reason: "nothing_observed_yet" }));
   setPage({ url: `${CATALOG.url}page/2`, elements: [LINK], structure: CATALOG.structure });
-  // A stale handle's refusal carries the page as it is now and says to use its handles or look again (t477).
+  // A stale handle's refusal carries the page as it is now and says to use its handles or the whole page (t477).
   const moved = await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" });
   const movedEvidence = moved.evidence as JsonObject;
   assert.equal(moved.resultCode, "web.action.rejected.target_unobserved");
@@ -156,7 +156,7 @@ test("refuses a target no recovery packet issued, or whose page has moved on, wi
   assert.deepEqual(Object.keys(movedDetail).sort(), ["next", "reason", "target"]);
   assert.equal(movedDetail.reason, "page_moved_since_packet");
   assert.equal(movedDetail.target, "t1");
-  assert.match(String(movedDetail.next), /look at the page again/u);
+  assert.match(String(movedDetail.next), /core\.full_page captures/u);
   assert.equal((movedEvidence.page as JsonObject).location, `${CATALOG.url}page/2`);
   assert.equal(commands.some((command) => command.parameters.detectStructure !== undefined), false);
 
@@ -227,5 +227,5 @@ test("a page with no list there is an answer, not a stop, and says which kind of
 
 /** What a handle no view of this page printed is told (`../rejection-next/next-sentence.ts`, t1034). */
 function notInPacketNext(handle: string): string {
-  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
+  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints -- the page every result carries, with its changes applied, or the whole page core.full_page captures; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
 }

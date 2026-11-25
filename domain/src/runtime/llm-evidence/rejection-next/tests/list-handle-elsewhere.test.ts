@@ -9,7 +9,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_FIND_ON_PAGE_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
+import { webLlmShownPageText } from "../../shown-page";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const READ = "web.output.dom-extract_list";
@@ -41,13 +42,18 @@ function shop(): { runtime: WebAutomationLlmEvidenceRuntime; go(url: string): vo
 const look = (runtime: WebAutomationLlmEvidenceRuntime, callId: string) =>
   runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 
-/** The label's handle, printed by a search on the basket page; with `leave`, the run is then on the results page. */
+/**
+ * The handle of the basket's quantity control, one element and no list, as the whole basket page prints it (page-diff
+ * D15: there is no search). The page prints the label and the select it names as the select's one line, so the select's
+ * handle stands for the label's. With `leave`, the run is then on the results page.
+ */
 async function labelSeen(leave: boolean): Promise<{ runtime: WebAutomationLlmEvidenceRuntime; label: string }> {
   const { runtime, go } = shop();
   await look(runtime, "call.look.basket");
-  const found = await runtime.executeTool({ ...PROJECT, callId: "call.find", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "Qty" } });
-  const label = /^(t\d+) label "/mu.exec(String((found.evidence as JsonObject).found))?.[1];
-  assert.ok(label !== undefined, String((found.evidence as JsonObject).found));
+  const full = await runtime.pageChannel?.fullPage?.({ ...PROJECT, callId: "call.full", permission: READ_PERMITTED });
+  const text = webLlmShownPageText(full) ?? "";
+  const label = /^(t\d+) select "Qty"/mu.exec(text)?.[1];
+  assert.ok(label !== undefined, text);
   if (leave) {
     go(RESULTS);
     await look(runtime, "call.look.results");
@@ -88,7 +94,7 @@ test("a detection at a handle another page printed is told the handle names noth
   const detected = await runtime.executeTool({ ...PROJECT, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: label } });
   const refusal = detected.evidence as unknown as Refusal;
   assert.equal(refusal.detail.reason, "handle_not_in_packet", JSON.stringify(detected.evidence).slice(0, 600));
-  assert.equal(refusal.detail.next, `Nothing was done: ${label} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`);
+  assert.equal(refusal.detail.next, `Nothing was done: ${label} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints -- the page every result carries, with its changes applied, or the whole page core.full_page captures; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`);
 });
 
 test("a read of a detected list naming a column it lacks is told as before (t1020)", async () => {

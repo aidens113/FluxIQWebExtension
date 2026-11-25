@@ -48,7 +48,7 @@ import {
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "../capture";
-import { webLlmDescribeElement, webLlmFindOnPage, webLlmFindQuery } from "../page-find";
+import { webLlmDescribeElement } from "../page-find";
 import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
@@ -64,7 +64,6 @@ import {
   WEB_RECOVERY_DESCRIBE_OPTION_ID,
   WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_ENTER_FIELD_OPTION_ID,
-  WEB_RECOVERY_FIND_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
   WEB_RECOVERY_PRESS_OPTION_ID,
@@ -207,17 +206,6 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       returned: Object.prototype.hasOwnProperty.call(input.request.value, "target") ? shownPacket(input) : undefined,
       handles: context.extractionHandles
     })),
-    // The whole page, hidden elements included. Its capture is the packet the
-    // next press binds through, as any page this exploration shows is; rendered
-    // elements are numbered before hidden ones, so a handle the last look
-    // printed still names the same element on an unchanged page.
-    [WEB_RECOVERY_FIND_OPTION_ID]: run(async (input) => {
-      const { query, after } = webLlmFindQuery(input.request.value);
-      const binding = await captureEvidence(context.gateway, input.sessionId, input.request, input.request.signal, undefined, { includeHidden: true });
-      const found = webLlmFindOnPage(binding.evidence, query, after);
-      shown(input, binding, found as unknown as JsonObject);
-      return toolExecution(found as unknown as JsonObject, false, WEB_LLM_INSPECT_RESULT_CODE);
-    }),
     // One element of the last packet this exploration showed: a handle means
     // something only against a packet the model was shown, and nothing moves.
     [WEB_RECOVERY_DESCRIBE_OPTION_ID]: run(async (input) => {

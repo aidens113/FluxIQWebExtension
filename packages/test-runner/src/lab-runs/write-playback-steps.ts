@@ -63,6 +63,7 @@
 
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { webLlmShownPageText } from "@fluxiq-web-extension/domain/node";
 import { pathExists } from "./path-exists.js";
 import { playbackClearedLayers, playbackListRead } from "./playback-step/index.js";
 import { rewriteStepsIndex } from "./rewrite-steps-index.js";
@@ -239,7 +240,7 @@ function playbackStepFiles(attempt: Json, step: number, skip: PlaybackSkippedSte
       ...(read ? { read: read.read } : {}),
       ...(cleared ? { clearedLayers: cleared.layers } : {}),
     },
-    page: text(record(record(result.metadata)?.failureEvidence)?.page),
+    page: text(webLlmShownPageText(record(record(result.metadata)?.failureEvidence))),
     meta: {
       step, kind: "run", callId: attempt.attemptId, toolId: actionType,
       startedAt: startedAt === undefined ? null : new Date(startedAt).toISOString(),
