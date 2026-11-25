@@ -109,6 +109,21 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-25 - Every lane merged with dev; W2 committed on its branch; t1040 opened
+- Why: the user (angry): "merge all test runs before doing more tests ... MERGE TO DEV AND MERGE TEST LANES AFTER ANY SERIOUS UPDATES". t1039 had reached `dev` while W1 kept running scripted Lab runs on a tree without it.
+- Done:
+  - `git merge dev` (at `3b610be39`) into t1015, t1036, t1037 and t1038. For t1036 the lead stashed only the one overlapping file (`docs/architecture/testing-facility.md`), merged, then popped it; no conflict.
+  - Core `dev` had not moved, so the Core trees needed nothing.
+  - `pnpm install --frozen-lockfile` in each lane, for `@resvg/resvg-wasm`.
+  - W1 told to start no new run until dev was in.
+  - The rule added to AGENTS.md, "Branches And Worktrees".
+  - t1040 opened: the Lab's behind-dev guard is extended from live runs to every run.
+  - W2 committed WIP on its branch (Core `81536c5cb`, downstream `21a36692e`, both pushed).
+- Validation:
+  - `git merge-base --is-ancestor dev HEAD` printed `contains dev: yes` for all four downstream lanes.
+  - The same check on each lane's Core and the shared Core: `yes`.
+  - The installs printed `Done in 1.2s` to `Done in 1.4s`, with one resvg package present in each lane.
+
 ### 2026-11-25 - t1037 (W3) phase 1 verified on its branch
 - Changed: Core `runtime/flow-authoring/draft/{compose,amendment/edits}/**` (new), draft `step`/`entry`/amendment files, `decision-handlers/amendment.ts` (gated on `draftEdits: "framework"`), `draft-amendment-feedback`, `held-amendments.ts`, `ui/activity-action/refusal-words.ts`; reports `reports/t1037-auto-draft.md` and `reports/t1037/{compose,edits,replay}.md`. Committed as Core `adbafa688` and merged with Core dev (`8a3e79572`); downstream reports merged with dev (`c14eccd4b`).
 - Validation: the lead's run on the merged tree. Core groups over `flow-authoring`, `runtime/llm`, `ui/activity-action` and `answer-first`: parallel `Tests  8230 passed | 2 skipped (8232)`, real-sql `Tests  526 passed (526)`, "all groups passed". `pnpm --filter fluxiq check` exit 0. Core audit `passed (573 warning(s), 903 baselined)`. Downstream audit `passed (261 warning(s), 551 baselined)`. `model-text: ok`.

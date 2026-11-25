@@ -23,7 +23,7 @@ import { coreCommitStaleness, readCoreCommit } from "./core/index.mjs";
 import { labInvocationEnvironment } from "./lab-invocation.mjs";
 import { providerFreeWhenScripted } from "./provider-free-run.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
-import { admitLiveRun, formatRefusals, recordLiveRunFinish, recordLiveRunStart } from "./live-guards/index.mjs";
+import { admitDevAncestry, admitLiveRun, formatRefusals, READ_ONLY_LAB_COMMANDS, recordLiveRunFinish, recordLiveRunStart } from "./live-guards/index.mjs";
 import { createStepTimer, runBuildPhase } from "./prelude/index.mjs";
 import { buildOrder, runStep } from "../build-cache/index.mjs";
 import { labScenarioRefusal } from "./scenario-guard/index.mjs";
@@ -83,7 +83,7 @@ const instanced = paths.instance !== null;
 
 // Subcommands that read what a past run wrote. They load no FluxIQ Core, so
 // they neither wait for Core nor report a change in it.
-const READ_ONLY_COMMANDS = new Set(["inspect", "compare", "auth", "clone-cache"]);
+const READ_ONLY_COMMANDS = READ_ONLY_LAB_COMMANDS;
 const loadsCore = !READ_ONLY_COMMANDS.has(args[0] ?? "");
 const timer = createStepTimer(note);
 const runtimeAbort = new AbortController();
@@ -100,6 +100,7 @@ try {
 // a note did not stop them. There is no flag past a refusal, only a file the
 // user creates (docs/architecture/testing-facility.md, "Live-run waste guards").
 const liveAdmission = await admitLiveRunOrExit();
+if (liveAdmission === null) await admitDevAncestryOrExit();
 if (loadsCore) {
   try {
     coreLease = await timer.time("core-build-lease", () => acquireCoreBuildLease(coreRepositoryRoot(process.env, repositoryRoot), {
@@ -399,4 +400,28 @@ function run(command, commandArgs, env, options = {}) {
       resolve(status);
     });
   });
+}
+
+/**
+ * The `behind-dev` rule for a run that makes no provider call (a scripted-model
+ * attempt, a provider-free run, `lab run`, interactive): the live guards ask it
+ * of live runs, and a stale lane that tests code without a merge `dev` already
+ * has is wrong whether or not it spends money. Exits refused, having built and
+ * started nothing; a read-only command is not asked.
+ */
+async function admitDevAncestryOrExit() {
+  let admission;
+  try {
+    admission = await admitDevAncestry({ args, repositoryRoot, coreRoot: coreRepositoryRoot(process.env, repositoryRoot) });
+  } catch (error) {
+    admission = { refusals: [{ rule: "guard-error", why: `the dev ancestry could not be evaluated: ${error instanceof Error ? error.message : String(error)}`, remedy: "Fix the checkout the message names, then run again." }], overridden: [] };
+  }
+  if (admission === null) return;
+  if (admission.refusals.length > 0) {
+    const refusal = formatRefusals(admission.refusals, "run");
+    process.stderr.write(refusal.text);
+    process.stderr.write(refusal.line);
+    process.exit(1);
+  }
+  if (admission.overridden.length > 0) note({ lab: "dev-guard", state: "admitted", overridden: admission.overridden, why: "an OVERRIDE-<rule> file the user created let this run past those rules" });
 }

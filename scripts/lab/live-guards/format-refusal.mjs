@@ -5,18 +5,19 @@
 
 /**
  * @param {import("./rules/guard-state.mjs").Refusal[]} refusals at least one
+ * @param {string} [subject] what was refused: "live run", or "run" for a run that makes no provider call
  * @returns {{ text: string, line: string }}
  */
-export function formatRefusals(refusals) {
+export function formatRefusals(refusals, subject = "live run") {
   const rules = refusals.map((refusal) => refusal.rule);
   const text = [
-    ...refusals.map((refusal) => `[lab] live run refused by rule "${refusal.rule}": ${refusal.why}.\n[lab]   To satisfy it: ${refusal.remedy}`),
-    "[lab] No provider call was made; this refusal cost nothing. Overrides are files only the user creates; there is no flag.",
+    ...refusals.map((refusal) => `[lab] ${subject} refused by rule "${refusal.rule}": ${refusal.why}.\n[lab]   To satisfy it: ${refusal.remedy}`),
+    "[lab] Nothing was built or started; this refusal cost nothing. Overrides are files only the user creates; there is no flag.",
     "",
   ].join("\n");
   const line = JSON.stringify({
     status: "failed", category: "lab.live-guard", rules,
-    message: `live run refused (${rules.join(", ")}): ${refusals[0].why}`,
+    message: `${subject} refused (${rules.join(", ")}): ${refusals[0].why}`,
     spentUsd: 0,
   });
   return { text, line: `${line}\n` };
