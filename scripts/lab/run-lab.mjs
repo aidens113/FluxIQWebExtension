@@ -14,6 +14,7 @@
 import { spawn } from "node:child_process";
 import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { withBuildLock } from "./build-lock.mjs";
 import { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./core/index.mjs";
 import { coreBuildCurrency, coreBuildMissing, scanCoreBuildEntries } from "./core/index.mjs";
@@ -44,6 +45,21 @@ if (args[0] === "stop") process.exit(await runStopCommand(args.slice(1)));
 // run watcher, and `watch --steps <dir>` follows one in flight. Reads files
 // only, like `stop`, so it returns before the build and the guards.
 if (args[0] === "watch") process.exit(await runWatchCommand(args.slice(1)));
+
+// `flow-chart <run dir> [--out DIR]` draws an existing run's Flow from its step
+// files. It reads files only, so like `stop` and `watch` it returns before the
+// build phase, the build lock, the Core checks and the guards: through them it
+// waited minutes for a build it does not need. It runs the runner as last built.
+if (args[0] === "flow-chart") {
+  const [runDirectory, flag, out] = args.slice(1);
+  if (!runDirectory || (flag !== undefined && (flag !== "--out" || !out)) || args.length > 4) {
+    process.stderr.write("Usage: lab flow-chart <run dir> [--out DIR]\n");
+    process.exit(1);
+  }
+  // Only the chart module is loaded, not the whole runner.
+  const { chartRunDirectory } = await import(pathToFileURL(path.join(repositoryRoot, "packages", "test-runner", "dist", "flow-chart", "index.js")).href);
+  process.exit(await chartRunDirectory(path.resolve(runDirectory), out ? path.resolve(out) : undefined));
+}
 
 // Every Lab run, live or provider-free, opens only the ten realistic scenarios
 // (user rule, 2026-09-29). Asked first, before the live-run guards, the Core

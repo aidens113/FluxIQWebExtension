@@ -27,12 +27,13 @@
     "extension-chat-check": "node dist/extension-chat-check/cli.js"
   },
   "dependencies": {
-    "@fluxiq/sdk": "link:../../../!FluxIQ/packages/sdk",
     "@fluxiq-web-extension/browser-host": "workspace:*",
     "@fluxiq-web-extension/domain": "workspace:*",
     "@fluxiq-web-extension/test-contracts": "workspace:*",
     "@fluxiq-web-extension/test-evidence": "workspace:*",
+    "@fluxiq/sdk": "link:../../../!FluxIQ/packages/sdk",
     "@playwright/test": "1.51.1",
+    "@resvg/resvg-wasm": "2.6.2",
     "fluxiq": "link:../../../!FluxIQ/packages/fluxiq"
   },
   "bin": {

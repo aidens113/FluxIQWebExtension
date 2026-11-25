@@ -14,6 +14,7 @@ import { parseLabCommand, expandMatrix } from "./commands.js";
 import { inspectCoreWebBuild } from "./core-web-build/index.js";
 import { classifyRunnerFailure } from "./failure.js";
 import { assertCreatedFlowVerificationReady, assertLabModelResetOnlyApplies, createdFlowTrialsCandidates, describeCreatedFlowRequest, labCandidateTrialFixtureReset, labCandidateTrialReadiness, loadCreatedFlowRequest, loadScenarioDemonstrations, selectDemonstration } from "./flow-lane/index.js";
+import { chartRunDirectory } from "./flow-chart/index.js";
 import { inspectRun } from "./inspect.js";
 import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
@@ -111,6 +112,7 @@ export async function runCli(argv: string[], given: NodeJS.ProcessEnv = process.
       process.stdout.write(`${JSON.stringify({ matrixRunId: outcome.matrixRunId, directory: outcome.directory, cases: outcome.results.map(result => ({ caseId: result.caseId, verdict: result.verdict, reasons: result.reasons })) })}\n`);
       return outcome.results.every(result => result.verdict === "passed") ? 0 : 1;
     }
+    if (command.command === "flow-chart") return chartRunDirectory(path.resolve(command.runDirectory), command.outDirectory === undefined ? undefined : path.resolve(command.outDirectory));
     if (command.command === "inspect") { process.stdout.write(`${JSON.stringify(await inspectRun(runsDirectory, command.runId))}\n`); return 0; }
     if (command.command === "compare") {
       const comparison = "halvesReport" in command
