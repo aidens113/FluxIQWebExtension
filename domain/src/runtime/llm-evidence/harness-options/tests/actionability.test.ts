@@ -8,6 +8,7 @@ import { actAndCapture, type WebLlmEvidenceGateway, type WebLlmEvidenceToolExecu
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSnapshotBinding } from "../../sanitize";
 import { RecoverableToolRejection } from "../../tool-rejection";
 import { createWebLlmExtractionHandles } from "../../structure";
+import { createWebLlmStableTargetHandles } from "../../stable-handles";
 import { webAutomationRecoveryHarnessOptionBundle } from "..";
 
 const REQUEST = { projectId: "project.one", flowId: "flow.one", callId: "call.action", toolId: "web.recovery.press", value: {} };
@@ -17,6 +18,7 @@ const OBSERVATION_FAILURE: AutomationStudioFailureRecord = {
 };
 
 function laboratory(kind: "button" | "checkbox" | "field" | "select", facts: Array<JsonObject | undefined> = [MEASURED], failAfter = false) {
+  const stable = createWebLlmStableTargetHandles();
   let acts = 0;
   let location = "https://example.test/start";
   const retained: WebLlmSnapshotBinding[] = [];
@@ -48,7 +50,7 @@ function laboratory(kind: "button" | "checkbox" | "field" | "select", facts: Arr
   const registry = new AutomationStudioHarnessOptionRegistry();
   registry.register(webAutomationRecoveryHarnessOptionBundle({
     gateway, scopePolicy: { kind: "same_scope" }, retainSelectors: (binding) => { retained.push(binding); },
-    extractionHandles: createWebLlmExtractionHandles(), sleep: async () => {}
+    extractionHandles: createWebLlmExtractionHandles(), restamp: (scope, binding) => stable.restamp(scope, binding), sleep: async () => {}
   }));
   let sequence = 0;
   const run = async (optionId: string, value: JsonObject): Promise<WebLlmEvidenceToolExecution> =>
@@ -61,7 +63,7 @@ function laboratory(kind: "button" | "checkbox" | "field" | "select", facts: Arr
 test("recovery press, text entry, select and navigation retain per-call controls without putting them on pages", async () => {
   for (const kind of ["button", "field", "select"] as const) {
     const lab = laboratory(kind);
-    const looked = await lab.run("web.recovery.inspect", {});
+    const looked = await lab.run("web.recovery.navigate_in_scope", {});
     assert.equal(looked.actionability, undefined);
     const result = await lab.run(kind === "button" ? "web.recovery.press" : "web.recovery.enter_field", kind === "button"
       ? { target: "t1", consequences: [] }
@@ -79,7 +81,7 @@ test("recovery press, text entry, select and navigation retain per-call controls
 
 test("a fresh checkbox restoration replaces the first click measurement even when its own fact is absent", async () => {
   const lab = laboratory("checkbox", [MEASURED, undefined]);
-  await lab.run("web.recovery.inspect", {});
+  await lab.run("web.recovery.navigate_in_scope", {});
   const pressed = await lab.run("web.recovery.press", { target: "t1", consequences: [] });
   assert.equal(lab.acts(), 2);
   assert.equal(pressed.effectApplied, true);
@@ -98,7 +100,7 @@ test("a successful action's later observation cannot become unacted or transient
     return true;
   });
   const throughHarness = laboratory("button", [MEASURED], true);
-  await throughHarness.run("web.recovery.inspect", {});
+  await throughHarness.run("web.recovery.navigate_in_scope", {});
   const result = await throughHarness.run("web.recovery.press", { target: "t1", consequences: [] });
   assert.equal(result.effectApplied, false, "the existing refusal flag is retained");
   assert.equal(result.personNeeded, true);

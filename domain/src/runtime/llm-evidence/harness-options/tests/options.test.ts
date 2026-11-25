@@ -15,17 +15,22 @@ import { createWebLlmExtractionHandles } from "../../structure";
 import type { WebRecoveryHarnessContext } from "../execute";
 import { publishedWebLlmPage } from "../../page-view";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { createWebLlmStableTargetHandles } from "../../stable-handles";
 import {
   webAutomationExplorationRefusalClassifier,
   webAutomationRecoveryHarnessOptionBundle,
-  WEB_RECOVERY_HARNESS_OPTION_IDS
+  WEB_RECOVERY_HARNESS_OPTION_IDS,
+  WEB_RECOVERY_NAVIGATE_OPTION_ID
 } from "..";
+
+/** Core's opening look, and the look after a person's Continue: the navigate option with no address (t1042). */
+const OPENING = WEB_RECOVERY_NAVIGATE_OPTION_ID;
 
 // Decision L14: the web domain's exploration actions are **registered into**
 // Core's harness-option registry, not built into Core. Every assertion below
 // goes through the real registry, so "registered" means the registry accepted
 // them, offered them, and dispatched to them.
-test("registers seven options into Core's registry and offers them only while exploring", () => {
+test("registers six options into Core's registry and offers them only while exploring", () => {
   const registry = registered();
 
   assert.deepEqual(registry.list(resolution()).map((option) => option.toolId), [...WEB_RECOVERY_HARNESS_OPTION_IDS]);
@@ -41,16 +46,15 @@ test("hands the model the tool fields and none of the gate metadata", () => {
   const tools = registered().tools(resolution());
 
   for (const tool of tools) {
-    assert.deepEqual(Object.keys(tool).filter((key) => !["toolId", "description", "inputSchema", "effect", "repeatPolicy", "initialObservation"].includes(key)), [], tool.toolId);
+    assert.deepEqual(Object.keys(tool).filter((key) => !["toolId", "description", "inputSchema", "effect", "perCallEffect", "repeatPolicy", "initialObservation"].includes(key)), [], tool.toolId);
   }
-  assert.equal(tools.filter((tool) => tool.initialObservation !== undefined).length, 1);
-  // The page is the compact view (t223), so the inspect description reads it
-  // out: the line, the header lines that say what stands in front of the page,
-  // the structure markers, and where the rest is found. It stays within Core's
-  // 2,000-character description limit, as every option's does.
-  const inspect = tools.find((tool) => tool.toolId === "web.recovery.inspect")?.description ?? "";
-  for (const said of ["one line per element", "handle (tN", "covered-by", "COVERING", "DIALOG", "LOADING", "[main]", "- 3/16", "below the fold", "untrusted page data", "describe_element"]) assert.equal(inspect.includes(said), true, said);
-  assert.doesNotMatch(inspect, /\b(?:isDialog|inDialog|coveredBy|frontLayer|blockedBy)\b|its box/u, "no field of the old packet");
+  // t1042, the user's "no more look command": no option is a look. The opening look is Core's first call of the
+  // navigate option with no address, an input its schema refuses from the model, as a build's rides `core.run_node`.
+  assert.equal(tools.some((tool) => tool.toolId === "web.recovery.inspect"), false);
+  const opening = tools.filter((tool) => tool.initialObservation !== undefined);
+  assert.deepEqual(opening.map((tool) => [tool.toolId, tool.initialObservation, tool.perCallEffect]), [[OPENING, { input: {} }, true]]);
+  assert.deepEqual((opening[0]!.inputSchema as { required?: string[] }).required, ["url"], "the model cannot send the opening's input");
+  for (const tool of tools) assert.doesNotMatch(tool.description, /\b[Ll]ook\b/u, `${tool.toolId} says to look`);
   for (const tool of tools) assert.equal(tool.description.length <= 2_000, true, `${tool.toolId}: ${tool.description.length} characters, over Core's 2,000`);
   assert.deepEqual(tools.filter((tool) => tool.effect === "mutate").map((tool) => tool.toolId), ["web.recovery.press", "web.recovery.enter_field", "web.recovery.navigate_in_scope"]);
 });
@@ -65,14 +69,14 @@ test("declares nothing destructive, and withholds the mutating options from a ca
   assert.deepEqual(registry.list(resolution()).filter((option) => option.safety?.sideEffect === "destructive"), []);
   assert.deepEqual(
     registry.list({ scope: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID }, stage: "gather" }).map((option) => option.toolId),
-    ["web.recovery.inspect", "web.recovery.wait_for_change", "web.recovery.detect_repeating_structure", "web.recovery.describe_element"]
+    ["web.recovery.wait_for_change", "web.recovery.detect_repeating_structure", "web.recovery.describe_element"]
   );
 });
 
 test("describes one element of the page the exploration showed, and keeps what the model read for the repair", async () => {
   const { registry, commands, retained } = registeredWith();
 
-  await execute(registry, "web.recovery.inspect", {});
+  await execute(registry, OPENING, {});
   assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
   // The page's capture is retained beside what the model read of it.
   assert.equal(retained.length, 1);
@@ -93,16 +97,16 @@ test("describe refuses before this exploration has shown anything, and a handle 
   const { registry, commands } = registeredWith();
   const before = await run(registry, "web.recovery.describe_element", { target: "t1" }) as { resultCode: string; resultReason?: string };
   assert.deepEqual([before.resultCode, before.resultReason], ["web.action.rejected.target_unobserved", "nothing_observed_yet"]);
-  await execute(registry, "web.recovery.inspect", {});
+  await execute(registry, OPENING, {});
   const unknown = await run(registry, "web.recovery.describe_element", { target: "t9" }) as { resultCode: string; resultReason?: string };
   assert.deepEqual([unknown.resultCode, unknown.resultReason], ["web.action.rejected.target_unobserved", "handle_not_in_packet"]);
   assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
 });
 
-test("inspects the page, returns the compact view naming elements by opaque handle, and keeps its selectors for the repair", async () => {
+test("the opening look returns the compact view naming elements by opaque handle, moves nothing, and keeps its selectors for the repair", async () => {
   const { registry, commands, retained } = registeredWith();
 
-  const evidence = await execute(registry, "web.recovery.inspect", {});
+  const evidence = await execute(registry, OPENING, {});
 
   // The page as the model reads every page (t223), with no element objects.
   assert.equal((evidence as JsonObject).schemaVersion, "web-llm-page.v4");
@@ -127,7 +131,7 @@ test("inspects the page, returns the compact view naming elements by opaque hand
 // is what stops a word list being quietly put back in its place.
 test("presses the control it is asked to, whatever it says, and retains only what the model was shown", async () => {
   const { registry, commands, retained } = registeredWith();
-  await execute(registry, "web.recovery.inspect", {});
+  await execute(registry, OPENING, {});
 
   const pressed = await run(registry, "web.recovery.press", { target: "t2", consequences: [] });
 
@@ -148,8 +152,8 @@ test("refuses a target handle before this exploration has shown any packet, and 
 
   for (const optionId of ["web.recovery.press", "web.recovery.detect_repeating_structure"]) {
     const refused = await run(registry, optionId, optionId === "web.recovery.press" ? { target: "t1", consequences: [] } : { target: "t1" });
-    // The refusal says which of the ways a handle names nothing this was, so
-    // the model calls inspect rather than the same option again.
+    // The refusal says which of the ways a handle names nothing this was. (In a
+    // run Core's opening look comes first, so a page has always been shown.)
     // `resultReason` beside the code is the same word the model is given, kept
     // where whoever reads the run afterwards can see it (`../../capture.ts`).
     assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved", detail: { reason: "nothing_observed_yet" } }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved", resultReason: "nothing_observed_yet" }, optionId);
@@ -169,6 +173,39 @@ test("navigates only where Core's scope policy allows, and says which refusal it
 
   assert.equal((moved as { resultCode: string }).resultCode, "web.action.succeeded");
   assert.equal(allowlisted.commands.includes("web.browser.navigate"), true);
+});
+
+// t1042 (page-diff D2): every capture a recovery takes is numbered by the run's stable handles, so a handle the page as
+// it is now still gives to an element binds to that element, whichever view printed it -- the one check a detection
+// makes (`../../structure/held-now.ts`). Before, a press refused it `page_moved_since_packet` and the model had to be
+// shown the page again. Only a handle the page now gives to no element is refused.
+test("a press binds a handle the page as it is now still gives to an element, after the page moved on", async () => {
+  const { registry, commands, setPage } = registeredWith();
+  const remove = shownPageLines(await execute(registry, OPENING, {})).find((line) => line.words === "Delete item")!.target;
+  setPage("https://example.test/start?sort=newest", true);
+  const pressed = await run(registry, "web.recovery.press", { target: remove, consequences: [] }) as { resultCode: string; effectApplied: boolean };
+  assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed));
+  assert.equal(pressed.effectApplied, true);
+  assert.equal(commands.filter((command) => command === "web.dom.click").length, 1);
+});
+
+test("a press of a handle the page as it is now gives to no element is refused, and nothing is clicked", async () => {
+  const { registry, commands, setPage } = registeredWith();
+  const remove = shownPageLines(await execute(registry, OPENING, {})).find((line) => line.words === "Delete item")!.target;
+  setPage("https://example.test/start?sort=newest", false);
+  const refused = await run(registry, "web.recovery.press", { target: remove, consequences: [] }) as { resultCode: string; resultReason?: string };
+  assert.deepEqual([refused.resultCode, refused.resultReason], ["web.action.rejected.target_unobserved", "page_moved_since_packet"]);
+  assert.equal(commands.includes("web.dom.click"), false);
+});
+
+test("an opening look moves nothing, and a navigate the model makes still needs an address", async () => {
+  const { registry, commands } = registeredWith();
+  const opened = await run(registry, OPENING, {}) as { resultCode: string; effectApplied: boolean };
+  assert.deepEqual([opened.resultCode, opened.effectApplied], ["web.inspect.succeeded", false]);
+  assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
+  const extra = await run(registry, OPENING, { url: "https://example.test/next", hint: "x" }) as { resultCode: string; resultReason?: string };
+  assert.deepEqual([extra.resultCode, extra.resultReason], ["web.action.rejected.invalid_input", "unexpected_input_keys"]);
+  assert.equal(commands.includes("web.browser.navigate"), false);
 });
 
 test("refuses a bounded wait that changed nothing rather than returning the same packet again", async () => {
@@ -222,11 +259,15 @@ function registeredWith(overrides: { scopePolicy?: { kind: "same_scope" } | { ki
   commands: string[];
   retained: WebLlmSnapshotBinding[];
   setTitle(title: string): void;
+  /** The page the browser is on from now on, and whether it still shows the "Delete item" button. */
+  setPage(url: string, withDelete: boolean): void;
 } {
   const commands: string[] = [];
   const retained: WebLlmSnapshotBinding[] = [];
   let title = "Fixture";
   let location = "https://example.test/start";
+  let withDelete = true;
+  const handles = createWebLlmStableTargetHandles();
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
@@ -234,7 +275,7 @@ function registeredWith(overrides: { scopePolicy?: { kind: "same_scope" } | { ki
       if (command.actionType === "web.browser.navigate") location = String(command.parameters.url);
       if (command.actionType === "web.dom.click") title = `${title} (opened)`;
       return command.actionType === "web.dom.capture_snapshot"
-        ? { status: "succeeded", payload: { snapshot: snapshot(location, title) } }
+        ? { status: "succeeded", payload: { snapshot: snapshot(location, title, withDelete) } }
         : { status: "succeeded" };
     },
   };
@@ -244,9 +285,14 @@ function registeredWith(overrides: { scopePolicy?: { kind: "same_scope" } | { ki
     scopePolicy: overrides.scopePolicy ?? { kind: "same_scope" },
     retainSelectors: (binding) => { retained.push(binding); },
     extractionHandles: createWebLlmExtractionHandles(),
+    restamp: (scope, binding) => handles.restamp(scope, binding),
     sleep: overrides.sleep
   })));
-  return { registry, commands, retained, setTitle: (next) => { title = next; } };
+  const setPage = (url: string, kept: boolean): void => {
+    location = url;
+    withDelete = kept;
+  };
+  return { registry, commands, retained, setTitle: (next) => { title = next; }, setPage };
 }
 
 function resolution(overrides: Partial<AutomationStudioHarnessOptionResolution> = {}): AutomationStudioHarnessOptionResolution {
@@ -273,7 +319,7 @@ async function execute(registry: AutomationStudioHarnessOptionRegistry, optionId
   return (result as { evidence: unknown }).evidence;
 }
 
-function snapshot(url: string, title: string): JsonObject {
+function snapshot(url: string, title: string, withDelete = true): JsonObject {
   return {
     url,
     title,
@@ -281,7 +327,7 @@ function snapshot(url: string, title: string): JsonObject {
     evidence: { dialogs: { open: [{ role: "dialog", modal: true }] } },
     interactiveElements: [
       { tagName: "button", selector: "#close", role: "button", name: "Close", context: { landmark: "dialog" } },
-      { tagName: "button", selector: "#delete", role: "button", name: "Delete item", context: { landmark: "dialog" } },
+      ...(withDelete ? [{ tagName: "button", selector: "#delete", role: "button", name: "Delete item", context: { landmark: "dialog" } }] : []),
       { tagName: "a", selector: "#next", name: "Next", href: `${new URL(url).origin}/next` }
     ]
   };

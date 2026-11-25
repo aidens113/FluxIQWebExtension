@@ -67,6 +67,7 @@ import type { WebPlanRefusalIssue } from "./refusal-issues";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
 import { WEB_PLAN_EXTRACTION_BINDING_KEY, webPlanSavedExtractionBinding } from "./saved-list";
 import { webPlanRetainedExtractionSchema } from "./retained-schema";
+import { webPlanSiteNames } from "./site-names";
 
 /** Why an `extractList` names no one detected list. Each is a plan resolver issue code. */
 export type WebExtractionSlotIssue = WebExtractionColumnIssue | "web.handle.misplaced" | "web.handle.unknown" | "web.handle.stale";
@@ -93,6 +94,8 @@ export type WebExtractionSlotResolution =
     request: JsonObject;
     recordSchema: AutomationStudioRecordSchema;
     requestedColumns?: string[];
+    /** For each kept column the plan renamed, the site's names for it (its detected key, readable name and page words), which a record output may still write (`./stored-columns.ts`). */
+    siteNames?: Record<string, string[]>;
     frameId: number | undefined;
     /** The path of the child frame's document the list was detected in, which finds that frame again after a reload; absent for the top frame. */
     frameUrlPath: string | undefined;
@@ -204,6 +207,8 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   const assumed = [...columns.assumed, ...(where !== undefined && where.ok ? where.assumed : [])];
   const resolved: Extract<WebExtractionSlotResolution, { status: "resolved" }> = { status: "resolved", request, recordSchema: webPlanRetainedExtractionSchema(binding, columns), frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, assumed };
   if (columns.requested !== undefined) resolved.requestedColumns = columns.requested;
+  const siteNames = webPlanSiteNames(columns.sources, binding.names, Object.fromEntries((binding.recordSchema?.fields ?? []).map((field) => [field.id, field.label])));
+  if (siteNames !== undefined) resolved.siteNames = siteNames;
   return resolved;
 }
 

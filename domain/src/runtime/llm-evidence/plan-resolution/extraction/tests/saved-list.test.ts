@@ -157,3 +157,48 @@ test("what a step holds that cannot be read is as if it held nothing", async () 
   assert.equal(answer.status, "refused");
   assert.equal((answer as unknown as { issueCodes: string[] }).issueCodes.includes("web.handle.unknown"), true);
 });
+
+test("a saved step holding the site's labels for its renamed columns re-resolves to the names the plan gave (t1041)", async () => {
+  const { ranWith } = await savedRead();
+  const stale = structuredClone(ranWith.parameters);
+  stale.recordOutput = {
+    datasetId: "products", writeMode: "replace",
+    schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "product-name", valueType: "string" }, { id: "price", label: "product-price", valueType: "string" }] },
+    process: { columns: ["name", "price"] }
+  };
+  const answer = await aProcess().runtime.resolvePlanNodeParameters({ ...SCOPE, nodeDefinitionId: EXTRACT_NODE, parameters: stale, declaredConsequences: [] });
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+  const fields = (((answer as { parameters: JsonObject }).parameters.recordOutput as JsonObject).schema as { fields: { id: string; label: string }[] }).fields;
+  assert.deepEqual(fields.filter((field) => field.id === "name" || field.id === "price").map((field) => [field.id, field.label]), [["name", "name"], ["price", "price"]]);
+});
+
+// The next attempt replays the saved Flow: every replay resolves the saved step again, and Core proves the replay
+// against the accepted run's steps and read shape. So a step saved under the asked names must resolve, in a process
+// that never saw it, to exactly what it resolved to before, every time: the same columns under the same ids and
+// labels, and the same request (t1041 retry: the lead suspected the re-resolve or the site-name rewrite moved them).
+test("a step saved under the asked names resolves to the same step on every replay, in a process that never saw it (t1041)", async () => {
+  const { ranWith } = await savedRead();
+  const saved = structuredClone(ranWith.parameters);
+  saved.recordOutput = {
+    datasetId: "products", writeMode: "append",
+    schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "name", valueType: "string" }, { id: "price", label: "price", valueType: "string" }] },
+    process: { columns: ["name", "price"] }
+  };
+  const resolve = async (parameters: JsonObject) => {
+    const answer = await aProcess().runtime.resolvePlanNodeParameters({ ...SCOPE, nodeDefinitionId: EXTRACT_NODE, parameters: structuredClone(parameters), declaredConsequences: [] });
+    assert.equal(answer.status, "resolved", JSON.stringify(answer));
+    return (answer as { parameters: JsonObject }).parameters;
+  };
+  const first = await resolve(saved);
+  const replayed = await resolve({ ...saved, recordOutput: first.recordOutput! });
+  const again = await resolve({ ...saved, recordOutput: replayed.recordOutput! });
+  assert.deepEqual(replayed, first);
+  assert.deepEqual(again, first);
+  const output = first.recordOutput as unknown as { schema: { fields: { id: string; label: string }[] }; process: { columns: string[] } };
+  assert.deepEqual(output.process.columns, ["name", "price"]);
+  assert.deepEqual(output.schema.fields.filter((field) => output.process.columns.includes(field.id)).map((field) => [field.id, field.label]), [["name", "name"], ["price", "price"]]);
+  // The request the page runs reads the asked columns under the asked names, and nothing under the site's.
+  const fields = (first.extractList as unknown as { fields: Record<string, unknown> }).fields;
+  assert.equal(Object.hasOwn(fields, "name") && Object.hasOwn(fields, "price"), true);
+  assert.equal(Object.hasOwn(fields, "product-name") || Object.hasOwn(fields, "product-price"), false);
+});

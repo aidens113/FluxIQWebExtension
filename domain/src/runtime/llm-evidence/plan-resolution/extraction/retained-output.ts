@@ -4,6 +4,7 @@ import type { WebAutomationExtractListRequest } from "../../../../actions/extrac
 import { webAutomationDerivedRecordOutput, webAutomationStoredColumns } from "../../../../output-nodes";
 import { present } from "../../present";
 import { webLlmUniqueStoredLabels } from "../../structure";
+import { isWithheldText, screenedPageText } from "../../withheld";
 
 /** The host's full schema and the author's display view, with resolved aliases rebased once. */
 export function webPlanRetainedRecordOutput(input: {
@@ -12,6 +13,8 @@ export function webPlanRetainedRecordOutput(input: {
   schema: AutomationStudioRecordSchema;
   requested: readonly string[] | undefined;
   names: readonly { field: string; written: string }[];
+  /** The site's names for each renamed column (`./site-names.ts`): a label the author's schema repeats from them is stale, not the author's. */
+  siteNames?: Readonly<Record<string, readonly string[]>> | undefined;
 }): JsonValue {
   const authored = isObject(input.authored) ? input.authored : undefined;
   if (input.authored !== undefined && input.authored !== null && authored === undefined) return structuredClone(input.authored);
@@ -21,8 +24,15 @@ export function webPlanRetainedRecordOutput(input: {
   const originalFields = isObject(authored?.schema) && Array.isArray(authored.schema.fields) ? authored.schema.fields : [];
   const exclusions = new Set(originalFields.flatMap((field) => isObject(field) && field.handling === "exclude" && typeof field.id === "string" ? [field.id] : []));
   const columns = originalFields.flatMap((field) => isObject(field) && field.handling !== "exclude" && typeof field.id === "string" ? [field.id] : []);
-  // A field renamed for the record output keeps its stored label; no label may answer to another field's new id (t997).
-  const labels = webLlmUniqueStoredLabels(input.schema.fields.map((field) => ({ id: name(field.id), label: field.label })));
+  // A column labelled by its own id (a plan's name for it, `./retained-schema.ts`) takes the label the author wrote for
+  // that id, which is its human name; any other keeps the stored label. No label may answer to another field's id (t997).
+  const written = authoredLabels(originalFields);
+  const folded = (text: string) => text.replace(/[_\-\s]+/gu, " ").trim().toLowerCase();
+  const chosen = (id: string): string | undefined => {
+    const label = written.get(name(id));
+    return label === undefined || input.siteNames?.[id]?.some((site) => folded(site) === folded(label)) ? undefined : label;
+  };
+  const labels = webLlmUniqueStoredLabels(input.schema.fields.map((field) => ({ id: name(field.id), label: field.label === field.id ? chosen(field.id) ?? field.label : field.label })));
   const schema = present<AutomationStudioRecordSchema>({
     schemaVersion: input.schema.schemaVersion,
     fields: input.schema.fields.map((field, index) => present<AutomationStudioRecordSchema["fields"][number]>({
@@ -44,6 +54,17 @@ export function webPlanRetainedRecordOutput(input: {
     output.process = displayed;
   }
   return output;
+}
+
+/** The label the author wrote for each field id it declared, screened as every page string the domain publishes. */
+function authoredLabels(fields: readonly JsonValue[]): Map<string, string> {
+  const labels = new Map<string, string>();
+  for (const field of fields) {
+    if (!isObject(field) || typeof field.id !== "string" || typeof field.label !== "string") continue;
+    const text = screenedPageText(field.label);
+    if (text !== undefined && !isWithheldText(text)) labels.set(field.id, text.slice(0, 200));
+  }
+  return labels;
 }
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
