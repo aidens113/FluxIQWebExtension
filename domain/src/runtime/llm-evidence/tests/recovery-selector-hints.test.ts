@@ -189,7 +189,7 @@ async function dismissedDialog(): Promise<{ runtime: WebAutomationLlmEvidenceRun
   const { runtime } = site(COVERED);
   const failure = await failurePacket(runtime);
   const recovery = exploration(runtime);
-  const inspected = await recovery.call("web.recovery.inspect", {});
+  const inspected = await recovery.call("web.recovery.navigate_in_scope", {});
   await recovery.call("web.recovery.press", { target: handleNamed(inspected, "Close"), consequences: [] });
   return { runtime, failure, explored: recovery.explored };
 }
@@ -280,7 +280,7 @@ test("a recovery's structure detection is offered while exploring and kept where
 test("a repair naming a handle a recovery description printed resolves with the selector behind it", async () => {
   const { runtime } = site(UNCOVERED);
   const recovery = exploration(runtime);
-  const inspected = await recovery.call("web.recovery.inspect", {});
+  const inspected = await recovery.call("web.recovery.navigate_in_scope", {});
   const handle = handleNamed(inspected, "Discard changes");
   const described = await recovery.call("web.recovery.describe_element", { target: handle });
   assert.equal(described.schemaVersion, "web-llm-describe.v1");
@@ -342,8 +342,9 @@ test("a repair's step naming an explored handle resolves from that packet alone,
   const handle = handleNamed(revealed, "Apply changes");
 
   assert.equal(resolvedStep(await askStep(runtime, revealed, handle)).selector, "#apply");
-  // The same number in the failure packet is another control, and resolves to it.
-  assert.equal(resolvedStep(await askStep(runtime, failure, handle)).selector, "#close");
+  // Asked of the failure packet, the same handle never reaches the explored control: that packet's numbers are its own
+  // (since t1042 a recovery's captures carry the run's stable handles, so the number may name nothing there).
+  assert.equal(JSON.stringify(await askStep(runtime, failure, handle)).includes("#apply"), false);
   // Without its packet the step is a build's, and this build was shown nothing.
   assert.deepEqual(await askStep(runtime, undefined, handle), { status: "refused", issueCodes: ["web.handle.unknown", "web.handle.unknown:target"] });
 });

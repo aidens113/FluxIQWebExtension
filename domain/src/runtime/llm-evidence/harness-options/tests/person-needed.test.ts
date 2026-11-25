@@ -18,6 +18,7 @@ import { WEB_AUTOMATION_FAILURE_CODES } from "../../../failure";
 import type { WebLlmEvidenceGateway } from "../../capture";
 import { present } from "../../present";
 import { createWebLlmExtractionHandles } from "../../structure";
+import { createWebLlmStableTargetHandles } from "../../stable-handles";
 import type { WebRecoveryHarnessContext } from "../execute";
 import { webAutomationRecoveryHarnessOptionBundle } from "..";
 
@@ -26,10 +27,10 @@ const SIGN_IN = { code: WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED, actual: "sig
 
 type Fails = { capture?: JsonObject; captureAfterFirst?: JsonObject; click?: JsonObject; navigate?: JsonObject };
 
-test("a look of a robot check comes back marked personNeeded, proposing nothing", async () => {
+test("the opening look (a navigate with no address) of a robot check comes back marked personNeeded, proposing nothing", async () => {
   const { registry } = registeredWith({ capture: CHECK });
 
-  const looked = await run(registry, "web.recovery.inspect", {}) as JsonObject;
+  const looked = await run(registry, "web.recovery.navigate_in_scope", {}) as JsonObject;
 
   assert.equal(looked.personNeeded, true);
   assert.equal(looked.resultCode, "web.action.rejected.needs_person");
@@ -39,7 +40,7 @@ test("a look of a robot check comes back marked personNeeded, proposing nothing"
 
 test("a press whose control raises a robot check comes back marked personNeeded", async () => {
   const { registry, commands } = registeredWith({ click: CHECK });
-  await run(registry, "web.recovery.inspect", {});
+  await run(registry, "web.recovery.navigate_in_scope", {});
 
   const pressed = await run(registry, "web.recovery.press", { target: "t1", consequences: [] }) as JsonObject;
 
@@ -72,7 +73,7 @@ test("a wait whose second look meets a robot check comes back marked personNeede
 // reported to the model as the refusal it always was.
 test("a press that meets a sign-in wall is not marked personNeeded", async () => {
   const { registry } = registeredWith({ click: SIGN_IN });
-  await run(registry, "web.recovery.inspect", {});
+  await run(registry, "web.recovery.navigate_in_scope", {});
 
   const pressed = await run(registry, "web.recovery.press", { target: "t1", consequences: [] }) as JsonObject;
 
@@ -90,6 +91,7 @@ test("every other refusal is reported exactly as before, unmarked", async () => 
 });
 
 function registeredWith(fails: Fails): { registry: AutomationStudioHarnessOptionRegistry; commands: string[] } {
+  const stable = createWebLlmStableTargetHandles();
   const commands: string[] = [];
   let captures = 0;
   let location = "https://example.test/start";
@@ -118,6 +120,7 @@ function registeredWith(fails: Fails): { registry: AutomationStudioHarnessOption
     scopePolicy: { kind: "same_scope" },
     retainSelectors: () => undefined,
     extractionHandles: createWebLlmExtractionHandles(),
+    restamp: (scope, binding) => stable.restamp(scope, binding),
     sleep: async () => {}
   })));
   return { registry, commands };
