@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16, three workstreams). Nothing dispatched yet; the session ended at the user's request before dispatch. Resume from Current State "Next".
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16, three workstreams). Dispatching: briefs written, W3 (t1037) opening first, W1 (t1036) and W2 (t1038) after t1034 merges.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -35,10 +35,11 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
     - **t1036** `page-diff-delivery`: created for W1 at dev 63ba8dc13-era with its own Core; empty.
     - **t1015** `paid-bigbox`: the live lane, slot 1.
     - **t1035**: the audit tree; its files are on dev; to abandon.
+- **Dispatch (2026-11-25, second session):** briefs written under `page-diff-delivery-plan/briefs/`. W3 opens first as t1037 `auto-draft`, since it shares no file with t1034; W2 becomes t1038 `native-decisions-one-read` (ids follow `pnpm task start`'s order). t1034 is under the lead's own check run (Core consumers of every changed module, both typechecks, both audits, domain `llm-evidence`, model text).
 - **Next (in order):**
   1. Verify t1034 (Core groups over `completion`, `tests/endings`, `llm/{anthropic,decision-handlers,decision-reading,verification-defects}`, `result-verification`; domain `llm-evidence`; both checks; audits), merge Core dev into it (bump to 0.54.19), finish both, push, sync the shared Core.
-  2. Merge dev into t1036 (both sides); start t1037 (W2) and t1038 (W3) with `--core`.
-  3. Dispatch three sub-supervisors (Opus) with briefs from Decisions and Phases. W1 and W2 build now; W3 designs now and builds after W1 merges.
+  2. Merge dev into t1036 (both sides); start t1038 (W2) with `--core`.
+  3. Dispatch W1 (t1036) and W2 (t1038) sub-supervisors (Opus); W3 (t1037) is dispatched as soon as its tree opens. W3 builds its own paths now and wires into the loop after W1 merges.
   4. Integrate, offline proof (P4), then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others.
   5. Also open: the judge accepting a wrong item on pickup availability (above); the answer-contract column reader misreading "columns title only"; fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`; `pinned-calls-job-board` setup wait; `tool-rejection.ts` at 799 lines; a Flow playback guard for list location (a wire change); a second full sweep and `main` promotion (`main` has not moved).
 - **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
@@ -80,8 +81,10 @@ Three workstreams, partitioned by file, each with its own sub-supervisor and tas
 | Workstream | Decisions | Branch | Owns |
 | --- | --- | --- | --- |
 | W1 What the model sees | D1-D8, D10, D11, D14, D15 | t1036 `page-diff-delivery` | Core decision context, evidence window, rounds and earlier rounds, page channel, look removal, judge skip; domain page view, page key, stable element keys (content script) |
-| W2 How the model acts | D12, D13 | t1037 `native-decisions-one-read` | Core provider adapters' decision transport and decision reading; domain read and detect nodes, extraction request, content list reader |
-| W3 The framework drafts the Flow | D16 | t1038 `auto-draft` (design now, build after W1 merges) | Core `runtime/flow-authoring/draft/**`, the amendment handler and its feedback, the draft's guidance; the evidence loop only through W1's merged shape |
+| W2 How the model acts | D12, D13 | t1038 `native-decisions-one-read` | Core provider adapters' decision transport and decision reading; domain read and detect nodes, extraction request, content list reader |
+| W3 The framework drafts the Flow | D16 | t1037 `auto-draft` (design now, build after W1 merges) | Core `runtime/flow-authoring/draft/**`, the amendment handler and its feedback, the draft's guidance; the evidence loop only through W1's merged shape |
+
+The exact owned and forbidden paths, and the interfaces fixed between workstreams, are in each brief under `page-diff-delivery-plan/briefs/` ([common.md](./page-diff-delivery-plan/briefs/common.md) binds all three). The one file two workstreams needed, Core `runtime/llm/anthropic/decision-check.ts`, is W2's: W1 ends look withdrawal at its source and W2 drops the adapter's withdrawn-action allowance.
 
 Each workstream proves itself offline:
 - unit tests;
