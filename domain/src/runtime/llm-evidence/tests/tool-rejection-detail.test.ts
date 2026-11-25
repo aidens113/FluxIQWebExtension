@@ -102,7 +102,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // Each implies a different next call, and the shapes a handle is accepted in
   // ride with them, because a code is a name for a mistake and never a
   // statement of what is accepted instead.
-  assert.deepEqual(detailOf(invented), { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(invented), { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'], next: notInPacketNext("t40") });
 
   // The control the handle named has left the page.
   //
@@ -120,7 +120,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // not invented here.
   pages.set({ url: QUEUE.url, elements: [QUEUE.elements[1]!] });
   const gone = await runtime.executeTool({ ...BASE, callId: "call.gone", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(gone), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(gone), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'], next: notInPacketNext("t1") });
 
   // The page the packet described has been left. The same answer, for the same
   // reason: the page remembered under that location no longer carries the
@@ -133,7 +133,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // is one the model already holds (`../repeated-refusal.ts`).
   pages.set({ url: "https://scheduler.example.test/queue/page/2", elements: QUEUE.elements });
   const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'], next: notInPacketNext("t1") });
   assert.equal((moved.evidence as { page?: { location?: string } }).page?.location, "https://scheduler.example.test/queue/page/2");
 
   // Not a handle this domain issues at all.
@@ -355,7 +355,8 @@ test("a stale handle is told to use the newest view or look again, and to use th
     // Passed back through, as a repeated refusal does (`../repeated-refusal.ts`), it says the same.
     assert.equal(rejectionDetail({ reason, target: named.target, instead: named.instead, missing: undefined, requestId: undefined }).next, named.next, reason);
   }
-  assert.equal(rejectionDetail({ reason: "handle_not_in_packet", target: "t9", instead: undefined, missing: undefined, requestId: undefined }).next, undefined);
+  // A handle no view printed is told where a handle comes from, and that a list another page shows is named there (t1034).
+  assert.equal(rejectionDetail({ reason: "handle_not_in_packet", target: "t9", instead: undefined, missing: undefined, requestId: undefined }).next, notInPacketNext("t9"));
 });
 
 test("a detail carrying the resolver's codes is sharpened once, and sharpening it again does not move it", () => {
@@ -454,7 +455,8 @@ test("a handle the page renumbered by reloading is told the page was reloaded an
   assert.deepEqual(rejectionDetail({ reason: renumbered.reason, target: renumbered.target, instead: renumbered.instead }), renumbered);
 
   const never = rejectionDetail({ reason: "parameters_not_resolved", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}'] });
-  assert.deepEqual(never, { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}'] });
+  assert.deepEqual(never, { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}'], next: notInPacketNext("t40") });
+  assert.equal(/reload/u.test(never.next ?? ""), false, "a handle never shown is not told of a reload");
 });
 
 // A type or clear on an element that holds no typed text (t486, `run-mv62icw0-2be384b4`: a quantity `<span>`).
@@ -538,3 +540,8 @@ test("a refusal carrying the site's wait and a returned tab says both after its 
   if (coveredBare.next !== undefined) assert.ok(covered.next?.startsWith(coveredBare.next));
   assert.match(covered.next ?? "", /wait 3 seconds/u);
 });
+
+/** What a handle no view of this page printed is told (`../rejection-next/next-sentence.ts`, t1034). */
+function notInPacketNext(handle: string): string {
+  return `Nothing was done: ${handle} is not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.`;
+}

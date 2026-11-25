@@ -25,6 +25,8 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
   return reason === "covered_by_layer" ? coveredNext(instead?.[0], target, closeWith, layerControls)
     // Read off the codes, so a repeat that passes them back says it again.
     : reason === "handle_not_in_packet" && instead?.includes(RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
+    // Read off the target, so a repeat that passes it back says it again (t1034).
+    : reason === "handle_not_in_packet" ? notInPacketNext(target)
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
     : reason === "press_had_no_effect" ? "The press left the page unchanged after it settled. Automatic retries have finished. Read the current page for a missing prerequisite or choose another control; the requested effect has not been established."
     : reason === "page_reported_press_failed" ? "The page answered the press only with a notice in its own status or alert region and changed nothing else. Automatic retries have finished. Read what the notice says on the current page before pressing again or choosing another way; the requested effect has not been established."
@@ -43,7 +45,7 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
     : reason === "page_moved_since_packet" || reason === "handle_no_longer_on_page" ? (staleHandleNamed(instead) ? STALE_NEXT_INSTEAD : STALE_NEXT)
     // Read off the name codes in `instead`, so a repeat that passes them back says it again (t1020).
-    : reason === "column_not_in_detected_list" ? webLlmUnknownColumn.next(instead)
+    : reason === "column_not_in_detected_list" ? webLlmUnknownColumn.next(instead, target)
     : undefined;
 }
 
@@ -215,6 +217,19 @@ function eitherOf(handles: readonly string[]): string {
 /** Whether `value` is one of this domain's handles (`t12`), and so may be said in a sentence. */
 function isHandle(value: string | undefined): value is string {
   return value !== undefined && /^t[1-9][0-9]*$/u.test(value);
+}
+
+/**
+ * What to do about a handle no view of this page printed (t1034). Bigbox run run-mwveg5ls-0266dfe0 saw a label's handle
+ * in a search of the basket page, went back to the results page, and asked twice to detect a list at that handle
+ * (steps 275 and 286): each refusal said `handle_not_in_packet` and nothing else, and the model never went back to the
+ * page that showed it. A handle names an element of the view that printed it; a list another page shows is detected
+ * and read on that page. Only this domain's own handle is said, never page text.
+ */
+function notInPacketNext(target: string | undefined): string {
+  const named = isHandle(target) ? `${target} is` : "The handle in target is";
+  return `Nothing was done: ${named} not a handle of this page's views. A handle names an element of the page view that printed it, and one printed on another page names nothing here. `
+    + "Use a handle the newest view of this page prints, or look at the page again; to detect or read a list that another page shows, go to that page first and name the list there by a handle its own view prints.";
 }
 
 /**
