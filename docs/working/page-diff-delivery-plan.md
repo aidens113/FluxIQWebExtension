@@ -27,7 +27,7 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - **Judging.** 22 judge calls cost $1.29 and accepted nothing; 7 judged a state unchanged since the last no.
 - **State:** planned; the build is dispatched in two workstreams (see Phases). Nothing built yet. t1034 merges first, since both workstreams build on it.
 - **Next:** the two sub-supervisors' reports; the lead integrates, runs the offline proof, then live tests on Sonnet (AGENTS.md: Lab runs start on Sonnet since 2026-11-25).
-- **Needs the user (not in this plan):** removing `find_on_page` (the user asked for page search); the framework writing the Flow from what ran (touches three user rules).
+- **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
 
 ## Decisions
 
@@ -36,7 +36,7 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
 - **D3. Delivery rides on every result.**
   - A round opening carries the page: the whole view the first time the run meets that key, otherwise the diff since the last delivery.
   - So does every tool result that ran on a page (acts, reads, searches). The model never has to ask "what does the page look like now".
-- **D4. No look command.** The look tool (and its withdrawal machinery) leaves the model's catalog. `find_on_page`, `describe_element` and `detect_repeating_structure` stay: they answer questions the view does not (hidden elements, one element's detail, a list's structure).
+- **D4. No look command.** The look capture leaves the model's catalog and its words, and look withdrawal goes with it. `describe_element` and `detect_repeating_structure` stay. `find_on_page` goes (D15).
 - **D5. The model can ask for the whole page.** `core.full_page`, or a domain tool if the domain must build it, returns the current whole view for the current key and resets that key's base. Over the limit, it comes in parts ("part 1 of 3; ask for part 2"), never cut silently.
 - **D6. A data limit on page content per request.**
   - Each delivery is held to a per-request page budget (configurable; the sub-supervisor proposes the default from the recordings' view sizes).
@@ -52,15 +52,22 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
 - **D12. Decisions are native tool calls** (audit change 3), not a JSON string inside JSON, so the provider constrains the shape. t1025's shared decision reading stays the one reader.
 - **D13. A list read is one call that detects the list itself** (audit change 2; the user's 2026-11-20 rule "keep all columns data during extraction"). The model names the list by a handle in the view (or its words); the read detects it and keeps every field. A separate detection stays available but is no longer required.
 - **D14. No judge when nothing changed since the last no** (audit change 7). The same evidence gets the same no, with the same reasons, at no cost.
+- **D15. No page search** (user, 2026-11-25). `find_on_page` leaves the catalog. The full-page request (D5) is the one way to see more than the view: hidden elements and their attributes, in parts under the data limit.
+- **D16. The framework drafts the Flow; the model edits it** (user, 2026-11-25).
+  - The draft is written from the acts and reads that worked, in order, with dead ends, failed and no-effect calls and repeats left out, and the asked table's read as the result.
+  - The model is able and told to edit it for a leaner Flow: loops over repeated steps, parameters for typed values, the result read, dropping waste.
+  - The draft-editing grammar shrinks to those edits.
+  - Rules kept: lasting acts are never done twice, and permissions are untouched.
 
 ## Phases
 
-Two workstreams, partitioned by file, each with its own sub-supervisor and task branch:
+Three workstreams, partitioned by file, each with its own sub-supervisor and task branch:
 
 | Workstream | Decisions | Branch | Owns |
 | --- | --- | --- | --- |
-| W1 What the model sees | D1-D8, D10, D11, D14 | t1036 `page-diff-delivery` | Core decision context, evidence window, rounds and earlier rounds, page channel, look removal, judge skip; domain page view, page key, stable element keys (content script) |
+| W1 What the model sees | D1-D8, D10, D11, D14, D15 | t1036 `page-diff-delivery` | Core decision context, evidence window, rounds and earlier rounds, page channel, look removal, judge skip; domain page view, page key, stable element keys (content script) |
 | W2 How the model acts | D12, D13 | t1037 `native-decisions-one-read` | Core provider adapters' decision transport and decision reading; domain read and detect nodes, extraction request, content list reader |
+| W3 The framework drafts the Flow | D16 | t1038 `auto-draft` (design now, build after W1 merges) | Core `runtime/flow-authoring/draft/**`, the amendment handler and its feedback, the draft's guidance; the evidence loop only through W1's merged shape |
 
 Each workstream proves itself offline:
 - unit tests;
