@@ -68,7 +68,7 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
        - Three are regressions the later attempts depend on: a hand step counted as a repair; a saved Flow no longer running as `run_flow`; a repaired row repeat pressing only some rows.
        - The wiring worker (Opus) is fixing them at their causes. It also owns t1042's two recovery tests, which need `core.run_flow` added to their offered-tool assertions. A text worker is fixing the remaining stale words.
        - Still to do: delete the 13-edit grammar, rebuild after 0.54.22, and the scripted bigbox run, 4 of 4.
-     - **t1043:** the self-changing-page race (worker-heavy, slot 4).
+     - **t1043:** the self-changing-page race, integrated (fluxiq 0.54.23; see the ledger).
   2. Then remove `maxStepsWithoutProgress` from every loop (AGENTS.md: no count ends a round). It crosses W3's files, so it comes after W3.
   - Tracked: Core `route-state/build-routing` "run-munneauy-de8663ed, rebuilt" fails at Core HEAD, independent of this plan (W3 found it). Fix it in the next sweep, or as its own task.
   3. A P4 offline proof across the integrated tree. Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
@@ -131,6 +131,24 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - t1043 (self-changing page) integrated (fluxiq 0.54.23)
+- Changed:
+  - **Domain (`press-effect/self-change/`):** a press is credited only with its own changes. What the page changes by itself is told apart by two signals:
+    - its own markup: carousels and slides by roledescription, marquee, timer, and live regions once seen changing;
+    - lines the run saw change with nothing done.
+
+    Those changes are kept out of `change/statement.ts`, `pageChanged` and the no-effect retry, and shown to the model marked "(changes by itself)".
+  - **Core (`judge-evidence/earlier-before-note.ts`):** Core recognises its own before-placeholder and tells the judge in its own words. The checkpoint shared the defect and is fixed too.
+- Validation: the lead's run on the t1043 trees.
+  - Core: `pnpm --filter fluxiq check` exit 0. Groups over `runtime/answer-first runtime/result-verification framework/.../answer-first runtime/llm` printed `Tests 6320 passed (6320)` and `Tests 512 passed (512)`, `all groups passed`. Core audit passed.
+  - Domain: `llm-evidence runtime/tests output-nodes` `# tests 2331 # pass 2331 # fail 0`; domain check exit 0.
+  - Extension: `# tests 4168 # pass 4168`. Downstream audit passed; model-text ok.
+  - The worker's forced-race tests fail without the fix and pass with it. Its three scripted bigbox runs passed 4 of 4 each (mwwdmmk2, mwwdv9jx, mwwe08jw); the carousel never turned mid-press in them, so they show no regression only.
+  - `pnpm task finish t1043`: audit passed; Core `"validation":{"ran":true,"command":"pnpm check","passed":true}`.
+  - Core bumped to 0.54.23; both `dev`s pushed (Core `f091ed4fe`, downstream `34f9655d3`); shared Core synced; `git merge dev` into t1015 and t1037 both sides, each `contains dev: yes`.
+- Accepted: the worker's in-place edits to `node-run/run.ts` (3 lines, which is at 800 lines) and `tools.ts` (+3), both outside its listed paths. The lead added the pointer from `build-loop.md` "What A Press Changed".
+- Known gaps: recovery-harness presses do not feed the self-change memory. A control outside a carousel that changes it without `aria-controls` reads as no effect.
 
 ### 2026-11-25 - t1042 (W1 leftovers) and t1041 (asked column names) integrated (fluxiq 0.54.22); t1043 opened
 - t1042 changed:
