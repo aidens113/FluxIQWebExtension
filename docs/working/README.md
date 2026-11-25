@@ -17,8 +17,9 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 | Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
 | [agent-working-doc-protocol.md](./agent-working-doc-protocol.md) | Senior supervisor agent | 498 | How the supervisor and workers use `docs/working/` as durable memory and as the coordination substrate for multi-agent work. | `agent-working-doc-protocol.md` |
-| [data-first-simplification-plan.md](./data-first-simplification-plan.md) | Senior supervisor agent | 716 | What changes after the 2026-11-19/20 live campaign: extraction keeps every column, one simple data layer dedupes and cleans from that upstream data, the model collects broadly, the framework does the heavy lifting, one model per task, replays that keep their repairs, a cheaper judge, and no paid run before a provider-free proof. | `data-first-simplification-plan.md` |
+| [data-first-simplification-plan.md](./data-first-simplification-plan.md) | Senior supervisor agent | 717 | What changes after the 2026-11-19/20 live campaign: extraction keeps every column, one simple data layer dedupes and cleans from that upstream data, the model collects broadly, the framework does the heavy lifting, one model per task, replays that keep their repairs, a cheaper judge, and no paid run before a provider-free proof. | `data-first-simplification-plan.md` |
 | [manual-panel-test-findings.md](./manual-panel-test-findings.md) | User for submission; senior supervisor agent for triage and closure | 311 | Capture manual panel, extension, recording, Flow creation, execution, repair, reuse, and performance findings so isolated workers can reproduce and fix them. | none |
+| [page-diff-delivery-plan.md](./page-diff-delivery-plan.md) | Senior supervisor agent | 117 | How the model sees pages: each page address's whole cleaned view once per run, then only what changed, delivered with every result; no look command; the model may ask for the whole page; page data per request stays within a limit. | `none yet (Core gets one if the sub-supervisor opens a Core working document)` |
 
 ## Paused
 
@@ -91,5 +92,5 @@ detail`. Retained for evidence. Do not plan current work from them.
 | [bootstrap-no-proposal-investigation.md](./bootstrap-no-proposal-investigation.md) | Senior supervisor agent | 278 | Diagnose and fix the first closed boundary that turns a successful model-backed Flow bootstrap request into zero durable proposals, then rerun that same live UI path before focused tests. | none |
 | [llm-production-automation-plan.md](./llm-production-automation-plan.md) | root coordination agent | 1577 ⚠ | Production-capable, provider-neutral LLM automation through the real web panel, production extension, and Testing Lab (instruction-only blank-Flow creation, evidence-guided exploration, runtime failure diagnosis/adaptation, reusable sanitized evidence); generic behavior lives in Core (`F:\!FluxIQ`), browser/DOM/selector/Testing Lab concerns live in this repository. | none |
 
-⚠ marks documents over the 800-line compaction threshold (2 of 51 here).
+⚠ marks documents over the 800-line compaction threshold (2 of 52 here).
 Compact them the next time work touches them; do not schedule a bulk rewrite.

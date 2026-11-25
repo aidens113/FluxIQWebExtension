@@ -1,0 +1,17 @@
+# t1035 brief: why a weaker model struggles in the build loop, measured, with structural fixes ranked
+
+Lead: Claude Code. Task t1035, tree `C:/Users/osrs_/FluxStuff/fxwork/t1035-agent-structure-audit` (read-only analysis; no source changes). Mode: investigation for a plan.
+
+The user (2026-11-25): "re-evaluate possible structural challenges that are going on currently thats causing worse quality models to perform badly. For instance what the hell is the 'look' command? why cant the agent see the entire page context (in the cleaned format ofc)". Earlier (memory, user rule): the model sees the whole page in a compact form, with no element caps.
+
+Evidence: five paid bigbox runs of 2026-11-24 on Haiku, each stopped by the lead, under `C:/Users/osrs_/FluxStuff/fxwork/recorded-evidence/t1015-bigbox/`: run-mwus396e, run-mwuuo3zk, run-mwuxd2v9, run-mwv5m906, run-mwveg5ls. Each step folder holds meta/call/result/request/response/decision files. Their debugs are on dev under `docs/working/language-driven-flow-loop-plan/debugs/`. Read the code paths the evidence points to: Core `packages/fluxiq/src/runtime/llm/**` (evidence loop, decision context, harness, repeat guard, loop detection, look withdrawal) and `framework/automation-service/service/answer-first/**` (rounds, completion, result); downstream `domain/src/runtime/llm-evidence/**` (page view, tools, structure, node-run).
+
+Measure across all five runs, and give numbers:
+1. **Where decisions go:** looks and searches (look, find_on_page, describe_element, detect_repeating_structure), acts, reads, draft bookkeeping (amend_draft, set_result_processing, complete), loop machinery (loop_decision), unreadable replies, refusals. Count refusals by code.
+2. **What the model sees:** when it receives a page view (round openings, looks, act results?), how often it acts on a stale view, and whether every act's result carries the page after it. What "look" is in the code, why perception is pulled by tool calls rather than given, and what a decision request holds: the system prompt, tool schemas, evidence window and draft, in tokens. Input tokens grow from about 25k to 276k per call within a run: what fills it (repeated page views, results, notes)?
+3. **Handles:** how often a call names a handle from another page or list, or a stale one, and what that cost.
+4. **Protocol load:** how many distinct tools, decision kinds, amendment kinds and refusal reasons the model must know; the size of the instructions; how often schemas change mid-run (look withdrawal), which breaks the prompt cache.
+5. **Judging:** judge calls per run, their tokens and cost, and how many could not change the outcome.
+Then **rank structural changes** by expected effect on a weaker model and by cost. Consider, without being limited to: the current cleaned page given with every decision (replacing older copies) instead of pulled; acts that return the page after them; fewer perception tools; handles that never go stale (stable element identity); a smaller draft grammar or the framework writing the Flow from what ran; an evidence window that summarises instead of growing; fewer judge calls. For each: what it removes, the risk, which rules it touches (AGENTS.md), and a rough size.
+
+Deliverable: `docs/working/data-first-simplification-plan/reports/t1035-agent-structure-audit.md` in your tree, numbers first, then the ranked proposals. No source edits, no git, no Lab or paid run, no `node -e` (write small scripts under your tree's `test-runs/` if you need them; never commit). End with the return contract.
