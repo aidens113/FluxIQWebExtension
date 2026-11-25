@@ -54,7 +54,7 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
 
 ## Decisions
 
-- **D1. One page channel, owned by Core, domain-neutral.** Core keeps, per run (never persisted across runs), the last page state it delivered to the model for each page key. The domain names the key (its normalized address; the domain decides what is "the same page") and supplies a page view as keyed lines: each line is a stable element key plus its text. Core diffs keyed lines (added, removed, changed) and never parses page words.
+- **D1. One page channel, owned by Core, domain-neutral.** Core keeps, per run (never persisted across runs), the last page state it delivered to the model for each page key. The domain names the key (its normalized address; the domain decides what is "the same page"; on the web the address is the URL "not including the ? params" (user, 2026-11-25), so a filter, sort or page change on the same path arrives as a diff, and a route fragment `#/` stays (lead's reading)) and supplies a page view as keyed lines: each line is a stable element key plus its text. Core diffs keyed lines (added, removed, changed) and never parses page words.
 - **D2. Stable element keys across captures within a run.** A diff is only meaningful if an element keeps its key from capture to capture. The domain and content script give an element the same handle for the whole run when it is the same element (by its fingerprint and place, never by its words alone). This also ends stale-handle refusals (`target_unobserved`) for elements that never left the page.
 - **D3. Delivery rides on every result.**
   - A round opening carries the page: the whole view the first time the run meets that key, otherwise the diff since the last delivery.
