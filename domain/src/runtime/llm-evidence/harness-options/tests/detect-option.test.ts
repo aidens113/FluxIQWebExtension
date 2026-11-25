@@ -21,6 +21,7 @@ import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 import { webAutomationExplorationRefusalClassifier, webAutomationRecoveryHarnessOptionBundle } from "..";
 import { WEB_RECOVERY_DETECT_OPTION_ID } from "../vocabulary";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { createWebLlmStableTargetHandles } from "../../stable-handles";
 
 const DOMAIN = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID } as const;
 const SCOPE = { projectId: "project.one", flowId: "flow.one" };
@@ -50,11 +51,14 @@ function harness(initial: Page = { url: CATALOG.url, elements: [LINK], structure
     : { eligibleSessionIds: () => ["session.one"], executeAction };
   const handles = createWebLlmExtractionHandles();
   const registry = new AutomationStudioHarnessOptionRegistry();
-  registry.register(webAutomationRecoveryHarnessOptionBundle({ gateway, scopePolicy: { kind: "same_scope" }, retainSelectors: () => {}, extractionHandles: handles }));
+  const stable = createWebLlmStableTargetHandles();
+  registry.register(webAutomationRecoveryHarnessOptionBundle({ gateway, scopePolicy: { kind: "same_scope" }, retainSelectors: () => {}, extractionHandles: handles, restamp: (scope, binding) => stable.restamp(scope, binding) }));
   return { registry, commands, handles, gateway, setPage: (next) => { page = next; } };
 }
 
-const gathering: AutomationStudioHarnessOptionResolution = { scope: DOMAIN, stage: "gather" };
+// As a recovery resolves its options (`runtime/adaptation/recovery/annotation/exploration.ts`): its acts answer to the
+// run's permission gate, so the navigate that carries the opening look is offered (t1042).
+const gathering: AutomationStudioHarnessOptionResolution = { scope: DOMAIN, stage: "gather", mutationsGovernedByPermission: true };
 let callSequence = 0;
 
 async function run(registry: AutomationStudioHarnessOptionRegistry, optionId: string, value: JsonObject, flowId = SCOPE.flowId): Promise<{ evidence: JsonObject; effectApplied: boolean; resultCode: string }> {
@@ -84,7 +88,7 @@ function rejection(code: string, detail?: JsonObject): { kind: string; evidence:
 
 function linkHandle(packet: JsonObject): string {
   const link = shownPageLines(packet).find((line) => line.kind === "link");
-  assert.ok(link, "the inspect page shows the product link");
+  assert.ok(link, "the opening page shows the product link");
   return link.target;
 }
 
@@ -115,14 +119,14 @@ test("is declared with the authoring detection's input bounds, observes only, an
   assert.deepEqual(option.availability, DOMAIN);
   assert.deepEqual(option.stages, ["gather", "iterate"]);
   // Core refuses an identical repeat on its own; a second target is a
-  // different request. The recovery's free look is `web.recovery.inspect`.
+  // different request. The recovery's opening look is Core's first navigate, with no address (t1042).
   assert.equal(option.repeatPolicy, undefined);
   assert.equal(option.initialObservation, undefined);
 });
 
 test("detects around a control a recovery packet showed, and keeps the handle for that project and Flow only", async () => {
   const { registry, commands, handles } = harness();
-  const inspected = await run(registry, "web.recovery.inspect", {});
+  const inspected = await run(registry, "web.recovery.navigate_in_scope", {});
 
   const detected = await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: linkHandle(inspected.evidence) });
 
@@ -142,21 +146,26 @@ test("detects around a control a recovery packet showed, and keeps the handle fo
 
 test("refuses a target no recovery packet issued, or whose page has moved on, without asking the page to detect", async () => {
   const { registry, commands, setPage } = harness();
-  await run(registry, "web.recovery.inspect", {});
+  await run(registry, "web.recovery.navigate_in_scope", {});
 
   assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9", next: notInPacketNext("t9") }));
   // Another Flow's exploration issued nothing this one can name.
   assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" }, "flow.two"), rejection("target_unobserved", { reason: "nothing_observed_yet" }));
   setPage({ url: `${CATALOG.url}page/2`, elements: [LINK], structure: CATALOG.structure });
-  // A stale handle's refusal carries the page as it is now and says to use its handles or the whole page (t477).
+  // A stale handle's refusal carries the page as it is now and says to use its handles or the whole page (t477). Another
+  // path's control has a number of its own, so t1 names nothing there; since t1042 a recovery's captures carry the run's
+  // stable handles, so the refusal also names the handle the element at the same place has now, as a build's does.
   const moved = await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" });
   const movedEvidence = moved.evidence as JsonObject;
   assert.equal(moved.resultCode, "web.action.rejected.target_unobserved");
   const movedDetail = movedEvidence.detail as JsonObject;
-  assert.deepEqual(Object.keys(movedDetail).sort(), ["next", "reason", "target"]);
+  assert.deepEqual(Object.keys(movedDetail).sort(), ["instead", "next", "reason", "target"]);
+  const instead = (movedDetail.instead as string[])[0]!;
+  assert.notEqual(instead, "t1");
+  assert.equal(linkHandle(movedEvidence.page as JsonObject), instead, "the handle named is the one the refusal's page prints for the link");
   assert.equal(movedDetail.reason, "page_moved_since_packet");
   assert.equal(movedDetail.target, "t1");
-  assert.match(String(movedDetail.next), /core\.full_page captures/u);
+  assert.match(String(movedDetail.next), /has the handle in instead, shown in the page with this answer/u);
   assert.equal((movedEvidence.page as JsonObject).location, `${CATALOG.url}page/2`);
   assert.equal(commands.some((command) => command.parameters.detectStructure !== undefined), false);
 

@@ -31,6 +31,7 @@ import type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./ele
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
 import { recoverable, RecoverableToolRejection, rejectionDetail } from "./tool-rejection";
 import { present } from "./present";
+import { webLlmElementHeldNow } from "./structure/held-now";
 
 /**
  * What a model told a press was declined should do next. The person said no to
@@ -144,10 +145,19 @@ export function observedElement(evidence: WebLlmPageEvidence, written: string): 
 
 /**
  * The element in the current page that the handle the model was given refers
- * to. Handles are positional, so a recapture that reranks the page would move
- * them; the binding goes through the selector recorded when the handle was
- * issued, and the whole call is refused if the page has moved on or the
- * selector no longer names exactly one element.
+ * to. The binding goes first through the selector recorded in the packet the
+ * handle was shown in (`returned`), when that packet is of this page and its
+ * selector still names exactly one element now.
+ *
+ * **A handle the page as it is now still gives to an element binds to it
+ * (t1042).** `current` is numbered as the run numbers its handles (a runtime
+ * recovery restamps every capture), so an element keeps its handle across
+ * captures and pages (page-diff D2). A handle from a view of another page,
+ * one whose selector moved, or one only the whole page printed, binds to the
+ * element `current` gives it -- the one check a detection makes
+ * (`./structure/held-now.ts`, never a copy). Only a handle the page now gives
+ * to no element is refused, with the reason the shown packet gives: the page
+ * moved on, the packet never held it, or its selector names none or several.
  */
 export function currentElementForReturnedTarget(
   returned: WebLlmSnapshotBinding | undefined,
@@ -156,15 +166,23 @@ export function currentElementForReturnedTarget(
 ): ResolvedWebLlmEvidenceElement {
   // `target.N` is the `tN` the packet printed (`./handle-spelling/`).
   const target = canonicalWebLlmTargetHandle(written) ?? written;
-  const observedSnapshot = returned ?? current;
-  if (observedSnapshot.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
-  observedElement(observedSnapshot.evidence, target);
-  const selector = observedSnapshot.selectors.get(target);
-  if (!selector) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
+  const shown = boundThroughShown(returned ?? current, current, target);
+  if (typeof shown !== "string") return shown;
+  const held = webLlmElementHeldNow(current, target);
+  if (held !== undefined) return { ...held.element, selector: held.selector };
+  return recoverable("target_unobserved", handleRefusal(shown, target));
+}
+
+type HandleRefusalReason = "handle_not_in_packet" | "page_moved_since_packet" | "handle_no_longer_on_page" | "handle_names_several_now";
+
+/** The element the shown packet's selector names now, or the way that binding failed. */
+function boundThroughShown(observed: WebLlmSnapshotBinding, current: WebLlmSnapshotBinding, target: string): ResolvedWebLlmEvidenceElement | HandleRefusalReason {
+  if (observed.evidence.location !== current.evidence.location) return "page_moved_since_packet";
+  const named = observed.evidence.elements.filter((element) => element.target === target);
+  const selector = named.length === 1 ? observed.selectors.get(target) : undefined;
+  if (!selector) return "handle_not_in_packet";
   const matches = current.evidence.elements.filter((element) => current.selectors.get(element.target) === selector);
-  if (matches.length !== 1) {
-    recoverable("target_unobserved", handleRefusal(matches.length === 0 ? "handle_no_longer_on_page" : "handle_names_several_now", target));
-  }
+  if (matches.length !== 1) return matches.length === 0 ? "handle_no_longer_on_page" : "handle_names_several_now";
   return { ...matches[0]!, selector };
 }
 
@@ -175,6 +193,6 @@ export function currentElementForReturnedTarget(
  * `target_unobserved` makes the same call again until the build runs out of
  * steps (`./tool-rejection.ts`).
  */
-function handleRefusal(reason: "handle_not_in_packet" | "page_moved_since_packet" | "handle_no_longer_on_page" | "handle_names_several_now", target: string) {
+function handleRefusal(reason: HandleRefusalReason, target: string) {
   return rejectionDetail({ reason, target, instead: undefined, missing: undefined, requestId: undefined });
 }

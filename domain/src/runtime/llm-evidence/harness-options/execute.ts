@@ -1,13 +1,23 @@
 // What each runtime harness option actually does to the page.
 //
-// Eight actions: inspect observes; find searches the whole page and describe
-// prints one element in full, as the authoring tools do (`../page-find/`);
-// detect observes the repeating structure a scrape reads, exactly as the
-// authoring detection does (`../structure/`);
-// wait observes again after a bounded pause; press presses one observed
-// control, through the same `../press.ts` the authoring tool uses; navigate
-// moves, but only where Core's scope policy says it may. Form entry and option
-// selection share one inferred field-entry action with authoring.
+// Six actions: describe prints one element in full, as the authoring tool does
+// (`../page-find/`); detect observes the repeating structure a scrape reads,
+// exactly as the authoring detection does (`../structure/`); wait observes
+// again after a bounded pause; press presses one observed control, through the
+// same `../press.ts` the authoring tool uses; navigate moves, but only where
+// Core's scope policy says it may. Form entry and option selection share one
+// inferred field-entry action with authoring. There is no look (t1042): a
+// navigate with no address -- Core's opening call, which the model is never
+// offered -- captures the page where it stands, and every result carries the
+// page through Core's page channel.
+//
+// **Every capture is numbered by the run's stable handles (t1042)**, as every
+// authoring capture is (`../stable-handles.ts`): an element keeps its handle
+// across this exploration's captures and pages, the same handle `core.full_page`
+// prints for it, so the channel sends only the lines that changed, and a handle
+// the page now still gives to an element binds to it there
+// (`../structure/held-now.ts`). Until t1042 each capture numbered its own
+// elements, so every press renumbered the page.
 //
 // Press refuses nothing on its own judgement of what a control looks like.
 // This runs while a real workflow is mid-failure, on somebody's live account,
@@ -15,8 +25,9 @@
 // Core and put to the person -- not a word list here. That seam is marked in
 // `../press.ts`; until Core carries it, press presses.
 //
-// A target handle is bound only through a packet this exploration returned,
-// never through a capture the model was not shown. Every packet returned is
+// A target handle is bound through a packet this exploration returned, or the
+// page as it is now where that still gives the handle to an element; never
+// before this exploration has shown a page at all. Every packet returned is
 // also handed to the runtime's retention, so a repair that names one of its
 // handles -- Core writes it `explored.N:tM` and strips the qualifier before
 // asking -- finds the structured packet and the selector hint behind exactly
@@ -64,7 +75,6 @@ import {
   WEB_RECOVERY_DESCRIBE_OPTION_ID,
   WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_ENTER_FIELD_OPTION_ID,
-  WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
   WEB_RECOVERY_PRESS_OPTION_ID,
   WEB_RECOVERY_WAIT_OPTION_ID,
@@ -92,6 +102,13 @@ export type WebRecoveryHarnessContext = {
    * the plan resolver for the same project and Flow.
    */
   extractionHandles: WebLlmExtractionHandles;
+  /**
+   * The run's stable handles (`../stable-handles.ts`), shared with authoring:
+   * every capture an option takes is numbered by them (header). Required: a
+   * bundle that numbered its own captures would print handles `core.full_page`
+   * does not, and renumber the page on every press.
+   */
+  restamp: (scope: { projectId: string; flowId: string }, binding: WebLlmSnapshotBinding) => WebLlmSnapshotBinding;
   /** Injectable so a test does not spend real seconds proving a bounded wait. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 };
@@ -122,7 +139,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         if (error instanceof RecoverableToolRejection) {
           // A refusal the page caused carries the page, shown like any packet
           // so its handles can be pressed next (`../capture.ts`).
-          const page = error.page === undefined ? undefined : shown(handled, error.page);
+          const page = error.page === undefined ? undefined : shown(handled, numbered(context, handled, error.page));
           // The reason goes out beside the code as well as inside the evidence:
           // the model reads the evidence, and whoever reads the run afterwards
           // reads the code, and one word for four refusals is what made
@@ -151,10 +168,6 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
     };
 
   return {
-    [WEB_RECOVERY_INSPECT_OPTION_ID]: run(async (input) => {
-      exactKeys(input.request.value, []);
-      return toolExecution(pageOf(shown(input, await capture(context, input))), false, WEB_LLM_INSPECT_RESULT_CODE);
-    }),
     [WEB_RECOVERY_PRESS_OPTION_ID]: run(async (input) => {
       exactKeys(input.request.value, ["target", "consequences"]);
       const target = handleIn(input.request.value);
@@ -167,15 +180,14 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         request: input.request,
         current,
         element,
-        // The recovery options number each capture as it comes; only authoring
-        // holds handles stable across captures of one page.
-        restamp: (binding) => binding,
+        // The run's stable handles, as every capture here (header).
+        restamp: (binding) => numbered(context, input, binding),
         consequences: input.request.value.consequences
       });
       const snapshot = shown(input, pressed.page);
-      // Recovery packets intentionally renumber each capture, so they cannot
-      // prove a target from the decision packet kept its meaning across this
-      // action. Stay conservative until recovery adopts stable handles.
+      // Stable handles keep an element's handle, but nothing here proves a
+      // target from the decision packet kept its meaning across this action
+      // (`../target.ts` does that for authoring), so it stays unclaimed.
       return toolExecution(pageOf(snapshot), true, WEB_LLM_ACTION_RESULT_CODE, false, undefined, undefined, undefined, pressed.actionability);
     }),
     [WEB_RECOVERY_ENTER_FIELD_OPTION_ID]: run(async (input) => {
@@ -191,20 +203,23 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         current,
         element,
         value: input.request.value.value,
-        restamp: (binding) => binding
+        restamp: (binding) => numbered(context, input, binding)
       });
       const snapshot = shown(input, entered.page);
       return toolExecution(pageOf(snapshot), true, WEB_LLM_ACTION_RESULT_CODE, false, undefined, undefined, undefined, entered.actionability);
     }),
-    // The authoring detection, bound through this exploration's packets and
-    // keeping its handle in the runtime's store. It returns a structure packet,
-    // not a page, so nothing is shown or retained: no target check reads one.
+    // The authoring detection, bound through this exploration's packets -- or
+    // the page now, where it still gives the handle to an element (`restamp`,
+    // `../structure/detect.ts`) -- and keeping its handle in the runtime's store.
+    // It returns a structure packet, not a page, so nothing is shown or
+    // retained: no target check reads one.
     [WEB_RECOVERY_DETECT_OPTION_ID]: run(async (input) => await detectRepeatingStructure({
       gateway: context.gateway,
       sessionId: input.sessionId,
       request: input.request,
       returned: Object.prototype.hasOwnProperty.call(input.request.value, "target") ? shownPacket(input) : undefined,
-      handles: context.extractionHandles
+      handles: context.extractionHandles,
+      restamp: (page) => numbered(context, input, page)
     })),
     // One element of the last packet this exploration showed: a handle means
     // something only against a packet the model was shown, and nothing moves.
@@ -228,6 +243,10 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       return toolExecution(pageOf(shown(input, after)), false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
     [WEB_RECOVERY_NAVIGATE_OPTION_ID]: run(async (input) => {
+      // Core's opening look, and the look after a person's Continue: no address,
+      // which the schema requires of every call the model makes (`./options.ts`).
+      // The page where it stands, and nothing moved.
+      if (Object.keys(input.request.value).length === 0) return toolExecution(pageOf(shown(input, await capture(context, input))), false, WEB_LLM_INSPECT_RESULT_CODE);
       exactKeys(input.request.value, ["url"]);
       const current = await capture(context, input);
       const destination = requestedUrl(input.request.value.url);
@@ -240,7 +259,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       // The recapture asserts it landed in the scope the policy allowed, not in
       // the one it started from: this is the one option permitted to move.
       const moved = await actAndCapture(context.gateway, input.sessionId, input.request, "web.browser.navigate", { url: destination.href }, current, input.request.signal, webAutomationExplorationScope(destination.href));
-      return toolExecution(pageOf(shown(input, moved.page)), true, WEB_LLM_ACTION_RESULT_CODE, false, undefined, undefined, undefined, moved.actionability);
+      return toolExecution(pageOf(shown(input, numbered(context, input, moved.page))), true, WEB_LLM_ACTION_RESULT_CODE, false, undefined, undefined, undefined, moved.actionability);
     })
   };
 }
@@ -275,7 +294,12 @@ function prepare(context: WebRecoveryHarnessContext, execution: AutomationStudio
 }
 
 async function capture(context: WebRecoveryHarnessContext, input: Handled): Promise<WebLlmSnapshotBinding> {
-  return await captureEvidence(context.gateway, input.sessionId, input.request, input.request.signal);
+  return numbered(context, input, await captureEvidence(context.gateway, input.sessionId, input.request, input.request.signal));
+}
+
+/** `binding` numbered by the run's stable handles (header). Numbering a capture already numbered changes nothing. */
+function numbered(context: WebRecoveryHarnessContext, input: Handled, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding {
+  return context.restamp({ projectId: input.request.projectId, flowId: input.request.flowId }, binding);
 }
 
 /**

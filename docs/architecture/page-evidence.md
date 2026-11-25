@@ -665,6 +665,33 @@ one `page` string):
   a guess. A control on another path keeps a number of its own. A bare handle
   that two remembered pages place at selectors differing only in positions
   resolves to its newest view (`plan-resolution/target-packets.ts`).
+- **A handle the page as it is now still gives to an element binds to it**
+  (t1036, t1042). Whichever view printed a handle -- a view of another address,
+  one whose selector has since moved, the whole page -- the capture a call
+  takes before it acts, numbered by the run's stable handles, says whether the
+  handle still names an element; when it does, that element as it is now is the
+  target and nothing is refused. Only a handle the page now gives to no element
+  is refused as stale (`page_moved_since_packet`, `handle_no_longer_on_page`),
+  with the page as it is. One check serves every path that binds against a
+  capture of its own (`structure/held-now.ts`): a detection
+  (`structure/detect.ts`) and a runtime recovery's press and field entry
+  (`press.ts`). A node run's press and read bind through the packet store,
+  which is handed the same numbered capture before the call resolves
+  (`node-run/run.ts`), so the same handle resolves there
+  (`node-run/tests/held-handle/tests/press-and-read.test.ts`).
+- **A runtime recovery gets the page as a build does** (t1042). Core carries
+  the page channel into a recovery's exploration: each result's page whole the
+  first time the exploration meets its key, then only what changed, and
+  `core.full_page` among its tools. There is no look option:
+  `web.recovery.inspect` is retired, and the opening look before the first
+  decision -- also the look after a person's Continue on a robot check -- is
+  Core's own first call of `web.recovery.navigate_in_scope` with no address, an
+  input its schema refuses from the model (`harness-options/options.ts`), which
+  captures the page where it stands and moves nothing. Every capture a recovery
+  option takes is numbered by the run's stable handles, as authoring's are, so
+  a recovery's pages and the whole page print one handle per element. The
+  `core.full_page` hook answers with the published page; Core reads the view
+  under its `pageView` member.
 - **A press through a cover is not sent.** When the look a press takes before
   acting shows its control `coveredBy` a layer, the press is refused
   `target_covered` (`blocked_by_dialog` under a modal) with the reason
