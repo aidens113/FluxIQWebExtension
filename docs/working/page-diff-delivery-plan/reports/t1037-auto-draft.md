@@ -166,3 +166,144 @@ descriptions in `draft/amendment/` (W3-owned). Generic only. Each left-out line 
 Drafting runs nothing: no act is done twice and no permission gate is touched. `keep` of a landed step runs
 nothing. Completion still needs one judged whole run from the start (untouched). Flows stay general: targets are
 the resolved `ranWith`, and the telling asks for loops and bindings.
+
+## Phase 2 (2026-11-25): the loop drafts the Flow
+
+### Outcome
+
+Phase 2 is done.
+- **The loop drafts the Flow itself.** Framework drafting is the evidence loop's only mode. The model edits the draft
+  with seven edits, `keep`, `drop`, `result`, `repeat`, `unrepeat`, `bind` and `rerun`, and the 13-edit grammar, the
+  transcript mode and the authored telling are deleted.
+- **The provider-free scripted bigbox run passed 4 of 4.** Attempt 1 explored. Attempts 2-4 ran the saved Flow, with
+  1, 0 and 0 model calls, the same as t1036's run.
+- **Checks:** the narrow checks pass, apart from one test that fails only under load and passes alone (listed below).
+
+### Workers (phase 2)
+
+| Worker | Tier | Brief | Outcome | What I checked myself |
+| --- | --- | --- | --- | --- |
+| `wiring` | worker-heavy | Wire the framework draft into the loop (your 9 items, 2 passes); then fix the 20 real-sql failures at their causes; then make the paging `repeat while/through` put in a left-out step | Done (`t1037/wiring.md`) | My own full group run after every worker had landed (below); the Lab run |
+| `text` | worker | Your items 2-3: look wording and `EXTRACTION_FROM`; then `amend_draft add` and "detect the list" wording (2 passes) | Done (`t1037/text.md`) | model-text ok; the parity pin it moved (below) |
+| `delete-grammar` | worker-heavy | Delete the 13-edit grammar, the transcript mode and stale words; migrate tests | Done (`t1037/delete-grammar.md`) | My full group run; the typecheck; both audits |
+| `scripted-reorder` | worker | Remove `reorder` from the local-classifieds scripted model | Done (`t1037/scripted-reorder.md`) | The test-runner check, exit 0 |
+| `carried-undeclared` | worker-heavy | t1043's test under framework drafting | Done (`t1037/carried-undeclared.md`) | I re-ran the test: it passes |
+| `docs` | worker | Core `llm-flow-bootstrap.md` and the other docs pass | Done (`t1037/docs.md`) | Both audits pass |
+
+That is more workers than phase 1's budget of three. The extra ones cover the items you added in phase 2.
+
+### Integration changes I made in phase 2
+
+- **Loop guidance restored** (Core `draft/entry.ts`, `FRAMEWORK_INSTRUCTION`). The framework telling now says how to
+  loop: one act to every item of a list is read with a where, act on one kept row, then `repeat over` the read, and
+  never act on items the read left out; a list that continues is `repeat while` the step that moves it on. The old
+  tellings carried this, and it went when they were deleted.
+- **Scripted models.** The professional-network scripted model and its 3 test assertions now send `change: "result"`
+  where they sent `add` (`packages/test-runner/.../scripts/professional-network-accept-messaged-invitations.ts:110`).
+- **Domain pin** (`domain/src/runtime/llm-evidence/script-examples/tests/parity.test.ts`). I re-pinned `format` from
+  6154 to 6159 bytes, with a comment, because the text worker changed one generic Core sentence from "for looking" to
+  "for reading the page". The completion-schema digest moved from 02c7667... to 4f2fce8...
+- **carried-undeclared.** I tried and reverted my own rewrite of it, then sent it to a worker-heavy, which found the
+  cause:
+  - On dev, `add: true` put a press into the Flow with a parameter its node does not take (`target`), so attempt 2
+    could not assemble it and repaired.
+  - Under framework drafting, that press, which nobody asked for, is left out as `dead_end`. Attempt 2 then runs the
+    saved Flow and never presses it again.
+  - The test now covers both: the model keeps the press (attempt 2 repairs, Core's note is shown, the result is
+    confirmed), and the default (attempt 2 runs the saved Flow).
+
+### Scripted bigbox Lab run (provider-free)
+
+Command: `FLUXIQ_LAB_INSTANCE=t1037-lab node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1037-lab -- pnpm lab attempt bigbox-retail --task bigbox-retail-rated-delivery-towels --authoring-mode answer-first --scripted-model --attempts 4`. It ran headed with the run watcher.
+- Run: `run-mwwol1vu-1a8e7146`, folder `test-runs/instances/t1037-lab/attempts/run-mwwol1vu-1a8e7146`.
+- Result: `{"status":"passed","answerVerdict":"right","ended":"achieved"}`, lab exit 0.
+- Watcher: `{"lab":"watch","state":"finished","alerts":0}` (`test-runs/lab-watch/t1037-lab-21556/watch-alerts.ndjson`).
+
+| Attempt | Verdict | Path | Continuation | Model calls | Time |
+| --- | --- | --- | --- | --- | --- |
+| 1 | right, achieved, 16 rows stored and shown | explore | (first) | 14: interpretation 1, judge 1, decisions 12 (t1036: 13) | 76 s |
+| 2 | right, 16 rows | run_flow (same Flow id) | from 1, held, refused [] | 1: judge 1, decisions 0 | 17 s |
+| 3 | right, 16 rows | run_flow | from 2, held, refused [] | 0 | 17 s |
+| 4 | right, 16 rows | run_flow | from 3, held, refused [] | 0 | 19 s |
+
+Attempt 1 made 12 browser calls for 9 steps (1.3x), with 0 repeated and 0 whole-Flow runs from step 1. Attempts 2-4
+found none of the asked acts already done and changed nothing on the site.
+
+**What `attempt-N/flow.png` shows.**
+- I opened attempts 1 and 4 as images. Attempts 2 and 3 differ from attempt 1's SVG only in the title.
+- All four show the framework's draft, saved as "Flow chart, attempt N (saved Flow)":
+  - INPUT: the instruction, with the parameters Search (step 3) = "paper towels" and Sort by (step 6) = "rating_high";
+  - 1 NAVIGATE;
+  - 3 ACT: TYPE "paper towels" into Search;
+  - 4 ACT: CLICK "Paper Towels (28)";
+  - 5 ACT: CLICK "Delivery (21)";
+  - 6 ACT: CHOOSE Sort by "rating_high";
+  - a loop bracket, "repeats over name, price, rating and 2 more until nothing more", around 8 READ * RESULT (12 rows
+    on page 1; first row Hearthside Select-A-Size Paper Towels, $14.47, 4.9) and 9 ACT: NEXT PAGE;
+  - "2 other steps tried (looks, failed tries, dropped repeats) are not in the Flow";
+  - OUTPUT: 16 rows, "Found 16 of 16".
+- t1036's chart said "3 other steps". Here the consent and offer detours were dropped by the script's `drop` edits,
+  and the paging press came in through the `repeat`.
+
+### Offline replay, re-run on the final composer (`test-runs/t1037/out.phase2.txt`)
+
+`node --experimental-transform-types --no-warnings replay.mts judge` gave exit 0, idempotent on all five runs.
+
+| Run | Model's Flow | Framework's Flow | Left out, besides looks |
+| --- | --- | --- | --- |
+| mwus396e | 5 | 3 | not_the_result 1, dead_end 3 |
+| mwuuo3zk | 5 | 9 | did_not_work 1, not_the_result 1, repeat 1 |
+| mwuxd2v9 | 7 | 8 | not_the_result 1 |
+| mwv5m906 | 6 | 6 | repeat 1 |
+| mwveg5ls | 12 | 18 | did_not_work 2, not_the_result 2, repeat 5 |
+
+Every act that landed is still in the framework's Flow on all five runs.
+
+### Commands run and observed results (phase 2, mine)
+
+- **Core libraries:** `pnpm --filter @fluxiq/contracts --filter @fluxiq/sdk --filter fluxiq --filter @fluxiq/client-gateway-websocket --filter @fluxiq/ui-components build` (heavy gate), after the last Core source edit: exit 0.
+- **Core tests:** `node ../../scripts/vitest-groups.mjs --groups=parallel,real-sql src/runtime/llm src/runtime/flow-authoring src/framework/automation-service src/runtime/adaptation src/server/fluxnode-api src/runtime/project-agents src/runtime/automation-activity src/ui src/runtime/result-verification`:
+  - parallel: `Test Files 1 failed | 1635 passed | 1 skipped (1637)`, `Tests 1 failed | 14803 passed | 2 skipped`. The 1 is
+    `project-build-offline-first` "the whole trial's offline-first port > is present on a candidate build, live without
+    a recording, ..." (`expected kind live to match kept`). Run alone it passes (`8 passed`), and again in the re-run
+    below. It is timing under load; no file of mine is in it.
+  - real-sql: `Test Files 1 failed | 258 passed (259)`, `Tests 1 failed | 1628 passed`. The 1 was `carried-undeclared`,
+    fixed since.
+- **Re-run after those fixes:** `vitest-groups --groups=parallel,real-sql src/framework/automation-service/service/answer-first/witnesses .../project-build-offline-first.test.ts` -> `3 passed (25 tests)` and `1 passed (2 tests)`, exit 0. The `carried-undeclared` worker also ran the whole answer-first folder in both groups: 832 + 506 tests, all passed.
+- **Core checks:** `pnpm --filter fluxiq check` -> exit 0; `node scripts/structure-audit.mjs` -> `passed (576 warning(s), 902 baselined)`.
+- **Domain:**
+  - `DOMAIN_TEST_BUILD_LABEL=t1037 node scripts/test-domain.mjs llm-evidence` -> first run `# tests 1823 # pass 1821 # fail 2` (the two parity pins above); after the re-pin `# tests 1823 # pass 1823 # fail 0`.
+  - `pnpm --filter @fluxiq-web-extension/domain check` -> exit 0.
+- **Extension:** `pnpm --filter @fluxiq-web-extension/extension check` -> exit 0. Extension tests were not run, because
+  `apps/extension` did not change.
+- **Test-runner:** `pnpm --filter @fluxiq-web-extension/test-runner check` -> exit 0.
+- **Downstream:** `node scripts/structure-audit.mjs` -> `passed (264 warning(s), 550 baselined)`; `node scripts/check/model-text.mjs` -> `ok (203 scenario tokens, 570 model-facing Core files, 14315 string literals)`.
+- **Docs worker:** Core `--rule docs-links` passed and `docs-reference --check` reported current.
+
+### Not verified (phase 2)
+
+- No live or provider run, as the brief says.
+- `packages/test-runner` full tests: the scripted-reorder worker saw 34 failures, in week1 smoke, launcher/readiness,
+  oracle, W17 upload and the reset helper. None is in scripted-model, and none was compared with a clean dev tree.
+  Your t1047 merge brought new demo-llm launcher tests, which may account for some of them.
+- The professional-network and local-classifieds scripted Lab runs were not run, only their unit tests.
+
+### Answers and open questions for the lead
+
+1. **t1044's two findings: neither is fixed by this work, so t1047 should take both.**
+   - `result-feed/feed.ts` `working` is still a count only.
+   - `decision-context/current-view.ts` still groups every read under one `holder:read`.
+   - What t1037 changed: answer-first now treats every read not marked intermediate as a result read
+     (`draft.resultRead`), and two reads of one list with nothing between them become one step in the Flow, the later
+     one. Rows still come from every read that ran. Neither change touches what the judge or the decider is shown of a
+     working read's rows.
+2. **There is no host signal for "lasting".** It matters more now:
+   - `after-result.ts` leaves out a press after the result's last read that shows no change on the page, no act claim
+     and no declared consequence. That is how carried-undeclared's renewal press, which nobody asked for, went out.
+   - An asked act that lands that way, unclaimed and with no visible change, would also be left out. In live use the
+     act checklist marks it lasting through its claim, and the model can `keep` it back.
+3. **The judge is not shown a carried act on a run_flow attempt** (summary acts `[]`). This predates t1037; it is the
+   judge-evidence owner's question.
+4. **Pre-existing, noted by the delete worker:**
+   - `route.ts`: a `repeat` whose `over` names a step that does not exist quietly uses the step before it.
+   - `settings` on an amendment is still parsed, though no edit offers it.

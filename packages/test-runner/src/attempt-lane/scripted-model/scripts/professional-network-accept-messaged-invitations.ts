@@ -105,9 +105,9 @@ function finishFromRead(request: ScriptedModelRequest, callId: string, summary: 
   if (step.actionId !== READ_NODE || step.written === true || step.replacedBy !== undefined || output?.purpose === "intermediate") throw new Error(`The final read ${callId} is not an available result step`);
   if (step.disposition === "kept") return finish(summary);
   if (step.disposition !== "taken") throw new Error(`The final read ${callId} is ${step.disposition ?? "not identified as taken"}`);
-  // Core's draft amendments name a step by the number the draft shows; `add` puts a step the model ran into the Flow.
+  // Core's draft amendments name a step by the number the draft shows; `result` makes a read the model ran the Flow's result.
   // The step is the one whose own call identity is this read's, found above, so its number names that call and no other.
-  return { kind: "evidence_tool_decision", summary: "Keep the chosen result read in the Flow.", decision: { kind: "amend_draft", amendments: [{ step: step.step, change: "add" }] } };
+  return { kind: "evidence_tool_decision", summary: "Make the chosen read the Flow's result.", decision: { kind: "amend_draft", amendments: [{ step: step.step, change: "result" }] } };
 }
 
 /** What stands over the page on a first visit, each only while it shows. */

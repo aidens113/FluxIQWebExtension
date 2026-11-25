@@ -90,26 +90,32 @@ const READ = { step: 10, actionId: "web.output.dom-extract_list", disposition: "
 const OPEN = { step: 11, actionId: "web.output.browser-navigate", disposition: "kept", input: { parameters: { url: `${BASE}/item/1003/` } } };
 const SAVE = { step: 12, actionId: "web.output.dom-click", disposition: "kept" };
 const BACK = { step: 13, actionId: "web.output.browser-navigate", disposition: "kept", input: { parameters: { url: `${BASE}/search/` } } };
-const DONE = [...HAND, made("read-tables"), made("open-first"), made("save-first"), made("back-first"), made("detect-again")];
+const DONE = [...HAND, made("write-read"), made("read-tables"), made("open-first"), made("save-first"), made("back-first"), made("detect-again")];
 
 test("the plain form repeats the opening and the save over its own read, and binds the address to the row's", () => {
   const amended = decide("plain", [...DONE, steps(READ, OPEN, SAVE, BACK)]);
   assert.deepEqual(amended.amendments, [
+    { step: 13, change: "drop" },
     { step: 11, change: "repeat", through: 12, over: 10 },
     { step: 11, change: "bind", input: { url: { $row: "url" } } },
   ]);
 });
 
-test("the reshaping form writes a read of other columns, without the price, and moves it before the repeat", () => {
-  const written = decide("reshape", [...DONE, steps(OPEN, SAVE, BACK)]);
+test("the reshaping form writes a read of other columns, without the price, before it opens the table, and repeats over it", () => {
+  const written = decide("reshape", [...HAND, made("read-tables")]);
+  assert.equal(written.callId, "write-read");
   assert.equal(written.input?.write, true);
   assert.deepEqual(written.input?.parameters?.extractList.fields, { listing: "a_title", link: "a_url" });
-  const read = { step: 14, actionId: "web.output.dom-extract_list", written: true };
-  const amended = decide("reshape", [...DONE, made("write-read"), steps(OPEN, SAVE, BACK, read)]);
+  assert.equal(decide("reshape", [...HAND, made("read-tables"), made("write-read")]).callId, "open-first");
+  const read = { step: 11, actionId: "web.output.dom-extract_list", written: true };
+  const open = { ...OPEN, step: 12 };
+  const save = { ...SAVE, step: 13 };
+  const back = { ...BACK, step: 14 };
+  const amended = decide("reshape", [...DONE, made("write-read"), steps(READ, read, open, save, back)]);
   assert.deepEqual(amended.amendments, [
-    { step: 14, change: "reorder", to: 11 },
-    { step: 11, change: "repeat", through: 12, over: 14 },
-    { step: 11, change: "bind", input: { url: { $row: "link" } } },
+    { step: 14, change: "drop" },
+    { step: 12, change: "repeat", through: 13, over: 11 },
+    { step: 12, change: "bind", input: { url: { $row: "link" } } },
   ]);
 });
 
@@ -211,8 +217,9 @@ test("the open-save-back form does what the paid run did, in its order, and its 
   assert.equal(write.input?.write, true);
 });
 
-test("the open-save-back form leaves out its hand presses, puts the way back after the save, repeats the first three rows, and asks for the loop by its first step from the saved items", () => {
+test("the open-save-back form leaves out its hand presses and way back, runs a way back after the save, repeats the first three rows, and asks for the loop by its first step from the saved items", () => {
   const before = [...HAND, made("open-first"), made("save-first"), made("back-first"), made("detect-again"), made("read-deduped"), made("read-tables"), made("open-again"), made("write-save")];
+  const loopBack = { step: 14, actionId: "web.output.browser-navigate", disposition: "kept", input: { parameters: { url: `${BASE}/search/` } } };
   const press = (step: number, target: string) => ({ step, actionId: "web.output.dom-click", disposition: "kept", does: { target } });
   const sort = press(7, "Price: lowest first");
   const firstOpen = press(8, "£45 Round pine dining table, 90cm Upper Kelford");
@@ -221,14 +228,19 @@ test("the open-save-back form leaves out its hand presses, puts the way back aft
   const readStep = { step: 11, actionId: "web.output.dom-extract_list", disposition: "kept" };
   const loopOpen = press(12, "£45 Round pine dining table, 90cm Upper Kelford");
   const check = { step: 13, actionId: "web.output.dom-check", written: true, does: { target: "Saved" } };
-  const amended = decide("open-save-back", [...before, steps(sort, firstOpen, firstSave, backStep, readStep, loopOpen, check)]);
+  const wayBack = decide("open-save-back", [...before, steps(sort, firstOpen, firstSave, backStep, readStep, loopOpen, check)]);
+  assert.equal(wayBack.callId, "back-loop");
+  assert.equal(wayBack.add, true);
+  assert.equal(wayBack.input?.parameters?.url, `${BASE}/search/?query=dining+table&radius=5&sortBy=price_ascend`);
+  const amended = decide("open-save-back", [...before, made("back-loop"), steps(sort, firstOpen, firstSave, backStep, readStep, loopOpen, check, loopBack)]);
   assert.deepEqual(amended.amendments, [
     { step: 8, change: "drop" },
     { step: 9, change: "drop" },
-    { step: 10, change: "reorder", to: 13 },
-    { step: 12, change: "repeat", over: 11, through: 10, most: 3 }
+    { step: 10, change: "drop" },
+    { step: 12, change: "repeat", over: 11, through: 14, most: 3 }
   ]);
   const looped = steps(sort, readStep, { ...loopOpen, runs: "repeats through step 13" }, check, { ...backStep, step: 14 });
+  before.push(made("back-loop"));
   const see = decide("open-save-back", [...before, looped]);
   assert.equal(see.callId, "see-saved");
   assert.equal(see.input?.parameters?.url, `${BASE}/saved/`);
@@ -345,6 +357,7 @@ test("the Run again form takes plain's Flow, a plain Save on each table opened b
   assert.equal(save.input?.node, "web.output.dom-click");
   assert.deepEqual(save.input?.consequences, ["modify_existing"]);
   assert.deepEqual(decide("run-again", [...DONE, steps(READ, OPEN, SAVE, BACK)]).amendments, [
+    { step: 13, change: "drop" },
     { step: 11, change: "repeat", through: 12, over: 10 },
     { step: 11, change: "bind", input: { url: { $row: "url" } } },
   ]);
