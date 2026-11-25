@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction; the build is dispatched to one sub-supervisor (P1-P4), then live tests (P5).
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16, three workstreams). Nothing dispatched yet; the session ended at the user's request before dispatch. Resume from Current State "Next".
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -25,8 +25,22 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - **Replies fail to parse.** 25 were unreadable (5.4%), because the reply is a JSON string inside JSON.
   - **Withdrawing looks changes the offered tools.** That happened 18 times, breaking the cache each time.
   - **Judging.** 22 judge calls cost $1.29 and accepted nothing; 7 judged a state unchanged since the last no.
-- **State:** planned; the build is dispatched in two workstreams (see Phases). Nothing built yet. t1034 merges first, since both workstreams build on it.
-- **Next:** the two sub-supervisors' reports; the lead integrates, runs the offline proof, then live tests on Sonnet (AGENTS.md: Lab runs start on Sonnet since 2026-11-25).
+- **State at the end of 2026-11-25:**
+  - Planned and decided; nothing of W1-W3 is built or dispatched.
+  - Nothing paid is running. Every leftover shell and `tail` of the session was stopped.
+  - Round spend of 11-24/25 is about $9.20 of $50: five Haiku bigbox runs and one Sonnet run.
+  - **The Sonnet run** (run-mwvgjb8c, $0.80, 90 s, 22 calls) set the store, read the cart as the result, and the product check accepted it. But the oracle marked the answer wrong: it added "Loftwell 1 Roll $1.97, 4.6 stars", which is not the cheapest towel that qualifies for pickup today at that store (`missingActs`, `unaskedChanges: cart:5520104:pickup`). Our judge, on Sonnet, accepted it, so judging pickup availability is an open defect.
+  - Open task trees:
+    - **t1034** (done by its worker, not yet lead-verified: the lead's check run was stopped at wrap-up; the worker's checks passed). It covers the asked table's own list, 3 unreadable-reply causes, and no judge over a table that cannot be the asked one. Trees `fxwork/t1034/{!FluxIQWebExtension,!FluxIQ}`; report `reports/t1034-asked-table-own-list.md` in that tree.
+    - **t1036** `page-diff-delivery`: created for W1 at dev 63ba8dc13-era with its own Core; empty.
+    - **t1015** `paid-bigbox`: the live lane, slot 1.
+    - **t1035**: the audit tree; its files are on dev; to abandon.
+- **Next (in order):**
+  1. Verify t1034 (Core groups over `completion`, `tests/endings`, `llm/{anthropic,decision-handlers,decision-reading,verification-defects}`, `result-verification`; domain `llm-evidence`; both checks; audits), merge Core dev into it (bump to 0.54.19), finish both, push, sync the shared Core.
+  2. Merge dev into t1036 (both sides); start t1037 (W2) and t1038 (W3) with `--core`.
+  3. Dispatch three sub-supervisors (Opus) with briefs from Decisions and Phases. W1 and W2 build now; W3 designs now and builds after W1 merges.
+  4. Integrate, offline proof (P4), then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others.
+  5. Also open: the judge accepting a wrong item on pickup availability (above); the answer-contract column reader misreading "columns title only"; fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`; `pinned-calls-job-board` setup wait; `tool-rejection.ts` at 799 lines; a Flow playback guard for list location (a wire change); a second full sweep and `main` promotion (`main` has not moved).
 - **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
 
 ## Decisions
@@ -83,6 +97,15 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - Handoff: decided and planned, not dispatched
+- Changed:
+  - The user's decisions were recorded in AGENTS.md and here: Sonnet for Lab runs, page diffs and no look, page search dropped, the framework drafting the Flow.
+  - The t1035 audit is on dev.
+  - The Sonnet bigbox run ran once (run-mwvgjb8c, $0.80, oracle: wrong item).
+  - Orphaned background processes of this session were stopped: 15 `tail -F` left by stopped Monitors, 2 paid-round watcher scripts, 4 old verification shells.
+- Validation: not validated: plan and records only. The lead's verification of t1034 was stopped unfinished (TaskStop) at wrap-up; the worker's own run: `vitest-groups` gave 794/794 and 86/86, domain `llm-evidence` gave 1778 pass 0 fail, checks exit 0, audits passed.
+- Follow-up: Current State "Next".
 
 ### 2026-11-25 - Planned on the user's instruction; build dispatched
 - Changed: this document; AGENTS.md rule "The page reaches the model as run-scoped diffs; there is no look command". Lab runs start on Sonnet (AGENTS.md, same day).
