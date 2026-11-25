@@ -37,7 +37,8 @@ export function webAutomationDeclaredColumnsRead(authored: JsonValue | undefined
     if (typeof field !== "string" && field.required !== false) fields[id] = { ...field, required: false };
   }
   return {
-    request: { ...request, fields }, columns, hidden, dropped: [],
+    // The shown columns are the asked ones; the rest stay kept only and are never pressed open (t1033).
+    request: { ...request, fields, ...(hidden.length ? { askedFields: [...answer].filter((id) => Object.hasOwn(fields, id)) } : {}) }, columns, hidden, dropped: [],
     ...(authored.purpose !== "intermediate" && (process === undefined || !Object.hasOwn(process, "columns")) ? { shown: [...answer] } : {})
   };
 }

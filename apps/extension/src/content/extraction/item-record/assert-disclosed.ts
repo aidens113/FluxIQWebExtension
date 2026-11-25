@@ -15,11 +15,13 @@ import type { FieldReaders } from "./field-readers";
  * fields named in `tested`, one per rejecting condition -- `undefined` for a
  * condition that read its own value, which the item filter holds to the same
  * rule -- since that rejection judged partial text. Only text and column reads
- * can be collapsed, so only they are read again.
+ * can be collapsed, so only they are read again. `whole`, when given, names the
+ * only fields held to it: a kept-only column is never a reason to refuse (t1033).
  */
-export function assertDisclosed(element: Element, fields: FieldReaders, tested?: readonly (string | undefined)[]): void {
+export function assertDisclosed(element: Element, fields: FieldReaders, tested?: readonly (string | undefined)[], whole?: ReadonlySet<string>): void {
   for (const [name, reader] of fields) {
     if (reader.kind !== "text" && reader.kind !== "column") continue;
+    if (whole !== undefined && !whole.has(name)) continue;
     if (tested === undefined || tested.includes(name)) readField(element, name, reader, "complete");
   }
 }

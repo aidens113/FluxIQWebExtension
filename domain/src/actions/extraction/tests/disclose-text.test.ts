@@ -61,3 +61,21 @@ test("a disclosedRows that is not a count drops the whole summary, as every coun
     assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, disclosedRows }), undefined, JSON.stringify(disclosedRows));
   }
 });
+
+// t1033: a read keeps every detected column beside the asked ones, and says which were asked so
+// the page presses and requires full text for those alone.
+test("askedFields is carried when it names keys of fields, and left out when it names none", () => {
+  const asked = webAutomationExtractListRequestRead({ ...READ, askedFields: ["posted", "nothing", "posted", 4] });
+  assert.deepEqual(asked.dropped, []);
+  assert.deepEqual(asked.request?.askedFields, ["posted"]);
+  for (const askedFields of [[], ["nothing"], "posted", null]) {
+    const none = webAutomationExtractListRequestRead({ ...READ, askedFields });
+    assert.equal(Object.hasOwn(none.request ?? {}, "askedFields"), false, JSON.stringify(askedFields));
+  }
+  assert.equal(Object.hasOwn(webAutomationExtractListRequestRead(READ).request ?? {}, "askedFields"), false);
+});
+
+test("the schema declares askedFields as a list of keys", () => {
+  const properties = webAutomationExtractListSchema({}).properties as Record<string, { type?: string }>;
+  assert.equal(properties.askedFields?.type, "array");
+});

@@ -471,6 +471,16 @@ export type WebAutomationExtractListRequest = {
    */
   discloseText?: boolean | undefined;
   /**
+   * The keys of `fields` the read was asked for, the rest being kept only
+   * (t982: a read keeps every detected column beside the asked ones). A kept
+   * column is read as the page shows it: its collapsed text is never pressed
+   * open and never refuses the read `incomplete_text` (t1033). The text of an
+   * asked column, and of any column a `where`, `dedupe` or `sort` names, is
+   * still held to being whole. Absent, every field is asked, which is what
+   * every request written before t1033 means.
+   */
+  askedFields?: string[] | undefined;
+  /**
    * The instant, in epoch milliseconds, a relative date in a `where` is judged
    * at ("3 days ago", "1d", `within`, a bound of `yesterday`). Set by the
    * domain's dispatch from the run's start, never by an author, so the page

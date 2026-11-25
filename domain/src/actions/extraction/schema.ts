@@ -172,7 +172,10 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       discloseText: { type: "boolean", label: "Open each kept row's collapsed text" },
       // The run's instant for relative dates, set by the domain's dispatch,
       // never by an author (`./request.ts`).
-      now: { type: "integer", label: "Relative dates judged at", minimum: 0 }
+      now: { type: "integer", label: "Relative dates judged at", minimum: 0 },
+      // The keys of `fields` the read was asked for; the rest are kept only and
+      // never pressed open (`./request.ts`, t1033). Set by the plan's resolution.
+      askedFields: { type: "array", label: "Asked fields", items: { type: "string", label: "Field key" } }
     }
   };
 }

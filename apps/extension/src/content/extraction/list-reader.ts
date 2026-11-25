@@ -151,7 +151,7 @@ import type { ExtractionCheckpoint } from "../../shared/extraction-continuation"
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
-import { assertDisclosed, contentKey, fieldReaders, rememberRejected, isRenderedItem, readRecord, recordGaps, type FieldReaders, type ItemRead } from "./item-record";
+import { assertDisclosed, contentKey, fieldReaders, rememberRejected, isRenderedItem, readRecord, recordGaps, wholeFields, type FieldReaders, type ItemRead } from "./item-record";
 import { awaitListComplete, awaitPageComplete } from "./list-wait";
 import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continued-read";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
@@ -335,6 +335,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const contentAware = paginate?.mode === "scroll";
   const resume = options.resume;
   const disclose = request.discloseText !== false;
+  // The fields held to full text: a column kept but never asked for is read as it shows (t1033).
+  const whole = wholeFields(request);
   let disclosedRows = 0;
 
   const records: ExtractedListRecord[] = resume ? resume.records.map((record) => ({ ...record })) : [];
@@ -613,12 +615,12 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         // The row read and judged; unless `discloseText: false`, again after each press
         // of a control the disclosure check refused it over (see the header).
         const judge = () => {
-          const itemRead = readRecord(element, fields, rejects ? "visible" : "complete");
+          const itemRead = readRecord(element, fields, rejects ? "visible" : "complete", whole);
           const key = keyOf(itemRead);
           if (seen === key) return undefined;
           const observations: WebAutomationExtractionRejectionObservation[] = [];
           const rejectedBy = rejects?.(element, itemRead.record, seenEach, samples ? { observations, page: progress.pagesRead, item: itemOrdinal + 1 } : undefined, keptValuesEach) ?? [];
-          if (rejects) assertDisclosed(element, fields, rejectedBy.length > 0 ? rejectedBy.map((index) => request.where?.[index]?.field) : undefined);
+          if (rejects) assertDisclosed(element, fields, rejectedBy.length > 0 ? rejectedBy.map((index) => request.where?.[index]?.field) : undefined, whole);
           return { itemRead, key, observations, rejectedBy };
         };
         const judged = disclose ? await readDisclosing(element, judge, progress.deadline, conditionNotes(seenEach, keptValuesEach)) : { value: judge(), pressed: 0 };
