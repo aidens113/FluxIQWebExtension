@@ -53,7 +53,10 @@ test("a read that names no list, and an answer that is no object, are handed bac
 test("the live read of a list is stamped as the saved read is, and no other node's is", () => {
   const whole = answer({ ...SUMMARY, place: { kind: "page", value: 3 } });
   const live = webListReadAnswerKeys("web.output.dom-extract_list", whole, PARAMETERS) as JsonObject;
-  assert.deepEqual(live, webAutomationExtractListAnswered(PARAMETERS, whole));
+  // The model's read also names the columns it kept (t1038, D13); the stamp is otherwise the saved read's.
+  const { columns, ...stamped } = live;
+  assert.deepEqual(stamped, webAutomationExtractListAnswered(PARAMETERS, whole));
+  assert.deepEqual(columns, ["train"]);
   assert.equal(live.place, "page=3");
   assert.equal(webListReadAnswerKeys("web.output.dom-click", whole, PARAMETERS), whole);
 });

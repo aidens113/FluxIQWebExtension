@@ -123,6 +123,8 @@ export type WebExtractionConditions =
 export type WebExtractionConditionColumns = {
   detected: Record<string, WebAutomationExtractField>;
   kept: Record<string, WebAutomationExtractField>;
+  /** Each detected column's readable name by key, where it is not the key (`../../structure/column-names.ts`, t1038): read as exactly as the key. */
+  names?: Readonly<Record<string, string>> | undefined;
 };
 
 /** The keys a condition may use to name its column, in the order they are read. The first one written wins, and two that disagree are malformed. */
@@ -242,7 +244,7 @@ function conditionColumn(
     { guess: true, wanted, among: "detected" },
     { guess: true, wanted, among: "kept" }
   ] as const satisfies readonly WebExtractionColumnLook[]) {
-    const column = webExtractionNamedColumn(named, look.among === "kept" ? columns.kept : columns.detected, path, look);
+    const column = webExtractionNamedColumn(named, look.among === "kept" ? columns.kept : columns.detected, path, look.among === "kept" ? look : { ...look, names: columns.names });
     if (column.ok || column.issue !== "web.handle.unknown_field") return column;
     unknown ??= column;
   }

@@ -161,7 +161,8 @@ test("with no page shown, no column is pointed at, and the packet reads as it di
   assert.equal(unseen.atNote, undefined);
   // A column's sample is read from the detection's own capture, so it needs no page shown; only `at` does.
   // So are its `type` and `parsed` (t800, `../column-type.ts`).
-  const fromSample = new Set(["sample", "type", "parsed"]);
+  // A class-path column's readable `name` is from the detection too (t1038, `../column-names.ts`).
+  const fromSample = new Set(["sample", "type", "parsed", "name"]);
   assert.deepEqual(unseen.fields.map((shownField) => Object.keys(shownField).filter((key) => !fromSample.has(key))), unseen.fields.map(() => ["key", "label", "kind", "coverage"]));
 });
 

@@ -102,7 +102,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // Each implies a different next call, and the shapes a handle is accepted in
   // ride with them, because a code is a name for a mistake and never a
   // statement of what is accepted instead.
-  assert.deepEqual(detailOf(invented), { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'], next: notInPacketNext("t40") });
+  assert.deepEqual(detailOf(invented), { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "tN"}'], next: notInPacketNext("t40") });
 
   // The control the handle named has left the page.
   //
@@ -120,7 +120,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // not invented here.
   pages.set({ url: QUEUE.url, elements: [QUEUE.elements[1]!] });
   const gone = await runtime.executeTool({ ...BASE, callId: "call.gone", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(gone), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'], next: notInPacketNext("t1") });
+  assert.deepEqual(detailOf(gone), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "tN"}'], next: notInPacketNext("t1") });
 
   // The page the packet described has been left. The same answer, for the same
   // reason: the page remembered under that location no longer carries the
@@ -133,7 +133,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // is one the model already holds (`../repeated-refusal.ts`).
   pages.set({ url: "https://scheduler.example.test/queue/page/2", elements: QUEUE.elements });
   const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'], next: notInPacketNext("t1") });
+  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "tN"}'], next: notInPacketNext("t1") });
   assert.equal((moved.evidence as { page?: { location?: string } }).page?.location, "https://scheduler.example.test/queue/page/2");
 
   // Not a handle this domain issues at all.
@@ -143,7 +143,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // and not `handle_not_in_packet`: looking again would not help, because what
   // was written is not the shape a handle is written in.
   assert.equal(codeOf(malformed), "target_unobserved");
-  assert.deepEqual(detailOf(malformed), { reason: "malformed_handle", instead: ["web.handle.malformed", "web.handle.expected.target.handle_location", "web.handle.malformed:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(malformed), { reason: "malformed_handle", instead: ["web.handle.malformed", "web.handle.expected.target.handle_location", "web.handle.malformed:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "tN"}'] });
 
   assert.deepEqual(clicks, [], "nothing was pressed on a handle that named nothing");
 });
@@ -158,7 +158,7 @@ test("a handle the page has turned into several elements says so, rather than be
   const several = await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
 
   assert.equal(codeOf(several), "target_unobserved");
-  assert.deepEqual(detailOf(several), { reason: "handle_names_several_now", target: "t1", instead: ["web.handle.not_unique", "web.handle.not_unique:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(several), { reason: "handle_names_several_now", target: "t1", instead: ["web.handle.not_unique", "web.handle.not_unique:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "tN"}'] });
   assert.deepEqual(clicks, []);
 });
 
@@ -402,7 +402,7 @@ test("a node given a control it cannot act on is told which node can, with the s
     reason: "handle_wrong_kind_of_control",
     target: "t1",
     useNode: "web.output.dom-click",
-    instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click", "web.handle.wrong_control:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}']
+    instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click", "web.handle.wrong_control:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "tN"}']
   });
   // Nothing of the page rides on it: the node is this domain's own id.
   assert.equal(JSON.stringify(detailOf(chosen)).includes("Set as my store"), false);

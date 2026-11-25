@@ -793,7 +793,40 @@ holds one it wins over the store on assembly, replay and forward runs; a
 number a step holds is never issued again. The key is on the denied list
 (`llm-evidence/denied-keys.ts`), so a model never sees it and one it writes is
 refused. An old draft that holds only the handle is refused after a restart and
-the model detects the list again.
+the model reads the list again.
+
+**A read is one call that detects its own list (t1038, D13).** A read no
+longer needs a detection first. Its `extractList` names the list by the handle
+of a line of the page view inside it or the heading above it
+(`{handle: "tN"}`), by the words such a line shows (`{words: "..."}`), or by
+nothing for the page's largest list; the read runs the detection above itself
+(`node-run/list-read/own-detection.ts`, the same `detectRepeatingStructure`,
+retained the same way) and goes on as a read of the `extraction.N` it issued.
+A line inside the list reads the list; where the page also sends the record
+the line sits in, outside the run it found, that record is read, unless the
+line is a heading or shows the list's own name, which names the list under
+it and reads the run. A `tN` read
+with `fields` naming only the element's own columns (`text`, `value`, `link`),
+or one around which no list exists on the page, reads that element as a
+one-row table as before (t903). Words no line shows are refused
+(`list_not_on_page` with `web.list.words_not_shown`), never read as the
+largest list. The step keeps the issued handle and its binding, so a rerun
+detects nothing. The detection tool stays, and a read that names an
+`extraction.N` or detected keys reads as before.
+
+**Every column is kept under a readable name.** A column whose key the page's
+own words gave (`price`) keeps it as its name; one whose key is a generated
+class path gets a name from what its element is and what of it is read, in
+closed words with no page value (`link`, `url`, `price`, `image_src`,
+`text_2`; `structure/column-names.ts`). The names are made once, at detection,
+and kept in the binding (`names`) and in a saved read's `extractionBinding`, so
+the same list read again keeps them. A read keeps every column: those its
+`fields` asks for under the plan's own keys, every other under its name, and
+`fields` (optional) may name a column by its name or its key. The packet
+shows a column's `name` beside its `key` where the two differ, the read's
+answer lists the names it kept (`columns`, with `asked` for the ones `fields`
+picked), and the retained record schema labels such a column by its name
+rather than its class-path key.
 
 Definition-list columns retain an exact semantic term and whether they read
 that term or its associated value. Their keys, coverage and stored readers do

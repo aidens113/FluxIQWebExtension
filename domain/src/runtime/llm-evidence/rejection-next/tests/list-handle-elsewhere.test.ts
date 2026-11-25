@@ -30,7 +30,9 @@ function shop(): { runtime: WebAutomationLlmEvidenceRuntime; go(url: string): vo
       const interactiveElements: JsonObject[] = url === BASKET
         ? [{ tagName: "label", selector: "#qty-label-1", visibleText: "Qty" }, { tagName: "select", selector: "#qty-1", accessibleName: "Qty" }]
         : [{ tagName: "a", selector: "#tray-1", visibleText: "Fernway Seed Tray" }];
-      return { status: "succeeded", payload: { snapshot: { url, title: url === BASKET ? "Basket" : "Results", interactiveElements } } };
+      const snapshot = { url, title: url === BASKET ? "Basket" : "Results", interactiveElements };
+      // Nothing on either page repeats, so a read that detects its own list (t1038) finds none and reads the one element.
+      return { status: "succeeded", payload: command.parameters.detectStructure === undefined ? { snapshot } : { snapshot, structure: { ok: false, refused: "no_repeating_run" } } };
     }
   });
   return { runtime, go: (next) => (url = next) };
@@ -66,7 +68,10 @@ test("a read through an element's own handle with a table's columns is told it n
   const next = refusal.detail.next ?? "";
   assert.ok(next.startsWith(`Nothing was read: ${label} names one element, not a list, and \`name\` is not one of its columns. `), next);
   assert.match(next, /whose only columns are text, value and link/u);
-  assert.match(next, /a list is detected where it stands, on the page that shows it, and read through the handle that detection issues/u);
+  // t1038 (D13): no list was found around it, and a list is read on its own page by a line of it, never detected first.
+  assert.match(next, /No list was found around it on this page/u);
+  assert.match(next, /naming the list by the handle of a line inside it/u);
+  assert.doesNotMatch(next, /[Dd]etect/u);
   assert.equal(next.includes("keys from this list's own fields"), false, "no list's fields are pointed to: there is none");
   for (const word of ["Qty", "Fernway", "basket", "garden"]) assert.equal(next.includes(word), false, `the sentence carries no page word: ${word}`);
 });
@@ -88,6 +93,8 @@ test("a detection at a handle another page printed is told the handle names noth
 
 test("a read of a detected list naming a column it lacks is told as before (t1020)", async () => {
   const { webLlmUnknownColumn } = await import("../index");
-  assert.match(webLlmUnknownColumn.next(["web.handle.unknown_column.item"], "extraction.3"), /^Nothing was read: `item` is not a column of the list this read's handle names\./u);
-  assert.match(webLlmUnknownColumn.next(["web.handle.unknown_column.item"]), /keys from this list's own fields/u);
+  assert.match(webLlmUnknownColumn.next(["web.handle.unknown_column.item"], "extraction.3"), /^Nothing was read: `item` is not a column of the list this read names\./u);
+  // t1038 (D13): a read keeps every column, and the same read with no fields shows every column under its name.
+  assert.match(webLlmUnknownColumn.next(["web.handle.unknown_column.item"]), /Run the same read with no fields to get every column under its name/u);
+  assert.doesNotMatch(webLlmUnknownColumn.next(["web.handle.unknown_column.item"]), /[Dd]etect (?:the|it|a) list|detect(?:ion)? first/u);
 });

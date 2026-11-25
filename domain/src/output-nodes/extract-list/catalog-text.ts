@@ -75,8 +75,12 @@ export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
  * whose value is no row, and stored nothing
  * (`runtime/llm-evidence/plan-resolution/extraction/element-record.ts`). It sits
  * in the description, not the grammar, because the grammar is at Core's 700.
+ *
+ * Since t1038 a `tN` names the list it is a line of, so the element's own
+ * columns are what say one element is meant: `fields` naming only `text`,
+ * `value` or `link` (`runtime/llm-evidence/node-run/list-read/own-detection.ts`).
  */
-export const WEB_AUTOMATION_EXTRACT_LIST_ONE_ELEMENT = "One element is a one-row table: handle tN, fields {yourKey: \"text\"}.";
+export const WEB_AUTOMATION_EXTRACT_LIST_ONE_ELEMENT = "Fields {yourKey: \"text\"} alone read that one element.";
 
 /**
  * The node's description: what it is for, how its list is named, and that
@@ -108,10 +112,16 @@ export const WEB_AUTOMATION_EXTRACT_LIST_ONE_ELEMENT = "One element is a one-row
  * design's first sentence ended "into the run's dataset", which is 91
  * characters; Core keeps 80 of a condensed description's first sentence, so it
  * says "into the dataset" and fits.
+ *
+ * **A read is one call (t1038, D13).** It said "Detect the list first and name
+ * it by its handle", and the 2026-11-24 bigbox runs made 102 detections for 44
+ * reads, 11 of them refused for a column key copied wrong. A read now names its
+ * list by a line of it, detects it itself and keeps every column, so the
+ * second sentence says that.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
   "Read the rows of a list or table on this page, or one record, into the dataset.",
-  "Detect the list first and name it by its handle.",
+  "Name the list by a line of it (handle tN); it keeps every column.",
   WEB_AUTOMATION_EXTRACT_LIST_ONE_ELEMENT,
   "It saves its rows itself: no save step."
 ].join(" ");
@@ -277,18 +287,30 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * names already say, and the Read more example "(e.g. a long review)" became
  * "(long text)", the same thing in generic words. At 699 of 700 there is 1
  * character left.
+ *
+ * **The handle is a line of the list (t1038, D13), 700 of 700.** A read names
+ * its list by a line in it or the heading above it, or by nothing for the
+ * page's largest list, and detects it itself
+ * (`runtime/llm-evidence/node-run/list-read/own-detection.ts`); it keeps every
+ * column under its readable name, and `fields` picks the ones asked. The
+ * clause saying so took the room of "All safe fields are retained; fields
+ * selects a view", which it restates, and the handle form's `extraction.N`,
+ * which still reads as before. A list may also be named by `words`, which the
+ * read's own refusal names where it matters; there is no room for it here.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}]};`,
-  "All safe fields are retained; fields selects a view. where is optional: omit it for data; narrow action rows here before a repeat. atMost/greaterThan/equals, contains/startsWith/endsWith/matches; within: \"7 days\"; list = any; not: true inverts; badge: is: \"present\".",
+  `{handle: "tN", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}]};`,
+  "tN: a line in/above the list (none: largest). All columns kept; fields picks some.",
+  "where is optional: omit it for data; narrow action rows here before a repeat. atMost/greaterThan/equals, contains/startsWith/endsWith/matches; within: \"7 days\"; list = any; not: true inverts; badge: is: \"present\".",
   "link=absolute URL, @href=raw href.",
   `Reads this page only. Across collected rows: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`,
   `Opens each kept row's own "Read more" (long text) itself; discloseText: false stops it.`
 ].join(" ");
 
 /**
- * One request as a model writes it: a detected list named by its handle, two
- * of its columns kept under the plan's own keys, read one page. Since t432 it
+ * One request as a model writes it: a list named by the handle of a line of it
+ * (since t1038; until then a detected list's `extraction.1`), two of its
+ * columns asked under the plan's own keys, read one page. Since t432 it
  * is the handle form, which plan resolution makes the request the page runs;
  * until then it was a literal request whose item and columns were selectors,
  * which a model is never shown. Its list is a recipe site's, a kind of site no
@@ -357,7 +379,7 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * would have stopped opening it.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
-  handle: "extraction.1",
+  handle: "t12",
   fields: { title: "title", link: "title@href" },
   where: [{ field: "promoted", is: "absent" }],
   dedupe: false,

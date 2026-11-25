@@ -27,7 +27,19 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - **Judging.** 22 judge calls cost $1.29 and accepted nothing; 7 judged a state unchanged since the last no.
 - **State (2026-11-25, second session): all three workstreams dispatched.**
   - **t1034 integrated** (fluxiq 0.54.19; both `dev`s pushed; ledger in the data-first plan). The shared Core sync followed.
-  - **W1, t1036** `page-diff-delivery`: sub-supervisor (Opus) running in `fxwork/t1036/{!FluxIQWebExtension,!FluxIQ}`, moved to both `dev` heads (Core 0.54.19) before dispatch.
+  - **W1, t1036** `page-diff-delivery`: **reported Partial, committed WIP on its branch** (Core `e9bf3fa31`, downstream `9ebf94571`, pushed). Report: `reports/t1036-page-diff-delivery.md` in its tree.
+    - **Built:** D1-D8, D10, D11, D14, D15. The page key is the URL without its query. With it, 13-14 of 32 later requests in the scripted run carried changes, up from 4-8.
+    - **The before-state cause was two things.** W1's own removal of `pageView` from the observed-state keys, now restored. And on `dev` since 11-04/11-22, `before_state_missing` was demanded after any act; the judge now asks for a before state only after a lasting act.
+    - **Its last scripted run:** zero `before_state_missing`; it was held only on `read_invalid`, which is W2's fix.
+    - **The lead accepts:**
+      - the draft stays after the history, not in the stable prefix, since it changed in 296 of 462 recorded consecutive requests;
+      - the Core directory is named `view-channel/`, because a guard test refuses "page" there.
+    - **Follow-ups the lead takes after W1 merges** (all in W1's files):
+      - `maxStepsWithoutProgress` still ends a loop, which AGENTS.md forbids;
+      - `core.run_flow` appears in the offered tools only once the draft has a step, so the tool list changes mid-run (D11);
+      - the recovery path keeps the `web.recovery.inspect` look, because it has no page channel.
+    - **For W3 phase 2:** two look phrasings remain in `flow-script-format.ts:235` and `did-not-work.ts:28`.
+    - **Combining (2026-11-25):** the lead merged W2's branch into W1's lane. Core merged clean; three conflicts arose in the scripted model. Worker t1036-g (Opus) is resolving them, fixing the W2 tests W1 breaks, running the combined checks and one scripted bigbox run (expected: attempt 1 confirmed, attempts 2-4 run the saved Flow).
     - Built. Its P4 replay is in its report, `reports/t1036-page-diff-delivery.md`. Long runs carry 35-45% less input per request (peak 309.5k to 132.8k tokens) and 16-21% fewer uncached tokens.
     - Its scripted bigbox Lab runs showed a blocker: the judge says yes, yet the completion is held unconfirmed (`answer_first.judged_unsure`, with `web_judge.read_invalid` and `judge_evidence.before_state_missing`), so the run repeats its work and never finishes.
     - The lead routed `before_state_missing` to W1. Core `judge-evidence/summary.ts` wants a before state after any act, while `answer-first/witnesses` reads one only before a lasting act. Fix: require it only when a lasting act ran. W1 now owns `answer-first/witnesses/**` and `result-verification/judge-evidence/**`.

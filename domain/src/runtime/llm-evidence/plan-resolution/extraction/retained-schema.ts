@@ -23,7 +23,11 @@ export function webPlanRetainedExtractionSchema(binding: WebLlmExtractionBinding
     const handling = metadata?.handling === "exclude" || spec?.handling === "exclude" ? "exclude" : spec?.handling ?? metadata?.handling;
     const semanticType = metadata?.semanticType ?? (spec === undefined ? undefined : webLlmColumnType(id, spec, undefined).type);
     if (same && handling !== "exclude" && handling !== "encrypt" && !identities.has(source)) identities.set(source, id);
-    const retained: AutomationStudioRecordField = { id, label: metadata?.label ?? id, valueType: "string" };
+    // A stored label that is only the detected key (a generated class path) gives way to the column's readable name
+    // (`../../structure/column-names.ts`, t1038), so a declaration binds it by that name as well as by its id.
+    const readable = metadata?.label === source ? binding.names?.[source] : undefined;
+    const label = readable ?? metadata?.label ?? id;
+    const retained: AutomationStudioRecordField = { id, label, valueType: "string" };
     if (semanticType !== undefined) retained.semanticType = semanticType;
     const mark = metadata?.mark ?? spec?.mark;
     if (mark !== undefined) retained.mark = mark;
