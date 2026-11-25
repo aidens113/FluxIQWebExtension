@@ -218,6 +218,12 @@ test("the handle keeps every detected column, and the read never carries the det
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { name: CARD_FIELDS.name }, discloseText: true } }
   });
+  // The columns the plan names are asked; the retained rest are kept only, which the read is told (t1033).
+  const named = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name", price: "product-price" } } });
+  const namedRequest = named.status === "resolved" ? named.parameters.extractList as JsonObject : {};
+  assert.deepEqual(namedRequest.askedFields, ["name", "price"]);
+  assert.ok(Object.keys(namedRequest.fields as JsonObject).length > 2, "the other detected columns are kept beside them");
+  assert.equal("askedFields" in request, false, "a plan that names no columns asks for every one");
   assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, discloseText: false } }), {
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { name: CARD_FIELDS.name }, discloseText: false } }

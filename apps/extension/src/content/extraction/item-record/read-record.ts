@@ -13,12 +13,14 @@ export type ItemRead = { record: ExtractedListRecord; missing: string[] };
  * An item's record. `"complete"` also refuses a text field whose element still
  * hides part of its text behind a disclosure control (`text-disclosure/`);
  * `"visible"` reads what the page shows, for the conditions to judge first.
+ * `whole`, when given, names the only fields held to `"complete"`: a field kept
+ * but never asked for is read as it shows (t1033).
  */
-export function readRecord(element: Element, fields: FieldReaders, completeness: "visible" | "complete"): ItemRead {
+export function readRecord(element: Element, fields: FieldReaders, completeness: "visible" | "complete", whole?: ReadonlySet<string>): ItemRead {
   const record: ExtractedListRecord = {};
   const missing: string[] = [];
   for (const [name, reader] of fields) {
-    const value = readField(element, name, reader, completeness);
+    const value = readField(element, name, reader, whole === undefined || whole.has(name) ? completeness : "visible");
     if (value === undefined) missing.push(name);
     else record[name] = value;
   }

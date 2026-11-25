@@ -177,6 +177,9 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   // `where` at all rather than an empty one the dispatch would have to read.
   // No `paginate`, whatever the detection found: the read reads the page shown.
   if (where !== undefined && where.ok && where.where.length > 0) request.where = where.where as unknown as JsonValue;
+  // The columns the plan named are asked; every other detected column is kept only, and the page never
+  // presses its collapsed text open (`actions/extraction/request.ts`, t1033). No `fields` asks them all.
+  if (columns.requested !== undefined && Object.keys(columns.fields).length > columns.requested.length) request.askedFields = [...columns.requested];
   if (value.minItems !== undefined) request.minItems = value.minItems as JsonValue;
   if (value.maxItems !== undefined) request.maxItems = value.maxItems as JsonValue;
   // The boolean written is carried, as the reader carries it: `false` stops the

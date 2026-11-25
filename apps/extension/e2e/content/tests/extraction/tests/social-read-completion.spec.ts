@@ -259,7 +259,10 @@ test("normally authored optional For Each expands helper rows before a full feed
         if (output.datasetId === "helper") {
           if (output.purpose !== "intermediate") proofIssues.push("helper.purpose");
           if (output.writeMode !== "replace") proofIssues.push("helper.writeMode");
-          if (rows.some((row) => Object.keys(row).join(",") !== "identity")) proofIssues.push("helper.columns");
+          // Since t982 a read keeps every detected column beside the asked one, and an intermediate helper stores them all
+          // (`retained-output.ts`), so its rows carry more than `identity`; they must still carry it (t1033: the kept
+          // ones are read as shown and never pressed open, which is what lets the For Each below find collapsed rows).
+          if (rows.some((row) => !Object.hasOwn(row, "identity"))) proofIssues.push("helper.columns");
           if (rows.some((row) => typeof row.identity !== "string" || row.identity.length === 0)) proofIssues.push("helper.missing_identity");
           helperCounts.push(rows.length);
         } else {
@@ -291,16 +294,17 @@ test("normally authored optional For Each expands helper rows before a full feed
   expect(helperCounts).toHaveLength(1);
   expect(helperCounts.every((count) => count > 0)).toBe(true);
   expect(scopedRows.length).toBe(helperCounts.reduce((sum, count) => sum + count, 0));
-  expect(scopedRows.every((row) => row !== undefined && Object.keys(row as object).join(",") === "identity")).toBe(true);
+  expect(scopedRows.every((row) => row !== undefined && Object.hasOwn(row as object, "identity"))).toBe(true); // the helper stores every kept column since t982, so a row carries more than identity
   expect(scopedRows.every((row) => typeof (row as JsonObject)?.identity === "string" && String((row as JsonObject).identity).length > 0)).toBe(true);
   expect(fullCounts).toHaveLength(1);
   expect(fullCounts[0]!).toBeGreaterThanOrEqual(helperCounts[0]!);
-  expect(batchReceipts).toEqual([{ datasetId: "answer", nodeId: "full", rows: fullCounts[0]!,
+  // Since t982 the answer stores every retained column, the asked ones first; its view (`process.columns`) is applied downstream.
+  expect(batchReceipts.map((receipt) => ({ ...receipt, fields: receipt.fields.slice(0, 2) }))).toEqual([{ datasetId: "answer", nodeId: "full", rows: fullCounts[0]!,
     fields: ["identity", "description"], invalidCount: 0, truncated: false }]);
   expect([...capturedDatasets.keys()]).toEqual(["answer"]);
   const capturedRows = [...(capturedDatasets.get("answer")?.values() ?? [])].flatMap((batch) => batch.rows);
   expect(capturedRows).toHaveLength(fullCounts[0]!);
-  expect(capturedRows.every((row) => Object.keys(row).join(",") === "identity,description")).toBe(true);
+  expect(capturedRows.every((row) => Object.keys(row).slice(0, 2).join(",") === "identity,description")).toBe(true);
   expect(afterMoveCollapsed).toEqual([0]);
   expect(trace.attempts.find((attempt) => attempt.nodeId === "next")?.route).toBe("ended");
   console.info("intermediate-capture-receipt", JSON.stringify({ helperCounts, fullCounts, batchReceipts }));

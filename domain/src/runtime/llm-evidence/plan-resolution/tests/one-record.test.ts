@@ -68,6 +68,7 @@ test("the record's handle with two of its columns resolves to the card's item an
     parameters: {
       extractList: {
         item: REPLY_CARD.item,
+        askedFields: ["item", "price"],
         fields: {
           item: { kind: "text", selector: REPLY_CARD.name, required: false },
           price: { kind: "text", selector: REPLY_CARD.price, required: false },
@@ -109,7 +110,9 @@ test("the record's handle with two of its columns resolves to the card's item an
   // selector withheld, it is the Flow's own list and gets them back.
   const kept = (resolved as { parameters: { extractList: JsonObject } }).parameters.extractList;
   const draft = { item: kept.item as string, fields: { item: { kind: "text", required: false }, price: { kind: "text", required: false }, [NOTE]: { kind: "text", required: false } }, maxItems: 1 };
-  assert.deepEqual(await resolve(runtime, draft), { status: "resolved", parameters: { extractList: kept } });
+  // It names all three columns, so all three are asked (t1033): the same request, with nothing kept only.
+  const { askedFields: _kept, ...asAllAsked } = kept;
+  assert.deepEqual(await resolve(runtime, draft), { status: "resolved", parameters: { extractList: asAllAsked } });
 });
 
 test("a receipt detected as a list of one builds an extract node that reads exactly one row", async () => {
@@ -124,6 +127,7 @@ test("a receipt detected as a list of one builds an extract node that reads exac
     parameters: {
       extractList: {
         item: "dl.tl-receipt",
+        askedFields: ["role", "company", "reference"],
         fields: {
           role: { kind: "text", selector: ":scope > dd:nth-of-type(1)", required: false },
           company: { kind: "text", selector: ":scope > dd:nth-of-type(2)", required: false },

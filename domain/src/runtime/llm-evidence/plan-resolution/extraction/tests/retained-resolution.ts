@@ -29,6 +29,13 @@ export function assertRetainedResolution(actual: unknown, expected: unknown, mes
     fields[under] = optional as unknown as JsonObject;
   }
   list.fields = fields;
+  // The plan's own columns are the asked ones; every other retained reading is kept only (t1033).
+  const actualList = actualPayload.extractList as JsonObject;
+  if (Object.keys(fields).length > Object.keys(selected).length) assert.deepEqual(actualList.askedFields, Object.keys(selected), "the retained extras are kept only, so the read is told which columns were asked");
+  if (actualList.askedFields !== undefined) {
+    assert.deepEqual(actualList.askedFields, Object.keys(selected), "askedFields are the columns the plan named");
+    delete actualList.askedFields;
+  }
   const output = actualPayload.recordOutput as JsonObject;
   const schema = parseAutomationStudioRecordSchema(output?.schema);
   assert.equal(schema.ok, true, "retained schema is valid");

@@ -212,6 +212,11 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
   // dropped and named, and the read then presses, as by default.
   const discloseText = optionalValue(request.discloseText, booleanValue);
   if (discloseText === REFUSED) dropped.push("discloseText");
+  // The fields the read was asked for (`./request.ts`, t1033): the names that are keys of `fields`. A value
+  // that names none of them is left out unnamed, which asks every field, as a request without it does.
+  const askedFields = Array.isArray(request.askedFields)
+    ? [...new Set(request.askedFields.filter((key): key is string => typeof key === "string" && Object.hasOwn(fields, key)))]
+    : [];
   return {
     request: {
       item,
@@ -225,7 +230,8 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
       ...(sort !== undefined && sort.sort.length > 0 ? { sort: sort.sort } : {}),
       ...(answer !== undefined ? { answer } : {}),
       ...(now !== undefined ? { now } : {}),
-      ...(typeof discloseText === "boolean" ? { discloseText } : {})
+      ...(typeof discloseText === "boolean" ? { discloseText } : {}),
+      ...(askedFields.length > 0 ? { askedFields } : {})
     },
     dropped,
     assumed

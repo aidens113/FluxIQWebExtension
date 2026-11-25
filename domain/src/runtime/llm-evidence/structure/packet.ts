@@ -493,6 +493,8 @@ function boundList(
       sort: undefined,
       // Whether the read opens each kept row's own collapsed text is the plan's to say too (t752).
       discloseText: undefined,
+      // Which of the detected columns the read is asked for is the plan's to say too (t1033).
+      askedFields: undefined,
       // The run's moment relative dates are read against is the dispatch's to fill (t800, K1), never a detection's.
       now: undefined
     }),

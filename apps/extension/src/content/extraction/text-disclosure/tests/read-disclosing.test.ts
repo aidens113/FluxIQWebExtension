@@ -142,3 +142,35 @@ test("a 'Read more' that is a link to another page, or a form's submit button, i
   await assert.rejects(read([submit], { where: THIS_YEAR }), refusedIncomplete);
   assert.equal(submitted, 0);
 });
+
+// t1033: a read keeps every detected column beside the asked ones, and only the
+// asked ones (and any a condition, dedupe or sort names) are held to full text.
+test("a kept-only column with collapsed text is read as it shows, never pressed, and an asked one is expanded", async () => {
+  const dom = fakeShadowDom();
+  const row = review(dom, "Long", "March 2026", { long: true });
+  const keptOnly = await read([row], { askedFields: ["posted"] });
+  assert.equal(row.pressed(), 0);
+  assert.equal(keptOnly.disclosedRows, undefined);
+  assert.deepEqual(keptOnly.records, [{ posted: "March 2026", body: `${CUT("Long")}Read more` }]);
+
+  const asked = review(dom, "Asked", "March 2026", { long: true });
+  const expanded = await read([asked], { askedFields: ["posted", "body"] });
+  assert.equal(asked.pressed(), 1);
+  assert.equal(expanded.disclosedRows, 1);
+  assert.deepEqual(expanded.records, [{ posted: "March 2026", body: FULL("Asked") }]);
+});
+
+test("a kept-only collapsed column never refuses a read that does not press, and an asked one still does", async () => {
+  const dom = fakeShadowDom();
+  const outcome = await read([review(dom, "Long", "March 2026", { long: true })], { askedFields: ["posted"], discloseText: false });
+  assert.deepEqual(outcome.records, [{ posted: "March 2026", body: `${CUT("Long")}Read more` }]);
+  await assert.rejects(read([review(dom, "Long", "March 2026", { long: true })], { askedFields: ["posted", "body"], discloseText: false }), refusedIncomplete);
+});
+
+test("a column a condition names is held to full text even when it was not asked for", async () => {
+  const dom = fakeShadowDom();
+  const row = review(dom, "Long", "March 2026", { long: true });
+  const outcome = await read([row], { askedFields: ["posted"], where: [{ field: "body", contains: "quiet" }] });
+  assert.equal(row.pressed(), 1);
+  assert.deepEqual(outcome.records, [{ posted: "March 2026", body: FULL("Long") }]);
+});
