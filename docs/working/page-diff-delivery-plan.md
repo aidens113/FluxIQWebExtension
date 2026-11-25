@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). All three workstreams dispatched to Opus sub-supervisors: W1 t1036, W2 t1038, W3 t1037 (phase 1). t1034 integrated first.
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W3 t1037 phase 1 verified on its branch; W1 t1036 and W2 t1038 building (Opus sub-supervisors). t1034 integrated first.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -29,7 +29,7 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - **t1034 integrated** (fluxiq 0.54.19; both `dev`s pushed; ledger in the data-first plan). The shared Core sync followed.
   - **W1, t1036** `page-diff-delivery`: sub-supervisor (Opus) running in `fxwork/t1036/{!FluxIQWebExtension,!FluxIQ}`, moved to both `dev` heads (Core 0.54.19) before dispatch.
   - **W2, t1038** `native-decisions-one-read`: sub-supervisor (Opus) running in `fxwork/t1038/{...}`, opened from both `dev` heads (Core 0.54.19).
-  - **W3, t1037** `auto-draft`: sub-supervisor (Opus) running phase 1 (design, and the parts inside its own paths) in `fxwork/t1037/{...}`. It opened from Core 0.54.18, before t1034, which touched none of its files. Phase 2 (wiring into the loop) waits for W1's merge, when the lead merges `dev` in and tells it.
+  - **W3, t1037** `auto-draft`: **phase 1 done, lead-verified and committed on its branch, with both `dev` heads merged in; not merged into `dev`** (inert until wired, so not yet a complete unit). `draft/compose/` drafts from the calls that worked, with reasons for each step left out. `draft/amendment/edits/` holds six edits (keep, drop, result, repeat, unrepeat, bind), only under `draftEdits: "framework"`, which nothing sets yet. Replay: every landed act is in the framework draft on all five runs, and two runs gain the result read the model lacked. Phase 2 hook points are in its report `reports/t1037-auto-draft.md` (in its tree), "Where phase 2 hooks in": mostly W1's `evidence-loop.ts`, plus `loop-configuration.ts`, `evidence-loop-decision.ts` and W1's `result-columns.ts`; after the switch, delete the 13-edit grammar. Its open questions: no host signal for "lasting" (it errs toward keeping), and looks still listed in the draft entry. Phase 2 starts when W1 merges: the lead merges `dev` in and resumes the same sub-supervisor.
   - Briefs: `page-diff-delivery-plan/briefs/` (`common.md` binds all three). Ids follow `pnpm task start`'s order, so W3 is t1037 and W2 is t1038.
   - Nothing paid is running. Round spend of 11-24/25 is about $9.20 of $50: five Haiku bigbox runs and one Sonnet run.
   - **The Sonnet run** (run-mwvgjb8c, $0.80, 90 s, 22 calls) set the store, read the cart as the result, and the product check accepted it. But the oracle marked the answer wrong: it added "Loftwell 1 Roll $1.97, 4.6 stars", which is not the cheapest towel that qualifies for pickup today at that store (`missingActs`, `unaskedChanges: cart:5520104:pickup`). Our judge, on Sonnet, accepted it, so judging pickup availability is an open defect.
@@ -97,6 +97,11 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - t1037 (W3) phase 1 verified on its branch
+- Changed: Core `runtime/flow-authoring/draft/{compose,amendment/edits}/**` (new), draft `step`/`entry`/amendment files, `decision-handlers/amendment.ts` (gated on `draftEdits: "framework"`), `draft-amendment-feedback`, `held-amendments.ts`, `ui/activity-action/refusal-words.ts`; reports `reports/t1037-auto-draft.md` and `reports/t1037/{compose,edits,replay}.md`. Committed as Core `adbafa688` and merged with Core dev (`8a3e79572`); downstream reports merged with dev (`c14eccd4b`).
+- Validation: the lead's run on the merged tree. Core groups over `flow-authoring`, `runtime/llm`, `ui/activity-action` and `answer-first`: parallel `Tests  8230 passed | 2 skipped (8232)`, real-sql `Tests  526 passed (526)`, "all groups passed". `pnpm --filter fluxiq check` exit 0. Core audit `passed (573 warning(s), 903 baselined)`. Downstream audit `passed (261 warning(s), 551 baselined)`. `model-text: ok`.
+- Follow-up: phase 2 after W1 merges.
 
 ### 2026-11-25 - Dispatch: briefs, t1034 first, three sub-supervisors
 - Changed:
