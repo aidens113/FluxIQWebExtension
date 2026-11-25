@@ -63,7 +63,14 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
      - t1041, the asked column names (worker; slot 4);
      - t1042, W1's leftovers (worker-heavy; slot 3).
      Verify each, integrate it, and merge `dev` into every lane after each merge (AGENTS.md).
+     - **W3 phase 2 (2026-11-25, hand-back at Partial):** the loop now redrafts in place under `draftEdits: "framework"`, with `rerun` kept as a seventh edit. `core.run_flow` is offered from the first decision and refused by name with no draft. The result read is chosen by the asked columns. The look wording is gone from its files.
+       - **20 real-sql tests fail because of the switch.** They are in 12 files, in answer-first, service-bootstrap and sdk-acceptance.
+       - Three are regressions the later attempts depend on: a hand step counted as a repair; a saved Flow no longer running as `run_flow`; a repaired row repeat pressing only some rows.
+       - The wiring worker (Opus) is fixing them at their causes. It also owns t1042's two recovery tests, which need `core.run_flow` added to their offered-tool assertions. A text worker is fixing the remaining stale words.
+       - Still to do: delete the 13-edit grammar, rebuild after 0.54.22, and the scripted bigbox run, 4 of 4.
+     - **t1043:** the self-changing-page race (worker-heavy, slot 4).
   2. Then remove `maxStepsWithoutProgress` from every loop (AGENTS.md: no count ends a round). It crosses W3's files, so it comes after W3.
+  - Tracked: Core `route-state/build-routing` "run-munneauy-de8663ed, rebuilt" fails at Core HEAD, independent of this plan (W3 found it). Fix it in the next sweep, or as its own task.
   3. A P4 offline proof across the integrated tree. Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
   4. Also open: the judge accepting a wrong item on pickup availability (above); the answer-contract column reader misreading "columns title only"; fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`; `pinned-calls-job-board` setup wait; `tool-rejection.ts` at 799 lines; a Flow playback guard for list location (a wire change); a second full sweep and `main` promotion (`main` has not moved).
 - **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
