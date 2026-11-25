@@ -19,6 +19,10 @@
 // element is drawn against the window (its box, whether it is on screen, which
 // controls a fixed layer happens to cover there) and where focus sits, which a
 // press moves to the control it pressed. None of them is an effect.
+//
+// Nor is what the page changes by itself (`own`, `./self-change/`, t1043): the
+// elements a carousel, a ticker or a clock holds are set aside on both sides, so
+// a press made while a slide turned is not said to have changed the page.
 
 import { webLlmLineFacts, type WebLlmLineFact } from "../../page-view";
 import type { WebLlmEvidenceElement } from "../../elements";
@@ -26,10 +30,13 @@ import type { WebLlmPageEvidence } from "../../sanitize";
 
 /** State tokens that say where an element is drawn or where focus sits. */
 const DRAWN_ONLY_TOKEN = /^(?:focused$|covered-by |covers \d)/u;
+const NONE: ReadonlySet<string> = new Set();
 
-/** True where the two looks show the same page in every respect but where it is drawn and where focus sits. */
-export function webPageUnchanged(before: WebLlmPageEvidence, after: WebLlmPageEvidence): boolean {
-  return samePage(before, after) && sameElements(before.elements, after.elements) && sameLines(webLlmLineFacts(before), webLlmLineFacts(after));
+/** True where the two looks show the same page in every respect but where it is drawn, where focus sits, and what in `own` the page changes by itself. */
+export function webPageUnchanged(before: WebLlmPageEvidence, after: WebLlmPageEvidence, own: ReadonlySet<string> = NONE): boolean {
+  const elements = (page: WebLlmPageEvidence) => page.elements.filter((element) => !own.has(element.target));
+  const lines = (page: WebLlmPageEvidence) => webLlmLineFacts(page).filter((line) => !own.has(line.handle));
+  return samePage(before, after) && sameElements(elements(before), elements(after)) && sameLines(lines(before), lines(after));
 }
 
 function samePage(before: WebLlmPageEvidence, after: WebLlmPageEvidence): boolean {

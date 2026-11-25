@@ -405,7 +405,11 @@ two never disagree. A text line that appeared or went is stated `appeared` or
 words on both pages whose words changed is stated with its words now, `rose`
 when they differ only in one number that went up ("Cart (2)" to "Cart (3)",
 "1 item" to "2 items", `press-effect/change/rose.ts`) and `reads` otherwise.
-State-token changes and lines without words are never stated. It is sent under
+State-token changes and lines without words are never stated. A line the page
+changes by itself (a carousel, a ticker, a timer, a live region the run has
+seen change with nothing done) is never credited to the press and is left out
+of these lines; see page-evidence.md, "What The Page Changes By Itself"
+(t1043). It is sent under
 the outcome's own conditions -- a mutating node that does not move the page,
 both pages read, one location -- and absent otherwise; a look, a navigation, a
 read, a refusal, a robot-check standing step and a written step send none.
