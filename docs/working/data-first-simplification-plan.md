@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.17, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.18, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -223,6 +223,19 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1032 integrated (fluxiq 0.54.18): no judge yes could stand since 11-22; the asked table is the result
+- Changed:
+  - Since t987 (11-22) the web judge projector marked every structure detection and Core's own calls as evidence gaps, and Core holds any yes unsure while gaps stand, so no yes could stand in a run that detected a list or set result processing. Core now never hands its own calls (`core.*` but the four that run host nodes, and its control-flow and timing nodes) to a host projector (`judge-evidence/core-call.ts`); the domain reads a detection as an observation.
+  - A yes is refuted when the answer contract names the asked table and the yes says the rows are not it (`asked: false`) or the rows hold nothing for a named column (`cited-yes/records-yes.ts`). Words are matched by shared word because the contract reader misreads "with columns title only"; that reader is to be fixed, then tightened.
+  - A held yes says why (`flow-less/held-yes.ts`). The result line says a pagerless list holds one page (`listPaging` on every detection) and names asked against held columns. Unsure feedback says how to make the asked table the result.
+  - Merged on t1029: t1032's `project.ts` stands, which makes t1029's bookkeeping branch redundant; t1029's toggle fix in `action.ts` stays.
+- Validation: the lead's run:
+  - t1032 trees after merging dev: Core groups over `result`, `result-feed`, `completion`, `tests/endings` and `result-verification` gave `Test Files  293 passed (293)`, `Tests  2217 passed (2217)`; real-sql `Tests  99 passed (99)`; domain `judge-evidence`, `structure` and `web-sessions` gave `# pass 126 # fail 0`; checks exit 0; both audits passed.
+  - After merging t1030: Core `Tests  2443 passed (2443)`, `Tests  188 passed (188)`; domain `# pass 705 # fail 0`; checks exit 0; audit passed.
+  - The worker's new tests fail before the fix: 8 in Core, 4 in the domain with the recording's exact gap codes.
+- Follow-up: fix the answer-contract column reader in `runtime/flow-authoring`; fake clocks for the deadline tests (`second-attempt-proof`, `later-attempt`).
+
 
 ### 2026-11-24 - t1030 integrated (fluxiq 0.54.17): a saved act checks its standing option at playback
 - Changed:
