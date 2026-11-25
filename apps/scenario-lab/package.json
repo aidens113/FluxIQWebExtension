@@ -8,7 +8,7 @@
     "check": "node ../../scripts/build-cache/cli.mjs scenario-lab:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check-src.tsbuildinfo && tsc -p tsconfig.e2e.json --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check-e2e.tsbuildinfo\"",
     "start": "node dist/server.js",
     "test": "node ../../scripts/build-cache/cli.mjs test-contracts:build && node ../../scripts/build-cache/cli.mjs scenario-lab:build && node --test dist/**/*.test.js",
-    "test:e2e": "node ../../scripts/build-cache/cli.mjs test-contracts:build && playwright test -c e2e/playwright.config.ts"
+    "test:e2e": "node ../../scripts/lab/live-guards/cli/behind-dev.mjs && node ../../scripts/build-cache/cli.mjs test-contracts:build && playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
     "@fluxiq-web-extension/test-contracts": "workspace:*"
