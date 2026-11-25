@@ -2224,6 +2224,18 @@ turn sits under the first. The second attempt's baseline is read when it starts 
   ended and was scored (rows, continuations, per-attempt deterministic lines and summary). An attempt the
   run had typed and followed is reported as started, with its browser steps and the request refused
   ("refused at request 4 of kind loop_verification"), never as "did not start".
+- **Every attempt draws its Flow (`flow.png`, `flow.svg`).** Before a Lab attempt ends, on every ending
+  (success, failure, a refused or stopped run, a throw), `flow-chart/` writes a picture of the Flow as it
+  stands into the attempt's evidence folder, and `attempt-report.txt` names it on a `Flow chart:` line that
+  says whether it shows the saved Flow or the draft. It reads the run's step files, not the browser: the newest
+  decision's `core.flow_draft`, so a dead extension still yields a chart. Top to bottom: the input (the chat's
+  instruction and each value the run typed or chose), one box per node in Flow order (kind, target in words,
+  the typed value, and what the run recorded going through it: the address, the rows a read found and the first
+  row), loops as brackets and branches as side arrows, the result read marked, and the output (the answer the
+  chat showed, its first rows with columns and the total, or "no result"). Tokens, cookies, auth headers and
+  secret-field values are hidden; page text stays. Rasterised in wasm (`@resvg/resvg-wasm`), no browser; a
+  failure writes `flow-chart-error.txt` and never fails the attempt. An attempt with no draft writes no image and
+  its report says so. `lab flow-chart <run dir> [--out DIR]` charts any existing run directory afterwards.
 - **`--attempts 1` is diagnosis only.** One attempt cannot show the loop pays off, so its status is
   `diagnosis_only` (never `passed`) however right the answer, and the report says so. It exits 0 when
   the answer was right and 1 otherwise. The live guards read `diagnosis_only` as no failure: it does
