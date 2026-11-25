@@ -84,9 +84,9 @@ test("the record's handle with two of its columns resolves to the card's item an
         schema: {
           schemaVersion: "0.1",
           fields: [
-            { id: "item", label: "span:1", valueType: "string", required: false },
-            { id: "price", label: "span:2", valueType: "string", required: false },
-            // Its stored label was its key, which gives way to its readable name.
+            { id: "item", label: "item", valueType: "string", required: false },
+            { id: "price", label: "price", valueType: "string", required: false },
+            // A column the plan names is labelled by that name (t1041); this one kept its detected key, which gives way to its readable name.
             { id: "text", label: "text", valueType: "string", required: false }
           ]
         },

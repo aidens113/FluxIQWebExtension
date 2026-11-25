@@ -157,3 +157,17 @@ test("what a step holds that cannot be read is as if it held nothing", async () 
   assert.equal(answer.status, "refused");
   assert.equal((answer as unknown as { issueCodes: string[] }).issueCodes.includes("web.handle.unknown"), true);
 });
+
+test("a saved step holding the site's labels for its renamed columns re-resolves to the names the plan gave (t1041)", async () => {
+  const { ranWith } = await savedRead();
+  const stale = structuredClone(ranWith.parameters);
+  stale.recordOutput = {
+    datasetId: "products", writeMode: "replace",
+    schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "product-name", valueType: "string" }, { id: "price", label: "product-price", valueType: "string" }] },
+    process: { columns: ["name", "price"] }
+  };
+  const answer = await aProcess().runtime.resolvePlanNodeParameters({ ...SCOPE, nodeDefinitionId: EXTRACT_NODE, parameters: stale, declaredConsequences: [] });
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+  const fields = (((answer as { parameters: JsonObject }).parameters.recordOutput as JsonObject).schema as { fields: { id: string; label: string }[] }).fields;
+  assert.deepEqual(fields.filter((field) => field.id === "name" || field.id === "price").map((field) => [field.id, field.label]), [["name", "name"], ["price", "price"]]);
+});

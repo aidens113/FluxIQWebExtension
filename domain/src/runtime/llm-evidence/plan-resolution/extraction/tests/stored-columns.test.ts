@@ -12,6 +12,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { parseAutomationStudioRecordSchema } from "fluxiq/components/automation";
 import {
   automationStudioFlowBootstrapIssueFeedback,
   resolveAutomationStudioFlowBootstrapPlanParameters,
@@ -229,4 +230,30 @@ test("a node a caller runs now is not dry-dispatched: its real dispatch, a momen
   const dispatch = webAutomationExtractListDispatch(answer.parameters);
   assert.equal(dispatch.ok, false);
   if (!dispatch.ok) assert.match(dispatch.result.failure?.actual ?? "", /mutualFriends/u);
+});
+
+// t1041: the label of a renamed column is the plan's own name, so the site's word binds here, in the name rewrite, and
+// Core binds the process by id.
+test("a process naming the site's key of a renamed column is read as the plan's name, and Core binds it", async () => {
+  const { runtime: shown, handle } = await detected();
+  const answer = await resolve(shown, {
+    extractList: { handle, fields: { name: NAME, rating: MUTUAL }, minItems: 0 },
+    recordOutput: output(["name", "rating"], { columns: ["name", MUTUAL], sort: [{ field: MUTUAL, order: "desc" }] })
+  });
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+  if (answer.status !== "resolved") return;
+  const saved = answer.parameters.recordOutput as JsonObject;
+  const process = saved.process as JsonObject;
+  assert.deepEqual(process.columns, ["name", "rating"]);
+  assert.deepEqual(process.sort, [{ field: "rating", order: "desc" }]);
+  const fields = (saved.schema as { fields: { id: string; label: string }[] }).fields;
+  assert.deepEqual(fields.filter((field) => field.id === "rating" || field.id === "name").map((field) => field.label), ["name", "rating"]);
+  const parsed = parseAutomationStudioRecordSchema(saved.schema);
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  // Core binds a process name to an exact id first (`bindAutomationStudioRecordProcessing`, not on the public surface
+  // the domain imports); every name here is one, so it binds with no label lookup. The scripted Lab run drives Core's own.
+  const ids = new Set(parsed.schema.fields.map((field) => field.id));
+  for (const name of [...(process.columns as string[]), ...(process.sort as { field: string }[]).map((key) => key.field)]) assert.ok(ids.has(name), `${name} is a stored id`);
+  assert.equal(webAutomationExtractListDispatch(answer.parameters).ok, true);
 });

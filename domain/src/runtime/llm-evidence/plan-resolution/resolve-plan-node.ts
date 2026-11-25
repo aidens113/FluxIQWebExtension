@@ -542,9 +542,9 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
       }
       const slot = resolveWebExtractionSlot(record.status === "named" ? record.value : value, scope, stores.extractions, !webPlanModelWrote(scope, key));
       if (slot.status === "resolved") {
-        const stored = webPlanStoredColumns(slot.request, parameters.recordOutput);
+        const stored = webPlanStoredColumns(slot.request, parameters.recordOutput, slot.siteNames);
         parameters = structuredClone(parameters);
-        parameters.recordOutput = webPlanRetainedRecordOutput({ authored: parameters.recordOutput, request: stored.request, schema: slot.recordSchema, requested: slot.requestedColumns, names: stored.assumed });
+        parameters.recordOutput = webPlanRetainedRecordOutput({ authored: stored.recordOutput, request: stored.request, schema: slot.recordSchema, requested: slot.requestedColumns, names: stored.assumed, siteNames: slot.siteNames });
         const list: Resolved = { value: stored.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined };
         if (views !== undefined) list.views = views;
         replaced.set(key, list);

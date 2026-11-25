@@ -46,7 +46,7 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListRequestValue, type WebAutomationExtractListRequest } from "../../../../actions/extraction";
-import { webAutomationExtractListDispatch, webAutomationStoredColumnIssues, webAutomationStoredColumns, type WebAutomationRecordOutputIssue } from "../../../../output-nodes";
+import { webAutomationExtractListDispatch, webAutomationRecordOutputWithNames, webAutomationStoredColumnIssues, webAutomationStoredColumns, type WebAutomationRecordOutputIssue } from "../../../../output-nodes";
 import type { WebLlmNameAssumptionSaid } from "../../name-assumption";
 import type { WebPlanValuePath } from "../handle-tokens";
 import { WEB_PLAN_ISSUE_CODE, webPlanBoundedIssues, type WebPlanRefusalIssue } from "./refusal-issues";
@@ -75,12 +75,35 @@ const COLUMN_ISSUES: ReadonlySet<string> = new Set([
  * record output naming a column the read does not read leaves the read as it
  * is: `webPlanUndispatchable` refuses that step.
  */
-export function webPlanStoredColumns(request: JsonObject, recordOutput: JsonValue | undefined): { request: JsonObject; assumed: WebLlmNameAssumptionSaid[] } {
-  const stored = webAutomationStoredColumns(recordOutput, request as unknown as WebAutomationExtractListRequest);
-  if (!stored.ok || !stored.renamed) return { request, assumed: [] };
+export function webPlanStoredColumns(request: JsonObject, recordOutput: JsonValue | undefined, siteNames?: Readonly<Record<string, readonly string[]>>): { request: JsonObject; assumed: WebLlmNameAssumptionSaid[]; recordOutput: JsonValue | undefined } {
+  const named = webPlanRecordOutputInKeys(request, recordOutput, siteNames);
+  const stored = webAutomationStoredColumns(named, request as unknown as WebAutomationExtractListRequest);
+  if (!stored.ok || !stored.renamed) return { request, assumed: [], recordOutput: named };
   const assumed = stored.assumed.map((entry): WebLlmNameAssumptionSaid => ({ path: ["recordOutput", ...entry.path], written: entry.written, field: entry.field, how: entry.how, score: entry.score }));
-  return { request: stored.request as unknown as JsonObject, assumed };
+  return { request: stored.request as unknown as JsonObject, assumed, recordOutput: named };
 }
+
+/**
+ * The record output with each name the site gave a column the plan renamed -- its detected key or readable name, `siteNames`
+ * -- written as the key the plan keeps the column under, before any guess. This is where a site's word binds a renamed
+ * column (t1041, lead's decision 2026-11-25); the column's label is the plan's own name, as Core defines a label. A
+ * name that is itself a column of the read is that column and is left as written.
+ */
+function webPlanRecordOutputInKeys(request: JsonObject, recordOutput: JsonValue | undefined, siteNames: Readonly<Record<string, readonly string[]>> | undefined): JsonValue | undefined {
+  if (recordOutput === undefined || siteNames === undefined) return recordOutput;
+  const fields = isJsonObject(request.fields) ? request.fields : {};
+  // A page's words are written in any case or spacing (Core's own binding folds them), so a name matches by its fold.
+  const keys = new Map<string, string>();
+  for (const [key, aliases] of Object.entries(siteNames)) {
+    if (!Object.hasOwn(fields, key)) continue;
+    for (const alias of aliases) if (!Object.hasOwn(fields, alias)) keys.set(alias.replace(FOLD, " ").trim().toLowerCase(), key);
+  }
+  if (keys.size === 0) return recordOutput;
+  return webAutomationRecordOutputWithNames(recordOutput, (written) => Object.hasOwn(fields, written) ? undefined : keys.get(written.replace(FOLD, " ").trim().toLowerCase()));
+}
+
+/** Core's binding folds `_`, `-` and runs of whitespace to one space and ignores case (`record-sets/process/binding/name-key.ts`). */
+const FOLD = /[_\-\s]+/gu;
 
 /**
  * Why the extraction step with these final parameters would be refused by its
