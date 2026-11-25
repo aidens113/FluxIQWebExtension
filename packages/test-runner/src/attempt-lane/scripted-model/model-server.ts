@@ -2,6 +2,8 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
+import { anthropicToolStreamBody } from "./anthropic-tool-stream.js";
+import { scriptedModelToolCall } from "./tool-call.js";
 import { anthropicStreamBody, scriptedModelReplyText, scriptedModelUsage } from "./anthropic-stream.js";
 import type { ScriptedModelScript, ScriptedReply } from "./script.js";
 import { readScriptedModelRequest, type ScriptedModelKind, type ScriptedModelRequest } from "./wire-request.js";
@@ -113,8 +115,20 @@ export async function startScriptedModelServer(input: { script: ScriptedModelScr
         refused(read.kind, read.ordinal, `The script for ${input.script.taskId} could not answer request ${read.ordinal} of kind ${read.kind}: ${error instanceof Error ? error.message : String(error)}`);
         return;
       }
-      const text = scriptedModelReplyText(value, read.jsonText);
-      const stream = anthropicStreamBody({ model: read.model, text, usage: scriptedModelUsage(Buffer.byteLength(body), Buffer.byteLength(text)) });
+      // A decision asked with tools is answered as the one tool call it is; any other request keeps its text answer.
+      let stream: string;
+      try {
+        if (read.kind === "evidence_tool_decision" && (read.tools ?? []).length > 0) {
+          const call = scriptedModelToolCall(value, read.tools ?? []);
+          stream = anthropicToolStreamBody({ model: read.model, call, usage: scriptedModelUsage(Buffer.byteLength(body), Buffer.byteLength(JSON.stringify(call.input))) });
+        } else {
+          const text = scriptedModelReplyText(value, read.jsonText);
+          stream = anthropicStreamBody({ model: read.model, text, usage: scriptedModelUsage(Buffer.byteLength(body), Buffer.byteLength(text)) });
+        }
+      } catch (error) {
+        refused(read.kind, read.ordinal, `The script for ${input.script.taskId} could not answer request ${read.ordinal} of kind ${read.kind}: ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
       record({ at, kind: read.kind, ordinal: read.ordinal, answered: true });
       response.writeHead(200, { "content-type": "text/event-stream" });
       response.end(stream);

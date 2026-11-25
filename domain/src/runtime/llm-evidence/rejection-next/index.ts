@@ -8,3 +8,5 @@ export { webLlmRejectionNext } from "./next-sentence";
 export { webLlmRejectionNextWithWait } from "./wait-words";
 export { webLlmUnknownColumn } from "./unknown-column";
 export { webLlmListMadeOn } from "./list-made-on";
+// How a read that named its list by words no line shows is told (`./list-words.ts`, t1038).
+export { webLlmListWords } from "./list-words";

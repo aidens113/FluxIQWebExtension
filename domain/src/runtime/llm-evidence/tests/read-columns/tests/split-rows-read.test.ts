@@ -108,7 +108,8 @@ test("a read of the list naming a cells key is told the key and where it belongs
   const refusal = first.evidence as unknown as Refusal;
   assert.equal(refusal.detail.reason, "column_not_in_detected_list");
   assert.ok(refusal.detail.instead?.includes("web.handle.unknown_column.item_url"), JSON.stringify(refusal.detail.instead));
-  assert.match(refusal.detail.next ?? "", /`item_url` is not a column of the list this read's handle names/u);
+  // t1038 (D13): a read finds its own list, so the refusal names the list this read names, not a handle's list.
+  assert.match(refusal.detail.next ?? "", /`item_url` is not a column of the list this read names/u);
   assert.match(refusal.detail.next ?? "", /cells or record is a column of their own handle/u);
   assert.equal(reads.length, 0, "nothing was read");
 

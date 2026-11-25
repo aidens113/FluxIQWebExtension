@@ -127,6 +127,11 @@ export type WebExtractionColumnLook = {
   guess: boolean;
   wanted?: AutomationStudioNameValueShape | undefined;
   among: "detected" | "kept";
+  /**
+   * The readable name each detected column is kept under, by key, where it is not the key
+   * (`../../structure/column-names.ts`, t1038): a name is read as exactly as its key.
+   */
+  names?: Readonly<Record<string, string>> | undefined;
 };
 
 /** The keys a column object may carry beside the ones that name its column. */
@@ -143,19 +148,25 @@ const GUESSING: WebExtractionColumnLook = { guess: true, among: "detected" };
 /** One entry of `fields`, as far as it has been read. */
 type Entry = { at: WebPlanValuePath; entry: unknown; ownKey: string | undefined; column: Column | undefined; written: string };
 
-/** The columns `fields` keeps, every detected one when it is absent. `path` is where `fields` itself is. */
-export function keptWebExtractionColumns(fields: unknown, measured: Detected, path: WebPlanValuePath): WebExtractionColumns {
+/**
+ * The columns `fields` keeps, every detected one when it is absent. `path` is where `fields` itself is. `names` is
+ * each column's readable name by detected key (`../../structure/column-names.ts`, t1038): a column `fields` does not
+ * ask for -- every column, when it is absent -- is kept under its name, and a name in `fields` reads as its key does.
+ */
+export function keptWebExtractionColumns(fields: unknown, measured: Detected, path: WebPlanValuePath, names?: Readonly<Record<string, string>>): WebExtractionColumns {
   const detected = unrequired(measured);
-  if (fields === undefined) return { ok: true, fields: structuredClone(detected), assumed: [], sources: Object.fromEntries(Object.keys(detected).map((key) => [key, key])) };
+  const nameOf = (key: string): string => names?.[key] ?? key;
+  if (fields === undefined) return { ok: true, fields: Object.fromEntries(Object.entries(detected).map(([key, field]) => [nameOf(key), structuredClone(field)])), assumed: [], sources: Object.fromEntries(Object.keys(detected).map((key) => [nameOf(key), key])) };
   const entries = writtenEntries(fields, path);
   if (!Array.isArray(entries)) return entries;
+  const strict: WebExtractionColumnLook = { ...STRICT, names };
 
   // Pass one: every strict reading, in both directions, taking no guess.
   for (const written of entries) {
-    written.column = readColumn(written.entry, written.ownKey, detected, written.at, STRICT);
+    written.column = readColumn(written.entry, written.ownKey, detected, written.at, strict);
     if (unknownField(written.column) && written.ownKey !== undefined && typeof written.entry === "string" && isWebAutomationExtractFieldKey(written.entry)) {
       // Written the other way round: the key is the column, the value the name to keep it under.
-      const reversed = readColumn(written.ownKey, undefined, detected, written.at, STRICT);
+      const reversed = readColumn(written.ownKey, undefined, detected, written.at, strict);
       if (reversed.ok) [written.column, written.written] = [reversed, written.entry];
     }
     if (!written.column.ok && !unknownField(written.column)) return written.column;
@@ -166,8 +177,8 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
   const remaining: Detected = Object.fromEntries(Object.entries(detected).filter(([key]) => !taken.has(key)));
   for (const written of entries) {
     if (written.column?.ok === true) continue;
-    const guessed = readColumn(written.entry, written.ownKey, remaining, written.at, GUESSING);
-    if (!guessed.ok) return unknownField(guessed) ? unknownColumn(written, detected) : guessed;
+    const guessed = readColumn(written.entry, written.ownKey, remaining, written.at, { ...GUESSING, names });
+    if (!guessed.ok) return unknownField(guessed) ? unknownColumn(written, detected, nameOf) : guessed;
     written.column = guessed;
     taken.add(guessed.key);
     delete remaining[guessed.key];
@@ -186,7 +197,7 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
     // plan wrote the map the other way round. An array keeps it under the name
     // written when that name found its column by anything but the detected key
     // and could be a key itself, and under the detected key otherwise.
-    const under = written.ownKey === undefined ? listedKey(column) : written.written;
+    const under = written.ownKey === undefined ? listedKey(column, nameOf) : written.written;
     if (!isWebAutomationExtractFieldKey(under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     if (Object.hasOwn(kept, under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     kept[under] = column.field;
@@ -196,12 +207,13 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
   }
   const shared = sharedColumn(entries, keptUnder, kept, detected);
   if (shared !== undefined) return shared;
-  // Requested columns are a view. Keep every other detected reading too,
-  // including the original reading when an alias requested another attribute.
+  // Requested columns are a view. Keep every other detected reading too, under
+  // its readable name, including the original reading when an alias requested another attribute.
   for (const [key, field] of Object.entries(detected)) {
     if (keptUnder.some((under) => sources[under] === key && webExtractionColumnReading(kept[under]!) === webExtractionColumnReading(field))) continue;
-    let under = key;
-    for (let suffix = 2; Object.hasOwn(kept, under); suffix += 1) under = `${key.slice(0, 90)}_${suffix}`;
+    const name = nameOf(key);
+    let under = name;
+    for (let suffix = 2; Object.hasOwn(kept, under); suffix += 1) under = `${name.slice(0, 90)}_${suffix}`;
     kept[under] = field;
     sources[under] = key;
   }
@@ -282,25 +294,26 @@ function unrequired(detected: Detected): Detected {
  * calls the column, exactly as a map's key is, so it is kept, as written before
  * any `@attribute`. A name written as the detected key keeps it, and so does
  * one that could not be a key -- `.product-price`, `column:Price` -- since the
- * detected key is the nearest well-formed name for what the plan meant.
+ * detected key is the nearest well-formed name for what the plan meant -- or,
+ * where the column has a readable name (t1038), that name.
  */
-function listedKey(column: Extract<Column, { ok: true }>): string {
+function listedKey(column: Extract<Column, { ok: true }>, nameOf: (key: string) => string): string {
   const written = column.assumed?.written;
-  return written !== undefined && isWebAutomationExtractFieldKey(written) ? written : column.key;
+  return written !== undefined && isWebAutomationExtractFieldKey(written) ? written : nameOf(column.key);
 }
 
 /**
  * The refusal of an entry no column answers to, even by a guess: the name it
- * wrote and every detected column, which are the names `fields` can use (t502).
+ * wrote and every detected column by its readable name, which are the names `fields` can use (t502, t1038).
  * An entry that wrote no one name is refused at its position alone, as before.
  */
-function unknownColumn(written: Entry, detected: Detected): Extract<WebExtractionColumns, { ok: false }> {
+function unknownColumn(written: Entry, detected: Detected, nameOf: (key: string) => string): Extract<WebExtractionColumns, { ok: false }> {
   const name = nameWritten(written.entry, written.ownKey);
   return present<Extract<WebExtractionColumns, { ok: false }>>({
     ok: false,
     issue: "web.handle.unknown_field",
     path: written.at,
-    issues: name === undefined ? undefined : webPlanUnknownColumnIssues(name, Object.keys(detected), detected),
+    issues: name === undefined ? undefined : webPlanUnknownColumnIssues(name, Object.keys(detected).map(nameOf), detected),
     expected: undefined
   });
 }
@@ -443,6 +456,9 @@ type Found = { key: string; how: "exact" | "normalized" | "nearest"; score: numb
  */
 function detectedKey(name: string, detected: Detected, look: WebExtractionColumnLook): Found | { issue: WebExtractionColumnIssue } | undefined {
   if (Object.hasOwn(detected, name)) return { key: name, how: "exact", score: 1 };
+  // A column's readable name is as exact as its key (`../../structure/column-names.ts`, t1038).
+  const byName = Object.entries(look.names ?? {}).find(([key, given]) => given === name && Object.hasOwn(detected, key))?.[0];
+  if (byName !== undefined) return { key: byName, how: "exact", score: 1 };
   const headerOnly = name.startsWith(HEADER_PREFIX);
   const header = headerOnly ? name.slice(HEADER_PREFIX.length) : name;
   const folded = (text: string) => text.trim().replace(/\s+/gu, " ").toLowerCase();
@@ -454,9 +470,12 @@ function detectedKey(name: string, detected: Detected, look: WebExtractionColumn
   if (unique.length > 1) return { issue: "web.handle.ambiguous" };
   const only = unique[0];
   if (only !== undefined) return { key: only, how: "normalized", score: 1 };
-  const near = webExtractionMatchedColumn(header, detected, { headerOnly, wanted: look.wanted });
+  // The nearest column is looked for among the columns as the read names them: by readable name where one has one.
+  const keyOf = new Map(Object.keys(detected).map((key) => [look.names?.[key] ?? key, key]));
+  const named = keyOf.size === Object.keys(detected).length ? Object.fromEntries([...keyOf].map(([shown, key]) => [shown, detected[key]!])) : detected;
+  const near = webExtractionMatchedColumn(header, named, { headerOnly, wanted: look.wanted });
   if (near === undefined || (near.how === "nearest" && !look.guess)) return undefined;
-  return near;
+  return named === detected ? near : { key: keyOf.get(near.key) ?? near.key, how: near.how, score: near.score };
 }
 
 function optional(value: unknown, type: "string" | "boolean"): boolean {

@@ -15,11 +15,13 @@
 // **What is told.** The name the call wrote (its own input, bounded to a key's
 // alphabet) rides in `instead` as `web.handle.unknown_column.<name>`, so a
 // repeat of the refusal, which passes `instead` back (`../repeated-refusal.ts`),
-// says the same. `next` names it, says a read takes only the keys listed under
-// its own handle's fields, and that a key listed under a detection's cells or
-// record is a column of their handle and not of this list. The list's columns
-// are not repeated: they are the keys the detection's packet already showed,
-// and a refusal carries no page-derived words (`../tool-rejection.ts`, header).
+// says the same. `next` names it, says a read keeps every column of its list
+// and `fields` only picks columns by their names or keys, that the same read
+// with no `fields` shows every column under its name (t1038, D13), and that a
+// key listed under a detection's cells or record is a column of their handle and
+// not of this list. The list's columns are not repeated: the refusal's issues
+// carry them (`valid`), and a refusal carries no page-derived words
+// (`../tool-rejection.ts`, header).
 
 /** The prefix a refused column name rides under in `instead`. */
 const UNKNOWN_COLUMN_CODE = "web.handle.unknown_column.";
@@ -40,9 +42,9 @@ const ELEMENT_HANDLE = /^t[1-9][0-9]*$/u;
  */
 function elementNext(target: string, said: string): string {
   return `Nothing was read: ${target} names one element, not a list, and ${said.startsWith("A column") ? "a column this read names is" : said} not one of its columns. `
-    + "A read through an element's own handle reads that one element as one row, whose only columns are text, value and link. "
-    + "A table of several rows is a list: a list is detected where it stands, on the page that shows it, and read through the handle that detection issues, with keys from that detection's fields. "
-    + "Detect the list you mean on its own page, then read it through that handle.";
+    + "No list was found around it on this page, so the read reads that one element as one row, whose only columns are text, value and link. "
+    + "A table of several rows is a list on the page that shows it: go to that page and read it there, naming the list by the handle of a line inside it, "
+    + "with no fields to keep every column under its name.";
 }
 
 /** How many refused names are told at once. */
@@ -62,9 +64,9 @@ export const webLlmUnknownColumn = {
     });
     const said = names.length === 0 ? "A column this read names is" : `${names.join(", ")} ${names.length === 1 ? "is" : "are"}`;
     if (target !== undefined && ELEMENT_HANDLE.test(target)) return elementNext(target, said);
-    return `Nothing was read: ${said} not a column of the list this read's handle names. `
-      + "A read takes only the keys listed under fields in the detection that issued its handle, each written as {your name: key}. "
-      + "A key listed under that detection's cells or record is a column of their own handle, not of this list: read it through that handle, or leave it out. "
-      + "Write the read again with keys from this list's own fields.";
+    return `Nothing was read: ${said} not a column of the list this read names. `
+      + "A read keeps every column of its list; fields only picks the ones asked, each written as {your name: name or key} with a column name or key of this list. "
+      + "Run the same read with no fields to get every column under its name, then pick from those names. "
+      + "A key of a detection's cells or record is a column of their own handle, not of this list.";
   }
 };
