@@ -20,6 +20,19 @@
 // extension runtime -- which is how it detects having landed in an isolated
 // world on a browser too old for `world: "MAIN"`.
 //
+// The other consequence: the page world wraps the page's timers, frames, idle
+// callbacks and `fetch` to count the work the page schedules for itself
+// (`src/page-world/page-work/`, `src/page-world/press-work/`). In the browser
+// the content script lives in an isolated world and calls its own unwrapped
+// copies, so none of its waits is ever the page's work. In one world it would
+// call the wrapped ones, and an unanswered press, which keeps watching while the
+// page has work pending (t906, `content/action-runtime/press-readiness/`), would
+// see the content script's own watch timers as the page's and wait out the whole
+// command (t1029: every auction-marketplace walk timed out on the sort button
+// that ignores its first press). So the originals are kept before the page world
+// installs, and the content-script bundle runs with them in scope, as it would
+// in its own world.
+//
 // The wire names below are written out rather than imported from
 // src/content/messages.ts on purpose: a harness that shared the constants
 // could not notice them changing.
@@ -133,6 +146,7 @@ export async function openContentHarness(page: Page, options: ContentHarnessOpti
     if (!pagesWithContentScript.has(page)) {
       // The page world first, and before the runtime stub: the override
       // refuses to install where it can see an extension runtime.
+      await page.addInitScript({ content: keepOwnSchedulersScript() });
       await page.addInitScript({ content: pageWorldInitScript(pageWorld) });
       await page.addInitScript({ content: initScript(source) });
       pagesWithContentScript.add(page);
@@ -194,9 +208,29 @@ function pageWorldBundleSource(): Promise<string> {
   return pageWorldBundle;
 }
 
-/** The runtime stub first, then the bundle, in one script so their order is fixed. */
+/**
+ * The window functions the page world wraps to count the page's own work, which the content script, in its own world in
+ * the browser, calls unwrapped (header). Prototype methods (`XMLHttpRequest.prototype.send`, `sendBeacon`) are not here:
+ * the content script calls none of them.
+ */
+const OWN_SCHEDULERS = ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame", "requestIdleCallback", "cancelIdleCallback", "fetch"] as const;
+/** The page global the originals are kept on, before the page world installs. */
+const OWN_SCHEDULERS_GLOBAL = "__fluxiqContentHarnessSchedulers";
+
+/** Keeps the window's own schedulers, bound to it, before the page world wraps them. */
+function keepOwnSchedulersScript(): string {
+  return `(() => {
+  const kept = {};
+  for (const name of ${JSON.stringify(OWN_SCHEDULERS)}) if (typeof window[name] === "function") kept[name] = window[name].bind(window);
+  Object.defineProperty(window, ${JSON.stringify(OWN_SCHEDULERS_GLOBAL)}, { value: Object.freeze(kept), configurable: false, enumerable: false, writable: false });
+})();\n//# sourceURL=fluxiq-content-harness-schedulers.js\n`;
+}
+
+/** The runtime stub first, then the bundle, in one script so their order is fixed; the bundle sees the kept schedulers (header). */
 function initScript(bundle: string): string {
-  return `(${installRuntimeStub.toString()})(${JSON.stringify(HARNESS_GLOBAL)});\n${bundle}\n//# sourceURL=fluxiq-content-harness.js\n`;
+  const names = OWN_SCHEDULERS.join(", ");
+  const kept = `const kept = window[${JSON.stringify(OWN_SCHEDULERS_GLOBAL)}] || {};`;
+  return `(${installRuntimeStub.toString()})(${JSON.stringify(HARNESS_GLOBAL)});\n(() => {\n${kept}\nreturn (function (${names}) {\n${bundle}\n}).apply(window, ${JSON.stringify(OWN_SCHEDULERS)}.map((name) => kept[name] || window[name]));\n})();\n//# sourceURL=fluxiq-content-harness.js\n`;
 }
 
 /** The page-world bundle alone, as the manifests' `world: "MAIN"` entry injects it. */

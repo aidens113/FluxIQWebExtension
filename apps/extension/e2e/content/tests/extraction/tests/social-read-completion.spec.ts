@@ -259,10 +259,11 @@ test("normally authored optional For Each expands helper rows before a full feed
         if (output.datasetId === "helper") {
           if (output.purpose !== "intermediate") proofIssues.push("helper.purpose");
           if (output.writeMode !== "replace") proofIssues.push("helper.writeMode");
-          // Since t982 a read keeps every detected column beside the asked one, and an intermediate helper stores them all
-          // (`retained-output.ts`), so its rows carry more than `identity`; they must still carry it (t1033: the kept
-          // ones are read as shown and never pressed open, which is what lets the For Each below find collapsed rows).
-          if (rows.some((row) => !Object.hasOwn(row, "identity"))) proofIssues.push("helper.columns");
+          // The helper's one asked column, and beside it only columns the detection offered: a read retains every
+          // safe detected field (t982, `ba64bbf1c` and `731b2b601`, `docs/architecture/retained-extraction.md`; the
+          // user's rule of 2026-11-20 that extraction keeps every column), and invents none. The kept ones are read as
+          // shown and never pressed open (t1033), which is what lets the For Each below find collapsed rows.
+          if (rows.some((row) => !Object.hasOwn(row, "identity") || Object.keys(row).some((key) => key !== "identity" && !packet.fields.some((field) => field.key === key)))) proofIssues.push("helper.columns");
           if (rows.some((row) => typeof row.identity !== "string" || row.identity.length === 0)) proofIssues.push("helper.missing_identity");
           helperCounts.push(rows.length);
         } else {

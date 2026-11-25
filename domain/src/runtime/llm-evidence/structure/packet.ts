@@ -114,6 +114,12 @@
 // which item a row is and `items` gives each item, in list order, its
 // `itemKey` and its marks, with `itemsNote` (`./list-items/`). A detection with
 // none of these gives none of them, and the packet is what it was.
+//
+// **Every packet declares each list's paging for Core (t1032).** `listPaging`
+// names, per handle's binding, the `listKey` a read of that list carries and
+// whether the binding kept a pager, so Core's result can say a step whose list
+// shows no pager holds one page instead of its paging being not yet checked
+// (`./list-paging.ts`).
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -131,6 +137,7 @@ import { webLlmShownColumn } from "./field-sample";
 import { webLlmCaptureWalk, webLlmFirstItemElements, webLlmFirstItemHandles, webLlmFirstItemLines, type WebLlmFirstItemPages } from "./first-item";
 import type { WebLlmExtractionBinding } from "./handles";
 import { webLlmItemRow } from "./item-row";
+import { webLlmStructureListPaging } from "./list-paging";
 import { webLlmListItems, type WebLlmStructureItem, type WebLlmStructureMark } from "./list-items";
 import { webLlmStoredColumnLabel } from "./stored-label";
 import { webLlmUniqueStoredLabels } from "./stored-labels";
@@ -284,6 +291,8 @@ export type WebLlmRepeatingStructure = {
   readNote: string;
   /** How every page of a list that continues is read: Next page on this handle, and a repeat. A sentence of this module; absent when `pagination` is `none`. */
   nextPageNote?: string;
+  /** Per list a handle here names, its `listKey` as a read of it carries one and whether it shows a way to another page, for Core's result (`./list-paging.ts`, t1032). */
+  listPaging?: ReturnType<typeof webLlmStructureListPaging>;
   /** How sure the detection is, from 0 to 1. */
   confidence: number;
   /** The one item the target belongs to, when it lies outside the list above. */
@@ -363,6 +372,10 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     readable.map((field) => ({ key: field.key, label: field.shown.label, spec: field.spec, coverage: field.coverage })),
     input.firstItem === undefined ? undefined : webLlmCaptureWalk(proposal, input.firstItem.detected)
   );
+  // A primary proposal of one item with no way to continue is a record by
+  // construction: a list needs a run of three or a record pair, so only the
+  // label/value receipt and a lone record are sent with one item.
+  const binding = boundList(input, input.handle, proposal, readable, paginate, proposal.itemCount === 1 && paginate === undefined, rows.rowIdentity);
   const packet = present<WebLlmRepeatingStructure>({
     schemaVersion: WEB_LLM_STRUCTURE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -375,6 +388,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     pagination,
     readNote: readNote(input.handle),
     nextPageNote: pagination === "none" ? undefined : nextPageNote(input.handle),
+    listPaging: webLlmStructureListPaging([binding, recordBinding, cells?.binding]),
     confidence: proposal.confidence,
     record: recordBinding === undefined ? undefined : {
       handle: recordBinding.handle,
@@ -391,10 +405,6 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     items: rows.items,
     itemsNote: rows.items === undefined ? undefined : ITEMS_NOTE
   });
-  // A primary proposal of one item with no way to continue is a record by
-  // construction: a list needs a run of three or a record pair, so only the
-  // label/value receipt and a lone record are sent with one item.
-  const binding = boundList(input, input.handle, proposal, readable, paginate, proposal.itemCount === 1 && paginate === undefined, rows.rowIdentity);
   return { packet, binding, recordBinding, cellsBinding: cells?.binding };
 }
 

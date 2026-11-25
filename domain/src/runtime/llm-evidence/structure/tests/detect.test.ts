@@ -50,7 +50,9 @@ const PACKET_KEYS = new Set([
   // How the handle is read, and how its read replaces one the draft holds (t1020, `../packet.ts`).
   "readNote",
   // What a column holds and what a list's rows carry (t800, CC1-CC3: `../column-type.ts`, `../list-items/`).
-  "type", "parsed", "fieldMarks", "markNote", "id", "rowIdentity", "items", "itemKey", "marks", "itemsNote"
+  "type", "parsed", "fieldMarks", "markNote", "id", "rowIdentity", "items", "itemKey", "marks", "itemsNote",
+  // Each list's opaque key (a digest, no selector) and whether it pages, for Core's result (t1032, `../list-paging.ts`).
+  "listPaging", "listKey", "pages"
 ]);
 
 const EXPECTED_PAGINATION: Record<CapturedDetectionName, WebLlmStructurePaginationMode> = {

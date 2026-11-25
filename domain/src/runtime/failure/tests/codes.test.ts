@@ -41,6 +41,8 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   // answered the same way, so a trial no longer advises testing it again.
   ["OPTION_NOT_OFFERED", "web.validation.option_not_offered", "output_not_observed", false, "verification"],
   ["STATE_MISMATCH", "web.validation.state_mismatch", "unexpected_state", false, "verification"],
+  // t1030: a saved act whose required option does not stand chosen, refused unrun. A step that cannot run, so it routes.
+  ["OPTION_NOT_CHOSEN", "web.precondition.option_not_chosen", "target_not_found", false, "target_resolution"],
   ["NAVIGATION_UNEXPECTED", "web.navigation.unexpected", "navigation_unexpected", false, "confirmation"],
   ["PAGE_CHANGED", "web.page.changed", "page_changed", true, "execution"],
   ["TIMEOUT", "web.action.timeout", "timeout", true, "execution"],
@@ -70,7 +72,7 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
 ];
 
 /** The rows whose producer can prove the act did not happen, which carry `effect: "unacted"`. Every other row states nothing. */
-const UNACTED: ReadonlySet<string> = new Set(["TARGET_NOT_FOUND", "TARGET_NOT_SHOWN", "TARGET_AMBIGUOUS", "RATE_LIMITED", "REFUSED_BY_PAGE", "NO_EFFECT", "PAGE_REPORTED_FAILURE"]);
+const UNACTED: ReadonlySet<string> = new Set(["TARGET_NOT_FOUND", "TARGET_NOT_SHOWN", "TARGET_AMBIGUOUS", "OPTION_NOT_CHOSEN", "RATE_LIMITED", "REFUSED_BY_PAGE", "NO_EFFECT", "PAGE_REPORTED_FAILURE"]);
 
 /** The rows whose producer saw the act certainly change nothing (t517, t743), which also carry `certainNoEffect`. */
 const CERTAIN_NO_EFFECT: ReadonlySet<string> = new Set(["NO_EFFECT", "PAGE_REPORTED_FAILURE"]);

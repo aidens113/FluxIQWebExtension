@@ -16,7 +16,7 @@ Related: [usable-client-plan.md](./usable-client-plan.md) (the campaign ledger, 
 **Memory is not a reason to wait (user, 2026-11-23):** "dont worry about mem, we have pagefile". Lanes, builds and visible browser runs are dispatched without waiting for free physical memory; the heavy gate queues heavy steps (AGENTS.md).
 
 **State at 2026-11-24 (Claude Code lead; detail per unit in the Work Ledger and "Integration History" below):**
-- **Integrated and pushed in both repositories** (fluxiq 0.54.16, contracts 0.23.2; merge commits in the Work Ledger):
+- **Integrated and pushed in both repositories** (fluxiq 0.54.18, contracts 0.23.2; merge commits in the Work Ledger):
   - P0: t976, t979, t981.
   - P1 t982 retained extraction; P4 t983 fixed model; P2+P6 t984/t987 data stage and smaller judge; P3 t989 collection guidance; P5 t985 (F24).
   - S1/S2/S6 t986 offline proof, scoreboard and preflights.
@@ -223,6 +223,40 @@ Read Current State first; every unit it lists as integrated is done and verified
 Lead owns shared-state updates, exact observed acceptance, commits, pushes and paired integration.
 
 ## Work Ledger
+
+### 2026-11-24 - t1032 integrated (fluxiq 0.54.18): no judge yes could stand since 11-22; the asked table is the result
+- Changed:
+  - Since t987 (11-22) the web judge projector marked every structure detection and Core's own calls as evidence gaps, and Core holds any yes unsure while gaps stand, so no yes could stand in a run that detected a list or set result processing. Core now never hands its own calls (`core.*` but the four that run host nodes, and its control-flow and timing nodes) to a host projector (`judge-evidence/core-call.ts`); the domain reads a detection as an observation.
+  - A yes is refuted when the answer contract names the asked table and the yes says the rows are not it (`asked: false`) or the rows hold nothing for a named column (`cited-yes/records-yes.ts`). Words are matched by shared word because the contract reader misreads "with columns title only"; that reader is to be fixed, then tightened.
+  - A held yes says why (`flow-less/held-yes.ts`). The result line says a pagerless list holds one page (`listPaging` on every detection) and names asked against held columns. Unsure feedback says how to make the asked table the result.
+  - Merged on t1029: t1032's `project.ts` stands, which makes t1029's bookkeeping branch redundant; t1029's toggle fix in `action.ts` stays.
+- Validation: the lead's run:
+  - t1032 trees after merging dev: Core groups over `result`, `result-feed`, `completion`, `tests/endings` and `result-verification` gave `Test Files  293 passed (293)`, `Tests  2217 passed (2217)`; real-sql `Tests  99 passed (99)`; domain `judge-evidence`, `structure` and `web-sessions` gave `# pass 126 # fail 0`; checks exit 0; both audits passed.
+  - After merging t1030: Core `Tests  2443 passed (2443)`, `Tests  188 passed (188)`; domain `# pass 705 # fail 0`; checks exit 0; audit passed.
+  - The worker's new tests fail before the fix: 8 in Core, 4 in the domain with the recording's exact gap codes.
+- Follow-up: fix the answer-contract column reader in `runtime/flow-authoring`; fake clocks for the deadline tests (`second-attempt-proof`, `later-attempt`).
+
+
+### 2026-11-24 - t1030 integrated (fluxiq 0.54.17): a saved act checks its standing option at playback
+- Changed:
+  - Core: the draft step's `chosen` carries the option's place (`at`). `instructed-acts/chosen-precondition.ts` writes each credited option onto the act's node as `requiresChosen`, from the one shared assembly.
+  - Domain: `actions/requires-chosen/`, gateway mapping, node definitions, failure code `web.precondition.option_not_chosen`, `standing-choices/at.ts`. Extension: `content/action-runtime/required-choices/` checks typed state before any verb.
+  - Only the person's credited options become preconditions. On a site whose chooser leaves the DOM, a replay refuses until a step chooses the option, which is safe. The build-time choose step is a follow-up for the first site that needs it; bigbox's closed chooser stays readable in the shadow DOM.
+  - New load-sensitive test: `later-attempt.test.ts` "a run's own deadline" (400 ms) failed once under load. Like t1032's `second-attempt-proof` deadline test, it needs a fake clock before the next sweep.
+- Validation: the lead's run: Core groups over `instructed-acts`, `draft-statement` and `answer-first/flow-run` gave `Tests  448 passed (448)`, `Tests  99 passed (99)`. `test-content.mjs required-choices --headed`: "playback with Pickup chosen: succeeded", then "playback with Delivery chosen: failed web.precondition.option_not_chosen", `1 passed (3.0m)`. After merging dev: domain and extension checks exit 0, domain `actions client output-nodes runtime/failure llm-evidence/node-run` gave `# pass 1227 # fail 0`, audit passed.
+- Follow-up: fake clocks for the two deadline tests.
+
+
+### 2026-11-24 - t1029 integrated: two dated product defects behind the decline, and the browser specs
+- Changed:
+  - Domain `runtime/web-sessions/leased-web-session.ts`: cause A. Since 11-18 (Core t911), every build trial's first page read threw on a bound lease, as `executor.fault.unclassified`.
+  - Domain `judge-evidence/{project,action}.ts`: cause B. Since 11-22 (t987), Core's waits, merges, loops and self-toggling presses were held as missing evidence, so such trials were always unsure.
+  - Content harness timers: cause C, all 9 auction specs. Specs updated for t982 and t903: causes D and E.
+  - Open: cause F, given to t1033. Kept-but-unasked columns make the reader press "See more" (`social-read-completion:90`).
+  - `pinned-calls-job-board:79` times out in its own setup with three headed workers; it passes alone.
+- Validation: the worker's run: 18 of 20 listed specs passed headed, the 2 being causes F and the setup timeout. The lead's run: `test-content.mjs part-run-job-board auction-marketplace-kestrel-auctions --headed` gave `12 passed (8.5m)`; domain `judge-evidence` and `web-sessions` gave `# pass 27 # fail 0`; domain and extension checks exit 0; audit passed.
+- Follow-up: t1033 (cause F); the pinned-calls setup wait.
+
 
 ### 2026-11-24 - t1023 integrated (fluxiq 0.54.16): an act's preset option counts as done
 - Changed:

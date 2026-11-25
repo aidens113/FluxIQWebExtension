@@ -160,3 +160,27 @@ test("the actual passive binding contributes semantic state from one capture, wi
   assert.doesNotMatch(JSON.stringify(projected), /"page"|"selector"|"target"|#updates|#notice/u);
   assert.equal(calls, 1);
 });
+
+// A Flow attempt's evidence is the client's own result, read beneath Core's dispatch record. A press that flipped its
+// own control answers its toggle there as the signature itself, with its reverse beside it as `toggleBefore`; only the
+// shape Core is told (`signature`, `beforeSignature`) was read, so every such press left its trial unconfirmed (t1029).
+test("a Flow press's toggle is read in the shape the client answers it, as in the shape Core is told it", () => {
+  const gains = { via: "class", gains: ["is-on"], loses: [] };
+  const loses = { via: "class", gains: [], loses: ["is-on"] };
+  const attempt = (result: JsonObject) => projectWebJudgeEvidence({ source: "flow-attempt", definitionId: "web.output.dom-click", evidence: { source: { entry: 6 }, evidence: { status: "succeeded", result: { status: "succeeded", result } } } });
+  const answered = attempt({ actionType: "web.dom.click", status: "succeeded", toggle: gains, toggleBefore: loses, snapshot: "RAW_PAGE_SENTINEL" });
+  assert.equal(answered.missing, undefined);
+  assert.deepEqual(((answered.evidence as JsonObject).action as JsonObject).toggle, { signature: gains, beforeSignature: loses });
+  const told = attempt({ actionType: "web.dom.click", status: "succeeded", toggle: { signature: gains, beforeSignature: loses } });
+  assert.deepEqual(((told.evidence as JsonObject).action as JsonObject).toggle, ((answered.evidence as JsonObject).action as JsonObject).toggle);
+  const attribute = attempt({ status: "succeeded", toggle: { via: "attribute", attribute: "aria-pressed", to: true } });
+  assert.deepEqual(((attribute.evidence as JsonObject).action as JsonObject).toggle, { signature: { via: "attribute", attribute: "aria-pressed", to: true }, idempotentWith: "web.output.dom-check" });
+  for (const broken of [{ toggle: { via: "class", gains: [], loses: [] } }, { toggle: gains, toggleBefore: { via: "class", gains: "is-on" } }, { toggle: { signature: gains, idempotentWith: "elsewhere" } }]) {
+    assert.deepEqual(attempt({ status: "succeeded", ...broken }).missing, ["web_judge.action_invalid"]);
+  }
+  assert.doesNotMatch(JSON.stringify(answered), /RAW_PAGE_SENTINEL/u);
+});
+
+// t1029 found Core's control-flow and timing steps (a wait, a merge, a For Each pass) named missing web evidence. Core now
+// never hands its own steps to a host's projector (Core's `runtime/result-verification/judge-evidence/core-call.ts`, t1032),
+// so that is proved through Core's trail in `./recorded-gaps.test.ts`, not on this projector, which is never given them.
