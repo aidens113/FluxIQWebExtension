@@ -17,12 +17,17 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - the model can ask for the full page;
   - "no more look command, its ridiculous";
   - a data limit on pages so not everything is sent on every request.
-- **Why (from the 2026-11-24 bigbox recordings):**
-  - The model sees the page only when it calls a look tool, at round openings and when it asks. It spends many decisions on looks, finds and detections; looks are withdrawn after repeats, which changes the tool schema mid-run and breaks the prompt cache.
-  - Requests grow from about 25k to 276k input tokens within a run, with a median of about 24k new (uncached) tokens per request.
-  - One whole cleaned page view is 4-11 KB, about 2.5-3k tokens.
-- **State:** planned; the build is dispatched (see Phases). Nothing built yet.
-- **Next:** the sub-supervisor's report; the lead integrates and runs the offline proof, then live tests on Sonnet (AGENTS.md: Lab runs start on Sonnet since 2026-11-25).
+- **Why: the t1035 audit of the five 2026-11-24 bigbox runs** (`data-first-simplification-plan/reports/t1035-agent-structure-audit.md`). The lead had first told the user the model saw the page only when it looked; the audit corrected that:
+  - **The whole cleaned page already rides with every decision.** `core.current_view` was in all 463 decisions, and all 36 acts came back with the page after them. "Look" is no tool: it is `core.run_node` with `web.output.dom-capture_snapshot`, run mostly by Core itself, and the words about it confuse the model.
+  - **Requests grow from 25k to 310k input tokens.** Mostly earlier rounds' calls are carried in full (40-52% of input in the long runs); the page is 2-3% of a late request. 91% of decision spend was in calls over 100k tokens.
+  - **48% of decisions are looks and searches; 6% are acts that landed; 34% were refused.** 55 of 109 page searches looked for words already on the page in front of the model. There were 102 detections for 44 reads.
+  - **Handles go stale.** 38 of 136 page-handle uses named a handle no longer on the page, and all failed.
+  - **Replies fail to parse.** 25 were unreadable (5.4%), because the reply is a JSON string inside JSON.
+  - **Withdrawing looks changes the offered tools.** That happened 18 times, breaking the cache each time.
+  - **Judging.** 22 judge calls cost $1.29 and accepted nothing; 7 judged a state unchanged since the last no.
+- **State:** planned; the build is dispatched in two workstreams (see Phases). Nothing built yet. t1034 merges first, since both workstreams build on it.
+- **Next:** the two sub-supervisors' reports; the lead integrates, runs the offline proof, then live tests on Sonnet (AGENTS.md: Lab runs start on Sonnet since 2026-11-25).
+- **Needs the user (not in this plan):** removing `find_on_page` (the user asked for page search); the framework writing the Flow from what ran (touches three user rules).
 
 ## Decisions
 
@@ -42,15 +47,27 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
 - **D8. Cache-friendly order.** The page channel's content goes after the stable prefix (system prompt, tool schemas, the draft), so the prefix stays byte-identical and the cache holds. With no look withdrawal, the tool schema no longer changes mid-run.
 - **D9. Out of scope:** the judge's trail (it reads the run's record, not the model's window); Flow playback (no model); anything persisted across runs.
 
+- **D10. Earlier rounds carry state, not transcripts** (audit change 1). A fresh round gets a compact state: what the run established (rows read, acts landed, the draft, open checks, the current page state), with earlier calls as short references, never every call's result whole. Later results replace earlier ones as references. Measured on the recordings, this is most of the spend.
+- **D11. The offered tool list never changes mid-run** (audit change 4). Withdrawn looks are gone with D4; anything still withdrawn is refused by name, never removed from the schema.
+- **D12. Decisions are native tool calls** (audit change 3), not a JSON string inside JSON, so the provider constrains the shape. t1025's shared decision reading stays the one reader.
+- **D13. A list read is one call that detects the list itself** (audit change 2; the user's 2026-11-20 rule "keep all columns data during extraction"). The model names the list by a handle in the view (or its words); the read detects it and keeps every field. A separate detection stays available but is no longer required.
+- **D14. No judge when nothing changed since the last no** (audit change 7). The same evidence gets the same no, with the same reasons, at no cost.
+
 ## Phases
 
-| Phase | What | Owner |
-| --- | --- | --- |
-| P1 | Domain and content: stable element keys across captures in a run; the page view as keyed lines; the page key per address | sub-supervisor lane (downstream) |
-| P2 | Core: the run-scoped page channel (D1, D3, D5-D8); remove look from the catalog and its withdrawal (D4); guidance text, generic | sub-supervisor lane (Core) |
-| P3 | Wire and integration: tool results carry page deltas; round openings and earlier rounds use the channel; protocol types, mappings, tests and architecture docs in sync | sub-supervisor |
-| P4 | Offline proof: diff and budget unit tests; replay the five 11-24 recordings' page captures through the channel and report page tokens per request, old against new; a provider-free browser run on a realistic scenario showing deltas after acts and a full-page request | sub-supervisor, then the lead re-runs |
-| P5 | Live: one watched bigbox run on Sonnet, then the other nine scoreboard tasks on four lanes | lead |
+Two workstreams, partitioned by file, each with its own sub-supervisor and task branch:
+
+| Workstream | Decisions | Branch | Owns |
+| --- | --- | --- | --- |
+| W1 What the model sees | D1-D8, D10, D11, D14 | t1036 `page-diff-delivery` | Core decision context, evidence window, rounds and earlier rounds, page channel, look removal, judge skip; domain page view, page key, stable element keys (content script) |
+| W2 How the model acts | D12, D13 | t1037 `native-decisions-one-read` | Core provider adapters' decision transport and decision reading; domain read and detect nodes, extraction request, content list reader |
+
+Each workstream proves itself offline:
+- unit tests;
+- the five recordings replayed through the new code, with tokens per request and decisions old against new;
+- a provider-free browser run on a realistic scenario.
+
+The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live: one watched bigbox run on Sonnet, then the other nine scoreboard tasks on four lanes.
 
 ## Validation
 
