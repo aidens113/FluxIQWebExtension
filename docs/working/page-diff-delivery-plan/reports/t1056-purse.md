@@ -150,3 +150,48 @@ Notes: Real purse defect fixed: unpriced calls were held at default rates below 
 Blocked items: MAX_ROUNDS=6 ends builds (phases.ts:559/595), and diagnosis_only runs request a patch (annotate.ts:436-572).
 Commit 70709836d includes my scratch probe file; its deletion is in the working tree.
 ```
+
+## Round 2 (the lead's follow-up): diagnosis_only patch, and judge keep-back when no judge runs
+
+Outcome: **Done.** The purse fix was committed by the lead as Core 240607157. Nothing in this round is committed.
+
+### What changed and why
+
+1. **A `diagnosis_only` run ends with its diagnosis** (`runtime/adaptation/recovery/annotation/annotate.ts`).
+   - `intentRefusal` now holds `DIAGNOSIS_ONLY_REASON` for `intent === "diagnosis_only"`, as it already held `intentSkipReason` for `diagnose_and_adapt`.
+   - That one value gates the exploration and the patch reserve it holds (`!intentRefusal`, around :465), the re-plan (which needs exploration evidence), and the patch call (`intentSkip`, so `patchWillFollow` is false).
+   - The record says why: `llmGate.patchSkipped` is the reason, `patchSkippedCode` is `llm.runtime_patch_grant_scope_refused` at rung `plan`. That is the code the intent refusal already uses, so no new vocabulary.
+   - Test, `framework/automation-service/tests/service-adaptation/tests/llm-run-caller.test.ts`:
+     - The two cases that failed before the fix now pass. Without the fix they failed with `["runtime_diagnosis","runtime_patch"]` (observed in the earlier rounds of this report).
+     - "executes an existing domain-native node before diagnosis-only annotation" now also asserts the recorded skip: code, rung, and a reason naming `diagnosis_only`.
+
+2. **The judge's call is kept back only when a judge can be asked** (`framework/automation-service/service/answer-first/attempt/run-attempt.ts`).
+   - New local `judgeMayBeAsked(caller)` mirrors the completion check (`completion/check.ts` :281-300):
+     - a chat attempt (no caller) has the judge, so it keeps a call back;
+     - a caller with no check keeps one back unless its judge is `off`;
+     - a caller with its own check keeps one back only when its judge is `always`.
+   - `automationStudioAnswerFirstKeepBackJudge` at the attempt's start runs only then. The keep-back just before an actual judge call (`check.ts:331`) is unchanged.
+   - Fluxnode test budgets went back to what the purse needs without a judge call (all three specs have their judge off; idempotency's resume test has a check with the judge on auto):
+     - act-scope "resumes an explore execution": $0.001. This is the configuration that failed (`cost.calls` 0) while the keep-back applied, so it now covers the fix.
+     - act-scope "a pipeline resumes each ..." and idempotency "owns its resume": $0.0015. The press is still offered outside the wrap-up and paid for; the completion is not.
+     - idempotency "returns one held execution": $0.001.
+     - pipeline-runs budget_out: $0.0015.
+     - Comments rewritten to match.
+
+### Commands run and observed results (round 2)
+
+- `pnpm exec vitest run src/framework/automation-service/tests/service-adaptation/tests/llm-run-caller.test.ts` -> `Tests 5 passed (5)`.
+- `pnpm exec vitest run .../fluxnode/tests/act-scope.test.ts .../fluxnode/tests/idempotency.test.ts .../fluxnode/pipeline/tests/pipeline-runs.test.ts` -> `Tests 18 passed (18)`.
+- `pnpm exec vitest run src/runtime/adaptation/recovery/annotation src/framework/automation-service/service/answer-first/attempt src/framework/automation-service/service/answer-first/tests src/framework/automation-service/tests/service-adaptation src/framework/automation-service/service/fluxnode` -> `Test Files 143 passed (143)`, `Tests 866 passed (866)`.
+- `node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1056-purse-check2 -- pnpm --filter fluxiq check` -> `exit 0`.
+- `node scripts/structure-audit.mjs`, run twice -> `8 violation(s) across 2 rule(s)` both times, none in my files:
+  - `[directory-files]` `unfinished-build/tests/` holds 26 files;
+  - `[import-cycles]` through `generation-failure/index.ts`, the new `generation-failure/stops-within.ts`, and `unfinished-build/{budget-exhausted,not/doable,not/finished,provider-unavailable,tried}.ts`.
+  - These are the other worker's in-flight edits: `stops-within.ts` and `tried.test.ts` are untracked, and `loop-limits/flow-bootstrap-rounds.ts` is deleted.
+  - My two files raise only advisory `file-lines` warnings: run-attempt.ts at 415 lines, annotate.ts at 795.
+
+### Not verified (round 2)
+
+- No live run.
+- The `diagnosis_only` change also skips a requested exploration, which no test covers on its own. iterating-recovery exercises exploration only for `diagnose_and_adapt` and `explore_and_adapt`; its `diagnosis_only` case only checks that the run resolves.
+- Suites outside the paths above (person-humanness `run-session`, `failed-start`, `in-run-repair`), which use `diagnosis_only`. `failed-start` is in service-adaptation and passed.
