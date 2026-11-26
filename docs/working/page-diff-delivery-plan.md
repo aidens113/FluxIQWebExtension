@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W1 t1036 and W2 t1038 integrated (fluxiq 0.54.21); the scripted bigbox run passes 4 of 4. W3 t1037 phase 2, t1041 (asked column names) and t1042 (W1 leftovers) running in parallel.
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W1 t1036, W2 t1038 and W3 t1037 integrated (fluxiq 0.54.25); under framework drafting the scripted bigbox run passes 4 of 4. Next: the read-rows fix, the step-count removal, fake clocks and the column reader, in parallel; then the other scripted tasks and live on Sonnet.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -58,13 +58,18 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - **The Sonnet run** (run-mwvgjb8c, $0.80, 90 s, 22 calls) set the store, read the cart as the result, and the product check accepted it. But the oracle marked the answer wrong: it added "Loftwell 1 Roll $1.97, 4.6 stars", which is not the cheapest towel that qualifies for pickup today at that store (`missingActs`, `unaskedChanges: cart:5520104:pickup`). Our judge, on Sonnet, accepted it, so judging pickup availability is an open defect.
   - Other open trees: **t1015** `paid-bigbox` (the live lane, slot 1); **t1035** (the audit tree; its files are on dev; to abandon).
 - **Next (in order):**
-  1. W1, W2, t1041 to t1045 and t1047 (the sweep's guard-test fallout) are integrated (ledger). Running: W3 phase 2 (t1037; sub-supervisor; Lab slot 2). Verify it, integrate it, and merge `dev` into every lane after the merge (AGENTS.md).
-     - **W3 phase 2 (2026-11-25, 14:35):** the 13-edit grammar is deleted and the scripted model no longer sends `reorder`.
-       - **Scripted bigbox run passed 4 of 4 under framework drafting** (run-mwwol1vu-1a8e7146, provider-free). Each attempt read 16 rows and gave the right answer. Model calls per attempt: 14, then 1 (the judge), 0 and 0. Attempts 2 to 4 each ran `flow.b50fa2ca` with continuation held; the saved Flow has 7 nodes.
-       - **Still open:** t1043's `carried-undeclared` test fails under framework drafting; the cause has not been traced yet. About 78 lines of Core's `llm-flow-bootstrap.md` still describe the deleted grammar and need a doc pass.
-  2. Right after W3, each edits W3's files, so none can start before:
-     - remove `maxStepsWithoutProgress` from every loop (AGENTS.md: no count ends a round);
-     - the judge and the decider see every read's rows (t1044's two main causes: `result-feed/feed.ts:269`, `decision-context/current-view.ts:28`). This was to be t1047, but that id went to the sweep fallout, so it takes the next free id;
+  1. W1, W2, W3 (t1037), t1041 to t1045 and t1047 are integrated (ledger). The plan's three workstreams are built.
+     - **Under framework drafting, the scripted bigbox run passes 4 of 4** (run-mwwol1vu-1a8e7146, provider-free):
+       - every attempt read 16 rows and gave the right answer;
+       - model calls per attempt: 14, 1 (the judge), 0 and 0;
+       - attempts 2 to 4 each ran `flow.b50fa2ca`, with continuation held;
+       - the saved Flow has 7 nodes.
+     - **Open risks W3 raised:**
+       - There is no host signal for a "lasting" act. A press after the result's last read is left out of the Flow when it shows no page change, no act claim and no declared consequence. An asked act that lands unclaimed and invisibly would be left out too, unless the model keeps it. Watch for it in live runs.
+       - On an attempt that runs the saved Flow, the judge's summary lists no carried acts. This predates W3; it is a judge-evidence item.
+  2. Next, in parallel. Each task edits W3's files, and they partition by file. The briefs are written; their ids are given at start:
+     - remove `maxStepsWithoutProgress` from every loop and recovery (AGENTS.md: no count ends a round). The same task takes W3's two leftovers: a `repeat` whose `over` names a missing step is refused by name, and the unused `settings` on an amendment is no longer parsed;
+     - the judge and the decider see every read's rows (t1044's two main causes: `result-feed/feed.ts:269`, `decision-context/current-view.ts:28`; W3 confirmed it does not fix them). This was to be t1047, but that id went to the sweep fallout, so it takes the next free id;
      - fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`;
      - the answer-contract column reader misreading "columns title only".
   3. Refit and run the other scripted tasks (4 attempts each). Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
@@ -133,6 +138,30 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - W3 (t1037) integrated: the framework drafts the Flow, the model edits it (fluxiq 0.54.25)
+- Changed (sub-supervisor; workers: wiring ×3 and delete-grammar on Opus, text ×2, scripted-reorder and docs on Sonnet; report `reports/t1037-auto-draft.md`):
+  - Core: every call that works joins the draft by itself, and the draft is recomposed in place after each call, rerun and edit. Dead ends and repeats are left out, and the asked table's read is the result.
+  - The model has seven edits: keep, drop, result, repeat, unrepeat, bind, rerun.
+  - `core.run_flow` is offered from the first decision and refused by name until something can run.
+  - A read's stored handle is recorded, never the model's `tN`.
+  - The 13-edit grammar, the transcript mode and the old tellings are deleted. The framework telling keeps the loop guidance: one act per item, and paging.
+  - The 20 real-sql failures of the switch were fixed at their causes: carried steps redrafted, a no-change press starting a detour, answer-first reads cut to one, drafting counted as progress.
+  - `carried-undeclared` was rewritten: a press nobody asked for is left out, so attempt 2 runs the saved Flow.
+  - Docs: Core `flow-authoring.md` and `llm-flow-bootstrap.md`, and downstream `build-loop.md`.
+  - Downstream: the local-classifieds and professional-network scripted models send no `reorder` or `add`, and the domain parity test is re-pinned to one changed Core sentence.
+- The lead also fixed the runner's test script to build scenario-lab first (`e18462713` on `dev`). W3's tree lacked that build, so 20 runner tests had failed with "Scenario Lab build is missing" (it had happened to t1047's fresh tree too).
+- Validation: the lead's runs in `fxwork/t1037`, after committing both sides (Core `62f645e97`, downstream `9c13a36f9`).
+  - Core libraries build exit 0; `pnpm --filter fluxiq check` exit 0.
+  - Vitest groups over `src/runtime/{llm,flow-authoring,adaptation,project-agents,automation-activity,result-verification,answer-first}`, `src/framework/automation-service`, `src/server/fluxnode-api` and `src/ui`:
+    - parallel printed `Test Files  1667 passed | 1 skipped (1668)`, `Tests  15297 passed | 2 skipped`;
+    - real-sql printed `Test Files  259 passed (259)`, `Tests  1630 passed | 1 skipped`.
+  - Core audit printed `structure-audit: passed (576 warning(s), 902 baselined)`.
+  - Downstream:
+    - the test-runner suite printed `# tests 3016 # pass 2990 # fail 20`, every failure "Scenario Lab build is missing";
+    - after building scenario-lab, the six failing files printed `# tests 44 # pass 44 # fail 0`;
+    - `test-domain.mjs llm-evidence runtime/tests`, the domain check, the runner check, the downstream audit and model-text each exited 0.
+  - The scripted bigbox run passed 4 of 4 (run-mwwol1vu-1a8e7146; the lead read its `attempt-report.txt`).
 
 ### 2026-11-25 - First full sweep of the day (t1046) read; its downstream failures fixed as t1047
 - Sweep: `dev` at the start of the sweep (before t1044 and t1045), in `fxwork/t1046`, run through the heavy gate.
