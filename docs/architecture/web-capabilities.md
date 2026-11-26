@@ -970,6 +970,32 @@ gives a path only to a node recorded in a child frame. A refusal names paths
 only, never a full URL, and is reported against the recorded id. Otherwise the
 frame chosen is the one then checked, pinged, addressed and reported.
 
+**Every `web.dom.*` node declares the two frame parameters** (t1062,
+[`domain/src/output-nodes/frame-parameters.ts`](../../domain/src/output-nodes/frame-parameters.ts)):
+`browserFrameUrlPath`, a string, and `browserFrameId`, a number, both optional,
+hidden from a model and never bound from state. A navigation, a tab operation
+and a download act on the tab and declare neither. Three writers already put
+them on a node: the recorder, plan resolution for an element a handle named in
+a child frame, and list detection. Until t1062 no definition declared them, so
+Core's check of the plan refused every such node as
+`bootstrap.unknown_parameter`. No Flow with a step inside an embedded widget
+could be saved or replayed (run `run-mwxdk1el-9dcfa4be`). Core's check stays
+strict: the web's nodes declare what the web writes.
+
+**The domain finds the frame the same way on a later attempt.** The host reads
+the frame a saved step names before the step acts, and again when it finds a
+stale target. Both reads are sent with the path and the saved id, so the
+extension picks the frame by its path. Until t1062 the domain then compared the
+frame the read reached with the saved id and refused it as another document,
+because the browser had given the frame a new id. Now, when a read named a
+path, the path proves the frame and any id agrees. Only a frame named by its id
+alone must keep that id (`webFrameIdAgrees`,
+[`domain/src/runtime/target-reacquire/identity/frame-id-agrees.ts`](../../domain/src/runtime/target-reacquire/identity/frame-id-agrees.ts)).
+That covers a step's capture, its frozen command scope, and the looked-up
+re-acquire of its target. A child frame whose document has no http(s) path
+(`about:blank`, `srcdoc`) is saved with its id alone. It is found again only
+while that document stands.
+
 ### Results And Failures
 
 Every result carries a `validation` (decision D4), because the builders in

@@ -994,7 +994,10 @@ top page's. The handle keeps the path of that frame's document, and every node
 a model builds in a child frame — an extraction node from a handle, or a
 click, type or other action on an element shown in the frame — carries
 `browserFrameUrlPath` (the pathname only, with no origin or query) beside
-`browserFrameId`. A reload renumbers frames, so when a command names a path,
+`browserFrameId`. Every `web.dom.*` node declares both, so such a node passes
+Core's check of the plan and its Flow can be saved (t1062). On a later attempt
+the path finds the frame, and the saved id only breaks a tie (see
+[Child Frames](web-capabilities.md#child-frames)). A reload renumbers frames, so when a command names a path,
 the extension waits up to 5 s for a frame at that path to appear, polling every
 100 ms, before it refuses `web.target.not_found`. The wait is cut to the
 command's own timeout less a 1 s margin

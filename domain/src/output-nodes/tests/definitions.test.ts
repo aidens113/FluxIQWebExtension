@@ -84,8 +84,9 @@ test("every action type has one valid output node, derived from its own schema r
     assert.equal(node.label, definition?.label, `${outputId} label`);
     assert.deepEqual(node.metadata?.parameterSchema, definition?.parameterSchema, `${outputId} carries its own parameter schema`);
     // Every parameter is state-bindable but a record output, which Core
-    // requires to be a literal (see the list extraction's own test below).
-    const bindable = node.parameters.filter((parameter) => parameter.id !== "recordOutput");
+    // requires to be a literal (see the list extraction's own test below), and
+    // the frame a step runs in, an address rather than a value (`./frame-parameters.test.ts`).
+    const bindable = node.parameters.filter((parameter) => parameter.id !== "recordOutput" && parameter.id !== "browserFrameUrlPath" && parameter.id !== "browserFrameId");
     assert.equal(bindable.every((parameter) => parameter.allowStateBinding === true), true, `${outputId} parameters must be state-bindable`);
     assert.equal(typeof node.icon === "string" && node.icon.length > 0, true, `${outputId} needs an icon`);
   }
