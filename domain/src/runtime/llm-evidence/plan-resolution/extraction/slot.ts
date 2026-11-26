@@ -61,7 +61,7 @@ import { webAutomationExtractListRequestRead, webAutomationExtractListRequestVal
 import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
-import { keptWebExtractionColumns, WEB_EXTRACTION_SAME_AS_HINT, type WebExtractionColumnAssumption, type WebExtractionColumnIssue } from "./columns";
+import { keptWebExtractionColumns, WEB_EXTRACTION_FIELD_KEY_HINT, WEB_EXTRACTION_SAME_AS_HINT, type WebExtractionColumnAssumption, type WebExtractionColumnIssue } from "./columns";
 import { keptWebExtractionConditions } from "./conditions";
 import type { WebPlanRefusalIssue } from "./refusal-issues";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
@@ -119,7 +119,7 @@ export type WebExtractionSlotResolution =
 const NEXT_PAGE_INSTEAD = "web.handle.expected.extract_list.next_page";
 
 /** The shape hints a slot refusal may carry beside its reason: paging, or `sameAs` for two fields meant to read one column (`./columns.ts`, t975). */
-type WebExtractionSlotHint = typeof NEXT_PAGE_INSTEAD | typeof WEB_EXTRACTION_SAME_AS_HINT;
+type WebExtractionSlotHint = typeof NEXT_PAGE_INSTEAD | typeof WEB_EXTRACTION_SAME_AS_HINT | typeof WEB_EXTRACTION_FIELD_KEY_HINT;
 
 const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "minItems", "maxItems", "discloseText"]);
 const REFERENCE_KEYS: ReadonlySet<string> = new Set(["handle", "location"]);

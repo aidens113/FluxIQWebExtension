@@ -57,6 +57,7 @@ import { isJsonRecord } from "../../untrusted-json";
 import { webExtractionMatchedColumn } from "../../../../output-nodes";
 import type { WebPlanValuePath } from "../handle-tokens";
 import { webPlanBoundedIssues, type WebPlanRefusalIssue } from "./refusal-issues";
+import { webPlanFieldKeyIssues } from "./field-key-issues";
 import { webPlanUnknownColumnIssues } from "./unknown-column-issues";
 import { webExtractionColumnReading } from "./column-reading";
 
@@ -96,6 +97,9 @@ export type WebExtractionColumnIssue = "web.handle.malformed" | "web.handle.ambi
  */
 export const WEB_EXTRACTION_SAME_AS_HINT = "web.handle.expected.extract_list.same_as";
 
+/** Said beside a column key that is not a legal record field key: a key is one word of letters, digits, `_` and `-` (`./field-key-issues.ts`, t1058). */
+export const WEB_EXTRACTION_FIELD_KEY_HINT = "web.handle.expected.extract_list.field_key";
+
 export type WebExtractionColumns =
   | { ok: true; fields: Record<string, WebAutomationExtractField>; assumed: WebExtractionColumnAssumption[]; sources: Record<string, string>; requested?: string[] }
   /**
@@ -103,7 +107,7 @@ export type WebExtractionColumns =
    * detection (`./unknown-column-issues.ts`, t502); and for a field reading another field's column: the field, the
    * field it shares with, and the columns no field reads (`sharedColumn`, t975), with `expected` saying how to keep both.
    */
-  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[]; expected?: typeof WEB_EXTRACTION_SAME_AS_HINT };
+  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[]; expected?: typeof WEB_EXTRACTION_SAME_AS_HINT | typeof WEB_EXTRACTION_FIELD_KEY_HINT };
 
 type Detected = Record<string, WebAutomationExtractField>;
 
@@ -198,7 +202,7 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
     // written when that name found its column by anything but the detected key
     // and could be a key itself, and under the detected key otherwise.
     const under = written.ownKey === undefined ? listedKey(column, nameOf) : written.written;
-    if (!isWebAutomationExtractFieldKey(under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
+    if (!isWebAutomationExtractFieldKey(under)) return { ok: false, issue: "web.handle.malformed", path: written.at, issues: webPlanFieldKeyIssues(under), expected: WEB_EXTRACTION_FIELD_KEY_HINT };
     if (Object.hasOwn(kept, under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     kept[under] = column.field;
     sources[under] = column.key;

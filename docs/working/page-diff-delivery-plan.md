@@ -76,11 +76,18 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
      - t1053: a passed-over step never becomes an evidence gap;
      - t1054: the build-cache lock race.
   3. Next:
-     - Rerun the scripted round, all eight tasks with 4 attempts each, on lane t1015. Its first pass stopped after bigbox 4/4, apprentices and saturday, which was fixed as t1052 and t1053. Watch the watcher's alerts under `test-runs/lab-watch/`, not the run folder.
-     - In parallel, two briefs that follow t1049 (in the lead's scratchpad, `next-briefs/`):
-       - **loop-counts:** no count ends an evidence loop; the deprecated chain goes; the build purse's `maxCallsPerRun` call allowance goes (a purse is dollars);
-       - **recovery-counts:** the recovery ledger's `maxActions`, `maxProviderCalls`, `maxRepeatsPerAction` and `maxRefusedActions` stop ending a recovery.
-     - Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
+     - **The user, 2026-11-26: "I think its time to start running live tests right after you fix those current running ones".** So the running fixes come first:
+       - t1058: the scripted contract fixes, and a named refusal for an illegal field key;
+       - t1056: no count ends an evidence loop, the deprecated chain goes, and the build purse's `maxCallsPerRun` call allowance goes (a purse is dollars);
+       - t1057: no count ends a recovery.
+     - Then live, with `dev` merged into every lane: on Sonnet (`--llm-model claude-sonnet-5-5 --llm-max-cost-usd 5`), each run with the run watcher, `--attempts 4`, and every attempt's flow chart reviewed.
+       - First, bigbox `new-store-cheapest-towels` on t1015, the rerun of run-mwvgjb8c, which t1048 fixed; its debug is written.
+       - Then one task per site, up to four lanes at once:
+         - company-website `apprentices`, crossborder `free-hubs-under-ten`, everything-store `batteries-and-descaler`;
+         - local-classifieds `save-dining-tables`, professional-network `accept-messaged-invitations`;
+         - social-network-feed `delete-stranger-requests`, job-board `remote-rust-roles`;
+         - auction-marketplace `kestrel-auctions`, photo-social `glaze-collection`.
+       - The scripted round is now a diagnostic, not a gate. Scripted round 2 stopped on two scripted-model defects (`reports/scripted-round-2-diagnosis.md`), which t1058 fixes. Watch the watcher's alerts under `test-runs/lab-watch/`.
   4. Also open:
      - a list read before a filter change stays in the decider's view beside the re-read (t1048; a product call);
      - the judge accepting a wrong item on pickup availability (above);

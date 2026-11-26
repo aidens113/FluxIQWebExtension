@@ -16,7 +16,7 @@ import { scriptedTaskProcess } from "./processing-declarations.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import type { ScriptedModelRequest } from "../wire-request.js";
 import { COMPANY_WEBSITE_COVERS } from "./company-website-apprentices.js";
-import { currentPageOf, latestOf, pageLine, pressOf, toolCall } from "./evidence.js";
+import { callsMade, currentPageOf, latestOf, pageLine, pressOf, toolCall } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
 
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("company-website-saturday-certificate") });
@@ -27,9 +27,6 @@ const WEEKS = 3;
 type Field = { key: string; sample?: string; label?: string };
 type Mark = { id: string; label?: string; kind?: string };
 type Cells = { handle?: string; fields?: readonly Field[]; fieldMarks?: readonly Mark[] };
-
-/** The calls this decision's evidence says were made, by call id. */
-const callsMade = (request: ScriptedModelRequest): ReadonlySet<string> => new Set((request.payload ? JSON.stringify(request.payload).match(/"callId":"[^"]+"/gu) ?? [] : []).map((text) => text.slice(10, -1)));
 
 /** The columns of the cells, from what the detection says they hold: the slot's own date and words, its day's heading, and its disabled mark. */
 function cellColumns(cells: Cells): { date: string; time: string; heading: string; disabled: string } {
@@ -63,7 +60,7 @@ function readWeek(request: ScriptedModelRequest, week: number): Record<string, u
       extractList: {
         handle: cells.handle,
         // Every slot is collected with its day's heading and its disabled mark; the processing declaration keeps the free Saturday ones.
-        fields: { date: columns.date, time: columns.time, "group heading": columns.heading, disabled: columns.disabled },
+        fields: { date: columns.date, time: columns.time, group_heading: columns.heading, disabled: columns.disabled },
         minItems: 0,
       },
       recordOutput: {
@@ -94,7 +91,8 @@ const decide: ScriptedReply = (request) => {
   const note = latestOf(request, "core.attempt_note")?.value.flowRun as { stoppedAt?: number; happened?: string } | undefined;
   if (note) throw new Error(`The saved Flow's run did not end the attempt, stopped at step ${note.stoppedAt ?? "none"}: ${note.happened ?? "no reason given"}`);
   const page = currentPageOf(request);
-  const made = callsMade(request);
+  // A refused call stops the script here (`callsMade`); every call id anywhere in the request, the held history included, is done.
+  const made = new Set([...callsMade(request), ...(request.payload ? JSON.stringify(request.payload).match(/"callId":"[^"]+"/gu) ?? [] : []).map((text) => text.slice(10, -1))]);
   if (made.has(`read-week-${WEEKS}`)) return { kind: "evidence_tool_decision", summary: "All three weeks are read.", decision: { kind: "complete", result: { summary: "Listed every free Saturday CP12 slot at Wrenfield across the three weeks, with nothing booked." } } };
   for (const cover of COMPANY_WEBSITE_COVERS) {
     if (!made.has(cover.callId) && pageLine(page, cover.words)) return pressOf(request, cover.summary, cover.callId, cover.words);
