@@ -244,7 +244,7 @@ test("a create-flow run readies its build with its permitted consequences and re
   const { core, run, prepared, written, published, settle } = await settleBuildOnce(proposedBuild);
   await settle();
   assert.deepEqual(prepared, { permittedConsequences: [] });
-  assert.equal(core.settingsRequests[0]?.flow.metadata.llmExecutionSettings.maxCalls, 26);
+  assert.equal(core.settingsRequests[0]?.flow.metadata.llmExecutionSettings.maxCalls, 250, "Core's schema requires the field; it carries no Lab count");
   // The run's spend ceiling is a Flow setting, saved with the rest.
   assert.deepEqual(core.settingsRequests[0]?.flow.metadata.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: LAB_CEILING_USD });
   assert.equal(core.settingsRequests[0]?.flow.metadata.llmModel, DEFAULT_LLM_MODEL);
@@ -333,7 +333,7 @@ test("a build that left no proposal carries the consequences Core's diagnostic n
     { ...stopped, providerCalls: 0, providerInvocation: "not_attempted" as const, accounting: null, evidenceLoop: null },
     { ...stopped, accounting: { ...proposedBuild.accounting!, totalTokens: Number.MAX_SAFE_INTEGER } },
   ]) {
-    const breached = await settleBuildOnce(throwing);
+    const breached = await settleBuildOnce(throwing, { maxTotalTokensPerRun: PER_REQUEST });
     const error = await breached.settle().then(() => assert.fail("the settlement must throw"), (thrown: unknown) => thrown);
     assert.ok(error instanceof RunnerFailure);
     const written = breached.written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
@@ -347,7 +347,7 @@ test("a build that reached no provider fails the run closed, after its evidence 
   const refused: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, providerCalls: 0, providerInvocation: "not_attempted", accounting: null, evidenceLoop: null, failure: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 } };
   const { written, settle } = await settleBuildOnce(refused);
   await assert.rejects(settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior"
-    && /Live LLM run reached no provider: --live-llm authorized 26 anthropic call\(s\) for --llm-task create-flow and Core made none\. Core's Flow build stopped at provider_resolution before a provider answered\. \(flow_bootstrap\.provider_resolution_failed\)/u.test(error.message));
+    && /Live LLM run reached no provider: --live-llm authorized anthropic calls for --llm-task create-flow and Core made none\. Core's Flow build stopped at provider_resolution before a provider answered\. \(flow_bootstrap\.provider_resolution_failed\)/u.test(error.message));
   assert.ok(written.some(entry => entry.path === "snapshots/live-llm.json"), "the refusal's evidence is written first");
   // A build that outlived its request with nothing to show counts as having called, so it fails on its own code, never as spend-free.
   const unfinished = await settleBuildOnce({ ...refused, providerCalls: null, providerInvocation: "unknown", failure: { code: "lab.generation_unfinished", stage: null, httpStatus: null } }, {}, null);
@@ -355,16 +355,15 @@ test("a build that reached no provider fails the run closed, after its evidence 
   assert.equal(unfinished.run.usage.calls, 1);
 });
 
-test("a build over its run budget, over its call count, or run on another model fails the run", async () => {
-  // One request past the run token budget, which for a build is every
-  // authorized call at the per-request limit, so cost and the stall guard bind
-  // before tokens do (`runTokenBudget` in live-llm-plan.ts).
-  const buildBudget = PER_REQUEST * DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
+test("a build over a typed run token budget, or run on another model, fails the run; no call count does", async () => {
+  // One request past a run token budget the operator typed. Without one, cost and the stall guard bind
+  // (`runTokenBudget` in live-llm-plan.ts).
+  const buildBudget = PER_REQUEST * 26;
   const overspend = buildBudget + PER_REQUEST;
-  const overspent = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, totalTokens: overspend } });
-  await assert.rejects(overspent.settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && new RegExp(`the run used ${overspend} total tokens against its run token budget of ${buildBudget}(?! \\()`, "u").test(error.message));
-  const tooManyCalls = await settleBuildOnce({ ...proposedBuild, providerCalls: 27 });
-  await assert.rejects(tooManyCalls.settle(), /the run made 27 provider call\(s\) against an authorized 26/u);
+  const overspent = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, totalTokens: overspend } }, { maxTotalTokensPerRun: buildBudget });
+  await assert.rejects(overspent.settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && new RegExp(`the run used ${overspend} total tokens against its run token budget of ${buildBudget}`, "u").test(error.message));
+  const manyCalls = await settleBuildOnce({ ...proposedBuild, providerCalls: 400 });
+  await manyCalls.settle();
   const otherModel = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, model: "deepseek-reasoner" } });
   await assert.rejects(otherModel.settle(), /Core's Flow build ran on anthropic\/deepseek-reasoner, not the authorized anthropic\/claude-haiku-5-5/u);
 });
@@ -413,7 +412,7 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
  * the ceiling however many calls it was allowed.
  */
 async function buildThenRepair(buildCostUsd: number, repairCostUsd: number) {
-  const { core, run, settle } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: buildCostUsd } }, { maxCallsPerRun: 64, maxEstimatedCostUsd: LAB_CEILING_USD });
+  const { core, run, settle } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: buildCostUsd } }, { maxEstimatedCostUsd: LAB_CEILING_USD });
   const build = await settle().then(() => undefined, (error: unknown) => error);
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const repairDetail: ExistingRunDetail = {
@@ -532,10 +531,10 @@ test("a repair that cannot be read back is recorded, not raised", async () => {
 });
 
 test("a repair over its run budget fails the run, after its spend is written", async () => {
-  const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
+  const { core, run, written, settle } = await settleBuildOnce(proposedBuild, { maxTotalTokensPerRun: PER_REQUEST });
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
-  const overspent: ExistingRunDetail = { ...detail, llmAccounting: { ...detail.llmAccounting!, calls: 27 } };
+  const overspent: ExistingRunDetail = { ...detail, llmAccounting: { ...detail.llmAccounting!, calls: 27, totalTokens: PER_REQUEST + 1 } };
   core.purse = flowPurse({ build: [5, 0.02], runtime: [27, 0.003] });
   await assert.rejects(
     run.settleRepair(reader(core, { getRunDetail: async () => overspent, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }), { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined),
@@ -593,7 +592,7 @@ const reauthorAdaptation = () => ({ adaptation: { evidenceLoop: { providerCallCo
 const REAUTHORED_PURSE = flowPurse({ build: [22, 0.04178802], judge: [2, 0.001830072], reauthor: [36, 0.042481212] });
 
 async function settleReauthoredRun(attempts: unknown[], adaptation: () => unknown = reauthorAdaptation, purse: ExistingFlowSpend | null = REAUTHORED_PURSE) {
-  const { core, run, written, published, settle } = await settleBuildOnce(reauthoredBuild, { maxCallsPerRun: 48 }, flowPurse({ build: [22, 0.04178802] }));
+  const { core, run, written, published, settle } = await settleBuildOnce(reauthoredBuild, {}, flowPurse({ build: [22, 0.04178802] }));
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   core.purse = purse;
@@ -720,7 +719,7 @@ test("a build that ended without a Flow over its cost ceiling fails on the budge
     accounting: { ...proposedBuild.accounting!, estimatedCostUsd: spent },
     failure: { code: "flow_bootstrap.evidence_budget_exhausted", stage: null, httpStatus: null },
   };
-  const { settle } = await settleBuildOnce(overspentWithoutFlow, { maxCallsPerRun: 64, maxEstimatedCostUsd: LAB_CEILING_USD });
+  const { settle } = await settleBuildOnce(overspentWithoutFlow, { maxEstimatedCostUsd: LAB_CEILING_USD });
   const error = await settle().then(() => undefined, (caught: unknown) => caught);
   assert.ok(isCostBreach(error, spent), `the category stays the budget's: ${String(error)}`);
   const cause = (error as RunnerFailure).cause;
@@ -728,7 +727,7 @@ test("a build that ended without a Flow over its cost ceiling fails on the budge
   assert.equal((cause.details?.failure as { code?: string } | undefined)?.code, "flow_bootstrap.evidence_budget_exhausted");
 
   // A build that did propose a Flow and overspent carries nothing: the lane goes on to judge it.
-  const { settle: settleProposed } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: spent } }, { maxCallsPerRun: 64, maxEstimatedCostUsd: LAB_CEILING_USD });
+  const { settle: settleProposed } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: spent } }, { maxEstimatedCostUsd: LAB_CEILING_USD });
   const proposedError = await settleProposed().then(() => undefined, (caught: unknown) => caught);
   assert.ok(isCostBreach(proposedError, spent));
   assert.equal((proposedError as RunnerFailure).cause, undefined);

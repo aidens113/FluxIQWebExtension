@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   DEFAULT_LLM_LAB_BUDGET,
   LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST,
-  LLM_LAB_MAX_CALLS_PER_RUN,
   assertLlmExecutionProfile,
   createDeterministicDryLlmProfile,
   validateLlmExecutionProfile,
@@ -38,7 +37,7 @@ test("exports conservative defaults and a non-overridable request ceiling", () =
   assert.equal(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, 1_000_000);
   assert.deepEqual(DEFAULT_LLM_LAB_BUDGET, {
     maxInputTokens: 992_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 1_000_000,
-    maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 5,
+    timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 5,
   });
   // The default request must fit under the ceiling, which is the relationship
   // that actually matters and which seven separate copies of these numbers kept
@@ -48,7 +47,7 @@ test("exports conservative defaults and a non-overridable request ceiling", () =
   assert.equal("maxTotalTokensPerRun" in DEFAULT_LLM_LAB_BUDGET, false);
   const dry = createDeterministicDryLlmProfile();
   assert.equal(dry.mode, "deterministic-dry");
-  assert.equal(dry.budget.maxCallsPerRun, 0);
+  assert.equal("maxCallsPerRun" in dry.budget, false);
   assert.doesNotThrow(() => assertLlmExecutionProfile(dry));
 });
 
@@ -63,9 +62,6 @@ test("validates an explicit loopback-only live profile", () => {
     { externalSideEffects: true },
     { retainRawPrompts: true },
     { maxConcurrentRuns: 2 },
-    { budget: { ...liveProfile.budget, maxCallsPerRun: 0 } },
-    { budget: { ...liveProfile.budget, maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN + 1 } },
-    { budget: { ...liveProfile.budget, maxCallsPerRun: 2.5 } },
     { budget: { ...liveProfile.budget, maxEstimatedCostUsd: 10.01 } },
     { profileId: "sk-secretvalue12345678" },
     { provider: "api_key_value" },
@@ -73,29 +69,22 @@ test("validates an explicit loopback-only live profile", () => {
   ]) assert.equal(validateLlmExecutionProfile({ ...liveProfile, ...mutation }).valid, false);
 });
 
-test("the call ceiling is Core's runaway backstop, not a per-task count", () => {
-  // The Lab's backstop is Core's own (250 since t576) and its default 26. The Lab once capped
-  // every run at two calls, which left a recovery no call to gather evidence with.
-  assert.equal(LLM_LAB_MAX_CALLS_PER_RUN, 250);
-  assert.equal(DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, 26);
-  for (const maxCallsPerRun of [1, 2, 3, 10, 64, LLM_LAB_MAX_CALLS_PER_RUN]) {
+test("no call count exists: the dollar ceiling bounds a run, and a legacy field is ignored", () => {
+  assert.equal("maxCallsPerRun" in DEFAULT_LLM_LAB_BUDGET, false);
+  for (const maxCallsPerRun of [0, 1, 26, 250, 100_000]) {
     assert.equal(validateLlmExecutionProfile({ ...liveProfile, task: "adapt", budget: { ...liveProfile.budget, maxCallsPerRun } }).valid, true, `maxCallsPerRun ${maxCallsPerRun}`);
   }
-  const over = validateLlmExecutionProfile({ ...liveProfile, task: "adapt", budget: { ...liveProfile.budget, maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN + 1 } });
-  assert.equal(over.valid, false);
-  assert.deepEqual(over.valid ? [] : over.issues.map(issue => issue.path), ["$.budget.maxCallsPerRun"]);
-  assert.match(over.valid ? "" : over.issues[0].message, /from 1 to 250/u);
 });
 
-test("a run token budget is optional, covers one request, and fits the calls declared", () => {
+test("a run token budget is optional, and covers one request", () => {
   // The per-request triple is set together. Overriding only the total while
   // inheriting the default's 992,000 input would make every case below invalid
   // for an unrelated reason -- input plus output may not exceed the total.
-  const budget = { ...liveProfile.budget, maxCallsPerRun: 26, maxInputTokens: 8_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000 };
-  for (const maxTotalTokensPerRun of [10_000, 100_000, 100_001, 260_000]) {
+  const budget = { ...liveProfile.budget, maxInputTokens: 8_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000 };
+  for (const maxTotalTokensPerRun of [10_000, 100_000, 100_001, 260_001]) {
     assert.equal(validateLlmExecutionProfile({ ...liveProfile, task: "adapt", budget: { ...budget, maxTotalTokensPerRun } }).valid, true, `maxTotalTokensPerRun ${maxTotalTokensPerRun}`);
   }
-  for (const maxTotalTokensPerRun of [0, 9_999, 260_001, 1.5, "100000"]) {
+  for (const maxTotalTokensPerRun of [0, 9_999, 1.5, "100000"]) {
     const checked = validateLlmExecutionProfile({ ...liveProfile, task: "adapt", budget: { ...budget, maxTotalTokensPerRun } });
     assert.equal(checked.valid, false, `maxTotalTokensPerRun ${maxTotalTokensPerRun}`);
     assert.ok(checked.issues.every(issue => issue.path === "$.budget.maxTotalTokensPerRun"), JSON.stringify(checked.issues));
@@ -148,7 +137,7 @@ test("provenance is sanitized, bounded, and internally consistent", () => {
 test("evaluation requires a zero-call deterministic replay and safety gate", () => {
   const evaluation = {
     schemaVersion: "0.1", runId: "run-1", profileId: "deepseek-lab", task: "diagnose",
-    invocations: [], maxCallsPerRun: 2, proposalValidated: true, reviewOutcome: "approved", applyOutcome: "applied",
+    invocations: [], proposalValidated: true, reviewOutcome: "approved", applyOutcome: "applied",
     deterministicReplay: { required: true, completed: true, passed: true, llmCalls: 0 },
     safetyPassed: true, verdict: "passed", reasons: [],
   };
@@ -163,14 +152,10 @@ test("evaluation requires a zero-call deterministic replay and safety gate", () 
     totalTokens: 15, usageSource: "provider-reported", latencyMs: 1, outcome: "succeeded",
     sanitized: true, rawPromptRetained: false, rawResponseRetained: false,
   };
-  assert.equal(validateLlmRunEvaluation({ ...evaluation, maxCallsPerRun: 1, invocations: [invocation, { ...invocation, requestId: "request-2" }] }).valid, false);
-  // An iterating run may record more than two calls, up to the backstop, and
-  // still may not record more than it declared.
-  const iterated = Array.from({ length: 26 }, (_, index) => ({ ...invocation, requestId: `request-${index + 1}` }));
-  assert.equal(validateLlmRunEvaluation({ ...evaluation, task: "adapt", maxCallsPerRun: 26, invocations: iterated }).valid, true);
-  assert.equal(validateLlmRunEvaluation({ ...evaluation, task: "adapt", maxCallsPerRun: 25, invocations: iterated }).valid, false);
-  assert.equal(validateLlmRunEvaluation({ ...evaluation, maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN }).valid, true);
-  assert.equal(validateLlmRunEvaluation({ ...evaluation, maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN + 1 }).valid, false);
+  // Any number of calls may be recorded; no count is declared or held. A legacy field is ignored.
+  const iterated = Array.from({ length: 300 }, (_, index) => ({ ...invocation, requestId: `request-${index + 1}` }));
+  assert.equal(validateLlmRunEvaluation({ ...evaluation, task: "adapt", invocations: iterated }).valid, true);
+  assert.equal(validateLlmRunEvaluation({ ...evaluation, maxCallsPerRun: 1, invocations: iterated }).valid, true);
 });
 
 test("a live profile may permit consequence classes, each once, and a dry one none", () => {

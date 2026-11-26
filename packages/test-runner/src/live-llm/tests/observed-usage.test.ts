@@ -28,7 +28,7 @@ const adapting = planAtLabCeiling({
   retainRawPrompts: false,
   retainRawResponses: false,
   maxConcurrentRuns: 1,
-  budget: { ...DEFAULT_LLM_LAB_BUDGET, maxCallsPerRun: 26 },
+  budget: { ...DEFAULT_LLM_LAB_BUDGET },
 } satisfies LlmExecutionProfile);
 
 function line(sequence: number, taskKind: string, overrides: Partial<ExistingRunProviderCall> = {}): ExistingRunProviderCall {

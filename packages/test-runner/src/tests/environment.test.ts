@@ -112,25 +112,11 @@ test("resolves the web panel host from the domain package's one declaration", as
   assert.equal(buildFluxIQEnvironment(allocation, { ...paths, hostModulePath: explicit }, {}).FLUXIQ_HOST_MODULE, explicit);
 });
 
-test("a resolved Lab build allowance reaches its child independently of argv and inherited settings", () => {
-  const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", buildCallLimit: 3 };
-  const env = buildFluxIQEnvironment(allocation, paths, { FLUXIQ_LLM_BUILD_CALL_LIMIT: "999", FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE: "test" }, ["node", "runner", "--llm-max-calls", "48"]);
-  assert.equal(env.FLUXIQ_LLM_BUILD_CALL_LIMIT, "3");
-  assert.equal(env.FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE, "test");
-});
-
-test("a run without a resolved build allowance drops inherited call admission scope", () => {
+test("a Lab Core never inherits a build call allowance", () => {
   const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" };
   const env = buildFluxIQEnvironment(allocation, paths, { FLUXIQ_LLM_BUILD_CALL_LIMIT: "999", FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE: "test" }, []);
   assert.equal("FLUXIQ_LLM_BUILD_CALL_LIMIT" in env, false);
   assert.equal("FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE" in env, false);
-});
-
-test("an invalid explicit build allowance is refused before constructing a Core child", () => {
-  for (const buildCallLimit of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-    const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", buildCallLimit };
-    assert.throws(() => buildFluxIQEnvironment(allocation, paths, {}, []), /build.*call|call.*limit/i);
-  }
 });
 
 test("a new-flow chat's resolved authorization reaches Core before there is a Flow to configure", async () => {
@@ -140,14 +126,8 @@ test("a new-flow chat's resolved authorization reaches Core before there is a Fl
     scenarioNetworkPolicy: "loopback-only", providerEgressPolicy: "core-trusted-provider-only",
     externalSideEffects: false, approvalMode: "manual", retainRawPrompts: false,
     retainRawResponses: false, maxConcurrentRuns: 1,
-    budget: { ...DEFAULT_LLM_LAB_BUDGET, maxCallsPerRun: 3, maxEstimatedCostUsd: 0.1 },
+    budget: { ...DEFAULT_LLM_LAB_BUDGET, maxEstimatedCostUsd: 0.1 },
   }, 0.1), { name: "CLAUDE_API_KEY", source: "test", value: "synthetic-test-key" });
-  const env = buildFluxIQEnvironment(allocation, {
-    repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core",
-    buildCallLimit: run.authorizedBuildCallLimit,
-  }, {}, ["node", "runner", "--llm-max-calls", "48"]);
-  assert.equal(env.FLUXIQ_LLM_BUILD_CALL_LIMIT, "3");
-  assert.equal(env.FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE, "test");
   const keyCalls: string[] = [];
   await run.chatBuildAuthorizer({
     async reauthenticate() {},

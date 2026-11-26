@@ -80,14 +80,11 @@ test("parses explicit live LLM mode with conservative defaults", () => {
   });
 });
 
-test("live LLM CLI lets an adaptation iterate: any call count up to Core's backstop of 64", () => {
+test("live LLM CLI refuses --llm-max-calls: no call count exists and the purse bounds a run", () => {
   const adapt = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "adapt"];
-  for (const calls of ["1", "3", "10", "64"]) {
-    const command = parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", calls]);
-    assert.equal(command.command === "run" ? command.llm?.budget.maxCallsPerRun : undefined, Number(calls));
+  for (const calls of ["1", "26", "251"]) {
+    assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", calls]), /no count of calls exists.*--llm-max-cost-usd/su);
   }
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", "251"]), /maxCallsPerRun.*from 1 to 250/su);
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", "0"]), /maxCallsPerRun.*from 1 to 250/su);
 });
 
 test("live LLM CLI takes a run token budget only when one is typed", () => {
@@ -105,13 +102,9 @@ test("live LLM CLI takes a run token budget only when one is typed", () => {
 test("--llm-task repair is a live task with the same budget options as adapt", () => {
   const repair = ["--live-llm", "--llm-profile", "lab-explore-repair", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "repair"];
   // The campaign's own repair limits, which an iterating repair needs room for.
-  const command = parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-input-tokens", "42000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "50000", "--llm-max-calls", "26", "--llm-max-run-tokens", "600000"]);
+  const command = parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-input-tokens", "42000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "50000", "--llm-max-run-tokens", "600000"]);
   assert.equal(command.command === "run" ? command.llm?.task : undefined, "repair");
-  assert.equal(command.command === "run" ? command.llm?.budget.maxCallsPerRun : undefined, 26);
   assert.equal(command.command === "run" ? command.llm?.budget.maxTotalTokensPerRun : undefined, 600_000);
-  // Not a small fixed cap: an iterating repair takes the operator's number, up to Core's backstop.
-  assert.equal(parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-calls", "64"]).command === "run" ? 64 : 0, 64);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-calls", "251"]), /from 1 to 250/u);
 });
 
 test("--replays applies and replays the repair, and only for the tasks whose Flow the model repairs", () => { const create = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "create-flow"];
@@ -138,7 +131,7 @@ test("live LLM CLI rejects unsafe budgets, and every live matrix", () => {
   // were fixed numbers that the contract quietly grew past.
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-total-tokens", String(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST + 1)]), new RegExp(String(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST)));
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-input-tokens", String(DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1)]), /must cover/);
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-calls", "251"]), /from 1 to 250/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-calls", "251"]), /no count of calls exists/);
   // The contract bounds a declared cost by Core's largest configurable ceiling ($10); the plan then holds it to the ceiling Core resolved.
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", String(LLM_LAB_MAX_ESTIMATED_COST_USD + 0.01)]), new RegExp(`maxEstimatedCostUsd: must be a finite number from 0 to ${LLM_LAB_MAX_ESTIMATED_COST_USD}`, "u"));
   const lowerCost = parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.10"]);

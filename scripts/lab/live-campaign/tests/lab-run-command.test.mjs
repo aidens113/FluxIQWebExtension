@@ -21,7 +21,7 @@ test("each repair task becomes one adapt run of the recorded Flow, with the live
   const overridden = labRunArguments(REPAIRS[1], parseCampaignArgs(["--", "--llm-max-cost-usd", "0.1", "--target", "isolated"]));
   assert.equal(overridden.filter((arg) => arg === "--llm-max-cost-usd").length, 1);
   assert.deepEqual(overridden.slice(-4), ["--llm-max-cost-usd", "0.1", "--target", "isolated"]);
-  assert.ok(overridden.includes("--llm-max-calls"));
+  assert.equal(overridden.includes("--llm-max-calls"), false, "no call count exists");
   // No run token budget is passed by default: cost bounds the run, so a build
   // that needs more than a million tokens across its calls is not failed as
   // `performance.budget` after the money is spent. An operator may still give one.
@@ -42,7 +42,7 @@ test("each repair task becomes one adapt run of the recorded Flow, with the live
   const creation = labRunArguments(CATALOG[0], parseCampaignArgs([]));
   assert.equal(creation[creation.indexOf("--llm-profile") + 1], "lab-create-flow");
   assert.equal(creation.includes("--flow"), false);
-  assert.equal(creation[creation.indexOf("--llm-max-calls") + 1], "48");
+  assert.equal(creation.includes("--llm-max-calls"), false, "no call count exists");
 });
 
 test("each task becomes one create-flow Lab run naming its scenario, variant and catalog id", () => {

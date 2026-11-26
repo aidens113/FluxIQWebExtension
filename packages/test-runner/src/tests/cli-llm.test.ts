@@ -188,7 +188,7 @@ test("a create-flow dry run resolves the task, plans the build and starts nothin
   assert.equal(printed.live.purpose, "build_and_adapt");
   assert.equal(printed.live.model, DEEPSEEK_MODEL);
   assert.equal(printed.live.coreDefaultModel, DEEPSEEK_MODEL);
-  assert.equal(printed.live.authorized.maxCalls, 26);
+  assert.equal("maxCalls" in printed.live.authorized, false);
   assert.deepEqual(printed.live.authorized.tokenLimits, { maxInputTokens: 40_000, maxOutputTokens: 6_000, maxTotalTokens: 46_000 });
   assert.deepEqual(printed.live.credentialSource, { name: "DEEPSEEK_API_KEY", from: "the process environment" });
   assert.equal(result.stdout.includes(DUMMY_KEY), false, "the dry run printed the credential");

@@ -32,7 +32,7 @@ const plan = planAtLabCeiling({
   retainRawPrompts: false,
   retainRawResponses: false,
   maxConcurrentRuns: 1,
-  budget: { ...DEFAULT_LLM_LAB_BUDGET, maxCallsPerRun: 2 },
+  budget: { ...DEFAULT_LLM_LAB_BUDGET },
 } satisfies LlmExecutionProfile);
 
 function usage(overrides: Partial<LiveLlmObservedUsage> = {}): LiveLlmObservedUsage {

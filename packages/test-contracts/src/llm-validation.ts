@@ -1,6 +1,5 @@
 import {
   LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST,
-  LLM_LAB_MAX_CALLS_PER_RUN,
   LLM_LAB_MAX_ESTIMATED_COST_USD,
   llmActionConsequences,
   llmEvidenceKinds,
@@ -132,12 +131,10 @@ export function validateLlmRunEvaluation(input: unknown): ValidationResult<LlmRu
     version(value.schemaVersion, "$.schemaVersion", issues);
     safeIdentifier(value.runId, "$.runId", issues); safeIdentifier(value.profileId, "$.profileId", issues);
     enumeration(value.task, tasks, "$.task", issues);
-    finite(value.maxCallsPerRun, "$.maxCallsPerRun", issues, 0, LLM_LAB_MAX_CALLS_PER_RUN, true);
     array(value.invocations, "$.invocations", issues, (entry, path, target) => {
       const checked = validateLlmInvocationProvenance(entry);
       for (const issue of checked.valid ? [] : checked.issues) add(target, path + issue.path.slice(1), issue.message);
     });
-    if (Array.isArray(value.invocations) && typeof value.maxCallsPerRun === "number" && value.invocations.length > value.maxCallsPerRun) add(issues, "$.invocations", "must not exceed maxCallsPerRun");
     if (typeof value.proposalValidated !== "boolean") add(issues, "$.proposalValidated", "must be a boolean");
     enumeration(value.reviewOutcome, ["not-applicable", "pending", "approved", "rejected"], "$.reviewOutcome", issues);
     enumeration(value.applyOutcome, ["not-attempted", "applied", "rejected", "reverted"], "$.applyOutcome", issues);
@@ -165,24 +162,20 @@ function checkBudget(input: unknown, path: string, issues: ValidationIssue[], dr
   finite(value.maxInputTokens, path + ".maxInputTokens", issues, 1, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, true);
   finite(value.maxOutputTokens, path + ".maxOutputTokens", issues, 1, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, true);
   finite(value.maxTotalTokensPerRequest, path + ".maxTotalTokensPerRequest", issues, 1, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, true);
-  finite(value.maxCallsPerRun, path + ".maxCallsPerRun", issues, dry ? 0 : 1, LLM_LAB_MAX_CALLS_PER_RUN, true);
   finite(value.timeoutMs, path + ".timeoutMs", issues, 1, 300_000, true);
   finite(value.maxRetries, path + ".maxRetries", issues, 0, 1, true);
   finite(value.maxEstimatedCostUsd, path + ".maxEstimatedCostUsd", issues, 0, LLM_LAB_MAX_ESTIMATED_COST_USD);
   if (typeof value.maxInputTokens === "number" && typeof value.maxOutputTokens === "number" && typeof value.maxTotalTokensPerRequest === "number" && value.maxInputTokens + value.maxOutputTokens > value.maxTotalTokensPerRequest) add(issues, path + ".maxTotalTokensPerRequest", "must cover maxInputTokens plus maxOutputTokens");
-  if (dry && value.maxCallsPerRun !== 0) add(issues, path + ".maxCallsPerRun", "must equal 0 in deterministic-dry mode");
   if (value.maxTotalTokensPerRun !== undefined) {
     if (dry) add(issues, path + ".maxTotalTokensPerRun", "must be absent in deterministic-dry mode");
-    else checkRunTokens(value.maxTotalTokensPerRun, value.maxTotalTokensPerRequest, value.maxCallsPerRun, path + ".maxTotalTokensPerRun", issues);
+    else checkRunTokens(value.maxTotalTokensPerRun, value.maxTotalTokensPerRequest, path + ".maxTotalTokensPerRun", issues);
   }
-  if (!dry && typeof value.maxCallsPerRun === "number" && typeof value.maxRetries === "number" && 1 + value.maxRetries > value.maxCallsPerRun) add(issues, path + ".maxRetries", "retries must fit within maxCallsPerRun");
 }
-/** A run's token budget covers at least one full request and no more than every authorized request could use. */
-function checkRunTokens(input: unknown, perRequest: unknown, calls: unknown, path: string, issues: ValidationIssue[]): void {
-  finite(input, path, issues, 1, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST * LLM_LAB_MAX_CALLS_PER_RUN, true);
-  if (typeof input !== "number" || typeof perRequest !== "number" || typeof calls !== "number") return;
+/** A run's token budget covers at least one full request; the dollar ceiling, not a call count, bounds the rest. */
+function checkRunTokens(input: unknown, perRequest: unknown, path: string, issues: ValidationIssue[]): void {
+  finite(input, path, issues, 1, Number.MAX_SAFE_INTEGER, true);
+  if (typeof input !== "number" || typeof perRequest !== "number") return;
   if (input < perRequest) add(issues, path, "must cover at least one maxTotalTokensPerRequest");
-  if (input > perRequest * calls) add(issues, path, "must not exceed maxTotalTokensPerRequest times maxCallsPerRun");
 }
 const safeIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/u;
 const secretLikeIdentifierPattern = /^(?:(?:sk|dsk|key|token|secret)[-_][A-Za-z0-9_-]{8,}|(?:bearer|basic):)/iu;

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation";
 import type { RunAllocation } from "./allocation.js";
 import { createdFlowTrialsCandidates } from "./flow-lane/index.js";
-import { LAB_AUTHORING_MODE_ENV, LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labAuthoringModeValue, labBuildCallLimitEnvironment, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
+import { LAB_AUTHORING_MODE_ENV, LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labAuthoringModeValue, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
 
 /**
  * Provider credentials belong to the test driver. Child processes receive an
@@ -42,8 +42,6 @@ export type TopologyPaths = {
   repositoryRoot: string;
   fluxiqRepositoryRoot: string;
   hostModulePath?: string;
-  /** The resolved live plan, supplied before startup; absent for an unplanned run. */
-  buildCallLimit?: number;
   /** Explicit construction admission; saved replay disables all factory model wiring. */
   modelProvidersEnabled?: boolean;
   /**
@@ -158,7 +156,6 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
     [CLIENT_GATEWAY_TRACE_ENV]: paths.tracing === false ? "0" : "1",
     [LAB_COST_CEILING_ENV]: costCeiling,
     [LAB_COST_CEILING_SCOPE_ENV]: "test",
-    ...labBuildCallLimitEnvironment(paths.buildCallLimit),
     ...(paths.modelProvidersEnabled === undefined ? {} : { FLUXIQ_MODEL_PROVIDERS_ENABLED: String(paths.modelProvidersEnabled) }),
     ...(defaultModel === undefined ? {} : { [LAB_DEFAULT_MODEL_ENV]: defaultModel }),
     [LAB_AUTHORING_MODE_ENV]: authoringMode,

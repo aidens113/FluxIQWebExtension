@@ -109,8 +109,8 @@ test("fails closed on owned Subflow or source-run contract mismatch", async () =
   ), /source run does not match/);
 });
 
-test("accepts a source run that iterated past two calls within its ceiling", async () => {
-  for (const calls of [3, 9, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun]) {
+test("accepts a source run that iterated past two calls, however many", async () => {
+  for (const calls of [3, 9, 26, 400]) {
     const run = sourceRun();
     run.providerCallCount = calls;
     const result = await controlExistingLlmTargetAdaptation(fakeControl(target, [], undefined, run), scope, "private-pin", "continue");
@@ -119,12 +119,10 @@ test("accepts a source run that iterated past two calls within its ceiling", asy
   }
 });
 
-test("refuses a source run above its ceiling or with no call count", async () => {
-  const over = sourceRun();
-  over.providerCallCount = FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1;
+test("refuses a source run with no call count", async () => {
   const unaccounted = sourceRun();
   delete unaccounted.providerCallCount;
-  for (const run of [over, unaccounted]) {
+  for (const run of [unaccounted]) {
     const calls: string[] = [];
     await assert.rejects(() => controlExistingLlmTargetAdaptation(
       fakeControl(target, calls, undefined, run), scope, "private-pin", "continue",
@@ -133,21 +131,20 @@ test("refuses a source run above its ceiling or with no call count", async () =>
   }
 });
 
-test("an adapting run's call count is bounded by its interventions and its ceiling, not a fixed number", () => {
+test("an adapting run's call count is bounded by its interventions and its ceiling, not a fixed number or a ceiling", () => {
   const interventions = sourceRun().interventions ?? [];
   assert.equal(interventions.length, 2);
-  const ceiling = FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun;
-  assert.equal(ceiling, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
-  for (const calls of [2, 3, ceiling]) assert.equal(adaptationCallCountWithinCeiling({ interventions, providerCallCount: calls }), true, `${calls} calls`);
-  for (const calls of [0, 1, ceiling + 1, 2.5, Number.NaN]) assert.equal(adaptationCallCountWithinCeiling({ interventions, providerCallCount: calls }), false, `${calls} calls`);
+  assert.equal("maxCallsPerRun" in FIRST_LIVE_ADAPTATION_PROFILE.budget, false);
+  for (const calls of [2, 3, 26, 400]) assert.equal(adaptationCallCountWithinCeiling({ interventions, providerCallCount: calls }), true, `${calls} calls`);
+  for (const calls of [0, 1, 2.5, Number.NaN]) assert.equal(adaptationCallCountWithinCeiling({ interventions, providerCallCount: calls }), false, `${calls} calls`);
   assert.equal(adaptationCallCountWithinCeiling({ interventions }), false);
   assert.equal(adaptationCallCountWithinCeiling({ interventions: [], providerCallCount: 1 }), true);
   assert.equal(adaptationCallCountWithinCeiling({ providerCallCount: 0 }), false);
   // The adaptation certificate passes its diagnosis and patch records as the
   // run's interventions; only their number is read.
   const certified = [{ purpose: "runtime_diagnosis" }, { purpose: "runtime_patch" }];
-  for (const calls of [2, 5, ceiling]) assert.equal(adaptationCallCountWithinCeiling({ interventions: certified, providerCallCount: calls }), true, `${calls} certified calls`);
-  for (const calls of [1, ceiling + 1]) assert.equal(adaptationCallCountWithinCeiling({ interventions: certified, providerCallCount: calls }), false, `${calls} certified calls`);
+  for (const calls of [2, 5, 400]) assert.equal(adaptationCallCountWithinCeiling({ interventions: certified, providerCallCount: calls }), true, `${calls} certified calls`);
+  for (const calls of [1]) assert.equal(adaptationCallCountWithinCeiling({ interventions: certified, providerCallCount: calls }), false, `${calls} certified calls`);
 });
 
 test("the ceiling rule does not import the adaptation certificate that applies it", async () => {

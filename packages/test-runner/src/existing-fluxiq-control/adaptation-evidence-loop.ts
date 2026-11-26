@@ -8,7 +8,6 @@
 // creation iterates for as many calls as it needs, so the only call ceiling a
 // record can honestly be held to is the one Core enforces on its own loop.
 
-import { LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts";
 import { array, integer, invalid, record, stringArray, text, type JsonRecord } from "./api-readings.js";
 import { publishableStepFields, type PublishableStepValue } from "./publishable-step-value.js";
 
@@ -124,14 +123,14 @@ export function adaptationEvidenceLoop(auditDetail: JsonRecord | undefined, at: 
 
 function outsideItsContract(loop: ExistingAdaptationEvidenceLoop): boolean {
   return (loop.providerCallCount === undefined) !== (loop.decisionCount === undefined)
-    || (loop.providerCallCount !== undefined && (loop.providerCallCount < 1 || loop.providerCallCount > LLM_LAB_MAX_CALLS_PER_RUN))
+    || (loop.providerCallCount !== undefined && (!Number.isSafeInteger(loop.providerCallCount) || loop.providerCallCount < 1))
     || (loop.providerCallCount !== undefined && loop.decisionCount !== loop.providerCallCount)
     // The total is the loop's calls plus the ones outside it, and a record
-    // that does not add up is not accounting. Both are bounded by the same
-    // per-run ceiling as the loop count: they were paid for out of one run's budget.
+    // that does not add up is not accounting. No upper bound is held on a count.
     || (loop.totalProviderCallCount !== undefined && (loop.providerCallCount === undefined
-      || loop.totalProviderCallCount !== loop.providerCallCount + (loop.additionalProviderCallCount ?? 0)
-      || loop.totalProviderCallCount > LLM_LAB_MAX_CALLS_PER_RUN))
+      || !Number.isSafeInteger(loop.totalProviderCallCount)
+      || loop.totalProviderCallCount < loop.providerCallCount
+      || loop.totalProviderCallCount !== loop.providerCallCount + (loop.additionalProviderCallCount ?? 0)))
     || (loop.additionalProviderCallCount !== undefined && loop.totalProviderCallCount === undefined)
     // The rows are at least the decisions they record and at most two per
     // decision. This read `traceStepCount === iterationCount`, which was true

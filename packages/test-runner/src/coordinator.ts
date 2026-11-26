@@ -35,8 +35,6 @@ export type TopologyOptions = {
   scenarioEntrypoint?: string;
   /** One Lab instance's copy of the web panel host; defaults to the path domain/package.json declares. */
   hostModulePath?: string;
-  /** Optional resolved Lab allowance for the owned Core child, never an inherited default. */
-  buildCallLimit?: number;
   /** False for a `--model-reset-only` candidate build: its Core gets no fixture reset between trials (`environment.ts`, t470, t472). Absent, the reset. */
   candidateTrialFixtureReset?: boolean;
   /**
@@ -148,7 +146,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
 
     const coreProcess = coreWebServerProcessSpec({
       name: "fluxiq-web", build: coreWebBuild, port: allocation.webPort,
-      env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath, ...(options.modelProvidersEnabled === undefined ? {} : { modelProvidersEnabled: options.modelProvidersEnabled }), ...(options.buildCallLimit === undefined ? {} : { buildCallLimit: options.buildCallLimit }), ...(options.stepLogDirectory ? { stepLogDirectory: options.stepLogDirectory } : {}), ...(options.candidateTrialFixtureReset === undefined ? {} : { candidateTrialFixtureReset: options.candidateTrialFixtureReset }), ...(options.tracing === undefined ? {} : { tracing: options.tracing }) }, options.environment, options.args),
+      env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath, ...(options.modelProvidersEnabled === undefined ? {} : { modelProvidersEnabled: options.modelProvidersEnabled }), ...(options.stepLogDirectory ? { stepLogDirectory: options.stepLogDirectory } : {}), ...(options.candidateTrialFixtureReset === undefined ? {} : { candidateTrialFixtureReset: options.candidateTrialFixtureReset }), ...(options.tracing === undefined ? {} : { tracing: options.tracing }) }, options.environment, options.args),
       logPath: processLogPath(allocation.logsDir, "core"),
     });
     supervisor.start(coreProcess);
