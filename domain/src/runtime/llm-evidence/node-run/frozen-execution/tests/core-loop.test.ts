@@ -13,7 +13,8 @@ async function runPaired(changeDocument = false) {
   const decisions: DecisionInput[] = [];
   const result = await runAutomationStudioLlmEvidenceLoop({
     tools: host.tools, executeTool: host.executeTool, rerunAuthority: host.authority,
-    maxIterations: 8, maxToolCalls: 8, maxStepsWithoutProgress: 8, draft: false, dryRun: false,
+    // No count of steps without progress ends a loop, so there is no setting for one (t1049).
+    maxIterations: 8, maxToolCalls: 8, draft: false, dryRun: false,
     decide: async (input) => {
       decisions.push(input);
       if (decisions.length === 1) return {
