@@ -48,10 +48,11 @@ test("it reads the rows from the fields the page's own structure gives, leaving 
     { key: "c_price", sample: "8,99 €", type: "currency", kind: "text", coverage: 1 },
     { key: "d_rating", sample: "4.7", type: "text", kind: "text", coverage: 0.9 },
     { key: "e_ad", sample: "Ad", type: "text", kind: "text", coverage: 0.2 },
+    { key: "f_ship", sample: "Free shipping", type: "text", kind: "text", coverage: 1 },
   ];
   const read = decision(RESULTS, [...before, { callId: "detect-hubs", toolId: "web.detect_repeating_structure", value: { extraction: "extraction.9", fields } }]);
   assert.equal(read.input?.node, "web.output.dom-extract_list");
-  assert.deepEqual(read.input?.parameters?.extractList.fields, { title: "a_title", store: "b_store", price: "c_price", rating: "d_rating" });
+  assert.deepEqual(read.input?.parameters?.extractList.fields, { title: "a_title", store: "b_store", price: "c_price", rating: "d_rating", shipping: "f_ship", ad: "e_ad" });
   assert.deepEqual(read.input?.parameters?.extractList.where, [{ field: "e_ad", is: "present", not: true }]);
   assert.equal(decision(RESULTS, [...before, ...made("read-hubs")]).kind, "complete");
 });

@@ -66,6 +66,7 @@ function cardColumns(fields: readonly Field[]) {
     store: fieldWhere(whole, (field) => /\b(Store|Shop|Official|Hub|Tech|Mart|Direct)\b/u.test(field.sample ?? "") && field.key !== lines[0]?.key, "store"),
     price: fieldWhere(whole, (field) => field.type === "currency", "price"),
     rating: fieldWhere(fields, (field) => /^\d\.\d$/u.test(field.sample ?? ""), "rating"),
+    shipping: fieldWhere(fields, (field) => /\bshipping\b/iu.test(field.sample ?? ""), "shipping note"),
     ad: fieldWhere(fields, (field) => /^(Ad|Sponsored)$/u.test(field.sample ?? ""), "ad mark"),
   };
 }
@@ -112,7 +113,7 @@ const decide: ScriptedReply = (request) => {
   return toolCall("Read the hubs, leaving out the ads.", "read-hubs", "core.run_node", {
     node: READ_NODE,
     parameters: {
-      extractList: { handle: structure.value.extraction, fields: { title: columns.title, store: columns.store, price: columns.price, rating: columns.rating }, where: [{ field: columns.ad, is: "present", not: true }], minItems: 1 },
+      extractList: { handle: structure.value.extraction, fields: { title: columns.title, store: columns.store, price: columns.price, rating: columns.rating, shipping: columns.shipping, ad: columns.ad }, where: [{ field: columns.ad, is: "present", not: true }], minItems: 1 },
       recordOutput: {
         datasetId: "free-hubs-under-ten",
         schema: { schemaVersion: "0.1", fields: ["title", "store", "price", "rating"].map((id) => ({ id, label: id, valueType: "string" })) },

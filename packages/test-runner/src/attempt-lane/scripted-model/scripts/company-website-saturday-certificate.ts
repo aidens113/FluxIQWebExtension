@@ -5,8 +5,8 @@ import { scriptedTaskProcess } from "./processing-declarations.js";
 // The honest path, in the words the fixture's own recorded path uses (`qualification/saturday-certificate/workflow.ts`):
 // clear what covers the page, open the booking, choose Wrenfield and Next, choose the CP12 service and Next, and read
 // the calendar. A week is drawn as seven day columns of slot buttons, so the read names detection's `cells` handle
-// (one row per slot, each with its day's heading), keeps the Saturday headings and drops the slots marked disabled
-// (taken), and takes the date from the slot's `data-date` and the time from its words. The calendar's Later control
+// (one row per slot, each with its day's heading), collects every slot with its heading and its disabled mark (the
+// processing declaration keeps the free Saturday ones), and takes the date from the slot's `data-date` and the time from its words. The calendar's Later control
 // moves a week on and the read is made again, each week's rows added to the result; the third week has no Later.
 // The widget redraws whole on every press, so each week is detected again before it is read.
 //
@@ -62,13 +62,13 @@ function readWeek(request: ScriptedModelRequest, week: number): Record<string, u
     parameters: {
       extractList: {
         handle: cells.handle,
-        fields: { date: columns.date, time: columns.time },
-        where: [{ field: columns.heading, contains: "Sat" }, { field: columns.disabled, is: "absent" }],
+        // Every slot is collected with its day's heading and its disabled mark; the processing declaration keeps the free Saturday ones.
+        fields: { date: columns.date, time: columns.time, "group heading": columns.heading, disabled: columns.disabled },
         minItems: 0,
       },
       recordOutput: {
         datasetId: "saturday-slots",
-        schema: { schemaVersion: "0.1", fields: [{ id: "date", label: "date", valueType: "string" }, { id: "time", label: "time", valueType: "string" }] },
+        schema: { schemaVersion: "0.1", fields: ["date", "time"].map((id) => ({ id, label: id, valueType: "string" })) },
         writeMode: "append",
       },
     },
