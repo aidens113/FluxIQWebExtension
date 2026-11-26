@@ -139,6 +139,31 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-25 - t1048 (the judge and the decider see every read's rows) integrated (fluxiq 0.54.27); t1054 (the read-lock test race) integrated (fluxiq 0.54.26)
+- Changed, t1048 (worker-heavy; report `reports/t1048.md`): t1044's two main causes.
+  - A draft read that is not the answer goes to the judge page by page with its rows (`result-feed/feed.ts`, `read-evidence.ts`, `result-evidence/{types,from-batches}.ts`). It used to go as a count only.
+    - A step with no page read yet still goes by its count, and stored bundles from before still load.
+    - The window fitting (`result-verification/flow-less/window-fitting.ts`) may summarise these rows after the looks and before the answer's pages, and says so in plain words.
+  - The decider's current view (`decision-context/current-view.ts`) holds a read whose answer names its list per list key, pager place and address. Run mwvgjb8c's pages 1 and 2 share a list key and a handle, so a key by list alone would have kept the defect. The same page read again replaces only its own rows.
+  - Open product question: a list read before a filter change stays in view beside the re-read, because the address differs.
+- Changed, t1054 (worker; report `reports/t1054.md`): Core `scripts/build-cache/tests/step-read-lock.test.mjs` waits until the build's writer lock file exists, not a fixed `delay(400)`.
+  - It had failed both of t1051's Core finishes under load with `'no stamp'`, and likely t1044's two unnamed failures this morning.
+  - The lead tried `--skip-checks` for t1051, and the permission check refused it. The test was fixed instead.
+- Validation: the lead's runs.
+  - t1048 in `fxwork/t1048`:
+    - `pnpm --filter fluxiq check` exit 0;
+    - vitest groups over `src/runtime/llm src/runtime/result-verification src/framework/automation-service/service/answer-first`: parallel printed `Test Files  679 passed (679)`, `Tests  5844 passed (5844)`; real-sql printed `Tests  513 passed (513)`;
+    - Core audit passed; model-text printed `ok`.
+  - The lead checked that the read lock writes its own reader entry, so `stepLock` is the build's writer lock and the poll is a real signal.
+  - t1054: the read-lock test was run 4 at once, twice, and each printed `# pass 1 # fail 0` (8 of 8). The worker had 20 of 20 at 4-way concurrency, 4 of 4 failures with the wait removed, and build-cache tests 87 of 87.
+  - `pnpm task finish` for both: t1054's Core finish printed `# tests 529 # pass 529 # fail 0` after two load failures that led to its lock fix. t1048's result line is in its integration commit.
+  - A combined check of t1048, t1049, t1050 and t1053 merged on Core `dev` `f83ff1e`, in the throwaway task t1055, ran before any of them reached `dev`:
+    - Core check exit 0; libraries build exit 0;
+    - vitest groups over `runtime/{llm,result-verification,adaptation,agents,loop-limits,flow-authoring,answer-first,project-agents}`, `framework/automation-service` and `engine/automation/composite`:
+      - parallel printed `Tests  14366 passed | 2 skipped`;
+      - real-sql printed `Tests  1 failed | 1620 passed | 1 skipped`. The failure is `service-bootstrap/tests/unfinished-build.test.ts`, which pinned the count ending t1049 removed; it was sent back to t1049;
+    - audit passed; domain `# pass 1995 # fail 0`; domain check exit 0; model-text `ok`.
+
 ### 2026-11-25 - t1052 (the Lab's frame-origin proof; stale scripted declarations) integrated
 - Changed (worker; report `reports/t1052.md`):
   - `lab-control/frame-origin-proof.ts` compares the store's stable `provenance.ownerEpoch`, not the whole cached health reply, whose store counters move with the site. A different epoch, a non-Lab server or an unreadable reply is still refused.
