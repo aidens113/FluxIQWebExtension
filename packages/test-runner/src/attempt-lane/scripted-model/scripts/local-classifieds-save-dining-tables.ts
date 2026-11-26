@@ -7,7 +7,7 @@ import { scriptedTaskProcess } from "./processing-declarations.js";
 //
 // `plain`: the Flow's read is the read the model explored with. Its saved items are read back by their address, as steps of the
 // Flow, so a second attempt's run of the saved Flow can end the attempt (t869).
-// `reshape`: the Flow's own read is written after the hand save, under other column names and
+// `reshape`: the Flow's own read is written before the first table is opened, under other column names and
 // without the price, so the row a pass carries really differs from the row the save was noted on.
 // `row-link`: the design a person writes first. The first table is opened by pressing its card's own
 // link, saved, and come back from, all three kept as steps; then those three repeat over the read. The
@@ -100,8 +100,8 @@ function draftSteps(request: ScriptedModelRequest): readonly DraftStep[] {
   return Array.isArray(draft?.value.steps) ? draft.value.steps as readonly DraftStep[] : [];
 }
 
-/** The steps the Flow holds, in order, as the draft numbers them. */
-const proposedSteps = (request: ScriptedModelRequest): readonly DraftStep[] => draftSteps(request).filter((step) => step.disposition === "kept" || step.disposition === "added" || step.written === true);
+/** The steps the Flow holds, in order they ran, as the draft numbers them: Core drafts every call that worked, so a call is in unless it was left out. */
+const proposedSteps = (request: ScriptedModelRequest): readonly DraftStep[] => draftSteps(request).filter((step) => step.disposition === "kept" || step.written === true);
 
 function listPage(request: ScriptedModelRequest): string {
   const structure = latestOf(request, "web.detect_repeating_structure");
@@ -168,13 +168,14 @@ const decideOf = (form: SaveDiningTablesForm): ScriptedReply => (request) => {
   // Adverts are not listings, and the legs and the chairs are not tables: the three left are the cheapest tables.
   const tables = [{ field: columns.sponsored, is: "present", not: true }, { field: columns.title, contains: ["table legs", "chairs"], not: true }, { field: columns.price, atMost: tablesOn(page)[2]!.price }];
   if (!made.has("read-tables")) return toolCall("Read the tables on offer, cheapest first, leaving out adverts, table legs and chairs.", "read-tables", "core.run_node", readOf(structure, { title: columns.title, price: columns.price, url: columns.url }, tables), form !== "reshape");
+  // The Flow's own read is run before the table is opened, so it stands before the opening in the order things ran.
+  if (form === "reshape" && !made.has("write-read")) return toolCall("Write the Flow's read of the tables, with the columns the Flow will carry.", "write-read", "core.run_node", { ...readOf(structure, { listing: columns.title, link: columns.url }, tables), write: true });
   if (!made.has("open-first")) {
     if (form === "row-link") return toolCall("Open the cheapest table by pressing its card.", "open-first", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: tablesOn(page)[0]!.handle } }, consequences: [] }, true);
     return toolCall("Open the cheapest table's own page by its address.", "open-first", "core.run_node", { node: NAVIGATE_NODE, parameters: { url: tablesOn(page)[0]!.address }, consequences: [] }, true);
   }
-  // Back on the list the structure's handle is new: see the listings again before the Flow's read is written or run.
+  // Back on the list the structure's handle is new: see the listings again before the Flow's read is run.
   if (!made.has("detect-again")) return toolCall("See the listings again now that the page is back.", "detect-again", "web.detect_repeating_structure", { target: tablesOn(page)[0]!.handle });
-  if (form === "reshape" && !made.has("write-read")) return toolCall("Write the Flow's read of the tables, with the columns the Flow will carry.", "write-read", "core.run_node", { ...readOf(structure, { listing: columns.title, link: columns.url }, tables), write: true });
   if (!made.has("forward") && !repeating(request)) return repeatSave(request, form);
   if (!made.has("forward")) return toolCall("Run forward on the tables not saved yet.", "forward", "core.run_flow", { from: readStep(request, form) });
   throw new Error("unreachable");
@@ -203,7 +204,7 @@ function workingRead(structure: EvidenceEntry, dedupe: boolean): Record<string, 
 const strayPress = (step: DraftStep): boolean => step.actionId === PRESS_NODE && /^(?:£|Saved?$)/u.test(step.does?.target ?? "");
 
 /** The steps of the loop as the draft now holds them: the read, the press that opens a row, the written save, the way back, and the hand presses to leave out. */
-function openSaveBackSteps(request: ScriptedModelRequest): { read: number; open: number; check: number; back: number; strays: readonly number[] } {
+function openSaveBackSteps(request: ScriptedModelRequest): { read: number; open: number; check: number; back: number; strays: readonly number[]; early: readonly number[] } {
   const steps = proposedSteps(request);
   const checkAt = steps.findIndex((step) => step.actionId === CHECK_NODE);
   const before = steps.slice(0, Math.max(checkAt, 0)).reverse();
@@ -212,7 +213,10 @@ function openSaveBackSteps(request: ScriptedModelRequest): { read: number; open:
   const read = before.find((step) => step.actionId === READ_NODE);
   const back = steps.slice(checkAt + 1).find((step) => step.actionId === NAVIGATE_NODE) ?? before.find((step) => step.actionId === NAVIGATE_NODE);
   if (!open || !check || !read || !back) throw new Error(`The draft holds no read, opening, save and way back: ${JSON.stringify(steps)}`);
-  return { read: read.step, open: open.step, check: check.step, back: back.step, strays: steps.filter((step) => step !== open && strayPress(step)).map((step) => step.step) };
+  const strays = steps.filter((step) => step !== open && strayPress(step));
+  // The way back made by hand after the first table's presses: the loop's own way back runs after its save, so this one is waste.
+  const early = strays.length === 0 ? undefined : steps.slice(steps.indexOf(strays[0]!), checkAt).find((step) => step.actionId === NAVIGATE_NODE && step.step !== back.step);
+  return { read: read.step, open: open.step, check: check.step, back: back.step, strays: strays.map((step) => step.step), early: early ? [early.step] : [] };
 }
 
 const decideOpenSaveBackOf = (form: "open-save-back" | "again-check"): ScriptedReply => (request) => {
@@ -227,12 +231,12 @@ const decideOpenSaveBackOf = (form: "open-save-back" | "again-check"): ScriptedR
     if (!made.has("see-saved")) return toolCall("Open the saved items to see their layout, as the Flow's last stage.", "see-saved", "core.run_node", { node: NAVIGATE_NODE, parameters: { url: `${base}/saved/` }, consequences: [] }, true);
     return toolCall("Run the save loop forward over the remaining cheapest tables.", "forward", "core.run_flow", { from: openSaveBackSteps(request).open });
   }
+  if (made.has("write-save") && !made.has("back-loop")) return toolCall("Come back to the sorted results, the way back that ends each pass of the loop.", "back-loop", "core.run_node", { node: NAVIGATE_NODE, parameters: { url: listPage(request) }, consequences: [] }, true);
   if (made.has("write-save")) {
     const steps = openSaveBackSteps(request);
-    const drop = steps.strays.map((step) => ({ step, change: "drop" }));
-    const backMoves = steps.back < steps.check ? [{ step: steps.back, change: "reorder", to: steps.check }] : [];
+    const drop = [...steps.strays, ...steps.early].map((step) => ({ step, change: "drop" }));
     const journey = settles ? handJourney(request) : [];
-    return { kind: "evidence_tool_decision", summary: "Open, save and go back over the first three kept rows, leaving out the presses made by hand.", decision: { kind: "amend_draft", amendments: [...journey, ...drop, ...backMoves, { step: steps.open, change: "repeat", over: steps.read, through: steps.back, most: 3 }] } };
+    return { kind: "evidence_tool_decision", summary: "Open, save and go back over the first three kept rows, leaving out the presses and the way back made by hand.", decision: { kind: "amend_draft", amendments: [...journey, ...drop, { step: steps.open, change: "repeat", over: steps.read, through: steps.back, most: 3 }] } };
   }
   if (made.has("save-first") && !made.has("back-first")) return toolCall("Back to the sorted results to read the list.", "back-first", "core.run_node", { node: NAVIGATE_NODE, parameters: { url: listPage(request) }, consequences: [] }, true);
   if (/^URL ~\/item\//mu.test(page)) {
@@ -249,7 +253,7 @@ const decideOpenSaveBackOf = (form: "open-save-back" | "again-check"): ScriptedR
   if (reaching) return reaching;
   if (!latestOf(request, "web.detect_repeating_structure")) return toolCall("See the shape of the listings.", "detect", "web.detect_repeating_structure", { target: tablesOn(page)[0]!.handle });
   if (!made.has("open-first")) return toolCall("Open the cheapest real table to find its Save.", "open-first", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: tablesOn(page)[0]!.handle } }, consequences: [] });
-  // Back on the list the structure's handle is new: see the listings again before the Flow's read is written.
+  // Back on the list the structure's handle is new: see the listings again before the Flow's read is run.
   if (!made.has("detect-again")) return toolCall("See the listings again now that the page is back.", "detect-again", "web.detect_repeating_structure", { target: tablesOn(page)[0]!.handle });
   const structure = latestOf(request, "web.detect_repeating_structure")!;
   if (settles && !made.has("write-list")) return writeTheList(request);
@@ -287,13 +291,14 @@ function decideByHand(form: "by-hand" | "by-hand-unread"): ScriptedReply {
 }
 
 /** The two steps of one table's save the Flow holds: its own page opened by address, and Save pressed on it. The draft may hold the way back to the list after them, so they are found by what they do. */
-function saveSpan(request: ScriptedModelRequest, form: SaveDiningTablesForm): { open: number; save: number; read: number } {
+function saveSpan(request: ScriptedModelRequest, form: SaveDiningTablesForm): { open: number; save: number; read: number; back: readonly number[] } {
   const steps = proposedSteps(request);
   const openAt = steps.length - 1 - [...steps].reverse().findIndex((step) => step.actionId === NAVIGATE_NODE && /\/item\//u.test(step.input?.parameters?.url ?? ""));
   const open = steps[openAt];
   const save = steps.slice(openAt + 1).find((step) => step.actionId === PRESS_NODE);
   if (!open || !save) throw new Error(`The draft holds no table opened and saved: ${JSON.stringify(steps)}`);
-  return { open: open.step, save: save.step, read: readStep(request, form) };
+  const back = steps.slice(steps.indexOf(save) + 1).find((step) => step.actionId === NAVIGATE_NODE);
+  return { open: open.step, save: save.step, read: readStep(request, form), back: back ? [back.step] : [] };
 }
 
 /** The step that reads the tables the Flow acts on: the one written for it in the reshaping form, else the one the model explored with. */
@@ -325,7 +330,8 @@ function repeatSave(request: ScriptedModelRequest, form: SaveDiningTablesForm): 
   const repeat = { step: span.open, change: "repeat", through: span.save, over: span.read };
   const readFirst = form === "plain" || form === "again-press" || form === "run-again";
   const bind = { step: span.open, change: "bind", input: { url: { $row: readFirst ? "url" : "link" } } };
-  const amendments = readFirst ? [repeat, bind] : [{ step: span.read, change: "reorder", to: span.open }, repeat, bind];
+  // The way back to the list that ran after the hand save is the hand journey's, not the Flow's: each pass opens its own table by address.
+  const amendments = [...span.back.map((step) => ({ step, change: "drop" })), repeat, bind];
   return { kind: "evidence_tool_decision", summary: "Save each table the read keeps: open its page by its own address, press Save.", decision: { kind: "amend_draft", amendments } };
 }
 

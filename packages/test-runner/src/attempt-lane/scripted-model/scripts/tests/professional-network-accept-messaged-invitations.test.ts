@@ -158,7 +158,7 @@ test("the notes-back form reads the tagged conversations' name and own message l
 
 test("every form takes its deliberately selected accepted read before completing", () => {
   for (const form of ["plain", "reshape", "thin", "notes-back"]) {
-    assert.deepEqual(decide(form, [...accepted, draft(resultStep("read-accepted", "taken"))]), { kind: "amend_draft", amendments: [{ step: 14, change: "add" }] });
+    assert.deepEqual(decide(form, [...accepted, draft(resultStep("read-accepted", "taken"))]), { kind: "amend_draft", amendments: [{ step: 14, change: "result" }] });
     assert.equal(decide(form, [...accepted, draft(resultStep("read-accepted", "kept"))]).kind, "complete");
   }
 });
@@ -171,7 +171,7 @@ test("a completed result read is authored before any unrelated page action or tr
       const decision = decide(form, extra, moved);
       assert.equal(decision.kind, disposition === "taken" ? "amend_draft" : "complete");
       assert.equal(decision.toolId, undefined);
-      if (disposition === "taken") assert.deepEqual(decision.amendments, [{ step: 14, change: "add" }]);
+      if (disposition === "taken") assert.deepEqual(decision.amendments, [{ step: 14, change: "result" }]);
     }
   }
 });
@@ -186,7 +186,7 @@ test("a later Messaging look is taken by actual call identity while earlier rows
   const extra = [...notesRead, made("probe"), made("result", "core.result", { result: "step 6, 3 rows" })];
   const before = draft(resultStep("back-read", "taken"), ...otherSteps);
   const unchanged = JSON.stringify(before);
-  assert.deepEqual(decide("notes-back", [...extra, before], MESSAGING), { kind: "amend_draft", amendments: [{ step: 14, change: "add" }] });
+  assert.deepEqual(decide("notes-back", [...extra, before], MESSAGING), { kind: "amend_draft", amendments: [{ step: 14, change: "result" }] });
   assert.equal(JSON.stringify(before), unchanged);
   assert.deepEqual(otherSteps.map((step) => step.disposition), ["kept", "taken", "kept", "dropped"]);
   assert.equal(decide("notes-back", [...extra, draft(resultStep("back-read", "kept"), ...otherSteps)], MESSAGING).kind, "complete");

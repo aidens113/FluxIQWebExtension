@@ -115,7 +115,7 @@ and validation path. The domain's task and independent Lab oracle are unchanged.
 **Lists during candidate exploration.** One list read and one Next page provide
 evidence for the paging loop. The submitted Flow reads subsequent pages at runtime;
 exploration does not need to visit every page. Written candidates express repetition
-with script repeat lines, while legacy drafts retain their `amend_draft` repeat form.
+with script repeat lines; a Flow the framework drafts states a repeat with the `amend_draft` `repeat` edit (`over` or `while`).
 Core keeps submission and trial tools available when repeated looks are withdrawn
 and through the final counted budget decision. A budget estimate never grants
 acceptance or bypasses the whole-Flow spend ceiling: completion with a trial runner
@@ -266,7 +266,7 @@ to the tool rejection reason `target_not_a_handle` (`tool-rejection.ts`).
 - Core passes `writtenByModel: true` for a candidate submission, a reply's plan,
   the no-exploration bootstrap and an in-run repair's steps;
 - Core passes `modelWrittenParameters` for a plan built from the draft: the
-  parameters an `amend_draft` decision's `settings` wrote over a step, which
+  parameters an `amend_draft` decision wrote over a step (`amendedParameters`), which
   are judged, while what the step ran with stands;
 - exploration (`node-run/run.ts`) treats every parameter of a call as the
   model's, except, in a round that continues a Flow, a parameter whose value is
@@ -390,8 +390,9 @@ needs: the read is one step that runs once a pass, not a new read per page. A re
 be found, every other node, every refusal, a look and a written step send no
 code; a read whose command met a robot check carries the code it would have
 sent. The dry-run replay builds no draft statement and sends none. Core
-compares codes for equality only and refuses a read joining the Flow with the
-code of a kept read when no kept step changed anything between them
+compares codes for equality only and leaves a read out of the framework's draft
+(`out: repeat`) when it has the code of another read and no kept step changed
+anything between them; the later of the two stays
 (`runtime/flow-authoring/draft/second-copy.ts`, live run `run-muq4oaof-464f5bce`).
 
 ## What A Press Changed
@@ -694,7 +695,7 @@ to every item; and bind a value that changes between runs or rows
 (`AUTOMATION_STUDIO_LOOP_AUTHORING_INSTRUCTION`, sent to Flow Bootstrap and the
 runtime, subflow and expectation-target patches; evidence decisions get the
 same rule from Core's loop policy). Keep an item by evidence of its own type,
-and state a loop's repeat by `amend_draft` `repeat` in a draft and by repeat
+and state a loop's repeat by the `amend_draft` `repeat` edit in a draft and by repeat
 lines in a written Flow (`AUTOMATION_STUDIO_LIST_AUTHORING_INSTRUCTION`), and be
 efficient against the build's small cost ceiling
 (`AUTOMATION_STUDIO_EFFICIENCY_INSTRUCTION`), both sent to Flow Bootstrap and
