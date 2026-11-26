@@ -12,12 +12,21 @@
 //     blocker names, or `""` when nothing stands in front of the page.
 //   - `controlHashes`: every distinct control name's mixed hash, sorted.
 //   - `controlCount`: how many distinct control names there were.
+//   - `markedHashes`: every distinct control name with the heading the
+//     controls line put it under (`./control-mark.ts`), the heading carried
+//     forward to the entries after its mark as the line writes it, hashed as a
+//     name is (t1062). The names alone say what a page offers; these say where
+//     on it, so a stepper's Next under "Where are you?" is told from the same
+//     Next under the next step's heading. Only a step's effect reads them
+//     (`./effect/sign.ts`, `./effect/seen.ts`); the signature never does.
 
 import type { JsonObject } from "fluxiq/core";
 import { fnv1a } from "../hash";
-import { webRouteControlName } from "./control-mark";
+import { webRouteControlHeading, webRouteControlName } from "./control-mark";
 
 const LIST_SEPARATOR = " | ";
+/** Between a heading and a name in a marked hash: no collapsed name holds a newline. */
+const HEADING_SEPARATOR = "\n";
 const LONG_SEGMENT = 24;
 
 type WebRoutePageFeatures = {
@@ -25,6 +34,7 @@ type WebRoutePageFeatures = {
   readonly layers: string;
   readonly controlHashes: readonly string[];
   readonly controlCount: number;
+  readonly markedHashes: readonly string[];
 };
 
 export function webRoutePageFeatures(state: JsonObject): WebRoutePageFeatures {
@@ -35,8 +45,21 @@ export function webRoutePageFeatures(state: JsonObject): WebRoutePageFeatures {
     path: hex8(pathShape(pathOf(page))),
     layers: layerNames.length > 0 ? hex8(layerNames.join("\n")) : "",
     controlHashes: [...new Set(controlNames.map(controlHash))].sort(),
-    controlCount: controlNames.length
+    controlCount: controlNames.length,
+    markedHashes: markedHashes(listOf(page.controls))
   };
+}
+
+/** Each entry's name under the heading it falls under, the last mark carried forward, hashed as a name is (header). */
+function markedHashes(entries: readonly string[]): string[] {
+  let heading = "";
+  const marked = new Set<string>();
+  for (const entry of entries) {
+    heading = webRouteControlHeading(entry) ?? heading;
+    const [name] = distinctNames([webRouteControlName(entry)]);
+    if (name !== undefined) marked.add(controlHash(`${distinctNames([heading])[0] ?? ""}${HEADING_SEPARATOR}${name}`));
+  }
+  return [...marked].sort();
 }
 
 /** `state.page.path`, else the pathname of `state.page.location`, else nothing. */

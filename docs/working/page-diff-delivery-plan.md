@@ -76,11 +76,18 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
      - t1053: a passed-over step never becomes an evidence gap;
      - t1054: the build-cache lock race.
   3. Next:
-     - Rerun the scripted round, all eight tasks with 4 attempts each, on lane t1015. Its first pass stopped after bigbox 4/4, apprentices and saturday, which was fixed as t1052 and t1053. Watch the watcher's alerts under `test-runs/lab-watch/`, not the run folder.
-     - In parallel, two briefs that follow t1049 (in the lead's scratchpad, `next-briefs/`):
-       - **loop-counts:** no count ends an evidence loop; the deprecated chain goes; the build purse's `maxCallsPerRun` call allowance goes (a purse is dollars);
-       - **recovery-counts:** the recovery ledger's `maxActions`, `maxProviderCalls`, `maxRepeatsPerAction` and `maxRefusedActions` stop ending a recovery.
-     - Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
+     - **The user, 2026-11-26: "I think its time to start running live tests right after you fix those current running ones".** So the running fixes come first:
+       - t1058: the scripted contract fixes, and a named refusal for an illegal field key;
+       - t1056: no count ends an evidence loop, the deprecated chain goes, and the build purse's `maxCallsPerRun` call allowance goes (a purse is dollars);
+       - t1057: no count ends a recovery.
+     - Then live, with `dev` merged into every lane: on Sonnet (`--llm-model claude-sonnet-5-5 --llm-max-cost-usd 5`), each run with the run watcher, `--attempts 4`, and every attempt's flow chart reviewed.
+       - First, bigbox `new-store-cheapest-towels` on t1015, the rerun of run-mwvgjb8c, which t1048 fixed; its debug is written.
+       - Then one task per site, up to four lanes at once:
+         - company-website `apprentices`, crossborder `free-hubs-under-ten`, everything-store `batteries-and-descaler`;
+         - local-classifieds `save-dining-tables`, professional-network `accept-messaged-invitations`;
+         - social-network-feed `delete-stranger-requests`, job-board `remote-rust-roles`;
+         - auction-marketplace `kestrel-auctions`, photo-social `glaze-collection`.
+       - The scripted round is now a diagnostic, not a gate. Scripted round 2 stopped on two scripted-model defects (`reports/scripted-round-2-diagnosis.md`), which t1058 fixes. Watch the watcher's alerts under `test-runs/lab-watch/`.
   4. Also open:
      - a list read before a filter change stays in the decider's view beside the re-read (t1048; a product call);
      - the judge accepting a wrong item on pickup availability (above);
@@ -147,6 +154,40 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-26 - t1058 (scripted contract fixes) and t1057 (no count ends a recovery) integrated (fluxiq 0.54.28); t1062 (iframe steps) found and fixed
+- Scripted round 2 (lane t1015):
+  - bigbox passed 4 of 4 (run-mwx9ale4);
+  - apprentices (run-mwx9k3mi) and saturday (run-mwx9mpt9) failed, and the lead stopped the round with `taskkill /T` on its tree.
+  - The diagnosis (worker-heavy, `reports/scripted-round-2-diagnosis.md`) found two scripted-model defects:
+    - apprentices compared the held group name literally, and t1048 names a read's group per list;
+    - saturday's t1052 read used the illegal field key `group heading`, and the script counted refused calls as done.
+- Changed:
+  - **t1058** (worker; report `reports/t1058.md`):
+    - `scripted-model/scripts/evidence.ts` resolves any view reference;
+    - saturday uses `group_heading`;
+    - every scripted model counts only calls that were not refused, so a refusal stops it where it failed;
+    - the domain refuses an illegal read field key with `web.handle.field_key_invalid`, naming the key and the allowed characters.
+  - **t1057** (worker-heavy; report `reports/t1057.md`): the recovery ledger's `maxActions`, `maxProviderCalls`, `maxRepeatsPerAction` and `maxRefusedActions` are gone.
+    - An exploration ends on its answer, the purse, its clock, a person, or the model's own `ask_person` loop decision. Its evidence loop takes loop detection's signal (`recovery/loop-signal.ts`).
+    - Refusals are recorded by kind and end nothing; a stated lasting act on one target is still refused from its third landing.
+    - Downstream, the exploration-refusal classifier and the runtime contract return `AutomationStudioExplorationRefusal`.
+  - **t1062** (worker-heavy; report `reports/t1062.md`; in progress): saturday's attempt 2 could not assemble its saved Flow.
+    - The domain writes `browserFrameId` and `browserFrameUrlPath` onto steps in a child frame, but no web node definition declared them, so Core's strict check refused them. Core is right and unchanged.
+    - The web node definitions now declare both keys, hidden from the model, and the domain finds a frame again by its URL path, with the id only agreeing.
+  - **Found by t1057 and moved to t1056:** the run budget's declared call count and its 250-call backstop still end runs; a provider failure that reports no usage charges nothing.
+- Validation: the lead's runs.
+  - t1058:
+    - domain `llm-evidence actions` printed `# pass 1996 # fail 0`;
+    - the runner suite printed `# tests 3026 # pass 3021 # fail 0`;
+    - both checks exit 0; audit passed; model-text `ok`;
+    - the worker's apprentices Lab run passed 4 of 4 (calls 1, 0, 0 after the explore).
+  - t1057:
+    - `pnpm --filter fluxiq check` exit 0;
+    - vitest groups over `src/runtime/adaptation src/framework/automation-service`: parallel printed `Tests  4086 passed (4086)`, real-sql `Tests  1582 passed | 1 skipped`;
+    - Core audit passed; domain `llm-evidence` printed `# pass 1823 # fail 0`; domain check exit 0.
+  - Core finish of t1057 printed `# pass 529 # fail 0`.
+  - Core bumped to 0.54.28; both `dev`s pushed (Core `f02bbc8ec`, downstream `cff473430`); four live lanes merged.
 
 ### 2026-11-25 - t1049 (no step count ends anything), t1050 (fake clocks) and t1053 (passed-over steps) integrated (fluxiq 0.54.27)
 - Changed:

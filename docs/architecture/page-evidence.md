@@ -994,7 +994,10 @@ top page's. The handle keeps the path of that frame's document, and every node
 a model builds in a child frame — an extraction node from a handle, or a
 click, type or other action on an element shown in the frame — carries
 `browserFrameUrlPath` (the pathname only, with no origin or query) beside
-`browserFrameId`. A reload renumbers frames, so when a command names a path,
+`browserFrameId`. Every `web.dom.*` node declares both, so such a node passes
+Core's check of the plan and its Flow can be saved (t1062). On a later attempt
+the path finds the frame, and the saved id only breaks a tie (see
+[Child Frames](web-capabilities.md#child-frames)). A reload renumbers frames, so when a command names a path,
 the extension waits up to 5 s for a frame at that path to appear, polling every
 100 ms, before it refuses `web.target.not_found`. The wait is cut to the
 command's own timeout less a 1 s margin
@@ -1174,6 +1177,23 @@ only when the step added at least three control names, none of them is on the
 observed page and the page is not on the path shape the step moved to, and
 `unknown` otherwise -- a later add whose panel words its quantity differently
 still shows part of the effect. Core fails a step on `not_seen` alone.
+
+**It is also `not_seen` when the page still stands where the step found it**
+(t1062). The effect keeps a second pair of samples, `marked`: the same hashes
+over each control name joined to the heading the controls line put it under
+(`route-state/page-features.ts`, `markedHashes`). They are kept only when the
+step took a control away from under its heading. When the observed page shows
+every one of those under its heading again and none of what the step brought,
+the step is not on the page, however few names it added. A stepper's Next adds
+only "Back", or nothing. In run `run-mwxk0spp-0e94cbfe` the booking widget's
+Next was carried from the first attempt and held to a look. Core's run gate
+asks this question before it lets such a hold go
+(`SVC/answer-first/run-acts/run-gate.ts`, t994), and until t1062 nothing could
+answer it for that press. The route signature never reads `marked`, so a
+heading still never makes an unchanged page read as changed. Core keeps each
+saved step with what its attempt's routing signed for it
+(`framework/automation-service/route-state/signed-steps.ts`), so a later
+attempt's Flow has the effect at all.
 
 A step a build created carries the same effect even where Core's build routing
 signs none, as on the candidate path (t447). When exploration acts on a

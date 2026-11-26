@@ -38,6 +38,19 @@
 //   elsewhere -- a timer, a scroll -- and its answer is the Flow's answer to an
 //   interruption, run only when the layer is there.
 //
+// **A layer in another document is not the act's (t1062).** An act made inside a child frame
+// opens what its own document makes of it; a layer that rose in another document -- the top page
+// over an embedded booking widget -- was raised by that document's own script. Nor can it be tied
+// to the control: a tie across two documents compares boxes in two coordinate spaces, and an id
+// one document names is not another's. Company-website `run-mwxh0jy6-91aad522`: the site's newsletter offer
+// opens on a timer a few seconds after the booking page loads, and it rose in the instant after
+// the build pressed the widget's Next inside its iframe. Remembered as that press's own, the
+// offer's close was saved as a required step, and once the site remembered the close (it never
+// offers again) every later attempt stopped on it. The frame is the capture's own fact
+// (`frameId`, the frame each element was captured in), never timing or the model's words. A
+// widget that asks its parent page to open a layer reads as an interruption: its answer runs
+// whenever the layer shows and is passed over only when it does not.
+//
 // **What this costs.** A layer a state setter's value does raise with no tie at
 // all -- a confirm the page puts up on a typed or chosen value, drawn apart from
 // the control and naming nothing -- cannot be told by any capture from one that
@@ -62,9 +75,18 @@ export function webLayersOpenedBy(act: WebNodeLayerAct, before: WebLlmPageEviden
   const was = handle === undefined ? undefined : before.elements.find((element) => element.target === handle);
   const now = handle === undefined ? undefined : after.elements.find((element) => element.target === handle);
   const control = now ?? was;
-  const tied = control === undefined ? [] : fresh.filter((layer) => webLayerTiedToControl(after, control, layer));
+  // Only a layer in the control's own document can be what it opened (header, t1062): a tie drawn across two
+  // documents is geometry in two coordinate spaces, and an id one document names is not another's.
+  const ownDocument = control === undefined ? fresh : fresh.filter((layer) => frameOf(after.elements.find((element) => element.target === layer)) === frameOf(control));
+  if (ownDocument.length === 0) return ownDocument;
+  const tied = control === undefined ? [] : ownDocument.filter((layer) => webLayerTiedToControl(after, control, layer));
   if (tied.length > 0) return tied;
   const expanded = now?.expanded === true && was?.expanded !== true;
   const commits = webAutomationResolvedActionEffect(act.actionType, act.parameters)?.effectClass === "commit";
-  return commits || expanded ? webLayersBeneathOthers(fresh, after) : [];
+  return commits || expanded ? webLayersBeneathOthers(ownDocument, after) : [];
+}
+
+/** The frame an element was captured in: 0, the top document, unless the capture says a child frame. */
+function frameOf(element: Pick<WebLlmPageEvidence["elements"][number], "frameId"> | undefined): number {
+  return element?.frameId ?? 0;
 }

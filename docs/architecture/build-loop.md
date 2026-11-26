@@ -759,6 +759,14 @@ page-view handle for the site's own Next control (`control: "tN"`), or be a
 literal `{item, next?}` for a list nothing detected
 (`plan-resolution/next-page-slot.ts`).
 
+A handle-form read that writes a column under a key that is not a record field
+key (one to 100 of `A-Z a-z 0-9 _ -`, so not "group heading") is refused
+`web.handle.malformed` at that key with the hint
+`web.handle.expected.extract_list.field_key` and the issue
+`{code: "web.handle.field_key_invalid", field, valid}`: the key as written where
+Core's bounds can say it, and its legal spelling in `valid`
+(`plan-resolution/extraction/field-key-issues.ts`).
+
 A handle-form read that writes `paginate`, `maxPages` or `maxScrolls` is
 refused `web.handle.malformed` at that key with the expected hint
 `web.handle.expected.extract_list.next_page`

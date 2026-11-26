@@ -1,4 +1,4 @@
-import type { WebTargetScope } from "../../../../target-reacquire/identity";
+import { webFrameIdAgrees, type WebTargetScope } from "../../../../target-reacquire/identity";
 import type { WebNodeFrozenScope, WebNodeFrozenScopeInput } from "../types";
 import { webNodeFrozenScope } from "./read";
 
@@ -20,6 +20,6 @@ export async function webNodeFrozenCommandScope(input: WebNodeFrozenScopeInput):
   if (typeof path === "string") requested.browserFrameUrlPath = path;
   const page = await input.look({ includeHidden: true, scope: requested });
   const actual = webNodeFrozenScope(page, input.sessionId);
-  if (actual === undefined || actual.kind !== "single-frame" || actual.browserTabId !== requested.browserTabId || (requested.browserFrameId !== undefined && actual.browserFrameId !== requested.browserFrameId) || (path !== undefined && actual.browserFrameUrlPath !== path)) return undefined;
+  if (actual === undefined || actual.kind !== "single-frame" || actual.browserTabId !== requested.browserTabId || !webFrameIdAgrees(requested.browserFrameId, requested.browserFrameUrlPath, actual.browserFrameId) || (path !== undefined && actual.browserFrameUrlPath !== path)) return undefined;
   return actual;
 }

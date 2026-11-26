@@ -125,6 +125,11 @@ test("an effect holds hashes only, never page text, keeps the 16 smallest and st
   assert.deepEqual(added, [...added].sort());
   assert.ok([...added, ...removed].every((hash) => /^[0-9a-f]{8}$/u.test(hash)));
   assert.match(String(effect.path), /^[0-9a-f]{8}$/u);
-  assert.deepEqual(Object.keys(effect).sort(), ["added", "path", "removed", "v"]);
+  // Both marked samples full too (t1062): names under their headings, hashes only.
+  const marked = effect.marked as { added: string[]; removed: string[] };
+  assert.equal(marked.added.length, 16);
+  assert.equal(marked.removed.length, 16);
+  assert.ok([...marked.added, ...marked.removed].every((hash) => /^[0-9a-f]{8}$/u.test(hash)));
+  assert.deepEqual(Object.keys(effect).sort(), ["added", "marked", "path", "removed", "v"]);
   assert.equal(webAutomationRouteEffectHolds(effect, after), true);
 });

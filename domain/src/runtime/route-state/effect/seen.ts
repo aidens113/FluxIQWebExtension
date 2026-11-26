@@ -25,6 +25,16 @@
 // -- the panel of a second add may word its quantity differently, a carousel the
 // recorded run caught turning is elsewhere now. Every one missing is the act's
 // own answer missing. `removed` is not read, for the reason `./holds.ts` gives.
+//
+// **Or the page still stands where the step found it (t1062).** A step that took
+// controls away from under their headings keeps that as `marked` (`./sign.ts`).
+// When the page shows every one of them under its heading again and none of what
+// the step brought under its own, it is the page the step was made on, with
+// nothing the step did on it: `not_seen`, however few names the step added. A
+// stepper's Next adds one name ("Back") or none, so the rule above could never
+// say it was not done, and a Next carried from an earlier attempt was held on
+// every replay of the Flow (company-website `run-mwxixc4p-b7945aed`). Still not
+// on the path the step moved to: a page there may have done it another way.
 
 import type { JsonObject } from "fluxiq/core";
 import { WEB_ROUTE_EFFECT_FORMAT } from "./format";
@@ -38,11 +48,24 @@ export function webAutomationRouteEffectSeen(effect: JsonObject, observed: JsonO
   if (webAutomationRouteEffectHolds(effect, observed)) return "seen";
   if (effect.v !== WEB_ROUTE_EFFECT_FORMAT.version) return "unknown";
   const { added, path } = effect;
-  if (!Array.isArray(added) || added.length < MIN_ADDED_FOR_ABSENCE) return "unknown";
-  if (!added.every((hash): hash is string => typeof hash === "string")) return "unknown";
+  if (!hashes(added)) return "unknown";
   if (path !== undefined && typeof path !== "string") return "unknown";
   const now = webRoutePageFeatures(observed);
   if (path !== undefined && path === now.path) return "unknown";
   const shown = new Set(now.controlHashes);
-  return added.some((hash) => shown.has(hash)) ? "unknown" : "not_seen";
+  if (added.length >= MIN_ADDED_FOR_ABSENCE && !added.some((hash) => shown.has(hash))) return "not_seen";
+  return standsWhereFound(effect.marked, now.markedHashes) ? "not_seen" : "unknown";
+}
+
+/** Whether the page shows every control the step took away, under its heading, and none it brought (header, t1062). */
+function standsWhereFound(marked: unknown, now: readonly string[]): boolean {
+  if (typeof marked !== "object" || marked === null || Array.isArray(marked)) return false;
+  const { added, removed } = marked as { added?: unknown; removed?: unknown };
+  if (!hashes(added) || !hashes(removed) || removed.length === 0) return false;
+  const shown = new Set(now);
+  return removed.every((hash) => shown.has(hash)) && !added.some((hash) => shown.has(hash));
+}
+
+function hashes(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((hash) => typeof hash === "string");
 }

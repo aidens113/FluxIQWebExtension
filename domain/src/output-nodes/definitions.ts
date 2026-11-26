@@ -26,6 +26,7 @@ import {
   webAutomationNextPageParameters
 } from "./next-page";
 import { WEB_AUTOMATION_HOVER_DESCRIPTION, WEB_AUTOMATION_HOVER_TAGS } from "./hover";
+import { WEB_AUTOMATION_FRAME_PARAMETERS } from "./frame-parameters";
 
 const controlInput: AutomationNodePort = { id: "in", label: "In", valueType: "signal", role: "control" };
 const outputPorts: AutomationNodePort[] = [
@@ -303,7 +304,8 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     // Every web parameter may be filled from state unless it says otherwise.
     // Only `recordOutput` does, for the reason Core gives its own: a binding
     // could replace the dataset schema, and with it the excluded fields.
-    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
+    // A DOM step also says which child frame it ran in (`./frame-parameters.ts`, t1062); a tab-level one never does.
+    parameters: [...parametersForOutput(definition.actionType), ...framesForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...(requiredParameters.has(parameter.id) ? { required: true } : {}),
       allowStateBinding: parameter.allowStateBinding ?? true
@@ -387,6 +389,11 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
   if (outputId === "web.browser.download") return [structured("download", "Download")];
   return selectorParameters;
+}
+
+/** The frame parameters a DOM step's node declares: every `web.dom.*` output acts inside one document, a navigation, tab or download on the tab. */
+function framesForOutput(outputId: WebAutomationActionType): readonly AutomationNodeParameter[] {
+  return outputId.startsWith("web.dom.") ? WEB_AUTOMATION_FRAME_PARAMETERS.map((parameter) => ({ ...parameter })) : [];
 }
 
 function iconForOutput(outputId: WebAutomationActionType): string {
