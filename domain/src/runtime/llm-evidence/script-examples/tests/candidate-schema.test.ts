@@ -31,7 +31,7 @@ test("the actual candidate submit schema carries the unchanged wrapper and four 
       throw stop;
     },
     loop: {
-      tools: [], maxIterations: 1, maxToolCalls: 1,
+      tools: [],
       executeTool: async () => { throw new Error("no tool should execute"); },
       decide: async () => { throw new Error("no model should execute"); }
     }
