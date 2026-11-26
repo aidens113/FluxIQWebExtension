@@ -47,7 +47,7 @@ import { scriptedTaskProcess } from "./processing-declarations.js";
 // `again-check`'s Flow for a while.
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
-import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
+import { currentPageOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry, callsMade } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
 
 export type SaveDiningTablesForm = "plain" | "reshape" | "row-link" | "open-save-back" | "by-hand" | "by-hand-unread" | "again-check" | "again-press" | "run-again";
@@ -65,7 +65,6 @@ type DraftStep = { step: number; actionId: string; disposition?: string; written
 
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("local-classifieds-save-dining-tables") });
 const finish = (summary: string): Record<string, unknown> => ({ kind: "evidence_tool_decision", summary, decision: { kind: "complete", result: { summary } } });
-const callsMade = (request: ScriptedModelRequest): ReadonlySet<string> => new Set(evidenceOf(request).map((entry) => entry.callId));
 
 function fieldsOf(structure: EvidenceEntry): readonly Field[] {
   return Array.isArray(structure.value.fields) ? structure.value.fields as readonly Field[] : [];

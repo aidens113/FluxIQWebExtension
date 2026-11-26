@@ -27,9 +27,8 @@ import { scriptedTaskProcess } from "./processing-declarations.js";
 //
 // Every handle, field key and filter label is read from the request's own evidence, never written here.
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
-import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
+import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry, callsMade } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
-import type { ScriptedModelRequest } from "../wire-request.js";
 
 const READ_NODE = "web.output.dom-extract_list";
 
@@ -40,7 +39,6 @@ type Field = { key: string; sample?: string; label?: string; kind?: string; type
 
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, process: scriptedTaskProcess("crossborder-marketplace-free-hubs-under-ten") });
 const finish = (summary: string): Record<string, unknown> => ({ kind: "evidence_tool_decision", summary, decision: { kind: "complete", result: { summary } } });
-const callsMade = (request: ScriptedModelRequest): ReadonlySet<string> => new Set(evidenceOf(request).map((entry) => entry.callId));
 
 /** What stands over the page on a first visit, in the order a person clears it, each only while it shows. */
 const COVERS: readonly { summary: string; callId: string; words: RegExp }[] = [
@@ -79,7 +77,8 @@ function searchParams(page: string): URLSearchParams {
 
 const decide: ScriptedReply = (request) => {
   const page = currentPageOf(request);
-  const made = callsMade(request);
+  // The detection's own refusal is reported below with its cause.
+  const made = callsMade(request, (callId) => callId === "detect-hubs");
   const applied = searchParams(page);
   if (made.has("read-hubs")) return finish("The free hubs at ten euros or less are read, cheapest first.");
   for (const cover of COVERS) {

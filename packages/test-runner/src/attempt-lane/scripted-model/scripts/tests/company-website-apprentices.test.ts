@@ -117,18 +117,22 @@ function projectedRead(value: JsonObject): readonly Record<string, unknown>[] {
   return [...projected.history, ...(projected.currentView ? [projected.currentView] : [])];
 }
 
-test("a successful read completes from Core's matching held-row view after a newer page observation", () => {
-  const evidence = projectedRead({
-    ok: true, node: "web.output.dom-extract_list", status: "succeeded", read: { extracted: [{ name: "A real apprentice" }] },
-  });
-  assert.deepEqual((evidence[0]!.value as { read: unknown }).read, {
-    extracted: { "core.view_reference": { callId: "read-team", group: "holder:read" } },
-  });
-  assert.equal(decision("", evidence).kind, "complete");
+/** The read as the web domain answers it: it names its list and the address it read, so Core holds it under a group named by both (Core t1048). */
+const NAMED_READ = { listKey: "list.071487963cb742047efd01bd5042", url: "http://127.0.0.1:4173/team", extracted: [{ name: "A real apprentice" }] };
+
+test("a successful read completes from Core's matching held-row view after a newer page observation, whatever the group is named", () => {
+  for (const read of [NAMED_READ, { extracted: [{ name: "A real apprentice" }] }]) {
+    const evidence = projectedRead({ ok: true, node: "web.output.dom-extract_list", status: "succeeded", read });
+    const group = (evidence[0]!.value as { read: { extracted: { "core.view_reference": { callId: string; group: string } } } }).read.extracted["core.view_reference"];
+    assert.equal(group.callId, "read-team");
+    // A read that names its list is held under `holder:read:<digest>`; one that does not, under `holder:read`.
+    assert.match(group.group, read === NAMED_READ ? /^holder:read:[0-9a-f]{12}$/u : /^holder:read$/u);
+    assert.equal(decision("", evidence).kind, "complete");
+  }
 });
 
 test("a held-row reference cannot complete a read with missing or mismatched source evidence", () => {
-  const success = { ok: true, node: "web.output.dom-extract_list", status: "succeeded", read: { extracted: [{ name: "A real apprentice" }] } };
+  const success = { ok: true, node: "web.output.dom-extract_list", status: "succeeded", read: NAMED_READ };
   const changed = (mutate: (evidence: Record<string, any>[]) => void) => {
     const evidence = structuredClone(projectedRead(success)) as Record<string, any>[];
     mutate(evidence);
@@ -145,11 +149,16 @@ test("a held-row reference cannot complete a read with missing or mismatched sou
     changed((evidence) => { evidence.at(-1)!.value.groups.find((group: { holder?: string }) => group.holder === "read").callId = "another-read"; }),
     changed((evidence) => { evidence.at(-1)!.value.groups.find((group: { holder?: string }) => group.holder === "read").group = "holder:other"; }),
     changed((evidence) => { evidence.at(-1)!.value.groups.find((group: { holder?: string }) => group.holder === "read").holder = "other"; }),
-    projectedRead({ ...success, read: { extracted: [] } }),
+    projectedRead({ ...success, read: { ...NAMED_READ, extracted: [] } }),
   ];
   for (const evidence of cases) {
     const next = decision('URL ~/team\nt70 "Megan Ashdown"', evidence);
     assert.equal(next.kind, "tool_call");
     assert.equal(next.toolId, "web.detect_repeating_structure");
   }
+});
+
+test("a refused press stops the script at that call, with the refusal's words", () => {
+  const refused = { callId: "close-chat", toolId: "core.run_node", value: { ok: false, code: "target_unobserved", detail: { reason: "malformed_handle", instead: ["web.handle.malformed"] } } };
+  assert.throws(() => decision('URL ~/\nt41 button "Accept all"', [refused]), /close-chat.*refused: target_unobserved; malformed_handle; web\.handle\.malformed/u);
 });

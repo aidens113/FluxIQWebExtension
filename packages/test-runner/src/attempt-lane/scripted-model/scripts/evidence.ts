@@ -79,3 +79,41 @@ export function pressOf(request: ScriptedModelRequest, summary: string, callId: 
   if (!found) throw new Error(`The page shows nothing matching ${String(words)} for "${summary}"`);
   return toolCall(summary, callId, "core.run_node", { node: "web.output.dom-click", parameters: { target: { handle: found.handle } }, consequences: [] }, true);
 }
+
+/** The words of a refused call's result: its code, and what it says of itself where it says. */
+function refusalWords(value: Readonly<Record<string, unknown>>): string {
+  const detail = isRecord(value.detail) ? value.detail : undefined;
+  const instead = Array.isArray(detail?.instead) ? detail.instead.filter((item): item is string => typeof item === "string") : [];
+  const parts = [typeof value.code === "string" ? value.code : undefined, typeof detail?.reason === "string" ? detail.reason : undefined, instead.length > 0 ? instead.join(", ") : undefined, typeof value.message === "string" ? value.message : undefined];
+  return parts.filter((part): part is string => part !== undefined).join("; ") || JSON.stringify(value).slice(0, 300);
+}
+
+/**
+ * The calls this decision's evidence says were done, by call id. A call whose result was refused (`ok: false`) is
+ * not done: it stops the script at that step, with the refusal's words, so a broken script fails where it broke
+ * and not many decisions later. `reported` names the calls whose refusal the script reads and reports itself, in
+ * words of its own (a read it asks again on a fresh detection, a final read it will not keep); those are counted
+ * and are not a stop here.
+ */
+export function callsMade(request: ScriptedModelRequest, reported: (callId: string) => boolean = () => false): ReadonlySet<string> {
+  const made = new Set<string>();
+  for (const entry of evidenceOf(request)) {
+    if (entry.value.ok === false && !reported(entry.callId)) throw new Error(`The call ${entry.callId} (${entry.toolId}) was refused: ${refusalWords(entry.value)}`);
+    made.add(entry.callId);
+  }
+  return made;
+}
+
+/** The rows a read's result holds: its own list, or the group of Core's current view its `core.view_reference` names, whatever that group is called. */
+export function heldRowsOf(entry: EvidenceEntry, evidence: readonly EvidenceEntry[]): readonly unknown[] | undefined {
+  const read = isRecord(entry.value.read) ? entry.value.read : undefined;
+  if (read === undefined) return undefined;
+  if (Array.isArray(read.extracted)) return read.extracted;
+  const reference = isRecord(read.extracted) && isRecord(read.extracted["core.view_reference"]) ? read.extracted["core.view_reference"] : undefined;
+  if (reference === undefined || reference.callId !== entry.callId || typeof reference.group !== "string") return undefined;
+  const current = [...evidence].reverse().find((item) => item.toolId === "core.current_view");
+  const groups = current && Array.isArray(current.value.groups) ? current.value.groups : [];
+  const held = groups.find((group) => isRecord(group) && group.callId === reference.callId && group.group === reference.group && group.holder === "read");
+  const rows = isRecord(held) && isRecord(held.value) ? held.value.extracted : undefined;
+  return Array.isArray(rows) ? rows : undefined;
+}
