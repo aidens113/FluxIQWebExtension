@@ -2311,7 +2311,10 @@ product's except the model's choices:
 - `scripted-model/scripts/` holds a script per task: ordered replies per request kind
   (`panel_command`, `evidence_tool_decision`, `loop_verification`), reading handles and
   field keys from the real evidence in the request. A request the script does not expect
-  fails the run with its kind, and is never answered.
+  fails the run with its kind, and is never answered. A call whose result was refused
+  (`ok: false`) is not done: the script stops at it, with the refusal's words, and a rows
+  reference is resolved through Core's current view by call and group, never by a group's
+  name (`scripts/evidence.ts`, `callsMade` and `heldRowsOf`).
 - The run sets `FLUXIQ_PROVIDER_KEY_FILES=none` and `FLUXIQ_TEST_ENV_FILES=none`, drops
   provider secrets, opens no env file for its ceiling and writes nothing to the spend ledger.
   Its row names the stand-ins `model` and `spend`, says `live: false`, and the result line

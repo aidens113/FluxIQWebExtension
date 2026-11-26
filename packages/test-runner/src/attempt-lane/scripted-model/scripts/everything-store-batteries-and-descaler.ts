@@ -1,7 +1,6 @@
 import { scriptedTaskProcess } from "./processing-declarations.js";
-import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
-import { currentPageOf, evidenceOf, pageLine, pressOf, toolCall } from "./evidence.js";
+import { currentPageOf, evidenceOf, pageLine, pressOf, toolCall, callsMade } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
 
 /**
@@ -17,7 +16,6 @@ const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with:
 const DESCALER = "Tidewell Kettle Descaler";
 const BATTERIES = "Brightaisle Basics AA";
 
-const callsMade = (request: ScriptedModelRequest): ReadonlySet<string> => new Set(evidenceOf(request).map((entry) => entry.callId));
 
 /** The first line matching `control` after the line naming `item` as `prefix`, by the page's own lines. */
 function controlAfter(page: string, prefix: RegExp, control: RegExp, what: string): string {

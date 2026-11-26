@@ -1,6 +1,6 @@
 import { scriptedTaskProcess } from "./processing-declarations.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
-import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
+import { callsMade, currentPageOf, evidenceOf, heldRowsOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
 
 /** The chat turn: what a model decides of the person's message, which is to start the attempt. Core saves the person's own words as the instruction. */
@@ -33,22 +33,16 @@ function loadTeam(request: Parameters<ScriptedReply>[0], page: string, taken: Re
   return waitFor("Megan Ashdown");
 }
 
-const recordOf = (value: unknown): Record<string, unknown> | undefined => typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-
-/** Successful rows are held in Core's current view, referenced by their original read. */
+/** Successful rows are held in Core's current view, referenced by their original read, under whatever name Core gave the group. */
 function readSucceeded(entry: EvidenceEntry | undefined, evidence: readonly EvidenceEntry[]): boolean {
   const result = entry?.value;
-  const read = recordOf(result?.read);
-  if (result?.ok !== true || result.node !== "web.output.dom-extract_list" || result.status !== "succeeded" || !read) return false;
-  if (Array.isArray(read.extracted)) return read.extracted.length > 0;
-  const reference = recordOf(recordOf(read.extracted)?.["core.view_reference"]);
-  if (reference?.callId !== entry?.callId || reference?.group !== "holder:read") return false;
-  const current = [...evidence].reverse().find((item) => item.toolId === "core.current_view");
-  const groups = Array.isArray(current?.value.groups) ? current.value.groups : [];
-  const held = groups.map(recordOf).find((group) => group?.callId === reference.callId && group?.group === reference.group && group?.holder === "read");
-  const rows = recordOf(held?.value)?.extracted;
-  return Array.isArray(rows) && rows.length > 0;
+  if (!entry || result?.ok !== true || result.node !== "web.output.dom-extract_list" || result.status !== "succeeded") return false;
+  const rows = heldRowsOf(entry, evidence);
+  return rows !== undefined && rows.length > 0;
 }
+
+/** A read the script asks again after it fails, on a fresh detection: it reads the refusal itself. */
+const isTeamRead = (callId: string): boolean => /^read-team(?:-retry-\d+)?$/u.test(callId);
 
 /**
  * `company-website-apprentices`: clear what covers the page, go to the team page, load the
@@ -62,8 +56,8 @@ const decide: ScriptedReply = (request) => {
   if (note) throw new Error(`The saved Flow's run did not end the attempt, stopped at step ${note.stoppedAt ?? "none"}: ${note.happened ?? "no reason given"}`);
   const page = currentPageOf(request);
   const evidence = evidenceOf(request);
-  const taken = new Set(evidence.map((entry) => entry.callId));
-  const read = [...evidence].reverse().find((entry) => entry.toolId === "core.run_node" && /^read-team(?:-retry-\d+)?$/u.test(entry.callId));
+  const taken = callsMade(request, isTeamRead);
+  const read = [...evidence].reverse().find((entry) => entry.toolId === "core.run_node" && isTeamRead(entry.callId));
   if (readSucceeded(read, evidence)) return { kind: "evidence_tool_decision", summary: "The apprentices are read.", decision: { kind: "complete", result: { summary: "Listed every apprentice across the branches, from the team page." } } };
   for (const cover of COMPANY_WEBSITE_COVERS) {
     if (!taken.has(cover.callId) && pageLine(page, cover.words)) return pressOf(request, cover.summary, cover.callId, cover.words);

@@ -378,8 +378,6 @@ test("what cannot name one detected list or column is refused with where the han
     [{ handle: extraction, fields: {} }, "extractList.fields"],
     [{ handle: extraction, fields: [] }, "extractList.fields"],
     [{ handle: extraction, fields: [7] }, "extractList.fields.0"],
-    [{ handle: extraction, fields: { "a name": "product-name" } }, "extractList.fields.0"],
-    [{ handle: extraction, fields: { title: "product-name", other: "product-name", "a name": "stock-badge" } }, "extractList.fields.2"],
     [{ handle: extraction, fields: { name: { kind: "text", selector: ".name" } } }, "extractList.fields.0.selector"],
     [{ handle: extraction, fields: { name: { key: "product-name", kind: "link" } } }, "extractList.fields.0.kind"],
     [{ handle: extraction, fields: { name: { key: "product-name", field: "product-price" } } }, "extractList.fields.0"],
@@ -401,6 +399,17 @@ test("what cannot name one detected list or column is refused with where the han
   ];
   for (const [extractList, position] of malformed) {
     assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
+  }
+  // A column key that is not a legal record field key is refused with the key hint, and the issue names its legal spelling (t1058).
+  for (const [extractList, position, spelling] of [
+    [{ handle: extraction, fields: { "a name": "product-name" } }, "extractList.fields.0", "a_name"],
+    [{ handle: extraction, fields: { title: "product-name", other: "product-name", "a name": "stock-badge" } }, "extractList.fields.2", "a_name"]
+  ] as Array<[JsonObject, string, string]>) {
+    assertRetainedResolution(
+      await resolve(runtime, EXTRACT_LIST_NODE, { extractList }),
+      { status: "refused", issueCodes: ["web.handle.malformed", EXTRACTION_HINT, "web.handle.expected.extract_list.field_key", `web.handle.malformed:${position}`], issues: [{ code: "web.handle.field_key_invalid", valid: [spelling] }] },
+      JSON.stringify(extractList)
+    );
   }
   // Two lists in one request cannot be read as one.
   assertRetainedResolution(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: second, key: "product-name" } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
