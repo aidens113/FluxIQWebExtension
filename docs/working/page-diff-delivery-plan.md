@@ -76,11 +76,9 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
      - t1053: a passed-over step never becomes an evidence gap;
      - t1054: the build-cache lock race.
   3. Next:
-     - **The user, 2026-11-26: "I think its time to start running live tests right after you fix those current running ones".** So the running fixes come first:
-       - t1058: the scripted contract fixes, and a named refusal for an illegal field key;
-       - t1056: no count ends an evidence loop, the deprecated chain goes, and the build purse's `maxCallsPerRun` call allowance goes (a purse is dollars);
-       - t1057: no count ends a recovery.
-     - Then live, with `dev` merged into every lane: on Sonnet (`--llm-model claude-sonnet-5-5 --llm-max-cost-usd 5`), each run with the run watcher, `--attempts 4`, and every attempt's flow chart reviewed.
+     - **The user, 2026-11-26: "I think its time to start running live tests right after you fix those current running ones".** Those fixes are all integrated (ledger): t1058 and t1057 (0.54.28), t1062 (0.54.29) and t1056 (0.54.30).
+     - The follow-up `briefs/candidate-stall-repair.md` covers a stalled candidate or project build that fails instead of repairing. It is off the answer-first path, so it runs beside the live round.
+     - Now live, with `dev` merged into every lane: on Sonnet (`--llm-model claude-sonnet-5-5 --llm-max-cost-usd 5`), each run with the run watcher, `--attempts 4`, and every attempt's flow chart reviewed.
        - First, bigbox `new-store-cheapest-towels` on t1015, the rerun of run-mwvgjb8c, which t1048 fixed; its debug is written.
        - Then one task per site, up to four lanes at once:
          - company-website `apprentices`, crossborder `free-hubs-under-ten`, everything-store `batteries-and-descaler`;
@@ -154,6 +152,48 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-26 - t1062 (iframe steps) integrated (fluxiq 0.54.29); t1056 (no count of calls or rounds ends a run) integrated (fluxiq 0.54.30); live round next
+- **t1062** (worker-heavy; report `reports/t1062.md`): a Flow saved from steps inside an iframe assembles and replays.
+  - Each frame step is found again by its frame's URL path, with the id only agreeing.
+  - A press owns only a popup in its own frame's document.
+  - "Not seen" reads a control under its heading.
+  - Provider-free on merged code: bigbox, apprentices and saturday-certificate each passed 4 of 4.
+- **t1056** (two workers: worker-heavy t1056-worker for rounds 1 to 5, worker-heavy t1056-purse for the purse group; reports `reports/t1056.md` and `reports/t1056-purse.md`). Only the result, the purse, the clock or Stop ends a run:
+  - **Counts removed:**
+    - the evidence loop's `maxIterations`, `maxToolCalls` and `unusableDecisions.maxConsecutive`;
+    - the resolution's `maxCallsPerRun`, which the Studio run ledger now strips from any untyped spread;
+    - the 250-call backstop;
+    - the unreadable-replies ending;
+    - the bootstrap's 6-round cap, whose record of round stops is now bounded in bytes.
+  - **Builds get a loopSignal.** A stalled round ends at the top of the loop-detection ladder, and the build repairs in a new round.
+  - **Loop detection now catches a repeated refused decision.** answerability's 870 identical `complete_not_offered` decisions now climb the refused-again ladder.
+  - **Unpriced providers are priced.** A provider that gives no price is held at the larger of Core's default rate and the most a call has cost.
+    - The earlier hold at the default rate alone was below real cost, and the overshoot spent the judging reserve. That was a real purse defect.
+  - **A diagnosis-only recovery** stops after its diagnosis.
+  - **Answer-first** keeps judge money back only when a judge will run.
+  - **A held-unsure yes never ends a build as accepted** (`candidate.trial_rows_unaccounted`).
+  - **Wording:** budget endings say what the money went on, and count the whole build's unreadable replies. A model-facing reason no longer carries a digest.
+  - **The request prefix** stays stable within a round, because `core.loop_decision` is offered from the first call. A new round is a new conversation.
+- **Decided:**
+  - **No change:** `decisionsLeft` is the purse and the clock in calls.
+  - **Follow-up, moved out:** a stalled candidate or project build fails instead of repairing. Neither path is answer-first. Brief: `briefs/candidate-stall-repair.md`.
+- Validation: the lead's runs.
+  - `pnpm --filter fluxiq check` exit 0.
+  - Core audit exit 0.
+  - vitest groups over `runtime/{llm,loop-limits,flow-authoring,project-agents,adaptation,answer-first,conversations,result-verification,agents} framework/automation-service programs/automation-studio`:
+    - parallel printed `Tests  2 failed | 14803 passed`;
+    - real-sql printed `Test Files  326 passed (326)`.
+  - Both parallel failures were traced:
+    - next.test's code count is now 11;
+    - build-routing moved because the refused-again steer shows one more entry, never fewer. It was re-pinned with the decisions named, and re-run: `Tests  32 passed (32)`.
+  - Downstream:
+    - Core libraries build exit 0;
+    - domain check exit 0;
+    - domain `llm-evidence` printed `# tests 1830 # pass 1830 # fail 0`;
+    - model-text `ok`.
+  - Core finish ran `pnpm check` and the contract tests: passed.
+  - Core bumped to 0.54.30. Both `dev`s were pushed (Core `ca4fb4502`, downstream `46c48ac90`). The shared Core was synced and the four live lanes merged.
 
 ### 2026-11-26 - t1058 (scripted contract fixes) and t1057 (no count ends a recovery) integrated (fluxiq 0.54.28); t1062 (iframe steps) found and fixed
 - Scripted round 2 (lane t1015):
