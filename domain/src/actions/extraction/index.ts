@@ -1,5 +1,6 @@
 export * from "./condition-grammar";
 export * from "./field-key";
+export * from "./legal-key-spelling";
 export * from "./field-match";
 export * from "./kept-values";
 export * from "./list-continues";

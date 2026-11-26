@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scriptedModelScriptFor, type ScriptedModelRequest } from "../../index.js";
+import { scriptedModelScriptFor, scriptedTaskProcess, type ScriptedModelRequest } from "../../index.js";
 
 const TASK = "company-website-saturday-certificate";
 
@@ -46,7 +46,7 @@ test("it detects the week on show from a slot, and reads the cells with the Satu
   assert.equal(read.add, true);
   const list = read.input?.parameters?.extractList;
   assert.equal(list.handle, "extraction.9");
-  assert.deepEqual(list.fields, { date: "data_date", time: "item", "group heading": "div_head", disabled: "item_disabled" });
+  assert.deepEqual(list.fields, { date: "data_date", time: "item", group_heading: "div_head", disabled: "item_disabled" });
   assert.equal(list.where, undefined, "every slot is collected; the processing declaration filters");
   assert.equal(read.input?.parameters?.recordOutput.writeMode, "append");
 });
@@ -55,7 +55,7 @@ test("the handle and keys are the evidence's own", () => {
   const other = { ...CELLS, handle: "extraction.31", fields: [{ key: "k_head", label: "group heading", sample: "Sat 10/10" }, { key: "k_date", label: "data-date", sample: "2026-10-10" }, { key: "k_time", label: "item", sample: "09:00" }], fieldMarks: [{ id: "k_off", label: "item (disabled)", kind: "disabled" }] };
   const list = decide(CALENDAR, [...STEPS_BEFORE_CALENDAR, detected(1, other)]).input?.parameters?.extractList;
   assert.equal(list.handle, "extraction.31");
-  assert.deepEqual(list.fields, { date: "k_date", time: "k_time", "group heading": "k_head", disabled: "k_off" });
+  assert.deepEqual(list.fields, { date: "k_date", time: "k_time", group_heading: "k_head", disabled: "k_off" });
 });
 
 test("a detection with no cells, or no disabled mark, fails loudly", () => {
@@ -102,4 +102,22 @@ test("it answers four attempts", () => {
   assert.equal(script.replies.panel_command!.length, 4);
   assert.ok(script.replies.loop_verification!.length >= 8);
   assert.throws(() => scriptedModelScriptFor(TASK, "no-such-form"), /no form "no-such-form"/u);
+});
+
+/** The domain's rule for a record field key (`domain/src/actions/extraction/field-key.ts`), which the package does not export. */
+const LEGAL_FIELD_KEY = /^[A-Za-z0-9_-]{1,100}$/u;
+
+test("the heading column is written under a legal field key, and the processing declaration's words still bind it", () => {
+  const list = decide(CALENDAR, [...STEPS_BEFORE_CALENDAR, detected(1)]).input?.parameters?.extractList;
+  for (const key of Object.keys(list.fields)) assert.match(key, LEGAL_FIELD_KEY, `${key} is not a legal field key`);
+  // Core's binding folds `_`, `-` and spaces to one space and ignores case, so the declaration's "group heading" reads it.
+  const declared = (scriptedTaskProcess(TASK).where as unknown as Array<{ field: string }>)[0]!;
+  assert.equal(declared.field, "group heading");
+  const fold = (name: string) => name.replace(/[\s_-]+/gu, " ").trim().toLowerCase();
+  assert.ok(Object.keys(list.fields).some((key) => fold(key) === fold(declared.field)));
+});
+
+test("a refused read stops the script at that read instead of pressing on", () => {
+  const refused: Entry = { callId: "read-week-1", toolId: "core.run_node", value: { ok: false, code: "target_unobserved", detail: { reason: "malformed_handle", instead: ["web.handle.malformed:extractList.fields.2"] } } };
+  assert.throws(() => decide(CALENDAR, [...STEPS_BEFORE_CALENDAR, detected(1), refused]), /read-week-1.*refused: target_unobserved; malformed_handle; web\.handle\.malformed:extractList\.fields\.2/u);
 });

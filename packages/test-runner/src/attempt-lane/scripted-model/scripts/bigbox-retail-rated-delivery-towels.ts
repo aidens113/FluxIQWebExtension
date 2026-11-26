@@ -2,7 +2,7 @@ import { scriptedTaskProcess } from "./processing-declarations.js";
 // Provider-free honest path for the unchanged realistic towels task. All row values come from browser reads.
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import type { ScriptedModelRequest } from "../wire-request.js";
-import { currentPageOf, evidenceOf, latestOf, pageLine, toolCall } from "./evidence.js";
+import { currentPageOf, evidenceOf, latestOf, pageLine, toolCall, callsMade } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
 
 const READ = "web.output.dom-extract_list";
@@ -63,7 +63,7 @@ function stepsOf(request: ScriptedModelRequest): readonly Step[] {
 const decide: ScriptedReply = (request) => {
   const page = currentPageOf(request);
   const evidence = evidenceOf(request);
-  const made = new Set(evidence.map((entry) => entry.callId));
+  const made = callsMade(request);
   // Transient first-visit detours are not fixed steps in the saved Flow.
   for (const [callId, words] of [["consent", /"Accept all"/u], ["offer", /(?:link|clickable|button) "No thanks"/u], ["not-now", /(?:clickable|button) "Not now"/u]] as const) {
     if (!made.has(callId) && pageLine(page, words)) return press(request, callId, words, false);

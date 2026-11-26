@@ -1,7 +1,7 @@
 import { scriptedTaskProcess } from "./processing-declarations.js";
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
-import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
+import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry, callsMade } from "./evidence.js";
 import { scriptedJudgement } from "./judgement.js";
 
 /**
@@ -30,7 +30,6 @@ const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with:
 /** A finished thought: what the model decides when there is nothing left to call. */
 const finish = (summary: string): Record<string, unknown> => ({ kind: "evidence_tool_decision", summary, decision: { kind: "complete", result: { summary } } });
 
-const callsMade = (request: ScriptedModelRequest): ReadonlySet<string> => new Set(evidenceOf(request).map((entry) => entry.callId));
 
 function fieldsOf(structure: EvidenceEntry): readonly Field[] {
   return Array.isArray(structure.value.fields) ? structure.value.fields as readonly Field[] : [];
@@ -94,6 +93,9 @@ function stepOfCall(request: ScriptedModelRequest, callId: string, actionId: str
 /** The read the repeat goes over and the press it repeats: by hand, or as the reshaping form wrote them. */
 const loopCallsOf = (form: AcceptMessagedForm) => form === "reshape" ? { read: "write-read", press: "write-accept" } : { read: "read-invitations", press: "accept-first" };
 
+/** The final reads, whose refusal `finishFromRead` reports in its own words. */
+const isFinalRead = (callId: string): boolean => callId === "read-accepted" || callId === "back-read";
+
 /** Take the chosen read's actual call into the Flow; an unrelated look is never its substitute. */
 function finishFromRead(request: ScriptedModelRequest, callId: string, summary: string): Record<string, unknown> {
   const calls = evidenceOf(request).filter((entry) => entry.callId === callId && entry.toolId === "core.run_node");
@@ -124,7 +126,7 @@ function clearAndArrive(request: ScriptedModelRequest, page: string): Record<str
 function readBack(request: ScriptedModelRequest, page: string): Record<string, unknown> {
   const forward = latestOf(request, "core.run_flow");
   if (forward && forward.value.passed !== true) throw new Error(`The forward run did not pass: ${JSON.stringify(forward.value).slice(0, 1500)}`);
-  const made = callsMade(request);
+  const made = callsMade(request, isFinalRead);
   const detected = evidenceOf(request).filter((entry) => entry.toolId === "web.detect_repeating_structure").at(-1);
   if (!made.has("detect-after")) {
     const card = pageLine(page, /"Lucia Romano View/u);
@@ -147,7 +149,7 @@ function readBack(request: ScriptedModelRequest, page: string): Record<string, u
  * connection", and reads the name and the message of those rows, which the list shows newest first.
  */
 function readNotesBack(request: ScriptedModelRequest, page: string): Record<string, unknown> {
-  const made = callsMade(request);
+  const made = callsMade(request, isFinalRead);
   if (pageLine(page, /Close your conversation/u)) return pressOf(request, "Close the conversation that opened over the page.", `back-close-${request.ordinal}`, /Close your conversation/u);
   if (!/^PAGE "Messaging/mu.test(page)) return pressOf(request, "Open messaging, where the notes now are.", `back-open-messaging-${request.ordinal}`, /link .*Messaging/u);
   const tagged = pageLine(page, /New connection/u);
@@ -169,12 +171,12 @@ function readNotesBack(request: ScriptedModelRequest, page: string): Record<stri
 
 /** The first attempt has left the invitations answered: no invitation row of the person it began with is left to press. */
 function afterAnAnswer(request: ScriptedModelRequest, page: string): boolean {
-  const mine = [...callsMade(request)].some((callId) => callId.startsWith("back-"));
+  const mine = [...callsMade(request, isFinalRead)].some((callId) => callId.startsWith("back-"));
   return mine || /^PAGE "Messaging/mu.test(page) || (/^PAGE "(Received invitations|My Network)/mu.test(page) && !pageLine(page, /"Ximena Ruiz View/u) && !evidenceOf(request).some((entry) => entry.toolId === "web.detect_repeating_structure"));
 }
 
 const decideOf = (form: AcceptMessagedForm): ScriptedReply => (request) => {
-  const made = callsMade(request);
+  const made = callsMade(request, isFinalRead);
   if (form === "notes-back" && made.has("back-read")) return finishFromRead(request, "back-read", "Read the three accepted people and their notes from Messaging, pressing nothing.");
   if (made.has("read-accepted")) return finishFromRead(request, "read-accepted", "Accepted the three invitations with a message, and listed them.");
   const page = currentPageOf(request);
