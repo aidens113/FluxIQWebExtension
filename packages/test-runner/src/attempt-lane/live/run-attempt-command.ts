@@ -16,7 +16,7 @@ import type { PersonHandOff } from "../../person-simulation/index.js";
 import { attemptReportRow, laterAttemptNotes, renderAttemptReport } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
-import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, attemptSpeed, attemptSpeedLines, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type AttemptSpeed, type LiveAttemptSession } from "./attempt/index.js";
+import { attemptCacheShare, AttemptProofStuck, guardViolationLines, AttemptScriptRefused, attemptSpeed, attemptSpeedLines, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type AttemptSpeed, type LiveAttemptSession } from "./attempt/index.js";
 import { partialSeries } from "./partial-series.js";
 import { attemptPersonFor } from "./attempt-person.js";
 import { attemptBalanceFailures } from "./balance-failures.js";
@@ -345,6 +345,13 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       const line = await writeFlowChart(evidence);
       await appendFile(path.join(evidence, "attempt-report.txt"), `${line}\n`).catch(/* best-effort: the report may not exist on a run that stopped early */ () => undefined);
     }).catch(/* best-effort: a picture never decides the run */ () => undefined);
+    // What the network guard blocked is named in the report, whatever ended the run: a frame that never loaded is otherwise a silent gap.
+    await Promise.resolve().then(async () => {
+      const lines = guardViolationLines(session?.browser.guard.violations() ?? []);
+      if (lines.length === 0) return;
+      process.stdout.write(`[attempt] ${lines[0]}\n`);
+      await appendFile(path.join(evidence, "attempt-report.txt"), `${lines.join("\n")}\n`);
+    }).catch(/* best-effort: the report may not exist on a run that stopped early */ () => undefined);
     try {
       await session?.close();
       if (side.replay) await writeFile(path.join(evidence, "recorded-replay.json"), JSON.stringify({ proof: "recorded_model_fixture_runtime", ...side.replay(), domainEvidenceReplayed: false, fullAttemptAccepted: false }, null, 2));

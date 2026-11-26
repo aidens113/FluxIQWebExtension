@@ -5,6 +5,7 @@ import type { ExistingFluxIQControlClient } from "../../../existing-fluxiq-contr
 import { RunnerFailure } from "../../../failure.js";
 import { resolveLabPaths } from "../../../lab-instance/index.js";
 import { extensionStatus, pairExtensionWithColdEpochRecovery, runtimeMessage } from "../../../run-lifecycle/index.js";
+import { attemptPanelAddresses } from "./panel-addresses.js";
 import { attemptStartupLogs } from "./startup-logs.js";
 
 /** A Core of this run's own, the real extension paired with it, and the real chat beside the page, visible. */
@@ -79,7 +80,7 @@ export async function openLiveAttemptSession(input: LiveAttemptSessionInput): Pr
     proxy = await startCoreRecordingProxy(topology.fluxiqOrigin);
     const workerRequests: WorkerRequest[] = [];
     log("[attempt] opening a visible Chrome with the extension");
-    browser = await openChromeChatSession({ topology, extensionPath: paths.extensionPath, scenarioUrl: `${topology.scenarioOrigin}${input.startPath}`, workerRequests, policy: chatNetworkPolicy(topology, proxy.origin) });
+    browser = await openChromeChatSession({ topology, extensionPath: paths.extensionPath, scenarioUrl: `${topology.scenarioOrigin}${input.startPath}`, workerRequests, policy: chatNetworkPolicy(topology, proxy.origin), addresses: attemptPanelAddresses(topology, proxy.origin) });
     const page = browser.control, coreApiUrl = proxy.origin;
     await pairExtensionWithColdEpochRecovery({
       connect: async () => (await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl, coreApiUrl, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true, ...(input.humanness === undefined ? {} : { humanness: input.humanness }) } })).status,
