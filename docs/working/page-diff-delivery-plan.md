@@ -1,7 +1,7 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W1 t1036, W2 t1038 and W3 t1037 integrated (fluxiq 0.54.25); under framework drafting the scripted bigbox run passes 4 of 4. Next: the read-rows fix, the step-count removal, fake clocks and the column reader, in parallel; then the other scripted tasks and live on Sonnet.
+Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W1, W2 and W3 integrated, then t1041 to t1054 (fluxiq 0.54.27). Next: the scripted round on all eight tasks, the loop-counts and recovery-counts follow-ups, then live on Sonnet.
 Created: 2026-11-25
 Last updated: 2026-11-25
 Owner: Senior supervisor agent
@@ -67,13 +67,22 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
      - **Open risks W3 raised:**
        - There is no host signal for a "lasting" act. A press after the result's last read is left out of the Flow when it shows no page change, no act claim and no declared consequence. An asked act that lands unclaimed and invisibly would be left out too, unless the model keeps it. Watch for it in live runs.
        - On an attempt that runs the saved Flow, the judge's summary lists no carried acts. This predates W3; it is a judge-evidence item.
-  2. Next, in parallel. Each task edits W3's files, and they partition by file. The briefs are written; their ids are given at start:
-     - remove `maxStepsWithoutProgress` from every loop and recovery (AGENTS.md: no count ends a round). The same task takes W3's two leftovers: a `repeat` whose `over` names a missing step is refused by name, and the unused `settings` on an amendment is no longer parsed;
-     - the judge and the decider see every read's rows (t1044's two main causes: `result-feed/feed.ts:269`, `decision-context/current-view.ts:28`; W3 confirmed it does not fix them). This was to be t1047, but that id went to the sweep fallout, so it takes the next free id;
-     - fake clocks for the deadline tests `second-attempt-proof` and `later-attempt`;
-     - the answer-contract column reader misreading "columns title only".
-  3. Refit and run the other scripted tasks (4 attempts each). Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
+  2. Integrated since (fluxiq 0.54.26 and 0.54.27; ledger):
+     - t1048: the judge and the decider see every read's rows;
+     - t1049: no count of steps without progress ends anything;
+     - t1050: fake clocks for three deadline tests;
+     - t1051: the column reader;
+     - t1052: the Lab's frame-origin proof, and stale scripted declarations;
+     - t1053: a passed-over step never becomes an evidence gap;
+     - t1054: the build-cache lock race.
+  3. Next:
+     - Rerun the scripted round, all eight tasks with 4 attempts each, on lane t1015. Its first pass stopped after bigbox 4/4, apprentices and saturday, which was fixed as t1052 and t1053. Watch the watcher's alerts under `test-runs/lab-watch/`, not the run folder.
+     - In parallel, two briefs that follow t1049 (in the lead's scratchpad, `next-briefs/`):
+       - **loop-counts:** no count ends an evidence loop; the deprecated chain goes; the build purse's `maxCallsPerRun` call allowance goes (a purse is dollars);
+       - **recovery-counts:** the recovery ledger's `maxActions`, `maxProviderCalls`, `maxRepeatsPerAction` and `maxRefusedActions` stop ending a recovery.
+     - Then live on Sonnet (`--llm-model claude-sonnet-5-5`): bigbox first, then the nine others, each with the run watcher, `--attempts 4`, and the per-attempt flow charts reviewed.
   4. Also open:
+     - a list read before a filter change stays in the decider's view beside the re-read (t1048; a product call);
      - the judge accepting a wrong item on pickup availability (above);
      - `pinned-calls-job-board` setup wait;
      - `tool-rejection.ts` at 799 lines;
@@ -138,6 +147,27 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-25 - t1049 (no step count ends anything), t1050 (fake clocks) and t1053 (passed-over steps) integrated (fluxiq 0.54.27)
+- Changed:
+  - **t1053** (worker; report `reports/t1053.md`): a Flow step passed over by routing, with no outputs and no failure, is Core's own record. The run trail never hands it to the web projector, reports it to the judge in Core's words, and raises no gap (`result-verification/run-trail/of/attempts.ts`, `judge-evidence/passed-over.ts`). Before, the replay's yes was held unsure forever when the cover dismissals were passed over.
+  - **t1050** (worker; report `reports/t1050.md`): `second-attempt-proof`, `later-attempt` "a run's own deadline" and judge-reply "ends at the judgement's existing deadline" run on fake clocks. An optional `startTimer` in the attempt ports reaches the engine's existing timer option; unset, real timers. No deadline was raised.
+  - **t1049** (worker-heavy; report `reports/t1049.md`): `maxStepsWithoutProgress` is gone from every loop and recovery. The count only steers: from the third such step the model is told what it keeps repeating. The recovery's three-step progress guard is deleted, and codes nothing produces are deleted.
+    - W3 leftovers: a `repeat` naming a missing step is refused `no_such_step`, and the unused `settings` on an amendment is no longer parsed.
+    - About 30 tests now state the new behaviour. The lead sent back `service-bootstrap/tests/unfinished-build.test.ts`, which pinned the old ending; it now asserts the purse ending with steering and no identical second round.
+  - **Found by t1049's follow-up:** that test's purse is `maxCallsPerRun: 12`, a call count ("stopped at its limit of 12 model calls"). It goes in the loop-counts brief with the other counts that still end non-answer-first loops.
+- Validation: the lead's runs.
+  - t1050 in `fxwork/t1050`:
+    - `pnpm --filter fluxiq check` exit 0;
+    - vitest groups over `answer-first`, `judge-reply` and `engine/automation/composite`: parallel printed `Tests  856 passed (856)`, real-sql `Tests  506 passed (506)`;
+    - audit passed.
+  - t1053: the lead read the passing Lab run's attempt table (`run-mwx2ylvq-1e1eb947`, company-website-apprentices):
+    - 4 of 4 right;
+    - calls 13, 1, 0 and 0;
+    - attempts 2 to 4 ran `run_flow` with continuation held.
+  - The combined check (t1055) is in the t1048 entry below. After t1049's test fix, `service-bootstrap` on t1049 merged with `dev` printed parallel `Tests  3 passed (3)` and real-sql `Tests  120 passed (120)`.
+  - Each `pnpm task finish` on Core printed `"validation":{"ran":true,"command":"pnpm check","passed":true}` with `# pass 529 # fail 0`.
+  - Core bumped to 0.54.27; both `dev`s pushed (Core `266b99197`, downstream `6c697de2a`).
 
 ### 2026-11-25 - t1048 (the judge and the decider see every read's rows) integrated (fluxiq 0.54.27); t1054 (the read-lock test race) integrated (fluxiq 0.54.26)
 - Changed, t1048 (worker-heavy; report `reports/t1048.md`): t1044's two main causes.
