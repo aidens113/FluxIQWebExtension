@@ -996,6 +996,15 @@ re-acquire of its target. A child frame whose document has no http(s) path
 (`about:blank`, `srcdoc`) is saved with its id alone. It is found again only
 while that document stands.
 
+**A press inside a child frame never owns a layer of another document** (t1062,
+`domain/src/runtime/llm-evidence/node-run/own-layers/opened-by.ts`). Only a layer
+captured in the pressed control's own frame can be one the press opened, tied
+or not. A layer the top page raised on a timer in the same instant reads as an
+interruption, so its answer is optional on replay. In run
+`run-mwxh0jy6-91aad522` the top page's newsletter offer rose as the widget's
+Next was pressed in its iframe. Its close became a required step, and the
+replay stopped on it once the site remembered the close.
+
 ### Results And Failures
 
 Every result carries a `validation` (decision D4), because the builders in
