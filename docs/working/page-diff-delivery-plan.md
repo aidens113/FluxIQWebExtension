@@ -153,6 +153,36 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-26 - t1064 (the Lab carries no call count) integrated; live bigbox launched; t1063 running
+- **The first live launch failed before Chrome opened ($0):**
+  - the Lab's prelude build broke on `live-llm-plan.test.ts`, which imported the call backstop t1056 deleted;
+  - the lead's t1056 checks had covered the domain but not the test-runner.
+- **The Lab still carried call counts of its own:**
+  - `LLM_LAB_MAX_CALLS_PER_RUN` (250);
+  - a default budget of 26 calls;
+  - `--llm-max-calls`;
+  - record validations that refused a run over a call count.
+  So a passing live run could have been marked invalid, and that had to be fixed before any paid run.
+- **t1064** (worker; report `reports/t1064.md`) removed them all.
+  - Old records may still carry `maxCallsPerRun`, and it is ignored.
+  - `--llm-max-calls` is refused with words saying the purse bounds a run.
+  - **The lead fixed two failures the worker had called pre-existing:**
+    - the worker's edits had written 33 files with CRLF endings, which broke `runner-wiring`'s source-text check; the lead normalized them to LF;
+    - `failure-sanitizer`'s "token count no build could spend" row relied on the old call bound, and Core now takes any safe whole token count (t1056). The row now uses a fraction.
+  - **Open (Core):** a Flow's `llmExecutionSettings.maxCalls` (1-250) is still required by Core and read by nothing. The Lab saves an inert 250.
+- **t1063** (worker-heavy; report `reports/t1063.md`; running):
+  - a candidate build no longer takes a loopSignal, so a stall is steered and retested, never ended;
+  - the project supervisor's dead stall branch is removed;
+  - the e2e specs no longer pass call counts.
+- Validation: the lead's runs.
+  - runner `failure-sanitizer` and `runner-wiring` printed `# tests 4 # pass 4 # fail 0`;
+  - test-contracts printed `# tests 184 # pass 184 # fail 0`;
+  - Lab script tests printed `# tests 85 # pass 85 # fail 0`;
+  - audit passed.
+  - The worker's provider-free bigbox run (`rated-delivery-towels`; `new-store-cheapest-towels` has no script) passed 4 of 4: 15 calls to explore, then the same Flow with 1, 0 and 0 calls.
+  - t1064 finished into `dev` (`de4368246`), pushed, and the four lanes merged.
+- **Live:** bigbox `new-store-cheapest-towels` relaunched on t1015 as run-mwy3btww-31d32e0d (Sonnet, `--attempts 4`, $5, watcher on).
+
 ### 2026-11-26 - t1062 (iframe steps) integrated (fluxiq 0.54.29); t1056 (no count of calls or rounds ends a run) integrated (fluxiq 0.54.30); live round next
 - **t1062** (worker-heavy; report `reports/t1062.md`): a Flow saved from steps inside an iframe assembles and replays.
   - Each frame step is found again by its frame's URL path, with the id only agreeing.
