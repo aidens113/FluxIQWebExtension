@@ -263,9 +263,9 @@ test("generation failures retain only Core-validated bounded diagnostics", async
     { ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).", payload: { diagnostic: { ...diagnostic, rawResponse: "private-response-value" } } },
     { ok: false, error: "private-prompt-value", payload: { diagnostic } },
     { ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).", payload: { diagnostic }, rawPrompt: "private-prompt-value" },
-    // A token count no build could spend. It was 50,001 until Core made the
-    // accounting a build's totals rather than one request's; see the row below.
-    { ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).", payload: { diagnostic: { ...diagnostic, accounting: { ...diagnostic.accounting, totalTokens: Number.MAX_SAFE_INTEGER } } } },
+    // A token count that is no count at all. No call count bounds a build since t1056 (fluxiq
+    // 0.54.30), so Core takes any safe whole number of tokens; a fraction is still malformed.
+    { ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).", payload: { diagnostic: { ...diagnostic, accounting: { ...diagnostic.accounting, totalTokens: 1000.5 } } } },
   ]) {
     const rejected = await readSanitizedGenerationFailure(response(400, JSON.stringify(unsafe)));
     assert.equal(rejected.code, "generation.http-400");

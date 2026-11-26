@@ -167,7 +167,7 @@ export type ExpectedFailure = { category: AutomationStudioAdaptiveFailureClass; 
  * absorption would read as a defect.
  *
  * `count` is `0` and nothing else: this declares an absence, not a budget, and
- * the caps on what a run may spend stay the operator's (`--llm-max-calls`).
+ * the caps on what a run may spend stay the operator's.
  * `because` is the fixture author's one sentence saying what is expected to do
  * the absorbing, and it is written into the run's `snapshots/live-llm.json` so
  * a reader sees that the silence was intended rather than inferred.

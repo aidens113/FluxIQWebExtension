@@ -72,7 +72,7 @@ test("first adaptation profile bounds each call strictly and lets the adaptation
   // an adaptation may gather evidence between its diagnosis and patch.
   assert.deepEqual(FIRST_LIVE_ADAPTATION_PROFILE.budget, {
     maxInputTokens: 992_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 1_000_000,
-    maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+    timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
   assert.equal(FIRST_LIVE_ADAPTATION_PROFILE.task, "adapt");
   assert.equal(FIRST_LIVE_ADAPTATION_PROFILE.approvalMode, "manual");
@@ -106,7 +106,7 @@ test("certifies failed-action-first adaptation, resumed completion, and zero-cal
   assert.equal(result.evidenceCallCount, 0);
   assert.equal(result.evaluation.invocations.length, 2);
   assert.deepEqual(result.evaluation.invocations.map(item => item.requestId), ["request.diagnosis.one", "request.adapt.one"]);
-  assert.equal(result.evaluation.maxCallsPerRun, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun);
+  assert.equal("maxCallsPerRun" in result.evaluation, false);
   assert.equal(result.retryCount, 0);
   assert.equal(result.reviewOutcome, "approved");
   assert.equal(result.applyOutcome, "applied");
@@ -192,12 +192,12 @@ test("refuses a certificate whose call count disagrees with its invocations", ()
   }
 });
 
-test("certifies up to the run's ceiling and refuses a call count past it", () => {
-  const ceiling = FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun;
-  const atCeiling = evaluateDemoLlmAdaptation(withEvidenceCalls(validInput(), ceiling - 2));
-  assert.equal(atCeiling.providerCallCount, ceiling);
-  assert.equal(atCeiling.evaluation.invocations.length, ceiling);
-  assert.throws(() => evaluateDemoLlmAdaptation(withEvidenceCalls(validInput(), ceiling - 1)), /run could not have produced/);
+test("certifies any call count: no ceiling on calls is held", () => {
+  for (const calls of [26, 400]) {
+    const certified = evaluateDemoLlmAdaptation(withEvidenceCalls(validInput(), calls - 2));
+    assert.equal(certified.providerCallCount, calls);
+    assert.equal(certified.evaluation.invocations.length, calls);
+  }
 });
 
 test("requires exactly one diagnosis first and one patch last, and rejects retries or invalid accounting", () => {

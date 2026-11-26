@@ -7,14 +7,15 @@ export type DemoLlmProfileName = (typeof DEMO_LLM_PROFILE_NAMES)[number];
 // must make, so both take the Lab's default rather than a fixed two. Cost and
 // tokens are what these profiles differ on, and what is meant to bound a run.
 const PROFILE_BUDGETS: Readonly<Record<DemoLlmProfileName, Readonly<LlmTokenBudget>>> = Object.freeze({
-  production: Object.freeze({ maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000, maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD }),
-  conservative: Object.freeze({ maxInputTokens: 12_000, maxOutputTokens: 4_000, maxTotalTokensPerRequest: 16_000, maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD }),
+  production: Object.freeze({ maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD }),
+  conservative: Object.freeze({ maxInputTokens: 12_000, maxOutputTokens: 4_000, maxTotalTokensPerRequest: 16_000, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD }),
 });
 
 export const DEFAULT_DEMO_LLM_CREATION_PROFILE = createProfile("production", PROFILE_BUDGETS.production);
 
 export function resolveDemoLlmCreationProfile(argv: readonly string[] = [], environment: NodeJS.ProcessEnv = {}): Readonly<LlmExecutionProfile> {
-  const allowed = new Set(["--llm-profile", "--llm-max-input-tokens", "--llm-max-output-tokens", "--llm-max-total-tokens", "--llm-max-calls", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd"]);
+  if (argv.includes("--llm-max-calls")) throw new Error("--llm-max-calls is refused: no count of calls exists, and the purse (--llm-max-cost-usd) bounds a run");
+  const allowed = new Set(["--llm-profile", "--llm-max-input-tokens", "--llm-max-output-tokens", "--llm-max-total-tokens", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd"]);
   for (let index = 0; index < argv.length; index += 2) {
     const name = argv[index];
     if (!name || !allowed.has(name) || argv[index + 1] === undefined) throw new Error("Demo LLM profile arguments are malformed");
@@ -42,7 +43,6 @@ export function resolveDemoLlmCreationProfile(argv: readonly string[] = [], envi
     maxInputTokens: integer("--llm-max-input-tokens", "FLUXIQ_LLM_MAX_INPUT_TOKENS", base.maxInputTokens),
     maxOutputTokens: integer("--llm-max-output-tokens", "FLUXIQ_LLM_MAX_OUTPUT_TOKENS", base.maxOutputTokens),
     maxTotalTokensPerRequest: integer("--llm-max-total-tokens", "FLUXIQ_LLM_MAX_TOTAL_TOKENS", base.maxTotalTokensPerRequest),
-    maxCallsPerRun: integer("--llm-max-calls", "FLUXIQ_LLM_MAX_CALLS", base.maxCallsPerRun),
     timeoutMs: integer("--llm-timeout-ms", "FLUXIQ_LLM_TIMEOUT_MS", base.timeoutMs),
     maxRetries: integer("--llm-max-retries", "FLUXIQ_LLM_MAX_RETRIES", base.maxRetries),
     maxEstimatedCostUsd,

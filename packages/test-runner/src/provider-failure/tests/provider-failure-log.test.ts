@@ -56,7 +56,7 @@ test("a failed call keeps the status, the body verbatim, and the diagnostic the 
 });
 
 test("the run's declared bounds ride beside the failure, so a size refusal reads against its limit", () => {
-  const bounds = { provider: "deepseek", model: "deepseek-flash", maxInputTokens: 48_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 56_000, maxCallsPerRun: 48, maxTotalTokensPerRun: 600_000, timeoutMs: 25_000 };
+  const bounds = { provider: "deepseek", model: "deepseek-flash", maxInputTokens: 48_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 56_000, maxTotalTokensPerRun: 600_000, timeoutMs: 25_000 };
   const log = new ProviderFailureLog({ secrets: [], bounds, now });
   record(log, coreRefusal());
   const entry = only(log);

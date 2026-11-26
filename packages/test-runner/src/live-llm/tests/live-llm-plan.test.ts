@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, DEFAULT_LLM_PROVIDER, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_MAX_ESTIMATED_COST_USD, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, llmProviderForModel, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, DEFAULT_LLM_PROVIDER, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_ESTIMATED_COST_USD, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, llmProviderForModel, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP, AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation";
 import { liveLlmBuildCostCeilingUsd } from "../build-cost-ceiling.js";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
 import { assertLiveLlmLaunchable, planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
@@ -21,10 +21,8 @@ const CEILING = LAB_CEILING_USD;
  * effective limit is at or inside what the operator typed, and a profile that
  * cannot be run inside its own stated bounds is refused rather than widened.
  *
- * They also pin the call-count model Core now has. An intent that does not
- * iterate makes one call; one that does takes the operator's number, bounded
- * only by Core's runaway backstop. The Lab used to pin adaptation at exactly
- * two calls, which left a real recovery no call to gather evidence with.
+ * They also pin that no count of calls exists: the plan carries none, and the
+ * purse (`--llm-max-cost-usd`) bounds a run (t1056, t1064).
  */
 
 function profile(overrides: Partial<LlmExecutionProfile> = {}, budget: Partial<LlmExecutionProfile["budget"]> = {}): LlmExecutionProfile {
@@ -48,46 +46,18 @@ function profile(overrides: Partial<LlmExecutionProfile> = {}, budget: Partial<L
 }
 
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
-const DEFAULT_CALLS = DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
 
-test("a diagnose profile plans exactly one authorized provider call, whatever cap was typed", () => {
-  for (const maxCallsPerRun of [1, 2, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, LLM_LAB_MAX_CALLS_PER_RUN]) {
-    const plan = planAtLabCeiling(profile({}, { maxCallsPerRun }));
-    assert.equal(plan.purpose, "diagnosis_only");
-    assert.equal(plan.maxCalls, 1, `--llm-max-calls ${maxCallsPerRun}`);
-    assert.equal(plan.declared.maxCallsPerRun, maxCallsPerRun);
+test("a plan carries no call count, whatever the task", () => {
+  for (const task of ["diagnose", "adapt", "repair", "create-flow"] as const) {
+    const plan = planAtLabCeiling(profile({ task }));
+    assert.equal("maxCalls" in plan, false, task);
+    assert.equal("maxCallsPerRun" in plan.declared, false, task);
   }
   const plan = planAtLabCeiling(profile());
+  assert.equal(plan.purpose, "diagnosis_only");
   assert.equal(plan.provider, DEFAULT_LLM_PROVIDER);
   assert.equal(plan.model, DEFAULT_LLM_MODEL);
-});
-
-test("a diagnose profile still needs a cap of at least one, and no more than Core's backstop", () => {
-  assert.throws(() => planAtLabCeiling(profile({}, { maxCallsPerRun: 0 })), /--llm-max-calls 0 must be a whole number between 1 and 250/u);
-  assert.throws(() => planAtLabCeiling(profile({}, { maxCallsPerRun: 251 })), /--llm-max-calls 251 must be a whole number between 1 and 250/u);
-});
-
-test("an adapt profile iterates for the operator's call count, defaulting to Core's twenty-six", () => {
-  const byDefault = planAtLabCeiling(profile({ task: "adapt" }));
-  assert.equal(byDefault.purpose, "diagnose_and_adapt");
-  assert.equal(byDefault.maxCalls, 26);
-  assert.equal(byDefault.maxCalls, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
-
-  const ten = planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 10 }));
-  assert.equal(ten.purpose, "diagnose_and_adapt");
-  assert.equal(ten.maxCalls, 10);
-});
-
-test("an adapt profile is never refused for asking for more than two calls", () => {
-  for (const maxCallsPerRun of [1, 2, 3, 7, 32, 64]) {
-    assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun })).maxCalls, maxCallsPerRun, `--llm-max-calls ${maxCallsPerRun}`);
-  }
-});
-
-test("an adapt call limit above Core's backstop or below one is refused, naming the option", () => {
-  assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 251 })), /Live LLM execution refused: --llm-max-calls 251 must be a whole number between 1 and 250/u);
-  assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 0 })), /--llm-max-calls 0 must be a whole number between 1 and 250/u);
-  assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 2.5 })), /--llm-max-calls 2\.5 must be a whole number/u);
+  assert.equal(planAtLabCeiling(profile({ task: "adapt" })).purpose, "diagnose_and_adapt");
 });
 
 test("repair plans the iterating explore_and_adapt intent, and adapt stays the narrow one", () => {
@@ -99,63 +69,43 @@ test("repair plans the iterating explore_and_adapt intent, and adapt stays the n
   const repair = planAtLabCeiling(profile({ task: "repair" }));
   assert.equal(repair.purpose, "explore_and_adapt");
   assert.equal(repair.task, "repair");
-  // It iterates, so the operator's own call count stands, as it does for adapt.
-  assert.equal(repair.maxCalls, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
-  assert.equal(planAtLabCeiling(profile({ task: "repair" }, { maxCallsPerRun: 40 })).maxCalls, 40);
-  assert.throws(() => planAtLabCeiling(profile({ task: "repair" }, { maxCallsPerRun: 251 })), /--llm-max-calls 251 must be a whole number between 1 and 250/u);
   // The narrow intent is unchanged: `repair` is a new task, not a redefinition of `adapt`.
   assert.equal(planAtLabCeiling(profile({ task: "adapt" })).purpose, "diagnose_and_adapt");
 });
 
-test("create-flow plans the web panel's iterating build_and_adapt, with the operator's call count and every call's tokens", () => {
+test("create-flow plans the web panel's iterating build_and_adapt, with every call's tokens and no call count", () => {
   // The whole per-request triple comes from the shared budget. Overriding the
   // output and total limits alone left the input limit at the default, and
   // input plus output may not exceed the total, so the profile was refused.
   const byDefault = planAtLabCeiling(profile({ task: "create-flow" }));
   assert.equal(byDefault.purpose, "build_and_adapt");
   assert.equal(byDefault.task, "create-flow");
-  // Core's own iterating default, not a one-call build.
-  assert.equal(byDefault.maxCalls, DEFAULT_CALLS);
-  // A build's token budget is every authorized call at the per-request limit,
-  // so the cost cap and the stall guard bind before tokens do.
-  assert.equal(byDefault.maxTotalTokensPerRun, PER_REQUEST * DEFAULT_CALLS);
-  assert.equal(planAtLabCeiling(profile({ task: "create-flow" }, { maxCallsPerRun: 40 })).maxCalls, 40);
-  // A typed campaign budget once capped real builds at ~34 decisions, so an
-  // untyped build budget outlasts every decision ...
-  const campaign = planAtLabCeiling(profile({ task: "create-flow" }, { maxCallsPerRun: 48 }));
-  assert.equal(campaign.maxTotalTokensPerRun, PER_REQUEST * 48);
-  assert.ok(Math.floor(campaign.maxTotalTokensPerRun / 16_000) >= 48, "tokens must outlast every authorized decision");
-  // ... but a budget the operator typed is theirs, and binds a build as it binds everything else,
-  assert.equal(planAtLabCeiling(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: PER_REQUEST * 2 })).maxTotalTokensPerRun, PER_REQUEST * 2);
+  // No run token budget unless one was typed: the cost cap and the stall guard bind.
+  assert.equal(byDefault.maxTotalTokensPerRun, undefined);
+  assert.equal("maxTotalTokensPerRun" in byDefault, false);
+  // A budget the operator typed is theirs, and binds a build as it binds everything else,
+  assert.equal(planAtLabCeiling(profile({ task: "create-flow" }, { maxTotalTokensPerRun: PER_REQUEST * 2 })).maxTotalTokensPerRun, PER_REQUEST * 2);
   // ... while the operator's cost cap stays exactly theirs,
-  const cheap = planAtLabCeiling(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxEstimatedCostUsd: 0.01 }));
+  const cheap = planAtLabCeiling(profile({ task: "create-flow" }, { maxEstimatedCostUsd: 0.01 }));
   assert.equal(cheap.maxEstimatedCostUsd, 0.01);
-  // and it is the whole build's ceiling, never multiplied by the call count.
+  // and it is the whole build's ceiling.
   assert.equal(cheap.maxTotalEstimatedCostUsd, 0.01);
-  assert.equal(planAtLabCeiling(profile({ task: "create-flow" }, { maxCallsPerRun: 20, maxEstimatedCostUsd: 0.01 })).maxTotalEstimatedCostUsd, 0.01);
   // ... a typed budget is still validated, and every other intent still honours it.
   assert.throws(() => planAtLabCeiling(profile({ task: "create-flow" }, { maxTotalTokensPerRun: PER_REQUEST - 1 })), /--llm-max-run-tokens .* must be a whole number of at least/u);
-  assert.equal(planAtLabCeiling(profile({ task: "repair" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: PER_REQUEST * 2 })).maxTotalTokensPerRun, PER_REQUEST * 2);
+  assert.equal(planAtLabCeiling(profile({ task: "repair" }, { maxTotalTokensPerRun: PER_REQUEST * 2 })).maxTotalTokensPerRun, PER_REQUEST * 2);
   // A build intent is never one a Flow run carries: the Flow lane's type has no room for it.
   const runPurposes: ReadonlyArray<PersistedFlowLlmExecution["intent"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
   assert.equal((runPurposes as readonly string[]).includes(byDefault.purpose), false);
 });
 
-test("without --llm-max-run-tokens the run token budget is every authorized call at the per-request limit", () => {
-  // What bounds a run is its spend ceiling, the calls it was allowed and
-  // Core's stall guard.
-  assert.equal(planAtLabCeiling(profile({ task: "adapt" })).maxTotalTokensPerRun, PER_REQUEST * DEFAULT_CALLS);
-  assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 3 })).maxTotalTokensPerRun, PER_REQUEST * 3);
-  assert.equal(planAtLabCeiling(profile()).maxTotalTokensPerRun, PER_REQUEST);
+test("without --llm-max-run-tokens the plan holds no run token budget", () => {
+  // What bounds a run is its spend ceiling and Core's stall guard.
+  for (const task of ["adapt", "diagnose", "repair", "create-flow"] as const) assert.equal(planAtLabCeiling(profile({ task })).maxTotalTokensPerRun, undefined, task);
 });
 
-test("a run token budget only moves down: held to what the authorized calls could use, refused below one request", () => {
+test("a typed run token budget is carried as typed and refused below one request", () => {
   assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxTotalTokensPerRun: PER_REQUEST * 3 })).maxTotalTokensPerRun, PER_REQUEST * 3);
-  const held = planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 2, maxTotalTokensPerRun: PER_REQUEST * 5 }));
-  assert.equal(held.maxTotalTokensPerRun, PER_REQUEST * 2);
-  // A diagnosis makes one call however high the typed budget, so one request is all it can spend.
-  const diagnosis = planAtLabCeiling(profile({}, { maxCallsPerRun: 64, maxInputTokens: 40_000, maxOutputTokens: 10_000, maxTotalTokensPerRequest: 50_000, maxTotalTokensPerRun: 3_000_000 }));
-  assert.equal(diagnosis.maxTotalTokensPerRun, 50_000);
+  assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxTotalTokensPerRun: PER_REQUEST * 5 })).maxTotalTokensPerRun, PER_REQUEST * 5);
   // The floor a run budget may never sit below is one whole request, which is
   // now the per-request ceiling itself rather than the 10,000 it once was.
   assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxTotalTokensPerRun: PER_REQUEST - 1 })), new RegExp(`--llm-max-run-tokens ${PER_REQUEST - 1} must be a whole number of at least --llm-max-total-tokens ${PER_REQUEST}`, "u"));
@@ -175,8 +125,8 @@ test("--llm-max-cost-usd is the whole build's spend ceiling, held to Core's per-
   assert.equal(planAtLabCeiling(profile()).maxTotalEstimatedCostUsd, CEILING);
   assert.equal(planAtLabCeiling(profile({ task: "adapt" })).maxTotalEstimatedCostUsd, CEILING);
   // Below the ceiling, the operator's smaller number is the build's, not one call's.
-  assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 4, maxEstimatedCostUsd: CEILING / 2 })).maxTotalEstimatedCostUsd, CEILING / 2);
-  assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 4, maxEstimatedCostUsd: CEILING * 9 })).maxTotalEstimatedCostUsd, CEILING);
+  assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxEstimatedCostUsd: CEILING / 2 })).maxTotalEstimatedCostUsd, CEILING / 2);
+  assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxEstimatedCostUsd: CEILING * 9 })).maxTotalEstimatedCostUsd, CEILING);
 });
 
 test("the build's ceiling is Core's resolved value, and the Lab contract's bound is Core's maximum", async (t) => {
@@ -197,9 +147,6 @@ test("the build's ceiling is Core's resolved value, and the Lab contract's bound
   assert.equal(LLM_LAB_MAX_ESTIMATED_COST_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD);
   // An unset --llm-max-cost-usd declares this: a lower Core ceiling holds the build lower, and a higher one does not raise it.
   assert.equal(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, 5);
-  // The call cap mirrors Core's runaway backstop the same way. Three 64s once drifted apart from it (t576, t583): the
-  // Lab refused a run Core would take, and Core refused the settings of a Flow the Lab had just built.
-  assert.equal(LLM_LAB_MAX_CALLS_PER_RUN, AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP);
 });
 
 test("the plan holds a build to the ceiling it is given, and refuses one that is not an amount", () => {
@@ -209,29 +156,15 @@ test("the plan holds a build to the ceiling it is given, and refuses one that is
   assert.throws(() => planLiveLlmExecution(profile(), Number.NaN), /is not a positive amount/u);
 });
 
-test("no campaign row can plan more than the per-build ceiling for one build, whatever its calls and cap", () => {
-  // The live campaign's own rows: create tasks run 48 calls, repair tasks 26,
-  // both at --llm-max-cost-usd 0.25. Every call count the contract allows is
-  // tried, with caps at, under and over the ceiling.
+test("no plan can hold more than the per-build ceiling for one build, whatever its cap", () => {
   for (const task of ["create-flow", "repair", "adapt", "diagnose"] as const) {
-    for (let calls = 1; calls <= LLM_LAB_MAX_CALLS_PER_RUN; calls += 1) {
-      for (const cost of [0.001, CEILING / 2, CEILING, CEILING * 1.2, 2]) {
-        const plan = planAtLabCeiling(profile({ task }, { maxCallsPerRun: calls, maxEstimatedCostUsd: cost }));
-        assert.ok(plan.maxTotalEstimatedCostUsd <= CEILING, `${task} x${calls} at ${cost}`);
-        assert.ok(plan.maxEstimatedCostUsd <= plan.maxTotalEstimatedCostUsd, `${task} x${calls} at ${cost}: one call may not outspend its build`);
-        assert.equal(plan.maxTotalEstimatedCostUsd, Math.min(cost, CEILING), `${task} x${calls} at ${cost}: never scaled by the call count`);
-      }
+    for (const cost of [0.001, CEILING / 2, CEILING, CEILING * 1.2, 2]) {
+      const plan = planAtLabCeiling(profile({ task }, { maxEstimatedCostUsd: cost }));
+      assert.ok(plan.maxTotalEstimatedCostUsd <= CEILING, `${task} at ${cost}`);
+      assert.ok(plan.maxEstimatedCostUsd <= plan.maxTotalEstimatedCostUsd, `${task} at ${cost}: one call may not outspend its build`);
+      assert.equal(plan.maxTotalEstimatedCostUsd, Math.min(cost, CEILING), `${task} at ${cost}`);
     }
   }
-});
-
-test("a build of 64 calls at Core's ceiling each is allowed Core's ceiling in all, not 64 times the per-call cap", () => {
-  // The user's rule: a Flow build's total is Core's ceiling. It used to be $2 here, so
-  // `--llm-max-cost-usd 0.25 --llm-max-calls 64` let one build spend eight times that.
-  const build = planAtLabCeiling(profile({ task: "create-flow" }, { maxCallsPerRun: 64, maxEstimatedCostUsd: CEILING }));
-  assert.equal(build.maxCalls, 64);
-  assert.equal(build.maxEstimatedCostUsd, CEILING);
-  assert.equal(build.maxTotalEstimatedCostUsd, CEILING);
 });
 
 test("the operator's own budget is carried through untouched for the post-run check", () => {
@@ -283,12 +216,6 @@ test("token limits are held inside Core's ceiling and must add up", () => {
   const overCeiling = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST + 1;
   assert.throws(() => planAtLabCeiling(profile({}, { maxInputTokens: overCeiling })), new RegExp(`--llm-max-input-tokens ${overCeiling} must be a whole number between 1 and ${LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST}`, "u"));
   assert.throws(() => planAtLabCeiling(profile({}, { maxInputTokens: 9_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000 })), /exceeds --llm-max-total-tokens/u);
-});
-
-test("a backstop-sized plan's spend ceiling is Core's ceiling, whatever its call count", () => {
-  // The ceiling is Core's, saved on the Flow as `maxEstimatedCostUsdPerRun`,
-  // which may only lower it.
-  assert.equal(planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).maxTotalEstimatedCostUsd, CEILING);
 });
 
 test("the consequence classes the Lab mirrors are Core's own, in Core's order", () => {

@@ -15,14 +15,9 @@ import type { LiveLlmObservedUsage } from "./observed-usage.js";
 /** Every breach found, as short sentences naming the option that was exceeded. */
 export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedUsage): string[] {
   const declared = plan.declared;
-  // The run-wide totals are judged across the calls the plan authorized, not
-  // across the operator's cap. The two are equal for an iterating purpose; for
-  // one that makes a single call, the cap may be larger, and multiplying by it
-  // would let one call spend what ten were allowed.
-  const calls = plan.maxCalls;
+  // No count of calls is held: the dollar ceiling, the run token budget when one
+  // was typed, and the per-call caps below are what a run is judged against.
   const breaches: string[] = [];
-  if (usage.calls > calls) breaches.push(`the run made ${usage.calls} provider call(s) against an authorized ${calls}`);
-  if (usage.calls > declared.maxCallsPerRun) breaches.push(`the run made ${usage.calls} provider call(s) against --llm-max-calls ${declared.maxCallsPerRun}`);
   // The build's spend ceiling, saved as the Flow's `maxEstimatedCostUsdPerRun`:
   // `--llm-max-cost-usd`, held to Core's per-build ceiling, for the whole
   // build whatever its call count -- never a per-call figure multiplied by
@@ -33,20 +28,12 @@ export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedU
     breaches.push(`the build's estimated cost ${usage.totalEstimatedCostUsd} exceeded its per-build cost ceiling of ${plan.maxTotalEstimatedCostUsd} (--llm-max-cost-usd ${declared.maxEstimatedCostUsd}, held to Core's per-build ceiling)`);
   }
   const accounting = usage.accounting;
-  if (accounting) {
-    // Core's own `budgetBreaches` counts calls that exceeded their per-call
-    // reservation, which is not a cap: it is a finding (`reservation-findings.ts`)
-    // while every cap below held, and the caps below fail the run when one did not.
-    if (accounting.inputTokens > declared.maxInputTokens * calls) breaches.push(`the run used ${accounting.inputTokens} input tokens against --llm-max-input-tokens ${declared.maxInputTokens} across ${calls} authorized call(s)`);
-    if (accounting.outputTokens > declared.maxOutputTokens * calls) breaches.push(`the run used ${accounting.outputTokens} output tokens against --llm-max-output-tokens ${declared.maxOutputTokens} across ${calls} authorized call(s)`);
-  }
-  // Total tokens are judged against the plan's run token budget, which is
-  // never more than every authorized call at its per-call limit. Core's
-  // accounting is preferred; the per-call records are the floor where Core
-  // published no accounting or reported less than they add up to.
+  // Total tokens are judged against the run token budget the operator typed,
+  // when one was. Core's accounting is preferred; the per-call records are the
+  // floor where Core published no accounting or reported less than they add up to.
   const recordedTokens = usage.observedCalls.reduce((sum, call) => sum + (call.totalTokens ?? 0), 0);
   const runTokens = Math.max(accounting?.totalTokens ?? 0, recordedTokens);
-  if (runTokens > plan.maxTotalTokensPerRun) {
+  if (plan.maxTotalTokensPerRun !== undefined && runTokens > plan.maxTotalTokensPerRun) {
     breaches.push(`the run used ${runTokens} total tokens against its run token budget of ${plan.maxTotalTokensPerRun}${declared.maxTotalTokensPerRun === undefined ? "" : ` (--llm-max-run-tokens ${declared.maxTotalTokensPerRun})`}`);
   }
   // Every itemized call is held to the per-call caps, the calls that gathered
@@ -108,7 +95,7 @@ export function assertLiveLlmProviderWasReached(plan: LiveLlmPlan, usage: LiveLl
   const gate = usage.gate;
   const reason = gate?.reason ?? (gate ? "Core published no reason." : "Core published no LLM gate for this run.");
   const code = gate?.code ? ` (${gate.code})` : "";
-  throw new RunnerFailure("runtime.behavior", `Live LLM run reached no provider: --live-llm authorized ${plan.maxCalls} ${plan.provider} call(s) for --llm-task ${plan.task} and Core made none. ${reason}${code}`, {
+  throw new RunnerFailure("runtime.behavior", `Live LLM run reached no provider: --live-llm authorized ${plan.provider} calls for --llm-task ${plan.task} and Core made none. ${reason}${code}`, {
     details: { calls: 0, interventions: usage.interventions, ...(gate ? { gate } : {}) },
   });
 }

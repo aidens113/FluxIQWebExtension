@@ -9,7 +9,7 @@
 // operator still allows is a consequence (`--llm-permit`).
 
 import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
-import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, defaultLlmModelForProvider, isLlmModel, isLlmModelForProvider, isLlmProvider, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmProvider, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, defaultLlmModelForProvider, isLlmModel, isLlmModelForProvider, isLlmProvider, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmProvider, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT } from "fluxiq/automation";
 import { RunnerFailure } from "../failure.js";
 
@@ -28,8 +28,6 @@ export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 /** The per-request ceiling: the configured models' own context window (Core's `AUTOMATION_STUDIO_DEEPSEEK_MODEL_LIMITS`), not a budget, so no limit hides page information from the model. Derived: a tenth copy of this number is how the previous nine happened. */
 const CORE_MAX_TOKENS = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST;
 const CORE_MAX_TIMEOUT_MS = 25_000;
-/** Core's runaway backstop on a run's calls (`AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP`, 250); the Lab contract carries the same number. */
-const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
 
 export type LiveLlmPlan = {
   profileId: string;
@@ -37,20 +35,13 @@ export type LiveLlmPlan = {
   model: LlmModel;
   task: LlmTaskKind;
   purpose: LiveLlmPurpose;
-  /**
-   * The run's call count. One for an intent that does not iterate; otherwise
-   * exactly the operator's `--llm-max-calls`, which is never above Core's
-   * backstop. Never more than the profile allows.
-   */
-  maxCalls: number;
   tokenLimits: { maxInputTokens: number; maxOutputTokens: number; maxTotalTokens: number };
   /**
    * The tokens the whole run may use, held by the Lab's post-run check: the
-   * operator's `--llm-max-run-tokens`, held to what the authorized calls could
-   * use, or without one every authorized call at the per-request limit, so
-   * `--llm-max-cost-usd`, the call count and Core's stall guard bind first.
+   * operator's `--llm-max-run-tokens`, and absent without one, so
+   * `--llm-max-cost-usd` and Core's stall guard bind. No call count exists.
    */
-  maxTotalTokensPerRun: number;
+  maxTotalTokensPerRun?: number;
   timeoutMs: number;
   /**
    * The most any one call may cost: the build's ceiling below, since no call
@@ -118,10 +109,6 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeil
   const purpose = purposeOf(profile.task);
   const budget = profile.budget;
   if (budget.maxRetries !== 0) throw refusal(`--llm-max-retries ${budget.maxRetries} is unsupported; a live provider run permits no retries`);
-  // The operator's number is checked whatever the purpose, so a cap outside
-  // Core's range is refused even where the purpose then asks for less.
-  const declaredCalls = bounded(budget.maxCallsPerRun, "--llm-max-calls", CORE_MAX_CALLS);
-  const maxCalls = PURPOSE_ITERATES[purpose] ? declaredCalls : 1;
   const tokenLimits = {
     maxInputTokens: bounded(budget.maxInputTokens, "--llm-max-input-tokens", CORE_MAX_TOKENS),
     maxOutputTokens: bounded(budget.maxOutputTokens, "--llm-max-output-tokens", CORE_MAX_TOKENS),
@@ -130,7 +117,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeil
   if (tokenLimits.maxInputTokens + tokenLimits.maxOutputTokens > tokenLimits.maxTotalTokens) {
     throw refusal("--llm-max-input-tokens plus --llm-max-output-tokens exceeds --llm-max-total-tokens");
   }
-  const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens, maxCalls);
+  const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens);
   if (!Number.isSafeInteger(budget.timeoutMs) || budget.timeoutMs < 1) throw refusal(`--llm-timeout-ms ${budget.timeoutMs} must be a positive integer`);
   if (!Number.isFinite(budget.maxEstimatedCostUsd) || budget.maxEstimatedCostUsd <= 0) {
     throw refusal(`--llm-max-cost-usd ${budget.maxEstimatedCostUsd} cannot authorize a live provider call; give a positive per-build limit at or below ${buildCostCeilingUsd}`);
@@ -144,9 +131,8 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeil
     model,
     task: profile.task,
     purpose,
-    maxCalls,
     tokenLimits,
-    maxTotalTokensPerRun: runTokens,
+    ...(runTokens === undefined ? {} : { maxTotalTokensPerRun: runTokens }),
     // Both clamp downward only: Core refuses anything above its own ceiling,
     // and an operator who asked for less than the ceiling keeps their number.
     timeoutMs: Math.min(budget.timeoutMs, CORE_MAX_TIMEOUT_MS),
@@ -180,24 +166,17 @@ function permittedConsequencesOf(asked: readonly string[] | undefined, purpose: 
 }
 
 /**
- * The run's token budget, for the Lab's post-run check. It only ever moves
- * down: a typed budget above what the authorized calls could use is held to
- * that, and one that cannot cover a single request is refused rather than
- * raised. Without one it is every authorized call at the per-request limit.
- *
- * It used to default lower, and for a creation build that acted as a
- * decision cap nobody chose: about 16k input tokens a decision on a real store
- * ran a 600,000-token budget out after about 34 decisions (lane-summary round
- * 1, rank 3). What stops a run is what it spends (`--llm-max-cost-usd`, saved
- * as the Flow's run spend ceiling), the calls it was allowed, and Core's stall
- * guard.
+ * The run's token budget, for the Lab's post-run check: the operator's typed
+ * `--llm-max-run-tokens`, or none. One that cannot cover a single request is
+ * refused rather than raised. What stops a run is what it spends
+ * (`--llm-max-cost-usd`, saved as the Flow's run spend ceiling) and Core's
+ * stall guard; no count of calls bounds it.
  */
-function runTokenBudget(declared: number | undefined, perCall: number, calls: number): number {
-  const exposure = perCall * calls;
+function runTokenBudget(declared: number | undefined, perCall: number): number | undefined {
   if (declared !== undefined && (!Number.isSafeInteger(declared) || declared < perCall)) {
     throw refusal(`--llm-max-run-tokens ${declared} must be a whole number of at least --llm-max-total-tokens ${perCall}`);
   }
-  return declared === undefined ? exposure : Math.min(declared, exposure);
+  return declared;
 }
 
 // `adapt` stays the narrow `diagnose_and_adapt` intent, which iterates and

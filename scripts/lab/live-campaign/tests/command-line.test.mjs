@@ -95,8 +95,8 @@ test("the command line: a dry run prints commands and runs nothing", () => withT
   assert.equal(dry.code, 0, dry.stderr);
   const commands = dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#"));
   assert.deepEqual(commands, [
-    "pnpm lab run job-board --live-llm --llm-profile lab-create-flow --llm-provider anthropic --llm-model claude-haiku-5-5 --authoring-mode legacy --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
-    "pnpm lab run job-board --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider anthropic --llm-model claude-haiku-5-5 --authoring-mode legacy --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
+    "pnpm lab run job-board --live-llm --llm-profile lab-create-flow --llm-provider anthropic --llm-model claude-haiku-5-5 --authoring-mode legacy --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000",
+    "pnpm lab run job-board --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider anthropic --llm-model claude-haiku-5-5 --authoring-mode legacy --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000",
   ]);
   await assert.rejects(stat(path.join(directory, "invocations.ndjson")), { code: "ENOENT" });
   await assert.rejects(stat(path.join(directory, "campaigns")), { code: "ENOENT" });

@@ -13,7 +13,7 @@ export const INSUFFICIENT_BALANCE = {
   records: [{
     at: "2026-09-30T17:22:52.266Z",
     route: "generate-flow-bootstrap-adaptation",
-    request: { controlRequestBytes: 193, bounds: { provider: "deepseek", model: "deepseek-flash", maxInputTokens: 48000, maxOutputTokens: 8000, maxTotalTokensPerRequest: 56000, maxCallsPerRun: 64, maxTotalTokensPerRun: 3584000, timeoutMs: 25000 } },
+    request: { controlRequestBytes: 193, bounds: { provider: "deepseek", model: "deepseek-flash", maxInputTokens: 48000, maxOutputTokens: 8000, maxTotalTokensPerRequest: 56000, maxTotalTokensPerRun: 3584000, timeoutMs: 25000 } },
     core: {
       httpStatus: 400,
       body: JSON.stringify({

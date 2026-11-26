@@ -176,7 +176,6 @@ export class LiveLlmRun {
   constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {
     this.runSpend = liveLlmRunSpend(null, plan.maxTotalEstimatedCostUsd, "not_settled");
   }
-  get authorizedBuildCallLimit(): number { return this.plan.maxCalls; }
   /** The authoring mode the run's Core was started in (`./authoring-mode-env.ts`). */
   get coreAuthoringMode(): LiveLlmPlan["coreAuthoringMode"] { return this.plan.coreAuthoringMode; }
 
@@ -303,8 +302,7 @@ export class LiveLlmRun {
       maxInputTokens: this.plan.tokenLimits.maxInputTokens,
       maxOutputTokens: this.plan.tokenLimits.maxOutputTokens,
       maxTotalTokensPerRequest: this.plan.tokenLimits.maxTotalTokens,
-      maxCallsPerRun: this.plan.maxCalls,
-      maxTotalTokensPerRun: this.plan.maxTotalTokensPerRun,
+      ...(this.plan.maxTotalTokensPerRun === undefined ? {} : { maxTotalTokensPerRun: this.plan.maxTotalTokensPerRun }),
       timeoutMs: this.plan.timeoutMs,
     };
   }
@@ -371,9 +369,8 @@ export class LiveLlmRun {
       task: plan.task,
       purpose: plan.purpose,
       authorized: {
-        maxCalls: plan.maxCalls,
         tokenLimits: plan.tokenLimits,
-        maxTotalTokensPerRun: plan.maxTotalTokensPerRun,
+        ...(plan.maxTotalTokensPerRun === undefined ? {} : { maxTotalTokensPerRun: plan.maxTotalTokensPerRun }),
         timeoutMs: plan.timeoutMs,
         maxEstimatedCostUsd: plan.maxEstimatedCostUsd,
         maxTotalEstimatedCostUsd: plan.maxTotalEstimatedCostUsd,
@@ -491,7 +488,7 @@ export class LiveLlmRun {
     const repair = {
       purpose: plan.purpose,
       runId: input.runId ?? null,
-      authorized: { maxCalls: plan.maxCalls, maxTotalTokensPerRun: plan.maxTotalTokensPerRun, maxEstimatedCostUsd: plan.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: plan.maxTotalEstimatedCostUsd, timeoutMs: plan.timeoutMs },
+      authorized: { ...(plan.maxTotalTokensPerRun === undefined ? {} : { maxTotalTokensPerRun: plan.maxTotalTokensPerRun }), maxEstimatedCostUsd: plan.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: plan.maxTotalEstimatedCostUsd, timeoutMs: plan.timeoutMs },
       observed: recovery ?? null,
       ...(observed ? {} : { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" }),
       ...(checks.length > 0 ? { resultChecks: { calls: checks.length, totalEstimatedCostUsd: Number(checksCost.toFixed(9)), record: "verification" } } : {}),
@@ -605,9 +602,8 @@ export class LiveLlmRun {
       coreAuthoringMode: this.plan.coreAuthoringMode,
       credentialSource: { name: this.credential.name, from: this.credential.source },
       authorized: {
-        maxCalls: this.plan.maxCalls,
         tokenLimits: this.plan.tokenLimits,
-        maxTotalTokensPerRun: this.plan.maxTotalTokensPerRun,
+        ...(this.plan.maxTotalTokensPerRun === undefined ? {} : { maxTotalTokensPerRun: this.plan.maxTotalTokensPerRun }),
         timeoutMs: this.plan.timeoutMs,
         maxEstimatedCostUsd: this.plan.maxEstimatedCostUsd,
         maxTotalEstimatedCostUsd: this.plan.maxTotalEstimatedCostUsd,

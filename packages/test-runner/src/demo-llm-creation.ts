@@ -187,7 +187,6 @@ export function evaluateDemoLlmCreation(input: unknown, profile: Readonly<LlmExe
     profileId: profile.profileId,
     task: "create-flow",
     invocations: [provenance],
-    maxCallsPerRun: budget.maxCallsPerRun,
     proposalValidated: true,
     reviewOutcome: "approved",
     applyOutcome: "applied",

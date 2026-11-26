@@ -12,6 +12,9 @@ import { RunnerFailure } from "../failure.js";
 import { liveFlowAdaptationModeOf, type LiveFlowAdaptationMode } from "../flow-lane/index.js";
 import type { LiveLlmPlan } from "./live-llm-plan.js";
 
+/** Core's Flow settings schema still requires a `maxCalls` field (1 to 250); nothing reads it (t1056), so it carries no Lab count. */
+const FLOW_SETTINGS_INERT_CALLS_FIELD = 250;
+
 export type LiveLlmFlowSettingsControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown>;
 };
@@ -47,7 +50,8 @@ export async function configureFlowLiveLlmExecution(control: LiveLlmFlowSettings
         llmSecretKeyId: input.secretKeyId,
         llmExecutionSettings: {
           tokenLimits: { ...plan.tokenLimits },
-          maxCalls: plan.maxCalls,
+          // Core's settings schema still requires this field and nothing reads it (t1056); the Lab holds no call count.
+          maxCalls: FLOW_SETTINGS_INERT_CALLS_FIELD,
           timeoutMs: plan.timeoutMs,
           maxEstimatedCostUsd: plan.maxEstimatedCostUsd,
           retryCount: 0,
@@ -87,8 +91,7 @@ function assertSettingsPersisted(payload: unknown, secretKeyId: string, plan: Li
   if (!isRecord(execution)) throw refusal("Core did not store the bounded LLM execution settings");
   const tokens = execution.tokenLimits;
   if (!isRecord(tokens)) throw refusal("Core did not store the LLM token limits");
-  const mismatch = execution.maxCalls !== plan.maxCalls
-    || execution.timeoutMs !== plan.timeoutMs
+  const mismatch = execution.timeoutMs !== plan.timeoutMs
     || execution.maxEstimatedCostUsd !== plan.maxEstimatedCostUsd
     || execution.retryCount !== 0
     || tokens.maxInputTokens !== plan.tokenLimits.maxInputTokens

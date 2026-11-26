@@ -16,7 +16,7 @@ const action = (status: "failed" | "succeeded") => ({ attemptId: "attempt.one", 
 test("first live profile is stricter than the global ceilings", () => {
   assert.deepEqual(FIRST_LIVE_DIAGNOSIS_PROFILE.budget, {
     maxInputTokens: 2_000, maxOutputTokens: 512, maxTotalTokensPerRequest: 3_000,
-    maxCallsPerRun: 1, timeoutMs: 20_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+    timeoutMs: 20_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
   assert.equal(FIRST_LIVE_DIAGNOSIS_PROFILE.externalSideEffects, false);
   assert.equal(FIRST_LIVE_DIAGNOSIS_PROFILE.retainRawPrompts, false);

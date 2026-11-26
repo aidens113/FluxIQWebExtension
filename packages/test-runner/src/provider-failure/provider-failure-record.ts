@@ -60,8 +60,7 @@ export type ProviderFailureRequestBounds = Readonly<{
   maxInputTokens: number;
   maxOutputTokens: number;
   maxTotalTokensPerRequest: number;
-  maxCallsPerRun: number;
-  maxTotalTokensPerRun: number;
+  maxTotalTokensPerRun?: number;
   timeoutMs: number;
 }>;
 

@@ -15,25 +15,9 @@ export * from "./llm-models/index.js";
  * model can read, and a request over it fails loudly rather than being
  * trimmed. It used to be Core's own 64,000-token ceiling (and 50,000 before
  * that), which with the Lab's 48,000-token default made a real page impossible
- * to describe. What bounds a run is cost, the per-run token budget, the call
- * ceiling and the deadline.
+ * to describe. What bounds a run is cost, the per-run token budget and the deadline.
  */
 export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 1_000_000 as const;
-/**
- * The most provider calls any Lab run may declare: a backstop against a
- * runaway loop, equal to Core's own (`AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP`).
- * It was 64 until 2026-10-14 (t576): a project build's supervisor and
- * builders make many small calls, and A8's first project builds ended on 64
- * calls with two thirds of their dollars unspent. What bounds a run is its
- * dollar ceiling, so the call count must not bind before it does.
- *
- * It is deliberately far above what an adaptation needs and is not a per-task
- * count. An adaptation iterates for as many calls as it needs; what is meant to
- * stop it is cost, tokens, the recovery deadline and a lack of progress. A
- * two-call ceiling used to live here, and it made every real recovery that
- * asked for evidence unreachable.
- */
-export const LLM_LAB_MAX_CALLS_PER_RUN = 250 as const;
 /**
  * The most `--llm-max-cost-usd` may declare: Core's largest configurable
  * per-build ceiling (`AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD`), not the
@@ -77,10 +61,9 @@ export type LlmTokenBudget = {
   maxInputTokens: number;
   maxOutputTokens: number;
   maxTotalTokensPerRequest: number;
-  maxCallsPerRun: number;
   /**
    * The tokens the whole run may use, across every call, held by the Lab's
-   * post-run check. Absent means `maxTotalTokensPerRequest * maxCallsPerRun`.
+   * post-run check. Absent means no token bound beyond the dollar ceiling.
    */
   maxTotalTokensPerRun?: number;
   timeoutMs: number;
@@ -136,11 +119,6 @@ export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
   maxInputTokens: LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST - 8_000,
   maxOutputTokens: 8_000,
   maxTotalTokensPerRequest: LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST,
-  // What an iterating run declares when the operator names no call count:
-  // a diagnosis, a patch, and the exploration's own default ceiling of 24
-  // decisions. Tokens are bounded separately, by `maxTotalTokensPerRun`, so a
-  // larger count does not by itself raise what a run may spend.
-  maxCallsPerRun: 26,
   timeoutMs: 30_000,
   maxRetries: 0,
   maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD,
@@ -159,7 +137,7 @@ export function createDeterministicDryLlmProfile(task: LlmTaskKind = "diagnose")
     retainRawPrompts: false,
     retainRawResponses: false,
     maxConcurrentRuns: 1,
-    budget: { ...DEFAULT_LLM_LAB_BUDGET, maxCallsPerRun: 0, maxEstimatedCostUsd: 0 },
+    budget: { ...DEFAULT_LLM_LAB_BUDGET, maxEstimatedCostUsd: 0 },
   };
 }
 
@@ -204,7 +182,6 @@ export type LlmRunEvaluation = {
   profileId: string;
   task: LlmTaskKind;
   invocations: LlmInvocationProvenance[];
-  maxCallsPerRun: number;
   proposalValidated: boolean;
   reviewOutcome: "not-applicable" | "pending" | "approved" | "rejected";
   applyOutcome: "not-attempted" | "applied" | "rejected" | "reverted";

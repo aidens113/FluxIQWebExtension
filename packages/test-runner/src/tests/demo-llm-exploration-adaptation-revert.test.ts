@@ -96,7 +96,7 @@ test("fails closed on ambiguous, cross-Subflow, and wrong-patch applied state", 
 
 test("reverts and rejects when the source run iterated past two calls within its ceiling", async () => {
   const iterating = async (calls: number) => ({ ...(await fixture().control.getRunDetail()), providerCallCount: calls });
-  for (const calls of [3, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun]) {
+  for (const calls of [3, 26, 400]) {
     const applied = fixture();
     applied.control.getRunDetail = () => iterating(calls);
     assert.equal((await revertExactAppliedExplorationTargetAdaptation(applied.control as any, "project.one", "pin")).status, "reverted");
@@ -115,11 +115,11 @@ test("reverts and rejects when the source run iterated past two calls within its
   }
 });
 
-test("revert fails closed before mutation when the source run spent more than its ceiling", async () => {
-  const over = fixture();
-  over.control.getRunDetail = async () => ({ ...(await fixture().control.getRunDetail()), providerCallCount: FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1 });
-  await assert.rejects(() => revertExactAppliedExplorationTargetAdaptation(over.control as any, "project.one", "pin"), /source run/u);
-  assert.equal(over.calls.length, 0);
+test("revert fails closed before mutation when the source run has no call count", async () => {
+  const unaccounted = fixture();
+  unaccounted.control.getRunDetail = async () => ({ ...(await fixture().control.getRunDetail()), providerCallCount: undefined as unknown as number });
+  await assert.rejects(() => revertExactAppliedExplorationTargetAdaptation(unaccounted.control as any, "project.one", "pin"), /source run/u);
+  assert.equal(unaccounted.calls.length, 0);
 });
 
 test("rejects exactly one inert proposed target edit with a bounded diagnosis-and-patch source run", async () => {
