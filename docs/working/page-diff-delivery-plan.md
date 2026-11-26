@@ -139,6 +139,26 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-25 - t1051 (the answer contract reads the asked columns) integrated (fluxiq 0.54.26); the scripted round stopped on two diagnosed defects
+- Changed (worker, Sonnet; report `reports/t1051.md`):
+  - Core `flow-authoring/bootstrap/answerability/instruction-columns.ts` drops a closing "only", "just" or "exactly" after a column name, so "with columns title only" asks for `title`, not `title only`. "only child" keeps its first word.
+  - `result-verification/asked-words/table-lacks.ts` no longer takes a held column that shares one word as the named one: "due" for "due date" had let a table with the wrong column pass.
+  - `held-column.ts` also meets the singular and the plural.
+  - The lead rewrote `answer-first/completion/tests/result-columns.test.ts`, which pinned the old tolerance. A shared word is now refused with no judge; "title only" and a singular or plural name reach the judge.
+- Validation: the lead's run in `fxwork/t1051`.
+  - `pnpm --filter fluxiq check` exit 0.
+  - Vitest groups over `src/runtime/flow-authoring/bootstrap src/runtime/result-verification src/runtime/answer-first src/framework/automation-service/service/answer-first`:
+    - parallel printed `Tests  2 failed | 6905 passed | 2 skipped`; real-sql printed `Tests  519 passed (519)`.
+    - The 2 failures were `result-columns.test.ts`, rewritten as above, after which the file printed `Tests  10 passed (10)`; and `judge-reply/tests/unreadable-reply.test.ts` "ends at the judgement's existing deadline", a load-timed deadline test that printed `Tests  9 passed (9)` alone and was added to t1050's fake clocks.
+  - Core audit passed.
+- Scripted round on `dev` with W3 (lane t1015, provider-free, `--attempts 4`):
+  - bigbox passed 4 of 4 (run-mwwvelrb-46358790);
+  - company-website-apprentices (run-mwwwf7pb) and saturday-certificate (run-mwwwr1ty) failed, and the lead stopped the round (AGENTS.md: fix a shared problem before running more).
+  - Diagnosis (worker-heavy, `reports/scripted-round-diagnosis.md`):
+    - saturday was a Lab defect: `frame-origin-proof.ts` compared a stale copy of the health reply, store counters included, so the booking widget's frame was blocked after the store changed. It is fixed as t1052.
+    - apprentices was a Core defect: passed-over cover steps reached the web projector as `evidence_unrecognized`, so the replay's yes was held unsure and the attempt could not end. It is fixed as t1053.
+  - TaskStop ended only the round's outer shell, so the loop went on to the next task. The lead ended its process tree with `taskkill /T`.
+
 ### 2026-11-25 - W3 (t1037) integrated: the framework drafts the Flow, the model edits it (fluxiq 0.54.25)
 - Changed (sub-supervisor; workers: wiring ×3 and delete-grammar on Opus, text ×2, scripted-reorder and docs on Sonnet; report `reports/t1037-auto-draft.md`):
   - Core: every call that works joins the draft by itself, and the draft is recomposed in place after each call, rerun and edit. Dead ends and repeats are left out, and the asked table's read is the result.
