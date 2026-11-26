@@ -74,9 +74,10 @@ test("an element node shows only `target`, described as the handle the page view
     assert.deepEqual(target?.example, { handle: "t5" }, id);
   }
   // Saved targeting details remain declared; the model explicitly chooses an observed end state.
-  // The options a saved act requires chosen are Core's to write from the build's evidence, never the model's (t1030).
+  // The options a saved act requires chosen are Core's to write from the build's evidence, never the model's (t1030),
+  // and the frame the step ran in is the domain's to write from the handle (t1062).
   const click = definitions.find((definition) => definition.id === "web.output.dom-click")!;
-  assert.deepEqual(click.parameters.filter((parameter) => parameter.shownToModel === false).map((parameter) => parameter.id), ["selector", "element", "visualTarget", "requiresChosen"]);
+  assert.deepEqual(click.parameters.filter((parameter) => parameter.shownToModel === false).map((parameter) => parameter.id), ["selector", "element", "visualTarget", "requiresChosen", "browserFrameUrlPath", "browserFrameId"]);
   const ensure = catalog.find((entry) => entry.id === "web.output.dom-click")!.parameters.find((parameter) => parameter.id === "ensureState");
   assert.ok(ensure);
   assert.match(String(ensure.description), /exact observed state signature/u);

@@ -10,3 +10,4 @@ export { webTargetReplacement } from "./replacement";
 export { webRefreshTargetIdentity } from "./refresh";
 export { webCapturedTargetObservation } from "./capture";
 export { createWebTargetPlaces } from "./places";
+export { webFrameIdAgrees } from "./frame-id-agrees";

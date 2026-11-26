@@ -66,7 +66,11 @@ test("the name under a mark is the name the page offered, and an unmarked entry 
 
 test("the route signature of a page is the same with its headings as without", () => {
   assert.deepEqual(webAutomationRouteSignature(page(WITH)), webAutomationRouteSignature(page(WITHOUT)));
-  assert.deepEqual(webRoutePageFeatures(page(WITH)), webRoutePageFeatures(page(WITHOUT)));
+  // Only a step's effect reads the names under their headings (t1062, `../effect/sign.ts`); every other feature is the same.
+  const { markedHashes: withMarks, ...withFeatures } = webRoutePageFeatures(page(WITH));
+  const { markedHashes: withoutMarks, ...withoutFeatures } = webRoutePageFeatures(page(WITHOUT));
+  assert.deepEqual(withFeatures, withoutFeatures);
+  assert.notDeepEqual(withMarks, withoutMarks);
 });
 
 test("a heading that moves a control to another group does not make an unchanged page read as changed", () => {

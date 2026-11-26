@@ -39,6 +39,16 @@
 // tested. When the act added nothing else, the layer is what the act opened (a
 // press that answers with a dialog on a new page), and its controls are kept.
 // The host's own `signRouteEffect` has route states only and names no layer.
+//
+// **Where it happened, too (t1062): `marked`.** The names say what the page offers, not
+// where: a stepper's Next stays "Next" from one step to the next, and a step that only moved
+// it on added one name ("Back") or none, too few for its absence to say anything
+// (`./seen.ts`). So the effect also keeps the same samples over the names under their
+// headings (`../page-features.ts`, `markedHashes`) -- "Next" under "Where are you?" taken
+// away, "Back" and "Next" under the next step's heading brought -- whenever the step took
+// one away. Company-website `run-mwxixc4p-b7945aed`: the widget's Next, carried from the
+// first attempt, was held on every replay because nothing could show it had not been done.
+// Hashes only, as the rest; well inside the bound with both samples full.
 
 import type { JsonObject } from "fluxiq/core";
 import { WEB_ROUTE_EFFECT_FORMAT } from "./format";
@@ -54,6 +64,9 @@ export function webAutomationRouteEffect(before: JsonObject, after: JsonObject, 
   const effect = tries.map((left) => signed(from.controlHashes, to.controlHashes, left)).find((tried) => (tried.added as string[]).length > 0)
     ?? signed(from.controlHashes, to.controlHashes, NONE);
   if (to.path !== from.path) effect.path = to.path;
+  // Where on the page, as well as what (t1062): only a step that took a control away from under its heading says it.
+  const marked = { added: smallestMissing(to.markedHashes, from.markedHashes, NONE), removed: smallestMissing(from.markedHashes, to.markedHashes, NONE) };
+  if (marked.removed.length > 0) effect.marked = marked;
   return effect;
 }
 

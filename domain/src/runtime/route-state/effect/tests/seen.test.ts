@@ -58,3 +58,33 @@ test("an effect of another version, or malformed, is unknown", () => {
   assert.equal(webAutomationRouteEffectSeen({ ...ADD_EFFECT, added: [1, 2, 3] as unknown as string[] }, observed), "unknown");
   assert.equal(webAutomationRouteEffectSeen({ ...ADD_EFFECT, path: 7 }, observed), "unknown");
 });
+
+// A stepper's Next adds too few names for their absence to say anything, so whether the page still stands where the
+// step found it is read from the names under their headings (t1062, company-website `run-mwxixc4p-b7945aed`: a Next
+// carried from the first attempt was held on every replay of the saved Flow).
+const WIZARD = "/scenarios/demo-shop/checkout";
+const SHELL = ["Home", "Help", "Chat"];
+const FIRST_STEP = [...SHELL, "[Choose a size] Next"];
+const SECOND_STEP = [...SHELL, "[Choose a colour] Back", "Next"];
+const NEXT_EFFECT = webAutomationRouteEffect(routeState(WIZARD, FIRST_STEP), routeState(WIZARD, SECOND_STEP));
+
+test("a stepper's Next on a page still at the step it was made on is not seen, though it added one name", () => {
+  assert.equal(Array.isArray(NEXT_EFFECT.added) && NEXT_EFFECT.added.length < MIN_ADDED_FOR_ABSENCE, true);
+  assert.equal(webAutomationRouteEffectSeen(NEXT_EFFECT, routeState(WIZARD, FIRST_STEP)), "not_seen");
+});
+
+test("the same Next on the step it moved to is seen", () => {
+  assert.equal(webAutomationRouteEffectSeen(NEXT_EFFECT, routeState(WIZARD, SECOND_STEP)), "seen");
+});
+
+test("a page showing part of what the Next brought under its heading is not judged", () => {
+  const halfway = [...SHELL, "[Choose a size] Next", "[Choose a colour] Swatches"];
+  const mixed = webAutomationRouteEffect(routeState(WIZARD, FIRST_STEP), routeState(WIZARD, [...SHELL, "[Choose a colour] Swatches", "Back", "Next"]));
+  assert.equal(webAutomationRouteEffectSeen(mixed, routeState(WIZARD, halfway)), "unknown");
+});
+
+test("a step that took nothing away from under its heading keeps no marked sample, and is judged as before", () => {
+  const add = webAutomationRouteEffect(routeState(PRODUCT, PRODUCT_CONTROLS), routeState(PRODUCT, [...PRODUCT_CONTROLS, "View cart"]));
+  assert.equal(add.marked, undefined);
+  assert.equal(webAutomationRouteEffectSeen(add, routeState(PRODUCT, PRODUCT_CONTROLS)), "unknown");
+});

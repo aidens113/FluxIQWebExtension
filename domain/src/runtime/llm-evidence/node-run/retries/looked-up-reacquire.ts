@@ -21,7 +21,7 @@
 
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeDefinitions } from "../../../../output-nodes";
-import { webRefreshTargetIdentity, type WebTargetObservation, type WebTargetScope } from "../../../target-reacquire/identity";
+import { webFrameIdAgrees, webRefreshTargetIdentity, type WebTargetObservation, type WebTargetScope } from "../../../target-reacquire/identity";
 import type { WebLlmSnapshotBinding } from "../../sanitize";
 import { isJsonRecord } from "../../untrusted-json";
 import type { WebNodeRun } from "../context";
@@ -54,7 +54,7 @@ export function webNodeLookedUpReacquire(
   return async () => {
     if (run.request.signal?.aborted || prior?.scope.sessionId === undefined || prior.scope.browserTabId === undefined || prior.scope.browserFrameId === undefined || prior.scope.resetResource === undefined || prior.scope.location === undefined || prior.scope.timeOrigin === undefined) return { outcome: "unavailable" };
     if ((prior.scope.browserFrameId !== 0 || parameters.browserFrameUrlPath !== undefined) && (prior.scope.kind !== "single-frame" || prior.coverage !== "complete" || !prior.includesHidden)) return { outcome: "unavailable" };
-    if ((tab !== undefined && tab !== prior.scope.browserTabId) || (frame !== undefined && frame !== prior.scope.browserFrameId) || (parameters.browserFrameUrlPath !== undefined && parameters.browserFrameUrlPath !== prior.scope.browserFrameUrlPath)) return { outcome: "unavailable" };
+    if ((tab !== undefined && tab !== prior.scope.browserTabId) || !webFrameIdAgrees(frame, parameters.browserFrameUrlPath, prior.scope.browserFrameId) || (parameters.browserFrameUrlPath !== undefined && parameters.browserFrameUrlPath !== prior.scope.browserFrameUrlPath)) return { outcome: "unavailable" };
     const scope: WebTargetScope = { ...prior.scope, kind: "single-frame" };
     const match = (page: WebLlmSnapshotBinding) => webRefreshTargetIdentity({ parameters, observation: observed(page, prior.scope) });
     const looked = await webNodeLookUntilPresent(run, input.definitionId, () => input.look({ includeHidden: true, scope }), (page) => page === undefined || match(page).outcome === "gone");

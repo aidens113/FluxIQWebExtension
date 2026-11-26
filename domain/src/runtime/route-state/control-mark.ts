@@ -26,3 +26,9 @@ export function webRouteMarkedControl(heading: string, name: string): string {
 export function webRouteControlName(entry: string): string {
   return entry.replace(MARK, "");
 }
+
+/** The heading an entry's mark writes, or `undefined` for an entry with none: an entry after it falls under the same heading. */
+export function webRouteControlHeading(entry: string): string | undefined {
+  const mark = MARK.exec(entry)?.[0];
+  return mark === undefined ? undefined : mark.slice(1, -2);
+}

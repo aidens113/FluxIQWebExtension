@@ -3,6 +3,7 @@ import { screenedEvidenceUrl } from "../../llm-evidence/location";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../llm-evidence/sanitize";
 import type { WebLlmSnapshotBinding } from "../../llm-evidence";
 import { webTargetObservation } from "./classify-observation";
+import { webFrameIdAgrees } from "./frame-id-agrees";
 import type { WebTargetObservation } from "./observation";
 import type { WebTargetCaptureProvenance } from "./provenance";
 import type { WebTargetScope } from "./scope";
@@ -24,7 +25,8 @@ export function webCapturedTargetObservation(input: {
   const requested = input.requested;
   if ((requested.sessionId !== undefined && requested.sessionId !== input.sessionId)
     || (requested.browserTabId !== undefined && requested.browserTabId !== browserTabId)
-    || (requested.browserFrameId !== undefined && requested.browserFrameId !== browserFrameId)
+    // A frame asked for by its path is proved by that path below; its id only chose between frames at one path.
+    || !webFrameIdAgrees(requested.browserFrameId, requested.browserFrameUrlPath, browserFrameId)
     || (requested.resetResource !== undefined && requested.resetResource !== resetResource)) return { kind: "rejected", reason: "resource_mismatch" };
   const raw = record(input.snapshot);
   const navigation = record(record(raw?.evidence)?.navigation);
