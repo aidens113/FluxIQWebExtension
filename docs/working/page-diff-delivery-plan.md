@@ -139,6 +139,64 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-25 - t1048 (the judge and the decider see every read's rows) integrated (fluxiq 0.54.27); t1054 (the read-lock test race) integrated (fluxiq 0.54.26)
+- Changed, t1048 (worker-heavy; report `reports/t1048.md`): t1044's two main causes.
+  - A draft read that is not the answer goes to the judge page by page with its rows (`result-feed/feed.ts`, `read-evidence.ts`, `result-evidence/{types,from-batches}.ts`). It used to go as a count only.
+    - A step with no page read yet still goes by its count, and stored bundles from before still load.
+    - The window fitting (`result-verification/flow-less/window-fitting.ts`) may summarise these rows after the looks and before the answer's pages, and says so in plain words.
+  - The decider's current view (`decision-context/current-view.ts`) holds a read whose answer names its list per list key, pager place and address. Run mwvgjb8c's pages 1 and 2 share a list key and a handle, so a key by list alone would have kept the defect. The same page read again replaces only its own rows.
+  - Open product question: a list read before a filter change stays in view beside the re-read, because the address differs.
+- Changed, t1054 (worker; report `reports/t1054.md`): Core `scripts/build-cache/tests/step-read-lock.test.mjs` waits until the build's writer lock file exists, not a fixed `delay(400)`.
+  - It had failed both of t1051's Core finishes under load with `'no stamp'`, and likely t1044's two unnamed failures this morning.
+  - The lead tried `--skip-checks` for t1051, and the permission check refused it. The test was fixed instead.
+- Validation: the lead's runs.
+  - t1048 in `fxwork/t1048`:
+    - `pnpm --filter fluxiq check` exit 0;
+    - vitest groups over `src/runtime/llm src/runtime/result-verification src/framework/automation-service/service/answer-first`: parallel printed `Test Files  679 passed (679)`, `Tests  5844 passed (5844)`; real-sql printed `Tests  513 passed (513)`;
+    - Core audit passed; model-text printed `ok`.
+  - The lead checked that the read lock writes its own reader entry, so `stepLock` is the build's writer lock and the poll is a real signal.
+  - t1054: the read-lock test was run 4 at once, twice, and each printed `# pass 1 # fail 0` (8 of 8). The worker had 20 of 20 at 4-way concurrency, 4 of 4 failures with the wait removed, and build-cache tests 87 of 87.
+  - `pnpm task finish` for both: t1054's Core finish printed `# tests 529 # pass 529 # fail 0` after two load failures that led to its lock fix. t1048's result line is in its integration commit.
+  - A combined check of t1048, t1049, t1050 and t1053 merged on Core `dev` `f83ff1e`, in the throwaway task t1055, ran before any of them reached `dev`:
+    - Core check exit 0; libraries build exit 0;
+    - vitest groups over `runtime/{llm,result-verification,adaptation,agents,loop-limits,flow-authoring,answer-first,project-agents}`, `framework/automation-service` and `engine/automation/composite`:
+      - parallel printed `Tests  14366 passed | 2 skipped`;
+      - real-sql printed `Tests  1 failed | 1620 passed | 1 skipped`. The failure is `service-bootstrap/tests/unfinished-build.test.ts`, which pinned the count ending t1049 removed; it was sent back to t1049;
+    - audit passed; domain `# pass 1995 # fail 0`; domain check exit 0; model-text `ok`.
+
+### 2026-11-25 - t1052 (the Lab's frame-origin proof; stale scripted declarations) integrated
+- Changed (worker; report `reports/t1052.md`):
+  - `lab-control/frame-origin-proof.ts` compares the store's stable `provenance.ownerEpoch`, not the whole cached health reply, whose store counters move with the site. A different epoch, a non-Lab server or an unreadable reply is still refused.
+  - The attempt lane gives the panel the run's addresses (`panel-addresses.ts`), so it never probes `127.0.0.1:3000`.
+  - The network guard's blocked frames and requests are written to `attempt-report.txt` in plain words.
+  - The apprentices script refuses a stray decision where it strays.
+  - Stale declarations: saturday-certificate filtered on `disabled`, which its read never captured, so Core refused all 44 completions (`processing_binding_missing`). The fixture marks taken slots `aria-disabled`, so the read collects every slot with that mark and the declaration filters taken ones out; the oracle is unchanged. crossborder's read now keeps the `shipping` and `ad` fields its declaration names. The other declarations match their reads; social-network-feed has none.
+- Validation: the lead's run in `fxwork/t1052-lab-frame-origin-proof`.
+  - The test-runner suite printed `# tests 3019 # pass 3014 # fail 0 # skipped 5`.
+  - The runner check exit 0; the audit printed `structure-audit: passed (264 warning(s), 550 baselined)`.
+  - The worker's scripted saturday run (run-mwx28pr6) proved the frame defect gone: the Wrenfield branch was on `/book`, with 0 guard violations. It was then refused on the stale declaration, since fixed.
+  - The re-run after the fix was refused by the Lab's behind-dev guard (shared Core behind Core `dev`); it waits for the shared Core sync.
+
+### 2026-11-25 - t1051 (the answer contract reads the asked columns) integrated (fluxiq 0.54.26); the scripted round stopped on two diagnosed defects
+- Changed (worker, Sonnet; report `reports/t1051.md`):
+  - Core `flow-authoring/bootstrap/answerability/instruction-columns.ts` drops a closing "only", "just" or "exactly" after a column name, so "with columns title only" asks for `title`, not `title only`. "only child" keeps its first word.
+  - `result-verification/asked-words/table-lacks.ts` no longer takes a held column that shares one word as the named one: "due" for "due date" had let a table with the wrong column pass.
+  - `held-column.ts` also meets the singular and the plural.
+  - The lead rewrote `answer-first/completion/tests/result-columns.test.ts`, which pinned the old tolerance. A shared word is now refused with no judge; "title only" and a singular or plural name reach the judge.
+- Validation: the lead's run in `fxwork/t1051`.
+  - `pnpm --filter fluxiq check` exit 0.
+  - Vitest groups over `src/runtime/flow-authoring/bootstrap src/runtime/result-verification src/runtime/answer-first src/framework/automation-service/service/answer-first`:
+    - parallel printed `Tests  2 failed | 6905 passed | 2 skipped`; real-sql printed `Tests  519 passed (519)`.
+    - The 2 failures were `result-columns.test.ts`, rewritten as above, after which the file printed `Tests  10 passed (10)`; and `judge-reply/tests/unreadable-reply.test.ts` "ends at the judgement's existing deadline", a load-timed deadline test that printed `Tests  9 passed (9)` alone and was added to t1050's fake clocks.
+  - Core audit passed.
+- Scripted round on `dev` with W3 (lane t1015, provider-free, `--attempts 4`):
+  - bigbox passed 4 of 4 (run-mwwvelrb-46358790);
+  - company-website-apprentices (run-mwwwf7pb) and saturday-certificate (run-mwwwr1ty) failed, and the lead stopped the round (AGENTS.md: fix a shared problem before running more).
+  - Diagnosis (worker-heavy, `reports/scripted-round-diagnosis.md`):
+    - saturday was a Lab defect: `frame-origin-proof.ts` compared a stale copy of the health reply, store counters included, so the booking widget's frame was blocked after the store changed. It is fixed as t1052.
+    - apprentices was a Core defect: passed-over cover steps reached the web projector as `evidence_unrecognized`, so the replay's yes was held unsure and the attempt could not end. It is fixed as t1053.
+  - TaskStop ended only the round's outer shell, so the loop went on to the next task. The lead ended its process tree with `taskkill /T`.
+
 ### 2026-11-25 - W3 (t1037) integrated: the framework drafts the Flow, the model edits it (fluxiq 0.54.25)
 - Changed (sub-supervisor; workers: wiring ×3 and delete-grammar on Opus, text ×2, scripted-reorder and docs on Sonnet; report `reports/t1037-auto-draft.md`):
   - Core: every call that works joins the draft by itself, and the draft is recomposed in place after each call, rerun and edit. Dead ends and repeats are left out, and the asked table's read is the result.
