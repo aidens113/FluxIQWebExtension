@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { webAutomationExplorationRefusalClassifier, webAutomationExplorationScope } from "..";
 
-// Core is handed an opaque string and answers in its own closed vocabulary.
-// The unclassified rows are the point: a refusal the model can recover from is
-// feedback, not an ending.
-test("translates only the terminal refusals into Core's stop reasons", () => {
+// Core is handed an opaque string and answers in its own closed vocabulary of
+// refusal kinds. No refusal ends an exploration (Core t1057); classifying one
+// only says what kind it was. The unclassified rows are the point: an answer
+// the model can act on is feedback, not a refusal of what the exploration may do.
+test("reads only the scope refusals as Core's refusal kinds", () => {
   // `target_unsafe` is no longer a code this domain can raise: it meant FluxIQ
   // had judged a control too dangerous to press from how it looked, and that
   // judgement is gone. Nothing maps to `destructive_action_refused` any more.

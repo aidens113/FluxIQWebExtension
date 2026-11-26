@@ -1,7 +1,7 @@
 import type {
   AutomationStudioActionPermissionCheck,
   AutomationStudioJudgeEvidenceProjector,
-  AutomationStudioExplorationStopReason,
+  AutomationStudioExplorationRefusal,
   AutomationStudioHarnessOptionBundle,
   AutomationStudioFlowScriptExamples,
   AutomationStudioFlowScriptGuidance,
@@ -103,8 +103,8 @@ export type WebAutomationLlmEvidenceRuntime = {
   };
   /** Options declared in full rather than as bare tools, so a runtime-only recovery option never reaches Flow authoring. */
   harnessOptions: AutomationStudioHarnessOptionBundle;
-  /** How Core reads one of this domain's result codes as a refusal, without learning any of them. */
-  classifyRefusal: (resultCode: string) => AutomationStudioExplorationStopReason | undefined;
+  /** How Core reads one of this domain's result codes as a kind of refusal, without learning any of them. A refusal is recorded by kind and ends nothing (Core t1057). */
+  classifyRefusal: (resultCode: string) => AutomationStudioExplorationRefusal | undefined;
   executeTool(input: WebLlmEvidenceToolRequest): Promise<WebLlmEvidenceToolExecution>;
   /**
    * What the page was at one moment, as the opaque digest Core compares for
