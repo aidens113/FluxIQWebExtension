@@ -34,6 +34,7 @@
 import type { WebLlmSnapshotBinding } from "../../sanitize";
 import { webLlmItemRow } from "../../structure";
 import type { WebRunnableNode } from "../catalog";
+import { webNodeKeyedItem } from "./keyed-item";
 
 /** The most characters of a card's words kept; Core cuts its line shorter. */
 const MOST_CHARACTERS = 2_000;
@@ -43,7 +44,8 @@ export function webNodeActedOnCard(node: WebRunnableNode, before: WebLlmSnapshot
   if (node.effect !== "mutate" || before === undefined || handle === undefined) return undefined;
   const elements = before.evidence.elements;
   const element = elements.find((candidate) => candidate.target === handle);
-  if (element === undefined || webLlmItemRow(before.evidence, handle) !== undefined) return undefined;
+  // A press in an item -- a list's, or a keyed card of several (`./keyed-item.ts`) -- says its item instead (`./acted-on.ts`).
+  if (element === undefined || webLlmItemRow(before.evidence, handle) !== undefined || webNodeKeyedItem(before, handle) !== undefined) return undefined;
   const within = flat(element.within ?? before.cardWords?.get(handle));
   if (within !== undefined) return within;
   const dialog = before.dialogNames?.get(handle);
