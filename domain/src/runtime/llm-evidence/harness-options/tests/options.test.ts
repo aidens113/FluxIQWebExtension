@@ -222,31 +222,35 @@ test("refuses a bounded wait that changed nothing rather than returning the same
 });
 
 // The whole seam in one run: Core's loop, Core's budget, Core's registry, this
-// domain's options, this domain's one remaining terminal refusal. A model that
-// asks to leave the scope it was given ends the exploration in
-// `unsafe_action_blocked` -- not in `budget_exhausted`, and not in an
-// exploration that quietly found nothing. It used to be a click on "Delete"
-// that ended this way; that refusal is gone, and a lasting press will instead
-// end in `user_intervention_required` once Core can carry what to ask.
-test("ends a run that asked to leave its scope in unsafe_action_blocked, through Core's own runner", async () => {
+// domain's options, this domain's scope refusal. A model that asks to leave the
+// scope it was given is refused, and the refusal is recorded by its kind,
+// `out_of_scope_refused` -- and it ends nothing (Core t1057): the model is shown
+// the refusal and the exploration goes on to its answer (or, failing that, its
+// purse). It used to end the exploration `unsafe_action_blocked` at the
+// refusal; no count of refusals ends one now.
+test("records a run's request to leave its scope as a refusal and goes on to its answer, through Core's own runner", async () => {
   const { registry, commands } = registeredWith();
-  const decisions: JsonObject[] = [{ kind: "tool_call", callId: "call.one", toolId: "web.recovery.navigate_in_scope", input: { url: "https://other.test/next" } }];
+  const decisions: JsonObject[] = [
+    { kind: "tool_call", callId: "call.one", toolId: "web.recovery.navigate_in_scope", input: { url: "https://other.test/next" } },
+    { kind: "complete", result: { finding: "the next page is outside the scope this exploration may reach" } }
+  ];
   let index = 0;
 
   const exploration = await runAutomationStudioRuntimeExploration({
     loop: registry.evidenceLoopBinding({ projectId: "project.one", flowId: "flow.one" }, resolution()),
-    decide: async () => decisions[index++] ?? { kind: "complete", result: { finding: "unreached" } },
-    budget: resolveAutomationStudioExplorationBudget({ maxRefusedActions: 1 }),
+    decide: async () => decisions[index++] ?? { kind: "complete", result: {} },
+    budget: resolveAutomationStudioExplorationBudget(),
     classifyRefusal: webAutomationExplorationRefusalClassifier
   });
 
-  assert.equal(exploration.outcome, "unsafe_action_blocked");
-  assert.equal(exploration.stopReason, "out_of_scope_refused");
-  assert.equal(exploration.result, undefined);
+  assert.equal(exploration.stopReason, undefined);
+  assert.equal(exploration.endedBy, "exploration.completed");
+  assert.deepEqual(exploration.refusals, { out_of_scope_refused: 1 });
   assert.equal(exploration.refusedActions, 1);
-  // The initial observation ran, so "it found nothing" would have been a
-  // separate and equally wrong answer. It is not the one that came back.
+  // Only the initial observation is evidence: the refused navigation never is.
   assert.equal(exploration.observedActions, 1);
+  assert.equal(exploration.outcome, "evidence_gathered");
+  assert.deepEqual(exploration.result, { finding: "the next page is outside the scope this exploration may reach" });
   assert.equal(commands.includes("web.browser.navigate"), false);
 });
 
