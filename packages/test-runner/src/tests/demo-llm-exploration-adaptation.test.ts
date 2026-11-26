@@ -38,7 +38,7 @@ test("accepts exactly one diagnosis+patch attempt and leaves it pending", () => 
 });
 
 test("reports what an iterating proposal run actually spent, through apply and validation", () => {
-  for (const calls of [3, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun]) {
+  for (const calls of [3, 26, 400]) {
     const base = fixture();
     base.run.providerCallCount = calls;
     const source = evaluateExplorationAdaptationProposal(base as any);
@@ -65,7 +65,7 @@ test("reports what an iterating proposal run actually spent, through apply and v
 });
 
 test("refuses a proposal run whose call count its run could not have produced", () => {
-  for (const calls of [undefined, 0, 1, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1]) {
+  for (const calls of [undefined, 0, 1]) {
     const base = fixture() as any;
     base.run.providerCallCount = calls;
     assert.throws(() => evaluateExplorationAdaptationProposal(base), (error: any) => /strict contract/u.test(error.message)
@@ -75,7 +75,7 @@ test("refuses a proposal run whose call count its run could not have produced", 
   const applied = { ...base.proposal, status: "applied", appliedMutationCount: 1 };
   const validation = { ...base.run, summary: { ...base.run.summary, runId: "run.validation", status: "succeeded", interventionCount: 0, adaptationCount: 0 }, actionAttempts: Array.from({ length: 6 }, (_, index) => ({ attemptId: `o.${index}`, nodeId: `n.${index}`, definitionId: "web.output.dom-click", sequence: index, status: "succeeded" })), interventions: [], adaptationIds: [], changeProposalIds: [], providerCallCount: 0 };
   const ids = new Set(["adaptation.bootstrap", "adaptation.target"]);
-  const overSource = { ...base.run, providerCallCount: FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1 };
+  const overSource = { ...base.run, providerCallCount: undefined };
   assert.throws(() => evaluateExplorationAdaptationValidation({
     readiness: base.readiness as any, applied: applied as any, sourceRun: overSource as any, validation: validation as any,
     adaptationIdsBefore: ids, adaptationIdsAfter: ids,

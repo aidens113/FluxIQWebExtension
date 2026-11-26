@@ -207,8 +207,6 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     session = await openLiveAttemptSession({
       repositoryRoot, fluxiqRepositoryRoot, runsDirectory: paths.runsDirectory, runId, seed: scenario.seed, startPath: scenario.startPath,
       environment: side.environment, args: side.args, stepLogDirectory: stepsDirectory, startupLogsDirectory: path.join(evidence, "startup-logs"),
-      // A call cap sits on the purse, and reaching it reads as budget out, so a run's Core is held to one only when the run typed one.
-      ...(side.live && input.argv.includes("--llm-max-calls") ? { buildCallLimit: side.live.authorizedBuildCallLimit } : {}),
       ...(command.humanness === undefined ? {} : { humanness: command.humanness }),
       authorize: side.authorize, log,
     });

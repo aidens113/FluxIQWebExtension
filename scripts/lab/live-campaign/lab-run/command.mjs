@@ -23,7 +23,7 @@ import { DEFAULT_PROFILES } from "./profiles.mjs";
  * run to every authorized call at the per-request limit (`runTokenBudget` in
  * packages/test-runner/src/live-llm/live-llm-plan.ts; the contract checks the
  * run budget only when one is given), so what bounds the run is its cost
- * ceiling, the call count and Core's stall guard.
+ * ceiling and Core's stall guard.
  * An operator may still give `--llm-max-run-tokens` after `--`.
  *
  * **No cost is passed either.** The cost ceiling is per build, and it has one
@@ -38,7 +38,6 @@ import { DEFAULT_PROFILES } from "./profiles.mjs";
  */
 const REPAIR_LIMITS = Object.freeze([
   ["--llm-max-input-tokens", "992000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "1000000"],
-  ["--llm-max-calls", "26"],
 ]);
 
 /**
@@ -64,20 +63,6 @@ const REPAIR_LIMITS = Object.freeze([
  */
 const CREATE_LIMITS = Object.freeze([
   ["--llm-max-input-tokens", "992000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "1000000"],
-  // The same story as the input tokens above, one limit along, and it has to be
-  // stated here for the same reason. Leaving the call count unnamed inherited
-  // `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun: 26`: a diagnosis, a patch and 24
-  // exploration decisions -- a shape
-  // that predates a build exploring by running the library's own nodes. On
-  // 2026-09-23 the first six tasks of a ten-site campaign each made 19 to 28
-  // calls and every one that passed 26 was failed as `performance.budget`
-  // after the model had already done the work: `run-mudpkd77-e780792e` made 27
-  // against an authorized 26, and $0.90 bought six runs that measured nothing.
-  // 48 is above what a build of these pages has been observed to need and below
-  // the contract ceiling of 64. What bounds the run stays what always bounded
-  // it -- the per-build cost ceiling, not a count set
-  // for a different shape of loop.
-  ["--llm-max-calls", "48"],
 ]);
 
 /**

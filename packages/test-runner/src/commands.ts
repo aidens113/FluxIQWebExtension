@@ -264,6 +264,7 @@ const llmOptionNames = [
 ] as const;
 
 function llmOptions(args: string[]): LlmExecutionProfile | undefined {
+  if (args.includes("--llm-max-calls")) throw new Error("--llm-max-calls is refused: no count of calls exists, and the purse (--llm-max-cost-usd) bounds a run");
   const enabled = args.includes("--live-llm");
   if (args.filter(value => value === "--live-llm").length > 1) throw new Error("--live-llm may only be specified once");
   const present = llmOptionNames.filter(name => name !== "--live-llm" && args.includes(name));
@@ -310,7 +311,6 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
       maxInputTokens: integerOption(args, "--llm-max-input-tokens", DEFAULT_LLM_LAB_BUDGET.maxInputTokens),
       maxOutputTokens: integerOption(args, "--llm-max-output-tokens", DEFAULT_LLM_LAB_BUDGET.maxOutputTokens),
       maxTotalTokensPerRequest: integerOption(args, "--llm-max-total-tokens", DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest),
-      maxCallsPerRun: integerOption(args, "--llm-max-calls", DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun),
       ...(maxTotalTokensPerRun === undefined ? {} : { maxTotalTokensPerRun }),
       timeoutMs: integerOption(args, "--llm-timeout-ms", DEFAULT_LLM_LAB_BUDGET.timeoutMs),
       maxRetries: integerOption(args, "--llm-max-retries", DEFAULT_LLM_LAB_BUDGET.maxRetries),

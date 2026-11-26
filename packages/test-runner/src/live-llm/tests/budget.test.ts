@@ -40,7 +40,7 @@ function escaped(amount: number): string {
   return String(amount).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
-const plan = livePlan("diagnose", { maxCallsPerRun: 1, maxEstimatedCostUsd: 0.25 });
+const plan = livePlan("diagnose", { maxEstimatedCostUsd: 0.25 });
 
 function usage(overrides: Partial<LiveLlmObservedUsage> = {}): LiveLlmObservedUsage {
   return {
@@ -61,8 +61,9 @@ test("a run inside every cap reports no breach", () => {
   assert.doesNotThrow(() => assertLiveLlmBudgetHeld(plan, usage()));
 });
 
-test("more calls than authorized fails the run", () => {
-  assert.throws(() => assertLiveLlmBudgetHeld(plan, usage({ calls: 2 })), /Live LLM budget exceeded.*2 provider call/su);
+test("no number of calls fails the run", () => {
+  assert.doesNotThrow(() => assertLiveLlmBudgetHeld(plan, usage({ calls: 2 })));
+  assert.doesNotThrow(() => assertLiveLlmBudgetHeld(plan, usage({ calls: 400 })));
 });
 
 test("a Core reservation overrun within every cap is not a breach", () => {
@@ -89,19 +90,20 @@ test("a real cap breach is still a breach, and the overrun finding is left to th
   const breached = usage({
     calls: 2,
     observedCalls: [{ ...first, budgetBreach: true }],
-    accounting: { calls: 2, inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004, budgetBreaches: 1, pendingCalls: 0 },
+    accounting: { calls: 2, inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 9, budgetBreaches: 1, pendingCalls: 0 },
+    totalEstimatedCostUsd: 9,
   });
-  assert.throws(() => assertLiveLlmBudgetHeld(plan, breached), /Live LLM budget exceeded.*2 provider call/su);
+  assert.throws(() => assertLiveLlmBudgetHeld(plan, breached), /Live LLM budget exceeded.*per-build cost ceiling/su);
   assert.deepEqual(liveLlmBudgetFindings(plan, breached), []);
 });
 
-test("Core's run totals bound the run even when no intervention recorded its tokens", () => {
+test("Core's run cost bounds the run even when no intervention recorded its tokens", () => {
   const untracked = usage({
     observedCalls: [{ requestId: null, taskKind: null, stage: null, provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, promptVersion: null, validationOk: false, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null }],
     accounting: { calls: 1, inputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1, outputTokens: 120, totalTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 121, estimatedCostUsd: 9, budgetBreaches: 0, pendingCalls: 0 },
     totalEstimatedCostUsd: 9,
   });
-  assert.throws(() => assertLiveLlmBudgetHeld(plan, untracked), /--llm-max-input-tokens/u);
+  assert.throws(() => assertLiveLlmBudgetHeld(plan, untracked), /per-build cost ceiling/u);
 });
 
 test("a call over the cost cap fails the run", () => {
@@ -144,8 +146,8 @@ test("an intervention Core recorded without provider tokens is not counted as a 
 });
 
 // An iterating run: many calls are normal, and what bounds it is what it asked
-// for -- its call count, its per-call caps and its run token budget.
-const adapting = livePlan("adapt", { maxCallsPerRun: 26 });
+// for -- its dollar ceiling, its per-call caps and a run token budget when typed.
+const adapting = livePlan("adapt", {});
 
 function adaptingUsage(calls: number, perCall: { inputTokens: number; outputTokens: number; estimatedCostUsd: number }): LiveLlmObservedUsage {
   const totalTokens = perCall.inputTokens + perCall.outputTokens;
@@ -163,17 +165,17 @@ function adaptingUsage(calls: number, perCall: { inputTokens: number; outputToke
   };
 }
 
-test("an iterating run inside its call count and run token budget reports no breach", () => {
-  assert.equal(adapting.maxCalls, 26);
-  assert.equal(adapting.maxTotalTokensPerRun, PER_REQUEST * 26);
+test("an iterating run reports no breach however many calls it makes, while inside its caps", () => {
+  assert.equal("maxCalls" in adapting, false);
+  assert.equal(adapting.maxTotalTokensPerRun, undefined);
   // 26 calls of 3,800 tokens is 98,800: more than two calls, inside every cap.
   assert.deepEqual(liveLlmBudgetBreaches(adapting, adaptingUsage(26, { inputTokens: 3_000, outputTokens: 800, estimatedCostUsd: 0.002 })), []);
 });
 
-test("an iterating run fails the moment it makes more calls than it asked for", () => {
-  const over = adaptingUsage(27, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.0001 });
-  assert.throws(() => assertLiveLlmBudgetHeld(adapting, over), /27 provider call\(s\) against an authorized 26/u);
-  assert.throws(() => assertLiveLlmBudgetHeld(adapting, over), /27 provider call\(s\) against --llm-max-calls 26/u);
+test("no count of calls fails a run: only its spend and its per-call caps do", () => {
+  const many = adaptingUsage(400, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.0001 });
+  assert.deepEqual(liveLlmBudgetBreaches(adapting, many), []);
+  assert.doesNotThrow(() => assertLiveLlmBudgetHeld(adapting, many));
 });
 
 test("an iterating run fails when its calls together exceed the run token budget, though each is within its own limit", () => {
@@ -181,12 +183,12 @@ test("an iterating run fails when its calls together exceed the run token budget
   // over a typed run token budget. Both halves of that are asserted, so the
   // probe cannot quietly stop proving what the title says when a limit moves.
   const budget = PER_REQUEST * 2;
-  const typed = livePlan("adapt", { maxCallsPerRun: 26, maxTotalTokensPerRun: budget });
+  const typed = livePlan("adapt", { maxTotalTokensPerRun: budget });
   const perCall = { inputTokens: Math.floor(PER_REQUEST / 10), outputTokens: 2_000, estimatedCostUsd: 0.002 };
   const perCallTokens = perCall.inputTokens + perCall.outputTokens;
   assert.ok(perCallTokens < PER_REQUEST, "the probe must be a legal request");
   const runTokens = perCallTokens * 26;
-  assert.ok(runTokens > typed.maxTotalTokensPerRun, "26 such calls must overrun the run token budget");
+  assert.ok(runTokens > budget, "26 such calls must overrun the run token budget");
   const over = adaptingUsage(26, perCall);
   assert.throws(() => assertLiveLlmBudgetHeld(typed, over), new RegExp(`the run used ${runTokens} total tokens against its run token budget of ${budget} \\(--llm-max-run-tokens ${budget}\\)$`, "u"));
   // The per-call records bound the run even where Core published no accounting.
@@ -198,7 +200,7 @@ test("a typed run token budget is the one the run is held to, and is named", () 
   // so the 40,000 this used to type is no longer a budget a plan will accept:
   // it was refused before the assertion it was written for could run.
   const budget = PER_REQUEST * 3;
-  const typed = livePlan("adapt", { maxCallsPerRun: 26, maxTotalTokensPerRun: budget });
+  const typed = livePlan("adapt", { maxTotalTokensPerRun: budget });
   assert.equal(typed.maxTotalTokensPerRun, budget);
   // Ten such calls fit the budget and eleven do not, whatever the request size.
   const perCallTokens = Math.floor(budget / 10.5);
@@ -208,7 +210,7 @@ test("a typed run token budget is the one the run is held to, and is named", () 
 });
 
 test("an iterating build's total cost is held to --llm-max-cost-usd for the whole build, not per call", () => {
-  const small = livePlan("adapt", { maxCallsPerRun: 4, maxEstimatedCostUsd: 0.05 });
+  const small = livePlan("adapt", { maxEstimatedCostUsd: 0.05 });
   const within = adaptingUsage(4, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.0125 });
   assert.doesNotThrow(() => assertLiveLlmBudgetHeld(small, within));
   // Four calls at the old per-call reading of $0.05 each come to $0.20: four times the build's own $0.05.
@@ -223,19 +225,17 @@ test("an iterating build's total cost is held to --llm-max-cost-usd for the whol
   assert.throws(() => assertLiveLlmBudgetHeld(adapting, pricey), new RegExp(`the build's estimated cost ${escaped(pricey.totalEstimatedCostUsd)} exceeded its per-build cost ceiling of ${escaped(LAB_CEILING_USD)} \\(.*held to Core's per-build ceiling\\)`, "u"));
 });
 
-test("a one-call diagnosis is judged across its one authorized call, not the larger cap typed", () => {
-  const diagnosis = livePlan("diagnose", { maxCallsPerRun: 26 });
-  assert.equal(diagnosis.maxCalls, 1);
+test("without a typed run token budget only each call's own caps are held", () => {
+  const diagnosis = livePlan("diagnose", {});
+  assert.equal("maxCalls" in diagnosis, false);
   const usage = adaptingUsage(1, { inputTokens: 8_000, outputTokens: 2_000, estimatedCostUsd: 0.01 });
   assert.doesNotThrow(() => assertLiveLlmBudgetHeld(diagnosis, usage));
-  // Core's totals say one token more than a single call may spend: comfortably
-  // inside what the 26 calls typed would have allowed, a breach for the one
-  // call this diagnosis actually authorized.
-  const inflatedInput = DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1;
-  const inflatedTotal = PER_REQUEST + 1;
-  const inflated = { ...usage, accounting: { ...usage.accounting!, inputTokens: inflatedInput, totalTokens: inflatedTotal } };
-  assert.throws(() => assertLiveLlmBudgetHeld(diagnosis, inflated), new RegExp(`${inflatedInput} input tokens against --llm-max-input-tokens ${DEFAULT_LLM_LAB_BUDGET.maxInputTokens} across 1 authorized call`, "u"));
-  assert.throws(() => assertLiveLlmBudgetHeld(diagnosis, inflated), new RegExp(`${inflatedTotal} total tokens against its run token budget of ${PER_REQUEST}`, "u"));
+  // Core's run totals are not judged against a count of calls, and with no typed run budget not at all.
+  const inflated = { ...usage, accounting: { ...usage.accounting!, inputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens * 3, totalTokens: PER_REQUEST * 3 } };
+  assert.deepEqual(liveLlmBudgetBreaches(diagnosis, inflated), []);
+  // A single call over its own cap is still a breach.
+  const overCall = adaptingUsage(1, { inputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1, outputTokens: 10, estimatedCostUsd: 0.01 });
+  assert.throws(() => assertLiveLlmBudgetHeld(diagnosis, overCall), new RegExp(`${DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1} input tokens against --llm-max-input-tokens ${DEFAULT_LLM_LAB_BUDGET.maxInputTokens}`, "u"));
 });
 
 // t798 (W0), `run-mvskptb1-c9cef4fe`: Core reserved 14,643 tokens for a call whose provider reported 15,093. Every
@@ -247,7 +247,7 @@ test("a reservation of 14,643 against 15,093 reported is a finding, never a budg
     observedCalls: [{ ...first, inputTokens: 15_093, totalTokens: 15_093 + 120, budgetBreach: true }],
     accounting: { calls: 1, inputTokens: 15_093, outputTokens: 120, totalTokens: 15_213, estimatedCostUsd: 0.0004, budgetBreaches: 1, pendingCalls: 0 },
   });
-  const roomy = livePlan("diagnose", { maxCallsPerRun: 1, maxEstimatedCostUsd: 0.25, maxInputTokens: 30_000, maxTotalTokensPerRequest: 40_000, maxTotalTokensPerRun: 60_000 });
+  const roomy = livePlan("diagnose", { maxEstimatedCostUsd: 0.25, maxInputTokens: 30_000, maxTotalTokensPerRequest: 40_000, maxTotalTokensPerRun: 60_000 });
   assert.deepEqual(liveLlmBudgetBreaches(roomy, under), []);
   assert.deepEqual(liveLlmBudgetFindings(roomy, under).map((finding) => [finding.code, finding.overrunCalls]), [["reservation_undercounted", 1]]);
 });

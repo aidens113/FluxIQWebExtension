@@ -33,8 +33,6 @@ export type LiveAttemptSessionInput = {
   stepLogDirectory?: string;
   /** Where a failed startup's process logs are kept, in the run's own folder (`./startup-logs.ts`). */
   startupLogsDirectory?: string;
-  /** The most model calls the run typed, for a run that typed one. */
-  buildCallLimit?: number;
   /** The humanness level (0-100) saved in the browser's extension settings with the pairing; absent writes nothing, so the stored settings are as they always were. */
   humanness?: number;
   /** Called once Core and the extension stand and before the chat opens: where a run's key goes into Secret Keys. */
@@ -71,7 +69,6 @@ export async function openLiveAttemptSession(input: LiveAttemptSessionInput): Pr
       scenarioEntrypoint: paths.scenarioEntrypoint, hostModulePath: paths.hostModulePath,
       ...(paths.hostPrebuilt ? { prepareHost: false } : {}),
       ...(input.stepLogDirectory ? { stepLogDirectory: input.stepLogDirectory } : {}),
-      ...(input.buildCallLimit === undefined ? {} : { buildCallLimit: input.buildCallLimit }),
       bootstrapIdentity: true,
       ...(startupLogs ? { copyStartupFailureLogs: startupLogs.copy } : {}),
     });

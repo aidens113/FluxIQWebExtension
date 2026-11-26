@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL, LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import type { PersistedFlowLlmExecution } from "../flow-lane/index.js";
@@ -290,7 +290,7 @@ test("forwards every live intent, explore_and_adapt included, as Core's run inte
   assert.deepEqual(bodies.at(-1)?.permittedConsequences, ["move_money"]);
 });
 
-test("holds an evidence-guided creation's provider calls to Core's backstop, not a small fixed count", async (t) => {
+test("holds an evidence-guided creation's provider calls to a whole count with no upper bound", async (t) => {
   const withCalls = (calls: number) => ({
     adaptationId: "adaptation.pending", projectId: "project.web", flowId: "flow.main", status: "proposed",
     metadata: { adaptationKind: "flow_bootstrap", phase9: { auditEvents: [{ eventType: "created", detail: {
@@ -302,13 +302,13 @@ test("holds an evidence-guided creation's provider calls to Core's backstop, not
   const client = await mockedClient(t, url => endpoint(url) === "get-flow-adaptation"
     ? json({ ok: true, payload: { adaptation: withCalls(calls) } })
     : (() => { throw new Error(`unexpected ${url.pathname}`); })());
-  for (const accepted of [17, LLM_LAB_MAX_CALLS_PER_RUN]) {
+  for (const accepted of [17, 250, 400]) {
     calls = accepted;
     assert.equal((await client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending")).evidenceLoop?.providerCallCount, accepted);
   }
-  for (const refused of [0, LLM_LAB_MAX_CALLS_PER_RUN + 1]) {
+  for (const refused of [0, -1, 2.5]) {
     calls = refused;
-    await assert.rejects(() => client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending"), /bounded contract/u);
+    await assert.rejects(() => client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending"), /bounded contract|non-negative integer/u);
   }
 });
 

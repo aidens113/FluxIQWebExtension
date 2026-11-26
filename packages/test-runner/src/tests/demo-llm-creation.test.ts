@@ -45,7 +45,7 @@ test("first creation profile enforces the one-call strict live ceiling", () => {
   assert.equal(FIRST_LIVE_CREATION_PROFILE, DEFAULT_DEMO_LLM_CREATION_PROFILE);
   assert.deepEqual(FIRST_LIVE_CREATION_PROFILE.budget, {
     maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000,
-    maxCallsPerRun: 26, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd,
+    timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd,
   });
   assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, {
     provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, maxInputTokens: 4_000, maxOutputTokens: 1_000,

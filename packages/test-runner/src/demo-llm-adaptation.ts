@@ -28,9 +28,6 @@ export const FIRST_LIVE_ADAPTATION_PROFILE: Readonly<LlmExecutionProfile> = Obje
     maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens,
     maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
     maxTotalTokensPerRequest: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
-    // A ceiling, not the count this demo certifies: an adaptation iterates for
-    // as many calls as it needs, and the certificate below records what it made.
-    maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun,
     timeoutMs: DEFAULT_LLM_LAB_BUDGET.timeoutMs,
     maxRetries: 0,
     maxEstimatedCostUsd: 0.25,
@@ -258,7 +255,6 @@ export function evaluateDemoLlmAdaptation(input: DemoLlmAdaptationCertificationI
     profileId: FIRST_LIVE_ADAPTATION_PROFILE.profileId,
     task: "adapt",
     invocations: provenance,
-    maxCallsPerRun: FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun,
     proposalValidated: true,
     reviewOutcome: "approved",
     applyOutcome: "applied",

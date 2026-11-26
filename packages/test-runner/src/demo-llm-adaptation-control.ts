@@ -154,22 +154,16 @@ function requireTargetShape(adaptation: ExistingFlowAdaptation, scope: ExistingT
  * have produced. An adaptation iterates for as many calls as it needs, and a
  * call spent gathering evidence between the diagnosis and the patch leaves no
  * intervention behind, so the count is not a fixed number. It is at least one
- * call per recorded intervention, each being a model output, and at most what
- * the run's ceiling allowed. The panel sends Core no call count for an adapting
- * run, so Core applies its default, which the Lab's drift test
- * (`live-llm/tests/live-llm-plan.test.ts`) holds equal to
- * `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun`, the adaptation profile's ceiling too.
+ * call per recorded intervention, each being a model output. No upper bound is held: no count
+ * of calls ends or invalidates a run, and its dollar ceiling bounds it.
  *
  * The adaptation certificate (`demo-llm-adaptation.ts`) applies this rule to
- * the run it certifies, which is why this module reads the ceiling from the
- * Lab's default rather than importing the certificate's profile: that import
- * would close a module cycle. Only the length of `interventions` is read.
+ * the run it certifies. Only the length of `interventions` is read.
  */
 export function adaptationCallCountWithinCeiling(run: Readonly<{ providerCallCount?: number; interventions?: readonly unknown[] }>): boolean {
   const calls = run.providerCallCount;
   return typeof calls === "number" && Number.isSafeInteger(calls)
-    && calls >= Math.max(1, run.interventions?.length ?? 0)
-    && calls <= DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
+    && calls >= Math.max(1, run.interventions?.length ?? 0);
 }
 
 function requireSourceRun(run: ExistingRunDetail, scope: ExistingTargetAdaptationScope, adaptationId: string): void {

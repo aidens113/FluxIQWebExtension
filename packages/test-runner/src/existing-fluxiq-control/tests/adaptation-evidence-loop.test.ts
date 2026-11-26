@@ -39,8 +39,10 @@ test("an extra-call count with no total to belong to is refused, because nothing
   assert.throws(() => adaptationEvidenceLoop(loop({ additionalProviderCallCount: 1 }), "detail"), /exceeded its bounded contract/u);
 });
 
-test("a total past the run's own call ceiling is refused: one run's budget paid for all of them", () => {
-  assert.throws(() => adaptationEvidenceLoop(loop({ providerCallCount: 200, decisionCount: 200, iterationCount: 201, traceStepCount: 201, additionalProviderCallCount: 60, totalProviderCallCount: 260 }), "detail"), /exceeded its bounded contract/u);
+test("no upper bound is held on a count: a total of 260 reads, and a count that is not a whole number is refused", () => {
+  const read = adaptationEvidenceLoop(loop({ providerCallCount: 200, decisionCount: 200, iterationCount: 201, traceStepCount: 201, additionalProviderCallCount: 60, totalProviderCallCount: 260 }), "detail");
+  assert.equal(read?.totalProviderCallCount, 260);
+  assert.throws(() => adaptationEvidenceLoop(loop({ additionalProviderCallCount: 0.5, totalProviderCallCount: 17.5 }), "detail"), /non-negative integer|bounded contract/u);
 });
 
 test("a build that made only loop calls still reads, and says nothing about calls outside it", () => {
