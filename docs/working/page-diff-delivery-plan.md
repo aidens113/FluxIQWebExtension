@@ -139,6 +139,19 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-25 - t1052 (the Lab's frame-origin proof; stale scripted declarations) integrated
+- Changed (worker; report `reports/t1052.md`):
+  - `lab-control/frame-origin-proof.ts` compares the store's stable `provenance.ownerEpoch`, not the whole cached health reply, whose store counters move with the site. A different epoch, a non-Lab server or an unreadable reply is still refused.
+  - The attempt lane gives the panel the run's addresses (`panel-addresses.ts`), so it never probes `127.0.0.1:3000`.
+  - The network guard's blocked frames and requests are written to `attempt-report.txt` in plain words.
+  - The apprentices script refuses a stray decision where it strays.
+  - Stale declarations: saturday-certificate filtered on `disabled`, which its read never captured, so Core refused all 44 completions (`processing_binding_missing`). The fixture marks taken slots `aria-disabled`, so the read collects every slot with that mark and the declaration filters taken ones out; the oracle is unchanged. crossborder's read now keeps the `shipping` and `ad` fields its declaration names. The other declarations match their reads; social-network-feed has none.
+- Validation: the lead's run in `fxwork/t1052-lab-frame-origin-proof`.
+  - The test-runner suite printed `# tests 3019 # pass 3014 # fail 0 # skipped 5`.
+  - The runner check exit 0; the audit printed `structure-audit: passed (264 warning(s), 550 baselined)`.
+  - The worker's scripted saturday run (run-mwx28pr6) proved the frame defect gone: the Wrenfield branch was on `/book`, with 0 guard violations. It was then refused on the stale declaration, since fixed.
+  - The re-run after the fix was refused by the Lab's behind-dev guard (shared Core behind Core `dev`); it waits for the shared Core sync.
+
 ### 2026-11-25 - t1051 (the answer contract reads the asked columns) integrated (fluxiq 0.54.26); the scripted round stopped on two diagnosed defects
 - Changed (worker, Sonnet; report `reports/t1051.md`):
   - Core `flow-authoring/bootstrap/answerability/instruction-columns.ts` drops a closing "only", "just" or "exactly" after a column name, so "with columns title only" asks for `title`, not `title only`. "only child" keeps its first word.
