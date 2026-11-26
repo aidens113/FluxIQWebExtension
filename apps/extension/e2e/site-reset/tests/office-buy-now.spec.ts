@@ -110,7 +110,7 @@ async function runOfficeBuild(extensionSession: ExtensionSession, testInfo: Test
       if (turn.step === 9) tests.push(record(last("core.test_subflow")));
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const outcomes = observed.outcomes;
     const looks = outcomes.filter(outcome => outcome.call.startsWith("site-reset.look."));

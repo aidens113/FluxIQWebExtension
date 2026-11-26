@@ -137,7 +137,7 @@ for (const variant of VARIANTS) test(variant.name, async ({ extensionSession }, 
       if (next) return next(turn);
       return turn.complete({ subflowKey: "main", ...(answers["submit"] ? candidate() : {}) });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 30, maxCallsPerRun: 40, builder, verify: judge.verify,
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify,
       supervisor: turn => {
         if (turn.step === 1) return turn.call("plan", "project.write_plan", turn.plan());
         if (turn.step === 2) {

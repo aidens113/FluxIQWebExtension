@@ -83,7 +83,7 @@ test("a playback's double no quoting only the value a condition rejected is re-a
         return { response: { kind: "diagnosis", summary: words, diagnosis: { answersRequest: "yes", observed: words } }, usage };
       }
     };
-    service.bindLlmExecutionProvider(() => ({ provider: judge, maxCallsPerRun: 12, maxEstimatedCostUsd: 0.1 }));
+    service.bindLlmExecutionProvider(() => ({ provider: judge, maxEstimatedCostUsd: 0.1 }));
 
     // The Flow, as a build would leave it: one read of the loaded feed keeping three groups by name.
     const project = await service.createProject({ name: "Installed feed tested value", domainId: "web-automation" });

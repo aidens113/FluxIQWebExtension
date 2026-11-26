@@ -16,7 +16,7 @@ test("the real sidepanel Stop cancels an actual Core build and refuses its late 
     provider: { metadata: { provider: "isolated-stand-in", model: "no-paid-calls" }, runTask: async () => {
       calls++; started(); await new Promise<void>(resolve => { release = resolve; });
       return { response: { kind: "flow_bootstrap", summary: "Late result", plan: { schemaVersion: "0.1", router: { name: "Primary", rules: [], fallback: { kind: "subflow", targetSubflowKey: "primary" } }, subflows: [{ key: "primary", name: "Primary", role: "primary", nodes: [{ key: "start", definitionId: "builtin.control.start", definitionVersion: "1.0.0" }, { key: "end", definitionId: "builtin.control.end", definitionVersion: "1.0.0" }], edges: [{ key: "end", source: { nodeKey: "start", portId: "next" }, target: { nodeKey: "end", portId: "in" } }] }] } }, usage: { inputTokens: 120, outputTokens: 80, totalTokens: 200, estimatedCostUsd: 0 } };
-    } }, maxCallsPerRun: 1, maxEstimatedCostUsd: 0.1
+    } }, maxEstimatedCostUsd: 0.1
   }) });
   const sockets = new Set<Socket>();
   let server: ReturnType<typeof createServer> | undefined;

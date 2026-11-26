@@ -181,7 +181,7 @@ test("act ledger: a save behind only-after is refused, a looped like is told per
       if (turn.step === 5) dispatches.push(record(turn.last("project.dispatch")));
       return turn.complete(ending);
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 40, builder, verify, supervisor });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify, supervisor });
     const { ending, failure } = await build.run();
 
     const bad = answers["submit.bad"] ?? {};

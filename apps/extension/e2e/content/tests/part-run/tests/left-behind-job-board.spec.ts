@@ -174,7 +174,7 @@ test("a pass that took a page-level link does not press its job: nothing is save
         throw error;
       }
     };
-    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder });
+    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder });
     const { ending, failure } = await build.run();
     Object.assign(diagnostic, { ending, failure, answers, builderError });
     await keepDiagnostic(testInfo, "pinned-calls-build.json", diagnostic);
@@ -223,7 +223,6 @@ test("a pass that took a page-level link does not press its job: nothing is save
           throw new Error("diagnostic.a_run_called_a_model");
         }
       },
-      maxCallsPerRun: 1,
       maxEstimatedCostUsd: 0
     }));
     await installed.resetLab();

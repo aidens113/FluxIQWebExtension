@@ -63,8 +63,8 @@ test("installed gateway project build judges an add-to-cart trial twice by the c
       return turn.complete({ subflowKey: "main", ...candidate });
     };
     const provider = bindScriptedProvider(installed, {
-      task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify,
-      supervisor: supervisorWithEffect({ permitted: ["create_new"], maxIterations: 20, effect: { kind: "change", direction: "adds", count: 1, what: "one product in the cart" } })
+      task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify,
+      supervisor: supervisorWithEffect({ permitted: ["create_new"], effect: { kind: "change", direction: "adds", count: 1, what: "one product in the cart" } })
     });
     const { ending, failure } = await build.run();
     const siteChanges = judge.siteChanges();

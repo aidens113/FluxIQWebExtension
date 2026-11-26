@@ -114,7 +114,7 @@ test("installed gateway project build settles a reloading confirm by its value o
       if (next) return next(turn);
       return turn.complete({ subflowKey: "main", ...(answers["submit"] ? candidate() : {}) });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 30, maxCallsPerRun: 40, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const summary = Object.fromEntries(Object.entries(answers).map(([id, answer]) => [id, { ok: answer.ok ?? null, code: answer.code ?? answer.verdict ?? null, codes: codes(answer), admission: answer.admission ?? answer.kind ?? null, toUndo: toUndo(answer), unsettleable: unsettleable(answer), settlement: answer.resetSettlement ?? null }]));
     await keepDiagnostic(testInfo, "reset-office-reloading-confirm.json", { ending, failure, builderStep: provider.builderSteps(), destinationReference, answers, reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });

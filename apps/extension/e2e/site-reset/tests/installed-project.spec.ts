@@ -199,7 +199,7 @@ for (const retryTransfer of [false, true]) test(retryTransfer
       provider.receipts.push({ call: "trial.clean", code: tested?.code ?? tested?.verdict });
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    const provider = bindScriptedProvider(installed, { task, permitted, instructionSourceId: build.instructionSourceId, maxIterations: retryTransfer ? 30 : 20, maxCallsPerRun: retryTransfer ? 40 : 30, builder });
+    const provider = bindScriptedProvider(installed, { task, permitted, instructionSourceId: build.instructionSourceId, builder });
     const { ending, failure } = await build.run();
     const receipts = provider.receipts;
     const diagnostic = { ending, failure, supervisorStep: provider.supervisorSteps(), builderStep: provider.builderSteps(), baseline, restored, receipts, reads, declarations, outcomes: observed.outcomes, targetDescriptors, rowSelectionFailure, undoList: { code: probeCode, inPlace }, retryTransfer: retryTransfer ? { failedSaveAct, retryAct, wrongInverseCode, correctInverseCode, otherEffectActs, wrongClicksBefore, wrongClicksAfter, wrongHashBefore, wrongHashAfter, correctClicksBefore, correctClicksAfter, stages: transferStages } : null, gatewayErrors: installed.gatewayErrors };

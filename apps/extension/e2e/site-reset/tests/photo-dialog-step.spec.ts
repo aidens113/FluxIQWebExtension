@@ -237,7 +237,7 @@ test("installed gateway project build resolves a candidate's press in the dialog
       if (turn.step === 12) tests.push(record(last("core.test_subflow")));
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const { declarations, reads } = observed;
     // The candidate's like step: resolved for the submission under view_history, naming the shared handle.
@@ -356,7 +356,7 @@ test("installed gateway project build is told a covered press's layer has a coll
       dockExpandedAfter = await page.locator(`fl-dock [part="collapse-button"]`).isVisible();
       return turn.complete({ subflowKey: "main" });
     };
-    const provider = bindScriptedProvider(installed, { task: "Look at one post.", permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 8, maxCallsPerRun: 12, builder, verify: judgeLog().verify });
+    const provider = bindScriptedProvider(installed, { task: "Look at one post.", permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judgeLog().verify });
     const { ending, failure } = await build.run();
     await keepDiagnostic(testInfo, "covered-dock.json", { ending, failure, coveredLine, refusal, clicksBefore, clicksAfter, dockExpandedAfter, outcomes: observed.outcomes, receipts: provider.receipts, pages });
     console.log(JSON.stringify({ coveredDock: { ending, failure, coveredLine, refusal } }));

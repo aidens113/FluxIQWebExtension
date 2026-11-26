@@ -124,7 +124,7 @@ test("installed folded submissions preserve repair, chat lines and completion wh
         if (previous === from) return send("test-passing", call("test-passing", "core.test_subflow", {}));
         throw new Error("diagnostic.provider_asked_after_read_yes");
       };
-      const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 80, builder, supervisor });
+      const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, builder, supervisor });
       const { ending, failure } = await build.run();
       settle();
       const failed = folded ? record(answers["submit-failed"]?.tested) : answers["test-failed"] ?? {};

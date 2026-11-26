@@ -32,7 +32,7 @@ test("installed authoring reruns one proven state call through the actual permis
     const beforeResults = installed.actionResultSummaries().length;
     const beforeDistinct = installed.distinctActionCommands();
     bindScriptedProvider(installed, {
-      task: TASK, permitted: [], instructionSourceId: proof.instructionSourceId, maxIterations: 10, maxCallsPerRun: 24,
+      task: TASK, permitted: [], instructionSourceId: proof.instructionSourceId,
       verify: () => {
         verifications += 1;
         throw new Error("This transport proof must never ask a whole-Flow judge.");

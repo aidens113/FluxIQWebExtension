@@ -133,7 +133,7 @@ test("installed gateway project build settles a trial confirm on no list by Core
       sent.push({ step: turn.step, callId: decision.callId ?? null, undoes: input.undoes ?? null, resetDestination: input.resetDestination ?? null });
       return answered;
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const outcomes = observed.outcomes;
     const siteChanges = judge.siteChanges();

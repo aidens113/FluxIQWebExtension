@@ -250,7 +250,7 @@ test("installed gateway project build never presses a post into a state the buil
           return done();
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 40, maxCallsPerRun: 60, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     likedAtEnd = await likedPosts(page);
     const unsettleable = tests.flatMap(unsettleableIn);

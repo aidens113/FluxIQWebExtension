@@ -53,8 +53,6 @@ export type ScriptedProviderOptions = {
   task: string;
   permitted: string[];
   instructionSourceId: () => string;
-  maxIterations: number;
-  maxCallsPerRun: number;
   builder: (turn: BuilderTurn) => ScriptedAnswer | Promise<ScriptedAnswer>;
   /** Scripts every supervisor turn; absent, the default one-part plan, one build brief, and completion on its answer. */
   supervisor?: (turn: SupervisorTurn) => ScriptedAnswer | Promise<ScriptedAnswer>;
@@ -119,7 +117,8 @@ export function bindScriptedProvider(build: Pick<InstalledBuild, "service">, opt
         if (options.supervisor) return options.supervisor({ step: supervisorStep, evidence, last, call, plan, complete: result => answer({ kind: "complete", result }) });
         if (supervisorStep === 1) return call("plan", "project.write_plan", plan());
         if (supervisorStep === 2) {
-          const brief = { kind: "build", subflowKey: "main", parts: ["p1"], entry: { caseId: "observed-current", predecessors: [] }, permittedActs: options.permitted, maxIterations: options.maxIterations };
+          // Core sizes the brief from the purse; a brief's turn count only lowers that share and ends nothing (t1063).
+          const brief = { kind: "build", subflowKey: "main", parts: ["p1"], entry: { caseId: "observed-current", predecessors: [] }, permittedActs: options.permitted };
           return call("dispatch", "project.dispatch", { reason: "Exercise the transport.", briefs: [brief] });
         }
         return answer({ kind: "complete", result: record(last("project.dispatch")?.complete) });
@@ -137,6 +136,6 @@ export function bindScriptedProvider(build: Pick<InstalledBuild, "service">, opt
         complete: result => answer({ kind: "complete", result })
       });
     }
-  }, maxCallsPerRun: options.maxCallsPerRun, maxEstimatedCostUsd: 0.1 }));
+  }, maxEstimatedCostUsd: 0.1 }));
   return { receipts, supervisorSteps: () => supervisorStep, builderSteps: () => builderStep };
 }

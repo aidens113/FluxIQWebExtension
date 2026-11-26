@@ -145,7 +145,7 @@ test("installed gateway project build settles a looped pass that pressed another
           return turn.complete({ subflowKey: "main", ...candidate! });
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 30, maxCallsPerRun: 40, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const summary = Object.fromEntries(sent.map(id => [id, { ok: answers[id]?.ok ?? null, code: trialCode(answers[id]) ?? null, failed: answers[id]?.failed ?? null, toUndo: actsUnder(answers[id], "actsToUndo").map(entry => [entry.act, entry.settle ?? null]), unsettleable: answers[id]?.actsUnsettleable ?? null }]));
     await keepDiagnostic(testInfo, "reset-photo-other-item.json", { ending, failure, builderStep: provider.builderSteps(), sent, act, liked: { start: likedAtStart, afterTrial: likedAfterTrial, afterUndo: likedAfterUndo }, answers, tests, siteChanges: judge.siteChanges(), reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
