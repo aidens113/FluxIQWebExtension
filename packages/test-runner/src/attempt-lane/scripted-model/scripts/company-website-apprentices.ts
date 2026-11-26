@@ -58,6 +58,8 @@ function readSucceeded(entry: EvidenceEntry | undefined, evidence: readonly Evid
  * evidence in the request.
  */
 const decide: ScriptedReply = (request) => {
+  const note = latestOf(request, "core.attempt_note")?.value.flowRun as { stoppedAt?: number; happened?: string } | undefined;
+  if (note) throw new Error(`The saved Flow's run did not end the attempt, stopped at step ${note.stoppedAt ?? "none"}: ${note.happened ?? "no reason given"}`);
   const page = currentPageOf(request);
   const evidence = evidenceOf(request);
   const taken = new Set(evidence.map((entry) => entry.callId));
