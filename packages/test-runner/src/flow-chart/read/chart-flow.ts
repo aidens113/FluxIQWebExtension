@@ -42,8 +42,8 @@ function exampleOf(step: DraftStep, read: NodeRead | undefined): string[] {
  * `null` when the run never held a draft.
  */
 export async function readChartFlow(from: string | ChartRead): Promise<ChartFlow | null> {
-  const { runDirectory, evidenceDirectory = runDirectory, attempt, saved }: ChartRead = typeof from === "string" ? { runDirectory: from } : from;
-  const steps = path.join(runDirectory, "steps");
+  const { runDirectory, stepsDirectory, evidenceDirectory = runDirectory, attempt, saved }: ChartRead = typeof from === "string" ? { runDirectory: from } : from;
+  const steps = stepsDirectory ?? path.join(runDirectory, "steps");
   const draft = await latestFlowDraft(steps);
   if (draft === null) return null;
   const inFlow = draft.filter((step) => step.inResult === true);
