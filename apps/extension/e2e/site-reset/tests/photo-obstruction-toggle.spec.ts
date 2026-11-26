@@ -170,7 +170,7 @@ test("installed gateway project build: layers over a press are closed in the run
       }
       throw new Error("diagnostic.confirmed_trial_did_not_complete_brief");
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: verifier.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: verifier.verify });
     verifier.restoreBinding();
     const { ending, failure } = await build.run();
     const finalTrial = ending === "proposed" ? build.finalTrial() : undefined;

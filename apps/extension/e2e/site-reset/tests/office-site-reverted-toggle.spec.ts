@@ -158,7 +158,7 @@ test("installed gateway project build settles a toggle the site put back itself 
       }
     };
     const provider = bindScriptedProvider(installed, {
-      task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify,
+      task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify,
       // The default one-part plan and single build brief, keeping the dispatch's answer, which says how the brief's test ended.
       supervisor: turn => {
         if (turn.step === 1) return turn.call("plan", "project.write_plan", turn.plan());

@@ -190,7 +190,7 @@ test("installed gateway project build repairs a failed step by running from it b
       }
     };
     const verify = offlineFirstVerify(() => testing, judged, { yes: "The links of the studio's posts were listed.", no: () => undefined });
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 80, builder, supervisor, verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, builder, supervisor, verify });
     const { ending, failure } = await build.run();
 
     // Core completes on the yes before another provider decision. Read that final receipt from its dispatch return.

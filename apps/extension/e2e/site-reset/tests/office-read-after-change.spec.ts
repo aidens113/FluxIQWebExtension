@@ -145,7 +145,7 @@ test("installed gateway project build reads a value its own earlier step changed
         throw error;
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 12, maxCallsPerRun: 20, builder });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, builder });
     const { ending, failure } = await build.run();
     // A dispatched read's answer may land a moment after the build saw it.
     await expect.poll(() => dispatchedReads.every(entry => entry.status !== undefined), { timeout: 5_000 }).toBe(true);

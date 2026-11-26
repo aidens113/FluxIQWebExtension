@@ -170,7 +170,7 @@ test("installed gateway project build keeps one site memory across briefs: a lat
         throw error;
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder, supervisor, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, builder, supervisor, verify: judge.verify });
     const { ending, failure } = await build.run();
 
     const calls = watch.calls;

@@ -135,7 +135,7 @@ test("installed gateway project build retries the page's failed save, and undoes
       return turn.complete({ subflowKey: "main", ...candidate });
     };
     const provider = bindScriptedProvider(installed, {
-      task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder,
+      task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder,
       // The default judge's bare yes, keeping what each trial showed it.
       verify: shown => {
         judged.push(shown);

@@ -106,8 +106,8 @@ for (const variant of ["newest", "pinned"] as const) {
         }
       };
       const provider = bindScriptedProvider(installed, {
-        task, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 24, builder, verify: judge.verify,
-        supervisor: supervisorWithEffect({ permitted: ["modify_existing"], maxIterations: 16, effect: { kind: "end_state", state: "the three posts are liked" }, ...(variant === "pinned" ? { unchanged: ["pinned posts"] } : {}) })
+        task, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify,
+        supervisor: supervisorWithEffect({ permitted: ["modify_existing"], effect: { kind: "end_state", state: "the three posts are liked" }, ...(variant === "pinned" ? { unchanged: ["pinned posts"] } : {}) })
       });
       const { ending, failure } = await build.run();
       const siteChanges = judge.siteChanges();

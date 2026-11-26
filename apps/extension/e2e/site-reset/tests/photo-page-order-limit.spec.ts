@@ -152,7 +152,7 @@ test("installed gateway project build submits a where-filtered read of three wal
       const words = ["The trial liked the three newest posts and no pinned one.", ...reasons].join(" ");
       return { summary: words, diagnosis: { answersRequest: "yes", observed: words } };
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 24, builder, verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify });
     const { ending, failure } = await build.run();
     const submission = answers["submit"] ?? {};
     const trial = answers["trial"];

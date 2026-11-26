@@ -188,7 +188,7 @@ test("a saved part runs at zero model calls behind its guard: right rows, refuse
         }
       }
     };
-    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder });
+    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder });
     const started = Date.now();
     const { ending, failure } = await build.run();
     console.log(JSON.stringify({ partRunBuildMs: Date.now() - started }));
@@ -226,7 +226,6 @@ test("a saved part runs at zero model calls behind its guard: right rows, refuse
           throw new Error("diagnostic.a_part_run_called_a_model");
         }
       },
-      maxCallsPerRun: 1,
       maxEstimatedCostUsd: 0
     }));
     const findId = String(find!.partId);
@@ -486,7 +485,7 @@ test("a part presses on each row it read: each intended row exactly once, by ide
         throw error;
       }
     };
-    bindScriptedProvider(installed, { task: "Find the roles for the words I give you, and save the first few of them to my saved jobs.", permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder });
+    bindScriptedProvider(installed, { task: "Find the roles for the words I give you, and save the first few of them to my saved jobs.", permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder });
     const { ending, failure } = await build.run();
     Object.assign(diagnostic, { ending, failure, answers, seen, builderError });
     await keepDiagnostic(testInfo, "part-run-rows-build.json", diagnostic);
@@ -515,7 +514,6 @@ test("a part presses on each row it read: each intended row exactly once, by ide
           throw new Error("diagnostic.a_part_run_called_a_model");
         }
       },
-      maxCallsPerRun: 1,
       maxEstimatedCostUsd: 0
     }));
     const asked = { projectId, partId, inputs: { words: ROW_PART_WORDS }, permittedConsequences: ["modify_existing"], acknowledgedRepeat: true };
