@@ -46,8 +46,8 @@ test("it detects the week on show from a slot, and reads the cells with the Satu
   assert.equal(read.add, true);
   const list = read.input?.parameters?.extractList;
   assert.equal(list.handle, "extraction.9");
-  assert.deepEqual(list.fields, { date: "data_date", time: "item" });
-  assert.deepEqual(list.where, [{ field: "div_head", contains: "Sat" }, { field: "item_disabled", is: "absent" }]);
+  assert.deepEqual(list.fields, { date: "data_date", time: "item", "group heading": "div_head", disabled: "item_disabled" });
+  assert.equal(list.where, undefined, "every slot is collected; the processing declaration filters");
   assert.equal(read.input?.parameters?.recordOutput.writeMode, "append");
 });
 
@@ -55,8 +55,7 @@ test("the handle and keys are the evidence's own", () => {
   const other = { ...CELLS, handle: "extraction.31", fields: [{ key: "k_head", label: "group heading", sample: "Sat 10/10" }, { key: "k_date", label: "data-date", sample: "2026-10-10" }, { key: "k_time", label: "item", sample: "09:00" }], fieldMarks: [{ id: "k_off", label: "item (disabled)", kind: "disabled" }] };
   const list = decide(CALENDAR, [...STEPS_BEFORE_CALENDAR, detected(1, other)]).input?.parameters?.extractList;
   assert.equal(list.handle, "extraction.31");
-  assert.deepEqual(list.fields, { date: "k_date", time: "k_time" });
-  assert.deepEqual(list.where, [{ field: "k_head", contains: "Sat" }, { field: "k_off", is: "absent" }]);
+  assert.deepEqual(list.fields, { date: "k_date", time: "k_time", "group heading": "k_head", disabled: "k_off" });
 });
 
 test("a detection with no cells, or no disabled mark, fails loudly", () => {
