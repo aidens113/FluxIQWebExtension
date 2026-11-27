@@ -5,7 +5,7 @@ import { overheadWords, type AttemptOverhead } from "../overhead/index.js";
 const PATH_WORDS: Readonly<Record<AttemptPath, string>> = {
   explore: "It explored, with no run of a saved Flow",
   run_flow: "It took the run of the saved Flow, and needed nothing else",
-  run_flow_then_repair: "It took the run of the saved Flow, then repaired the step that stopped it",
+  run_flow_then_repair: "It took the run of the saved Flow, then repaired the Flow where it fell short (the run stopped at a step, or its judge did not accept it)",
   run_flow_then_explore: "It took the run of the saved Flow, then explored on from where that stopped",
 };
 

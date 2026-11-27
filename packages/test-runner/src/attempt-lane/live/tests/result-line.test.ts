@@ -22,6 +22,12 @@ test("a second attempt's line says what it ran against, what it found, what it c
   assert.match(line, /NOT LIVE, stand-ins: model, spend\./u);
 });
 
+test("a repaired attempt does not say a step stopped the run when its judge was what sent it to repair", () => {
+  const line = attemptResultLine({ row: { ...LATER, path: "run_flow_then_repair" }, answer: ANSWER, status: "achieved", startedFromFirst: true });
+  assert.match(line, /then repaired the Flow where it fell short \(the run stopped at a step, or its judge did not accept it\)\./u);
+  assert.doesNotMatch(line, /repaired the step that stopped it/u);
+});
+
 test("a Run again on saves already standing says it found them as asked and pressed nothing", () => {
   const line = attemptResultLine({ row: LATER, answer: ANSWER, status: "achieved", startedFromFirst: true, askedAgain: { pressedAgain: [], foundAsAsked: ["Three saved"], undone: [], notPressed: [] } });
   assert.ok(line.includes("answer right. You asked to do it again (Run again): it found already as asked and pressed nothing: Three saved. It ran against what attempt 1 left"), line);
