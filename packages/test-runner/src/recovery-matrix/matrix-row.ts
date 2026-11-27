@@ -82,6 +82,13 @@ export type RecoveryMatrixCase = Readonly<{
   /** The candidate script under `flows/`, by its export name. */
   flow: string;
   check: RecoveryCheckId;
+  /**
+   * The effects the saved Flow carries on its steps, by node key, each the name of a
+   * signed effect in `effects/` (t1090). A hand-authored script has no build to sign one, so
+   * a case that needs a step's effect checked names it here; the Flow is saved with it as the
+   * answer-first draft saves its own.
+   */
+  routeEffects?: Readonly<Record<string, string>>;
   site: RecoverySiteExpectation;
   /** Whether the scenario's playback goal facts must hold on the page after the run. */
   goalFacts: boolean;

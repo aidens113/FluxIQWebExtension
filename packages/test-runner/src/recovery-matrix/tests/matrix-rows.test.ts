@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MATRIX_CHECKS } from "../checks/index.js";
+import { MATRIX_SIGNED_EFFECTS } from "../effects/index.js";
 import * as flows from "../flows/index.js";
 import { RECOVERY_MATRIX_ROWS } from "../matrix-rows.js";
 import { isRealisticScenario } from "../../realistic-scenarios/index.js";
@@ -31,15 +32,15 @@ test("a row is ready, pending on what it needs, or blocked by an authoring gap, 
 });
 
 test("--ready selects only rows that need nothing and have no authoring gap; unknown cases and rows are refused", () => {
-  assert.deepEqual(selectRecoveryMatrixCases({ ready: true }).map(item => item.matrixCase.caseId), ["1", "13a", "13b", "13c", "14", "15"]);
+  assert.deepEqual(selectRecoveryMatrixCases({ ready: true }).map(item => item.matrixCase.caseId), ["1", "13a", "13b", "13c", "14", "14b", "15"]);
   assert.deepEqual(selectRecoveryMatrixCases({ caseIds: ["4b"], rows: [13] }).map(item => item.matrixCase.caseId), ["4b", "13a", "13b", "13c"]);
   assert.throws(() => selectRecoveryMatrixCases({ caseIds: ["4z"] }), /no case 4z/);
   assert.throws(() => selectRecoveryMatrixCases({ rows: [12] }), /no row 12/);
   assert.throws(() => selectRecoveryMatrixCases({}), /selected no case/);
 });
 
-test("all seventeen deterministic browser cases carry explicit task text independent of titles", () => {
-  assert.equal(cases.length, 17);
+test("all eighteen deterministic browser cases carry explicit task text independent of titles", () => {
+  assert.equal(cases.length, 18);
   for (const matrixCase of cases) {
     assert.equal(typeof matrixCase.taskInstructions, "string");
     assert.ok(matrixCase.taskInstructions.trim().length > 0);
@@ -80,4 +81,18 @@ test("a person-cleared case names its steps by place, ends on the Flow's last st
     assert.ok(Number(steps[0]!.slice(1)) < nodes);
     assert.deepEqual(item.site, { kind: "crossborder-checks-passed", checksPassed: steps.length });
   }
+});
+
+test("case 14b saves case 14's Flow with a signed effect on its search, and the effect is one the bot check does not show", () => {
+  const plain = cases.find(item => item.caseId === "14")!;
+  const signed = cases.find(item => item.caseId === "14b")!;
+  assert.equal(plain.routeEffects, undefined);
+  assert.deepEqual({ flow: signed.flow, variantId: signed.variantId, check: signed.check }, { flow: plain.flow, variantId: plain.variantId, check: plain.check });
+  assert.deepEqual(signed.routeEffects, { s1: "HOOD_SEARCH_EFFECT" });
+  const effect = MATRIX_SIGNED_EFFECTS[signed.routeEffects!.s1!]!;
+  // The shape t1083 signs for a step that moved: its start and its destination, so a page on neither is "between".
+  assert.equal(effect.v, "web-effect.v1");
+  assert.equal(typeof effect.path, "string");
+  assert.equal(typeof effect.from, "string");
+  assert.notEqual(effect.from, effect.path);
 });

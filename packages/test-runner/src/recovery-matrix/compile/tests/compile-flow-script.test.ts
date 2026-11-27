@@ -7,6 +7,7 @@ import { FluxIQ } from "fluxiq";
 import { WEB_AUTOMATION_DOMAIN_ID, webAutomationDomain } from "@fluxiq-web-extension/domain/node";
 import { RunnerFailure } from "../../../failure.js";
 import { compileMatrixFlow, MatrixAuthoringGap, type MatrixFlowStep } from "../compile-flow-script.js";
+import { HOOD_SEARCH_EFFECT } from "../../effects/index.js";
 import * as flows from "../../flows/index.js";
 import { CONFIRM_QUALIFYING } from "../../flows/index.js";
 import { RECOVERY_MATRIX_ROWS } from "../../matrix-rows.js";
@@ -93,3 +94,16 @@ for (const taskInstructions of [undefined, null, 42, {}, "", "   ", "x".repeat(4
     assert.equal(create.mock.callCount(), 0);
   });
 }
+
+test("a signed effect on a step the script does not have is refused, and no Flow is saved for it", { timeout: 120_000 }, async () => {
+  const { root, projectId } = await workspace();
+  try {
+    const taskInstructions = RECOVERY_MATRIX_ROWS.flatMap(row => row.cases).find(matrixCase => matrixCase.flow === "HOOD_SELLER_SHOP")!.taskInstructions;
+    await assert.rejects(
+      compileMatrixFlow({ fluxiqRoot: root, projectId, flowId: "flow.matrix.no-such-step", flowName: "no such step", taskInstructions, script: scripts.HOOD_SELLER_SHOP!, routeEffects: { s99: HOOD_SEARCH_EFFECT } }),
+      (error: unknown) => error instanceof RunnerFailure && error.category === "fixture.invalid" && error.message.includes("s99")
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  }
+});

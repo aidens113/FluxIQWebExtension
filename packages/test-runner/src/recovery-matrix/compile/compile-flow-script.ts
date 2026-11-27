@@ -16,6 +16,7 @@
 // started afterwards reads the saved Flow from its own storage.
 
 import { FluxIQ } from "fluxiq";
+import type { JsonObject } from "fluxiq/core";
 import { acceptAutomationStudioFlowBootstrapResult, automationStudioFlowBootstrapSizeLimitsOf, validateAutomationStudioFlowBootstrapPlan } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID, webAutomationDomain } from "@fluxiq-web-extension/domain/node";
 import { RunnerFailure } from "../../failure.js";
@@ -51,6 +52,8 @@ export type CompileMatrixFlowInput = {
   flowName: string;
   taskInstructions: string;
   script: string;
+  /** Effects the build would have signed, by node key (`s1`): kept on the step as `routeSignatures.effect`, as a draft's are. */
+  routeEffects?: Readonly<Record<string, JsonObject>>;
 };
 
 /** Thrown when the script names an evidence handle: the row cannot be hand-authored as written. */
@@ -79,9 +82,10 @@ export async function compileMatrixFlow(input: CompileMatrixFlowInput): Promise<
     const resolution = native.getRegistryResolution(flow.scope);
     const accepted = acceptAutomationStudioFlowBootstrapResult({ result: input.script, registry, resolution });
     if (!accepted.ok) throw refusal("assemble", accepted.issues);
-    const handles = planEvidenceHandles(accepted.plan);
+    const plan = withRouteEffects(accepted.plan, input.routeEffects ?? {});
+    const handles = planEvidenceHandles(plan);
     if (handles.length) throw new MatrixAuthoringGap(handles);
-    const validation = validateAutomationStudioFlowBootstrapPlan({ plan: accepted.plan, registry, resolution, size: automationStudioFlowBootstrapSizeLimitsOf(flow) });
+    const validation = validateAutomationStudioFlowBootstrapPlan({ plan, registry, resolution, size: automationStudioFlowBootstrapSizeLimitsOf(flow) });
     if (!validation.ok || !validation.validated) throw refusal("validate", validation.issues);
     const instruction = await service.saveFlowGenerationInstruction({
       projectId: input.projectId,
@@ -129,4 +133,22 @@ function matrixFlowStep(subflowKey: string, node: { key: string; definitionId: s
 function refusal(stage: "assemble" | "validate", issues: readonly { code: string; message: string; path?: string | undefined }[]): RunnerFailure {
   const listed = issues.map(issue => `${issue.code} at ${issue.path ?? "plan"}: ${issue.message}`);
   return new RunnerFailure("fixture.invalid", `Core refused the matrix script at ${stage}: ${listed.join("; ")}`, { details: { codes: issues.map(issue => issue.code) } });
+}
+
+/** The plan with each named step carrying its signed effect, and a refusal when a key names no step. */
+function withRouteEffects<Plan extends { subflows: readonly { nodes: readonly { key: string }[] }[] }>(plan: Plan, effects: Readonly<Record<string, JsonObject>>): Plan {
+  const keys = Object.keys(effects);
+  if (!keys.length) return plan;
+  const copy = structuredClone(plan);
+  const missing = new Set(keys);
+  for (const subflow of copy.subflows) {
+    for (const node of subflow.nodes as { key: string; routeSignatures?: { effect?: JsonObject } }[]) {
+      const effect = effects[node.key];
+      if (effect === undefined) continue;
+      node.routeSignatures = { ...node.routeSignatures, effect: structuredClone(effect) };
+      missing.delete(node.key);
+    }
+  }
+  if (missing.size) throw new RunnerFailure("fixture.invalid", `The matrix case signs an effect on ${[...missing].join(", ")}, which the script has no step for`);
+  return copy;
 }
