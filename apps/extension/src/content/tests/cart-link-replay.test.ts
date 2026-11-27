@@ -39,6 +39,14 @@ type Shop = {
   linkTo?: string;
   /** The mini cart is open, so its "View cart" is shown beside the header link. */
   miniCartOpen?: boolean;
+  /** A second visible link to the cart in the header's own links, the region the header link sits in (t1079 F2). */
+  rivalInNav?: boolean;
+  /**
+   * The page is drawn in one wrapper `div`, as the scenario's shell draws it, and on every page but the cart a support
+   * chat `div` follows it (t1079): the header link's selector is then `body > div:nth-of-type(1) > ...` on a results
+   * page and `body > div > ...` on the cart page.
+   */
+  shell?: boolean;
 };
 type Installed = { cartLink: Element; add: Element | undefined; controls: Element[]; url: string };
 
@@ -53,14 +61,17 @@ function install(t: TestContext, shop: Shop): Installed {
   const main: StubElement = shop.page === "search"
     ? el("main", {}, el("ul", {}, el("li", {}, el("a", { href: "/scenarios/bigbox-retail/ip/towels" }, "Paper Towels, 1 Roll"), add!)))
     : el("main", {}, el("h1", {}, "Cart"));
-  document.append(el("html", {}, el("body", {},
-    el("header", {}, el("div", {},
-      el("a", { class: "logo", href: "/scenarios/bigbox-retail/" }, "ValueRidge"),
-      el("nav", {}, reorder, cartLink),
-      el("div", shop.miniCartOpen ? { class: "mini" } : { class: "mini", hidden: "" }, el("strong", {}, "Your cart"), viewCart))),
-    main)));
+  const header = el("header", {}, el("div", {},
+    el("a", { class: "logo", href: "/scenarios/bigbox-retail/" }, "ValueRidge"),
+    el("nav", {}, reorder, cartLink, ...(shop.rivalInNav ? [el("a", { href: CART_PATH }, "Basket")] : [])),
+    el("div", shop.miniCartOpen ? { class: "mini" } : { class: "mini", hidden: "" }, el("strong", {}, "Your cart"), viewCart)));
+  const body = shop.shell
+    ? [el("div", { class: "page" }, header, main), ...(shop.page === "cart" ? [] : [el("div", { class: "chat" }, el("span", {}, "Support"))])]
+    : [header, main];
+  document.append(el("html", {}, el("body", {}, ...body)));
   installStubDocument(t, document);
-  const controls = [cartLink, viewCart, reorder, ...(add ? [add] : []), ...main.querySelectorAll("a, h1")] as unknown as Element[];
+  // What a snapshot describes: rendered elements only, so a closed mini cart's link is not among them (t1079).
+  const controls = [cartLink, ...(shop.miniCartOpen ? [viewCart] : []), reorder, ...(add ? [add] : []), ...main.querySelectorAll("a, h1")] as unknown as Element[];
   return { cartLink: cartLink as unknown as Element, add: add as unknown as Element | undefined, controls, url: shop.page === "search" ? SEARCH : CART };
 }
 
@@ -77,19 +88,23 @@ function described(element: Element, url: string): JsonObject {
     ...(name ? { accessibleName: name } : {}),
     ...(role ? { implicitRole: role } : {}),
     ...(element.getAttribute("class") ? { classNames: element.getAttribute("class")!.split(" ") } : {}),
-    ...(href ? { href: new URL(href, url).href, attributes: { href } } : {})
+    ...(href ? { href: new URL(href, url).href } : {}),
+    // The attributes as the content script puts them on the wire: the class too, which the identity reads its class names from (t1079).
+    ...(href || element.getAttribute("class") ? { attributes: { ...(element.getAttribute("class") ? { class: element.getAttribute("class")! } : {}), ...(href ? { href } : {}) } } : {})
   };
 }
 
 /** The saved step, as attempt 1 explored and its draft was assembled; and the act's own parameters before assembly. */
-async function attemptOne(t: TestContext): Promise<{ saved: BrowserActionCommand; asActed: BrowserActionCommand }> {
-  let page = install(t, { page: "search", count: 1, total: "$3.97" });
+async function attemptOne(t: TestContext, shell = false): Promise<{ saved: BrowserActionCommand; asActed: BrowserActionCommand; selectors: string[] }> {
+  let page = install(t, { page: "search", count: 1, total: "$3.97", shell });
+  const selectors = [selectorFor(page.cartLink)];
   let document = 1;
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_session, command) => {
       if (command.actionType === "web.dom.click" && command.parameters.selector === selectorFor(page.cartLink)) {
-        page = install(t, { page: "cart", count: 2, total: "$5.25" });
+        page = install(t, { page: "cart", count: 2, total: "$5.25", shell });
+        selectors.push(selectorFor(page.cartLink));
         document += 1;
       }
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
@@ -118,7 +133,7 @@ async function attemptOne(t: TestContext): Promise<{ saved: BrowserActionCommand
   await run(look, {});
   const assembled = await runtime.resolvePlanNodeParameters({ ...SCOPE, nodeDefinitionId: CLICK, parameters: structuredClone(acted.parameters), declaredConsequences: [], permission: async () => ({ permitted: true as const }) });
   if (assembled.status !== "resolved") assert.fail(JSON.stringify(assembled));
-  return { saved: command(assembled.parameters), asActed: command(acted.parameters) };
+  return { saved: command(assembled.parameters), asActed: command(acted.parameters), selectors };
 }
 
 /** The gateway command a saved step's parameters dispatch as. */
@@ -163,16 +178,36 @@ test("the step as it stood before the build marked its words is still refused on
   assert.equal(failureCode(() => resolveTarget(asActed)), "web.target.not_found");
 });
 
-test("what stays must confirm it: another destination, or a second visible link there, is refused", async (t) => {
+test("what stays must confirm it: another destination, or a second visible link there in its region, is refused", async (t) => {
   await t.test("the same words and place leading elsewhere", async (inner) => {
     const { saved } = await attemptOne(inner);
     install(inner, { page: "search", count: 1, total: "$3.97", linkTo: "/scenarios/bigbox-retail/orders" });
     assert.equal(failureCode(() => resolveTarget(saved)), "web.target.not_found");
   });
-  await t.test("the mini cart open, its View cart leading to the same place", async (inner) => {
+  await t.test("a second visible link to the cart among the header's own links", async (inner) => {
     const { saved } = await attemptOne(inner);
-    install(inner, { page: "search", count: 2, total: "$5.25", miniCartOpen: true });
-    // The header link alone is refused at Level 1, and Level 2 weighs the two links to the cart level: a tie.
+    install(inner, { page: "search", count: 2, total: "$5.25", rivalInNav: true });
     assert.equal(failureCode(() => resolveTarget(saved)), "web.target.ambiguous");
   });
+});
+
+// t1079 F2: until then any visible link to the cart was a rival, so an open mini cart made the step a tie (t1071's
+// open question 4). Its "View cart" sits in the header, outside the header's links: another place to go to the cart
+// from, not a second reading of the one link. Rivals are counted within the link's own region.
+test("the mini cart open, its View cart leading to the same place from another region: the header link", async (t) => {
+  const { saved } = await attemptOne(t);
+  const page = install(t, { page: "search", count: 2, total: "$5.25", miniCartOpen: true });
+  assert.equal(resolveTarget(saved).element, page.cartLink);
+});
+
+// Provider-free run `run-mwyueo09-ea0204c3` (reproduced as `run-mwyw05h7-46d7d38f`, step 0040): the header link sat at
+// one selector on the results pages and at another on the cart page, the rule kept its two wordings under the two
+// selectors, one each, and the click attempt 1 saved was never marked. Keyed by what stays (t1079), it is one link.
+test("the header link at another selector on the cart page: the saved step is still marked, and attempt 2 finds it", async (t) => {
+  const { saved, selectors } = await attemptOne(t, true);
+  assert.notEqual(selectors[0], selectors[1], `the two pages place the link differently: ${selectors.join(" | ")}`);
+  assert.equal((saved.element as { readsWords?: boolean }).readsWords, true);
+  assert.equal((saved.element as { href?: string }).href, CART_PATH);
+  const page = install(t, { page: "search", count: 2, total: "$5.25", shell: true });
+  assert.equal(resolveTarget(saved).element, page.cartLink);
 });

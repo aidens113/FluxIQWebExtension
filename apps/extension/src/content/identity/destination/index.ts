@@ -9,12 +9,19 @@
 // place as `href`, a path (`domain/.../self-changing/state-words.ts`).
 //
 // **The rule.** For such a target, the candidate's own destination confirms it
-// when it is the recorded path and no other visible link in the candidate's root
-// leads there. Its own destination is where it goes within the site: the path of
-// its address, without query or fragment, and only for a link that leads
-// somewhere -- never one that acts on the page (`action-link.ts`), and never one
-// to another origin. A hidden link to the same place (a closed mini cart's "View
-// cart") is no rival; two visible ones are, and then the destination says nothing.
+// when it is the recorded address and no other visible link in the candidate's
+// region leads there. Its own destination is where it goes within the site: the
+// path and query of its address, without its fragment (t1079 F1: a link whose
+// words change together with its query is two links taking turns in one place,
+// never one link's state), and only for a link that leads somewhere -- never one
+// that acts on the page (`action-link.ts`), and never one to another origin. A
+// hidden link to the same place (a closed mini cart's "View cart") is no rival.
+// Neither is a visible one in another region (`region.ts`, t1079 F2): the
+// nearest dialog or landmark each sits in, so an open mini cart's "View cart"
+// beside the header's links is another way to the cart, not a second reading of
+// the one link. Two visible ones in one region are rivals, and then the
+// destination says nothing; two candidates that each confirm in their own region
+// are a tie Level 2 does not break by rank.
 //
 // It corroborates as an exact signal does, in the veto's rule 2 and at Level 2's
 // last check, and nowhere else: it never adds to a score, never lowers one, and a
@@ -23,4 +30,5 @@
 // everything else the recording named.
 
 export { destinationVerdict } from "./verdict";
+export { destinationRegion } from "./region";
 export { recordedDestination } from "./recorded";

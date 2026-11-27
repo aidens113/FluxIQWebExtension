@@ -15,13 +15,41 @@ export function evidenceOf(request: ScriptedModelRequest): readonly EvidenceEntr
   return Array.isArray(evidence) ? evidence.filter((entry): entry is EvidenceEntry => isRecord(entry) && typeof entry.toolId === "string" && isRecord(entry.value)) : [];
 }
 
+/** Core's one trailing entry holding the page deliveries (t1080). */
+const PAGE_WINDOW_TOOL_ID = "core.page_window";
+
 /**
- * The page as it stands now, rebuilt as a model would from the deliveries the request carries (page-diff D1): the
- * newest whole delivery of the newest result's page key, then the `changes` after it, applied in order. A delivery
- * that is a reference (`replacedBy`, `droppedAt`), a recalled page or unchanged adds nothing. A request from before
- * the page channel holds the page itself, or `core.current_view`'s, and is read as it always was.
+ * The page the work is on, from Core's trailing page window (t1080): the page marked `current`, from its first whole
+ * delivery (a part answer, which names the delivery it is `from`, is not the page's start), with each later `changes`
+ * applied in order. Undefined when the request carries no window, or the window holds no current page.
+ */
+function windowPageOf(evidence: readonly EvidenceEntry[]): string | undefined {
+  const window = evidence.find((entry) => entry.toolId === PAGE_WINDOW_TOOL_ID);
+  const pages = window && Array.isArray(window.value.pages) ? window.value.pages : [];
+  const held = pages.find((page) => isRecord(page) && page.current === true && page.recalled !== true);
+  const shown = isRecord(held) && Array.isArray(held.shown) ? held.shown.filter(isRecord) : [];
+  let lines: string[] | undefined;
+  for (const delivery of shown) {
+    if (delivery.from !== undefined) continue;
+    if (typeof delivery.whole === "string") lines = delivery.whole.split("\n");
+    else if (typeof delivery.changes === "string") {
+      if (lines === undefined) throw new Error(`The page window carries changes to page ${String(held?.key)} without its whole page`);
+      lines = applyPageChanges(lines, delivery.changes.split("\n"));
+    }
+  }
+  return lines?.join("\n");
+}
+
+/**
+ * The page as it stands now, rebuilt as a model would from the deliveries the request carries (page-diff D1): since
+ * t1080 from Core's trailing `core.page_window` (`windowPageOf`). A request from before t1080 carries each delivery
+ * in its result instead: the newest whole delivery of the newest result's page key, then the `changes` after it,
+ * applied in order; a reference (`replacedBy`, `droppedAt`), a recalled page or unchanged adds nothing. A request from
+ * before the page channel holds the page itself, or `core.current_view`'s, and is read as it always was.
  */
 export function currentPageOf(request: ScriptedModelRequest): string {
+  const fromWindow = windowPageOf(evidenceOf(request));
+  if (fromWindow !== undefined) return fromWindow;
   const pages = new Map<string, string[]>();
   let current: string | undefined;
   for (const entry of evidenceOf(request)) {
