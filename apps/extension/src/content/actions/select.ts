@@ -98,9 +98,10 @@ export async function selectAction(action: BrowserActionCommand, deps: ContentAc
     return deps.success(action, startedAt, "No option was named.", {
       status: "failed",
       expected: "an option named by value, label, or index",
-      actual: "the command named none",
+      // The domain refuses such a command before dispatch (t1081); this phrase is the one its refusal reads (`actions/select-option-issue.ts`).
+      actual: "no option: the command named none",
       redacted: withheld
-    }, evidence());
+    }, evidence(), WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER);
   }
   if (!(element instanceof HTMLSelectElement)) {
     return deps.success(action, startedAt, "The target is not a select element.", {

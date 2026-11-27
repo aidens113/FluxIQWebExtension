@@ -10,3 +10,5 @@ export { webLlmUnknownColumn } from "./unknown-column";
 export { webLlmListMadeOn } from "./list-made-on";
 // How a read that named its list by words no line shows is told (`./list-words.ts`, t1038).
 export { webLlmListWords } from "./list-words";
+// How a select that named no option is told (`./select-option-next.ts`, t1081).
+export { WEB_SELECT_OPTION_CODE_PREFIX } from "./select-option-next";

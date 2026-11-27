@@ -171,7 +171,7 @@ test("a command naming no option at all reports the gap rather than selecting so
   expect(reply).toMatchObject({
     status: "failed",
     message: "No option was named.",
-    validation: { status: "failed", expected: "an option named by value, label, or index", actual: "the command named none" }
+    validation: { status: "failed", expected: "an option named by value, label, or index", actual: "no option: the command named none" }
   });
   await expect(page.locator(DEPARTMENT)).toHaveValue(INITIAL_DEPARTMENT);
 });
