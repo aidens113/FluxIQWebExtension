@@ -40,9 +40,9 @@
 - their tests.
 
 **Must not touch.**
-- `framework/automation-service/service/answer-first/**` (t1090).
+- `framework/automation-service/service/answer-first/**` (t1091).
 - `engine/**` and `domain/src/**`.
-- `packages/test-runner/**` (t1091).
+- `packages/test-runner/**` (t1090).
 - The judge answer tool's strictness. It stays non-strict: the platform refused its strict grammar, as the header of
   `strict-answer-schema.ts` records.
 

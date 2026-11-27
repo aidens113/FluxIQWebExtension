@@ -1,4 +1,4 @@
-# Brief t1091: recovery-matrix case 14 with a signed search effect
+# Brief t1090: recovery-matrix case 14 with a signed search effect
 
 **Goal.** Provider-free proof (b) of t1083's K1.
 
@@ -26,8 +26,8 @@ Add a variant of case 14 whose search step carries a signed effect, as the answe
 
 **Must not touch.** Core, and `domain/src/**`.
 
-**Checks** (in `C:/Users/osrs_/FluxStuff/fxwork/t1091-recovery-matrix-signed-search`; put heavy commands through
-`node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1091-<label> -- <cmd>`):
+**Checks** (in `C:/Users/osrs_/FluxStuff/fxwork/t1090-recovery-matrix-signed-search`; put heavy commands through
+`node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1090-<label> -- <cmd>`):
 - the recovery-matrix tests for case 14 and the new variant;
 - `node scripts/structure-audit.mjs`. Group by shared prefix; no one-file groups.
 
@@ -36,4 +36,4 @@ scenarios' sites (AGENTS.md). Say which one it is.
 
 No `node -e`, no git, no live or paid runs.
 
-**Report.** `docs/working/page-diff-delivery-plan/reports/t1091.md` in the worktree, ending with the return contract.
+**Report.** `docs/working/page-diff-delivery-plan/reports/t1090.md` in the worktree, ending with the return contract.
