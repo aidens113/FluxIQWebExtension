@@ -136,6 +136,17 @@
 // selector's lone match is acted on. A press is not marked and is judged as it
 // always was.
 //
+// ## A target whose words are state is confirmed by where it leads (t1071 F1)
+//
+// The domain marks the same way a press whose words the build saw change as
+// state -- a header cart link named by its count and total -- and gives it the
+// path it always led to (`href`). Judged without its words, such a link asks the
+// question by its destination: the precondition counts it, and rule 2 takes only
+// a candidate that leads there and is the only visible link on the page that does
+// (`./destination/`) -- a link leading elsewhere is refused whatever else agrees,
+// since the build saw this one always lead there. Rule 1 still weighs everything
+// else the recording named, so a link the page contradicts is refused too.
+//
 // ## What the veto reports back, and why an accept now reports it too
 //
 // The veto scores every Level 1 match. Until 2026-09-12 it returned that number
@@ -160,6 +171,7 @@
 
 import { candidateFingerprint, candidateLabel, type TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
+import { destinationVerdict, recordedDestination } from "./destination";
 import { recordedPlaceRefusal, type TargetPlaceRefusal } from "./place";
 import { readWordsOf } from "./read-words";
 import { scoreTargetCandidate, type RecordedIdentity } from "./score";
@@ -255,12 +267,15 @@ export function vetoCandidate(recorded: RecordedIdentity, candidate: TargetCandi
   // named no record: the check returns before it reads the page.
   const place = recordedPlaceRefusal(target.context, candidate.element);
   if (place !== undefined) return { refusedBecause: place };
-  if (!recordedDistinguisher(target)) return {};
+  const destination = keptDestination(recorded);
+  if (!recordedDistinguisher(target) && destination === undefined) return {};
   const score = scoreTargetCandidate(target, candidate);
   if (!score) return {};
   const measurement: TargetMeasurement = { score: score.normalizedScore, confidence: score.confidence };
   if (measurement.score < TARGET_VETO_FLOOR) return { measurement, refusedBecause: "contradicted" };
-  return corroboratesExactly(score) ? { measurement } : { measurement, refusedBecause: "uncorroborated" };
+  // Words that change as state corroborate nothing; where the link always led must (header, `./destination/`).
+  const confirmed = destination === undefined ? corroboratesExactly(score) : destinationVerdict(destination, candidate.element) === "confirms";
+  return confirmed ? { measurement } : { measurement, refusedBecause: "uncorroborated" };
 }
 
 /**
@@ -283,8 +298,8 @@ export function vetoExactMatch(recorded: RecordedIdentity, element: Element): Ex
   // for tidiness: `candidateFingerprint` reads layout, and this runs on the
   // critical path of every action. A recording that named nothing must cost
   // nothing.
-  if (!recordedDistinguisher(target)) return {};
-  const verdict = vetoCandidate(target, { element, fingerprint: candidateFingerprint(element, 0) });
+  if (!recordedDistinguisher(target) && keptDestination(recorded) === undefined) return {};
+  const verdict = vetoCandidate(recorded, { element, fingerprint: candidateFingerprint(element, 0) });
   if (!verdict.refusedBecause) return verdict;
   // Unreachable: the recorded-place rules ran above and passed, so
   // `vetoCandidate` cannot refuse for them. Written out rather than asserted,
@@ -307,6 +322,11 @@ export function vetoExactMatch(recorded: RecordedIdentity, element: Element): Ex
 function refusedPlace(reason: TargetPlaceRefusal, element: Element): ExactMatchVerdict {
   const place = reason === "other-record" ? "record" : reason === "other-dialog" ? "dialog" : "landmark";
   return { refusedBecause: reason, summary: `refused ${candidateLabel(element)} in another ${place}` };
+}
+
+/** Where a target whose words are a value always led (`./destination/`, t1071 F1); nothing for any other target, whose words still say who it is. */
+function keptDestination(recorded: RecordedIdentity): string | undefined {
+  return readWordsOf(recorded) === undefined ? undefined : recordedDestination(recorded);
 }
 
 /** What the veto judges a recording by: all of it, or for a read everything but the words it reads (header). */
