@@ -47,3 +47,10 @@ test("processing declarations cannot become a default or be changed by an earlie
   assert.deepEqual(scriptedTaskProcess("crossborder-marketplace-free-hubs-under-ten-timed-check"), hubs);
   assert.deepEqual(scriptedTaskProcess("crossborder-marketplace-free-hubs-under-ten"), hubs);
 });
+
+test("the Kestrel auctions declaration names the site's columns and its pound ceiling", () => {
+  const process = scriptedTaskProcess("auction-marketplace-kestrel-auctions") as { columns: string[]; anyOf: unknown[][]; sort: unknown[] };
+  assert.deepEqual(process.columns, ["link_text", "price", "text_5", "text_9"]);
+  assert.equal(process.anyOf.length, 2);
+  assert.deepEqual(process.sort, [{ field: "ends", order: "asc", as: "date" }]);
+});
