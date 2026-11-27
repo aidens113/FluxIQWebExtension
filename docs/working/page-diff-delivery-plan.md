@@ -153,6 +153,26 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-27 - Free harnesses pass 4 of 4 on 0.54.36; t1086 and t1090 integrated; t1091 and t1092 running
+- **Bigbox plain** (`run` in t1086, instance t1086): 4 of 4 right. Attempt 1 explored (15 calls); attempts 2-4 ran the saved Flow.
+- **Bigbox panel** (instance t1086p, `run-mwzdbvkm-204422a9`): 4 of 4 right.
+  - Calls: 16, 1 (the judge), 0, 0.
+  - In attempt 2, "View cart" was passed over as `executor.state.not_arisen`. Its step's spans show `state-route`, then a successful `send.click` (the header cart link), then the cart read returned 2 rows. That is F1 end to end.
+  - The judge requests of attempts 1 and 2 (`loop_verification-001`, `-002`) hold the page's "Pickup today" line. The evidence-reading scripted judge said yes on page text it was shown: F2 end to end.
+- **Kestrel** (instance k1 in t1015-paid-bigbox): 4 of 4 right, 10 rows each time.
+  - Calls: 11, 1 (the judge), 0, 0.
+  - The replayed search that stopped live and in t1082's run now passes: K1 end to end.
+- **t1090** (worker): recovery-matrix case 14b passed with 0 model calls; s2 retried until the check let the visitor on. Its record does not show whether the effect check ran on s1, so kestrel is the end-to-end proof of K1.
+- **t1086** merged. Every live lane was merged with dev afterwards.
+- **Running:**
+  - t1091 (worker-heavy): every result read of one list answers;
+  - t1092 (worker-heavy): the carried-row repair tests failing on dev.
+- **Live reruns** of bigbox and kestrel wait for t1091 (a known fix in flight), within the remaining ~$16.80.
+- Validation: the lead's runs:
+  - `pnpm lab attempt bigbox-retail --task bigbox-retail-new-store-cheapest-towels --authoring-mode answer-first --scripted-model --attempts 4` -> `"status":"passed"`, watcher `alerts: 0`; with `FLUXIQ_ATTEMPT_SCRIPT_FORM=panel` -> `"status":"passed"`, calls `16, 1, 0, 0`, `alerts: 0`;
+  - `pnpm lab attempt auction-marketplace --task auction-marketplace-kestrel-auctions ... --attempts 4` -> `"status":"passed"`, calls `11, 1, 0, 0`, `alerts: 0`;
+  - `pnpm lab recovery-matrix --case 14b` -> `{"caseId":"14b","verdict":"passed"}`.
+
 ### 2026-11-27 - The replay fixes integrated: t1083, t1084, t1085, t1087 (strict part reverted), t1088, t1089 (fluxiq 0.54.36)
 - **t1083** (worker-heavy): F1 and K1.
   - A step passed over as `not_arisen` still reaches the route its recorded effect went to. Core asks the host through the new optional `reachRouteEffect`, and the web host:
