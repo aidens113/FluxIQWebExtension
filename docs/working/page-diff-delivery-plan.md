@@ -153,6 +153,59 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-27 - The replay fixes integrated: t1083, t1084, t1085, t1087 (strict part reverted), t1088, t1089 (fluxiq 0.54.36)
+- **t1083** (worker-heavy): F1 and K1.
+  - A step passed over as `not_arisen` still reaches the route its recorded effect went to. Core asks the host through the new optional `reachRouteEffect`, and the web host:
+    1. goes on if the page is already there;
+    2. otherwise presses a visible link to the same route, banner or navigation first;
+    3. otherwise goes to the recorded destination.
+  - An effect now signs `from`. A page on neither its start nor its destination is `unknown`.
+  - Proven on both recordings:
+    - bigbox s12 presses the header cart link before s13; with the old decision, 3 of 7 tests fail;
+    - the kestrel check page reads `unknown`; with the old rule, it reads `not_seen`.
+  - **Lead's decision:** a step reached this way stands as saved. No call is made, the path is deterministic, and the attempt records `reached`.
+- **t1084** (worker-heavy): F2. Every judge that does not continue a decider gets page views, in the order decided above.
+  - On run-mwz29d50's records, the rebuilt replay judge request holds the "4.5 out of 5 Stars" and pickup "Today" lines, within the page budget.
+- **t1085** (worker-heavy): F3, the drop-copy check, and K3.
+  - Proof beats no proof in `better-flow.ts`.
+  - Keep and result are checked against the steps as they will stand after the same decision's drops.
+  - A result read carried from an earlier attempt no longer outranks a fresh read of the same list.
+  - A returning read gets back the pages it read.
+- **t1087** (worker): K5 row handles kept; **K4's strict answer reverted** (lead, Core `689fc826e`).
+  - One check against the API before any live run, over 0088's recorded tools, was refused twice. Neither refusal billed anything:
+    - first: "Enum value 'yes' does not match declared type ['string','null']", fixed by writing nullable enums as `anyOf`;
+    - then: "The compiled grammar is too large".
+  - The counted limits held (0 optional, 12 unions), but grammar size is a further limit. Every decider request carries the answer tool, so strict would have refused every decision.
+  - The answer tool is non-strict again. The reshape module stays, marked as not sent.
+  - The judge-shape defect (0088) is open again.
+- **t1088** (worker): a replay stop on an unseen effect reads the page once before handing over.
+  - Where the effect holds, the replay continues from the next step. Otherwise the note names the page as it is now.
+  - The lead regrouped `flow-run/tests` by shared prefix (`tests/steps-ran/tests/`), replacing a one-file group that only dodged the 25-file limit.
+- **t1089** (worker-heavy): row handles reach the Flow-less judge's first ask, with the shared rule where labels are shared. A judge the provider ends up sending on its own request carries the pages. The Anthropic adapter takes them out only for a real continuation.
+- **t1086** (worker): the bigbox harness gains a `panel` form with an evidence-reading scripted judge.
+  - The plain form passes 4 of 4: explore 15 calls, then 1, 0 and 0.
+  - The panel form waits for the shared Core sync.
+- **Integration defects found by the lead:**
+  - **Type errors.** The Core finish refused t1083 and t1085 on type errors in their new test files. The workers had run vitest only, and vitest does not type-check. Both were fixed; Core's check now runs in the tree before a finish.
+  - **Early push.** Downstream dev was pushed with t1083's domain half before Core's finish had succeeded. Downstream did not build against Core dev until the Core rerun landed, about 15 minutes later. From now on, both repositories push only after both finishes are confirmed.
+  - **Leftover processes.** Five were killed: three `tail` watchers on finished runs and two shells of a worker's wait loop. They were blocking the shared Core sync.
+- **Open, new:**
+  - `domain/src/runtime/tests/carried-row-service-repair.test.ts` has 4 failures, the same on dev before t1083;
+  - the judge answer's shape needs a fit the grammar can hold;
+  - t1091: the answer comes from every result read of one list (t1082's 9 rows);
+  - t1090: recovery-matrix case 14b, built and waiting for the sync to run.
+- Validation: the lead's runs on the merged branches:
+  - t1087 groups over `llm providers result-verification`: `Tests 5098 passed`, `7 passed`;
+  - the revert, over `llm providers`: `Tests 3129 passed`, `4 passed`;
+  - t1084, over `result-verification answer-first`: `2850 passed`, `510 passed`; merged with t1087: `2108`, `3`;
+  - t1088, over `flow-run attempt`: `234 passed`, `148 passed`;
+  - t1083: state-routing and related `424 passed`, `115 passed`; domain `235 pass`, with the 4 failures pre-existing (dev `169 pass`, the same 4);
+  - t1089 merged: `2155 passed`, `3 passed`;
+  - t1085 merged: `1344 passed`, `509 passed`; `pnpm check` clean after the test type fix;
+  - every Core finish passed `pnpm check`, the contracts tests and the audit;
+  - Core `0979c2a15` (0.54.36) pushed.
+- Follow-up: sync the lanes, then run the free harnesses (bigbox plain and panel 4 of 4, kestrel 4 of 4, recovery case 14b). Only then rerun bigbox and kestrel live.
+
 ### 2026-11-27 - Both replays diagnosed on 0.54.35; t1082 (kestrel harness) integrated; t1083-t1088 dispatched
 - **Live on 0.54.35.** Both first attempts were right; both replays failed. The lead stopped both runs. Spend is about $33.20 of $50.
   - **Bigbox run-mwz29d50:** attempt 1 right (17 calls, $0.65).
@@ -483,273 +536,6 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
   - Core finish of t1057 printed `# pass 529 # fail 0`.
   - Core bumped to 0.54.28; both `dev`s pushed (Core `f02bbc8ec`, downstream `cff473430`); four live lanes merged.
 
-### 2026-11-25 - t1049 (no step count ends anything), t1050 (fake clocks) and t1053 (passed-over steps) integrated (fluxiq 0.54.27)
-- Changed:
-  - **t1053** (worker; report `reports/t1053.md`): a Flow step passed over by routing, with no outputs and no failure, is Core's own record. The run trail never hands it to the web projector, reports it to the judge in Core's words, and raises no gap (`result-verification/run-trail/of/attempts.ts`, `judge-evidence/passed-over.ts`). Before, the replay's yes was held unsure forever when the cover dismissals were passed over.
-  - **t1050** (worker; report `reports/t1050.md`): `second-attempt-proof`, `later-attempt` "a run's own deadline" and judge-reply "ends at the judgement's existing deadline" run on fake clocks. An optional `startTimer` in the attempt ports reaches the engine's existing timer option; unset, real timers. No deadline was raised.
-  - **t1049** (worker-heavy; report `reports/t1049.md`): `maxStepsWithoutProgress` is gone from every loop and recovery. The count only steers: from the third such step the model is told what it keeps repeating. The recovery's three-step progress guard is deleted, and codes nothing produces are deleted.
-    - W3 leftovers: a `repeat` naming a missing step is refused `no_such_step`, and the unused `settings` on an amendment is no longer parsed.
-    - About 30 tests now state the new behaviour. The lead sent back `service-bootstrap/tests/unfinished-build.test.ts`, which pinned the old ending; it now asserts the purse ending with steering and no identical second round.
-  - **Found by t1049's follow-up:** that test's purse is `maxCallsPerRun: 12`, a call count ("stopped at its limit of 12 model calls"). It goes in the loop-counts brief with the other counts that still end non-answer-first loops.
-- Validation: the lead's runs.
-  - t1050 in `fxwork/t1050`:
-    - `pnpm --filter fluxiq check` exit 0;
-    - vitest groups over `answer-first`, `judge-reply` and `engine/automation/composite`: parallel printed `Tests  856 passed (856)`, real-sql `Tests  506 passed (506)`;
-    - audit passed.
-  - t1053: the lead read the passing Lab run's attempt table (`run-mwx2ylvq-1e1eb947`, company-website-apprentices):
-    - 4 of 4 right;
-    - calls 13, 1, 0 and 0;
-    - attempts 2 to 4 ran `run_flow` with continuation held.
-  - The combined check (t1055) is in the t1048 entry below. After t1049's test fix, `service-bootstrap` on t1049 merged with `dev` printed parallel `Tests  3 passed (3)` and real-sql `Tests  120 passed (120)`.
-  - Each `pnpm task finish` on Core printed `"validation":{"ran":true,"command":"pnpm check","passed":true}` with `# pass 529 # fail 0`.
-  - Core bumped to 0.54.27; both `dev`s pushed (Core `266b99197`, downstream `6c697de2a`).
-
-### 2026-11-25 - t1048 (the judge and the decider see every read's rows) integrated (fluxiq 0.54.27); t1054 (the read-lock test race) integrated (fluxiq 0.54.26)
-- Changed, t1048 (worker-heavy; report `reports/t1048.md`): t1044's two main causes.
-  - A draft read that is not the answer goes to the judge page by page with its rows (`result-feed/feed.ts`, `read-evidence.ts`, `result-evidence/{types,from-batches}.ts`). It used to go as a count only.
-    - A step with no page read yet still goes by its count, and stored bundles from before still load.
-    - The window fitting (`result-verification/flow-less/window-fitting.ts`) may summarise these rows after the looks and before the answer's pages, and says so in plain words.
-  - The decider's current view (`decision-context/current-view.ts`) holds a read whose answer names its list per list key, pager place and address. Run mwvgjb8c's pages 1 and 2 share a list key and a handle, so a key by list alone would have kept the defect. The same page read again replaces only its own rows.
-  - Open product question: a list read before a filter change stays in view beside the re-read, because the address differs.
-- Changed, t1054 (worker; report `reports/t1054.md`): Core `scripts/build-cache/tests/step-read-lock.test.mjs` waits until the build's writer lock file exists, not a fixed `delay(400)`.
-  - It had failed both of t1051's Core finishes under load with `'no stamp'`, and likely t1044's two unnamed failures this morning.
-  - The lead tried `--skip-checks` for t1051, and the permission check refused it. The test was fixed instead.
-- Validation: the lead's runs.
-  - t1048 in `fxwork/t1048`:
-    - `pnpm --filter fluxiq check` exit 0;
-    - vitest groups over `src/runtime/llm src/runtime/result-verification src/framework/automation-service/service/answer-first`: parallel printed `Test Files  679 passed (679)`, `Tests  5844 passed (5844)`; real-sql printed `Tests  513 passed (513)`;
-    - Core audit passed; model-text printed `ok`.
-  - The lead checked that the read lock writes its own reader entry, so `stepLock` is the build's writer lock and the poll is a real signal.
-  - t1054: the read-lock test was run 4 at once, twice, and each printed `# pass 1 # fail 0` (8 of 8). The worker had 20 of 20 at 4-way concurrency, 4 of 4 failures with the wait removed, and build-cache tests 87 of 87.
-  - `pnpm task finish` for both: t1054's Core finish printed `# tests 529 # pass 529 # fail 0` after two load failures that led to its lock fix. t1048's result line is in its integration commit.
-  - A combined check of t1048, t1049, t1050 and t1053 merged on Core `dev` `f83ff1e`, in the throwaway task t1055, ran before any of them reached `dev`:
-    - Core check exit 0; libraries build exit 0;
-    - vitest groups over `runtime/{llm,result-verification,adaptation,agents,loop-limits,flow-authoring,answer-first,project-agents}`, `framework/automation-service` and `engine/automation/composite`:
-      - parallel printed `Tests  14366 passed | 2 skipped`;
-      - real-sql printed `Tests  1 failed | 1620 passed | 1 skipped`. The failure is `service-bootstrap/tests/unfinished-build.test.ts`, which pinned the count ending t1049 removed; it was sent back to t1049;
-    - audit passed; domain `# pass 1995 # fail 0`; domain check exit 0; model-text `ok`.
-
-### 2026-11-25 - t1052 (the Lab's frame-origin proof; stale scripted declarations) integrated
-- Changed (worker; report `reports/t1052.md`):
-  - `lab-control/frame-origin-proof.ts` compares the store's stable `provenance.ownerEpoch`, not the whole cached health reply, whose store counters move with the site. A different epoch, a non-Lab server or an unreadable reply is still refused.
-  - The attempt lane gives the panel the run's addresses (`panel-addresses.ts`), so it never probes `127.0.0.1:3000`.
-  - The network guard's blocked frames and requests are written to `attempt-report.txt` in plain words.
-  - The apprentices script refuses a stray decision where it strays.
-  - Stale declarations: saturday-certificate filtered on `disabled`, which its read never captured, so Core refused all 44 completions (`processing_binding_missing`). The fixture marks taken slots `aria-disabled`, so the read collects every slot with that mark and the declaration filters taken ones out; the oracle is unchanged. crossborder's read now keeps the `shipping` and `ad` fields its declaration names. The other declarations match their reads; social-network-feed has none.
-- Validation: the lead's run in `fxwork/t1052-lab-frame-origin-proof`.
-  - The test-runner suite printed `# tests 3019 # pass 3014 # fail 0 # skipped 5`.
-  - The runner check exit 0; the audit printed `structure-audit: passed (264 warning(s), 550 baselined)`.
-  - The worker's scripted saturday run (run-mwx28pr6) proved the frame defect gone: the Wrenfield branch was on `/book`, with 0 guard violations. It was then refused on the stale declaration, since fixed.
-  - The re-run after the fix was refused by the Lab's behind-dev guard (shared Core behind Core `dev`); it waits for the shared Core sync.
-
-### 2026-11-25 - t1051 (the answer contract reads the asked columns) integrated (fluxiq 0.54.26); the scripted round stopped on two diagnosed defects
-- Changed (worker, Sonnet; report `reports/t1051.md`):
-  - Core `flow-authoring/bootstrap/answerability/instruction-columns.ts` drops a closing "only", "just" or "exactly" after a column name, so "with columns title only" asks for `title`, not `title only`. "only child" keeps its first word.
-  - `result-verification/asked-words/table-lacks.ts` no longer takes a held column that shares one word as the named one: "due" for "due date" had let a table with the wrong column pass.
-  - `held-column.ts` also meets the singular and the plural.
-  - The lead rewrote `answer-first/completion/tests/result-columns.test.ts`, which pinned the old tolerance. A shared word is now refused with no judge; "title only" and a singular or plural name reach the judge.
-- Validation: the lead's run in `fxwork/t1051`.
-  - `pnpm --filter fluxiq check` exit 0.
-  - Vitest groups over `src/runtime/flow-authoring/bootstrap src/runtime/result-verification src/runtime/answer-first src/framework/automation-service/service/answer-first`:
-    - parallel printed `Tests  2 failed | 6905 passed | 2 skipped`; real-sql printed `Tests  519 passed (519)`.
-    - The 2 failures were `result-columns.test.ts`, rewritten as above, after which the file printed `Tests  10 passed (10)`; and `judge-reply/tests/unreadable-reply.test.ts` "ends at the judgement's existing deadline", a load-timed deadline test that printed `Tests  9 passed (9)` alone and was added to t1050's fake clocks.
-  - Core audit passed.
-- Scripted round on `dev` with W3 (lane t1015, provider-free, `--attempts 4`):
-  - bigbox passed 4 of 4 (run-mwwvelrb-46358790);
-  - company-website-apprentices (run-mwwwf7pb) and saturday-certificate (run-mwwwr1ty) failed, and the lead stopped the round (AGENTS.md: fix a shared problem before running more).
-  - Diagnosis (worker-heavy, `reports/scripted-round-diagnosis.md`):
-    - saturday was a Lab defect: `frame-origin-proof.ts` compared a stale copy of the health reply, store counters included, so the booking widget's frame was blocked after the store changed. It is fixed as t1052.
-    - apprentices was a Core defect: passed-over cover steps reached the web projector as `evidence_unrecognized`, so the replay's yes was held unsure and the attempt could not end. It is fixed as t1053.
-  - TaskStop ended only the round's outer shell, so the loop went on to the next task. The lead ended its process tree with `taskkill /T`.
-
-### 2026-11-25 - W3 (t1037) integrated: the framework drafts the Flow, the model edits it (fluxiq 0.54.25)
-- Changed (sub-supervisor; workers: wiring ×3 and delete-grammar on Opus, text ×2, scripted-reorder and docs on Sonnet; report `reports/t1037-auto-draft.md`):
-  - Core: every call that works joins the draft by itself, and the draft is recomposed in place after each call, rerun and edit. Dead ends and repeats are left out, and the asked table's read is the result.
-  - The model has seven edits: keep, drop, result, repeat, unrepeat, bind, rerun.
-  - `core.run_flow` is offered from the first decision and refused by name until something can run.
-  - A read's stored handle is recorded, never the model's `tN`.
-  - The 13-edit grammar, the transcript mode and the old tellings are deleted. The framework telling keeps the loop guidance: one act per item, and paging.
-  - The 20 real-sql failures of the switch were fixed at their causes: carried steps redrafted, a no-change press starting a detour, answer-first reads cut to one, drafting counted as progress.
-  - `carried-undeclared` was rewritten: a press nobody asked for is left out, so attempt 2 runs the saved Flow.
-  - Docs: Core `flow-authoring.md` and `llm-flow-bootstrap.md`, and downstream `build-loop.md`.
-  - Downstream: the local-classifieds and professional-network scripted models send no `reorder` or `add`, and the domain parity test is re-pinned to one changed Core sentence.
-- The lead also fixed the runner's test script to build scenario-lab first (`e18462713` on `dev`). W3's tree lacked that build, so 20 runner tests had failed with "Scenario Lab build is missing" (it had happened to t1047's fresh tree too).
-- Validation: the lead's runs in `fxwork/t1037`, after committing both sides (Core `62f645e97`, downstream `9c13a36f9`).
-  - Core libraries build exit 0; `pnpm --filter fluxiq check` exit 0.
-  - Vitest groups over `src/runtime/{llm,flow-authoring,adaptation,project-agents,automation-activity,result-verification,answer-first}`, `src/framework/automation-service`, `src/server/fluxnode-api` and `src/ui`:
-    - parallel printed `Test Files  1667 passed | 1 skipped (1668)`, `Tests  15297 passed | 2 skipped`;
-    - real-sql printed `Test Files  259 passed (259)`, `Tests  1630 passed | 1 skipped`.
-  - Core audit printed `structure-audit: passed (576 warning(s), 902 baselined)`.
-  - Downstream:
-    - the test-runner suite printed `# tests 3016 # pass 2990 # fail 20`, every failure "Scenario Lab build is missing";
-    - after building scenario-lab, the six failing files printed `# tests 44 # pass 44 # fail 0`;
-    - `test-domain.mjs llm-evidence runtime/tests`, the domain check, the runner check, the downstream audit and model-text each exited 0.
-  - The scripted bigbox run passed 4 of 4 (run-mwwol1vu-1a8e7146; the lead read its `attempt-report.txt`).
-
-### 2026-11-25 - First full sweep of the day (t1046) read; its downstream failures fixed as t1047
-- Sweep: `dev` at the start of the sweep (before t1044 and t1045), in `fxwork/t1046`, run through the heavy gate.
-  - Core build passed. Core `pnpm check` passed. Downstream `pnpm build` passed.
-  - Core fluxiq tests had 2 failures:
-    - `route-state/build-routing` "run-munneauy": fixed on `dev` by t1045, which landed after the sweep started;
-    - `components/automation/tests/ownership.test.ts`: `Test timed out in 15000ms` while W3's checks held the other heavy slot. Alone, `vitest run` on it printed `Tests 2 passed (2)` in 1440 ms. Recorded as contention, not changed; act on it only if the second sweep repeats it.
-  - The rest passed: parallel group `Tests 2 failed | 20488 passed | 6 skipped`; real-sql group `Tests 3251 passed | 1 skipped`.
-  - Downstream `pnpm check` had 2 script-test failures out of 834, and downstream `pnpm test` (all 12 packages ran, `--no-bail`) had 14 failures, all in test-runner. All 16 came from t1040: the dev-ancestry guard now stands in front of the Lab entry and the launchers, and those tests pinned the old order or text. t1040's narrow checks never ran them.
-- t1047 (worker, Sonnet; brief `docs/working/data-first-simplification-plan/briefs/t1047-sweep-guard-test-fallout.md`; report `.../reports/t1047.md`):
-  - fixed the tests, not the guard: `package-gates.test.mjs` allows exactly the dev-ancestry guard ahead of the core-build gate and still refuses any other prefix (new case);
-  - `unbuilt.test.mjs` gives its fixture Core a commit and a local `dev`, so the unbuilt-Core refusal is still what stops the run;
-  - 10 test-runner files expect the guarded launcher text.
-  - The `inspect-*` launchers stay unguarded, as t1040 intended (they are read-only).
-- Validation: the lead's re-runs in the t1047 worktree.
-  - `node --test scripts/check/core-build/tests/package-gates.test.mjs` printed `# tests 2 # pass 2 # fail 0`.
-  - `node --test scripts/lab/core/build/tests/unbuilt.test.mjs` printed `# tests 13 # pass 13 # fail 0`.
-  - `heavy-slot.mjs run t1047-lead-runner -- pnpm --filter @fluxiq-web-extension/test-runner test` printed `# tests 3016 # pass 3011 # fail 0 # skipped 5`.
-
-### 2026-11-25 - t1045 (build-routing) and t1044 (judge continuation) integrated (fluxiq 0.54.24); t1044's main cause queued; sweep running
-- t1045: Core `route-state/tests/build-routing.test.ts` was stale after t1036 withdrew the look. Its scripted build ends at 15 decisions, not 18, and captures 11 times, not 12. The test now asserts the 15 decisions and the totals `[11, 0, 9]`. Not a product regression; t1036 updated only the sibling `state-digest-cost.test.ts`. The lead's W1 checks missed it because `route-state` was not in its folder list.
-- t1044 (run-mwvgjb8c, where the judge accepted a wrong pickup item):
-  - **The cause.** The judge never saw the cheaper qualifying row. It sat in page 1's read, which reached the judge as `working: [{step, kept: 15}]`, a count only (`answer-first/result-feed/feed.ts:269`), while page 2's rows came whole.
-  - **The decider picked wrong for a related reason.** Every read shares one `holder:read` group (`runtime/llm/decision-context/current-view.ts:28`), so page 2's read dropped page 1's rows from its view.
-  - **Merged now:** a judge continuation no longer claims a call is shown above when its view reference resolves outside the prefix (`models/providers/anthropic/continuation.ts`, with `judge-held-whole.test.ts`).
-  - **Queued as t1047 after W3:** both main causes, which are in W3's files. W3 was told; its "rows from every read that ran" design may cover them.
-- Validation: the lead's runs.
-  - t1045's folder: `vitest run src/framework/automation-service/route-state` printed `Test Files 7 passed (7)`, `Tests 49 passed (49)`.
-  - t1044: anthropic, llm/anthropic and judge-continues-decider printed `Tests 158 passed (158)`. After `dev` (t1045) was merged into its Core branch, anthropic, llm/anthropic and route-state printed `Tests 206 passed (206)`.
-  - `pnpm task finish` both. Core `pnpm check` for t1044 first failed 2 of 529 script tests while the full sweep loaded the machine. A re-run printed `# tests 529 # pass 529 # fail 0`, and the finish then printed `"validation":{"ran":true,"command":"pnpm check","passed":true}`. The two tests' names were not captured; the next such failure keeps its log.
-  - Core bumped to 0.54.24; both `dev`s pushed (Core `2af56a961`, downstream `67f779182`); `git merge dev` into t1015 and t1037 both sides, each `contains dev: yes`.
-- A full sweep on `dev` (t1046, the first of the day) is running in its own worktree; it started before t1044 and t1045.
-
-### 2026-11-25 - t1043 (self-changing page) integrated (fluxiq 0.54.23)
-- Changed:
-  - **Domain (`press-effect/self-change/`):** a press is credited only with its own changes. What the page changes by itself is told apart by two signals:
-    - its own markup: carousels and slides by roledescription, marquee, timer, and live regions once seen changing;
-    - lines the run saw change with nothing done.
-
-    Those changes are kept out of `change/statement.ts`, `pageChanged` and the no-effect retry, and shown to the model marked "(changes by itself)".
-  - **Core (`judge-evidence/earlier-before-note.ts`):** Core recognises its own before-placeholder and tells the judge in its own words. The checkpoint shared the defect and is fixed too.
-- Validation: the lead's run on the t1043 trees.
-  - Core: `pnpm --filter fluxiq check` exit 0. Groups over `runtime/answer-first runtime/result-verification framework/.../answer-first runtime/llm` printed `Tests 6320 passed (6320)` and `Tests 512 passed (512)`, `all groups passed`. Core audit passed.
-  - Domain: `llm-evidence runtime/tests output-nodes` `# tests 2331 # pass 2331 # fail 0`; domain check exit 0.
-  - Extension: `# tests 4168 # pass 4168`. Downstream audit passed; model-text ok.
-  - The worker's forced-race tests fail without the fix and pass with it. Its three scripted bigbox runs passed 4 of 4 each (mwwdmmk2, mwwdv9jx, mwwe08jw); the carousel never turned mid-press in them, so they show no regression only.
-  - `pnpm task finish t1043`: audit passed; Core `"validation":{"ran":true,"command":"pnpm check","passed":true}`.
-  - Core bumped to 0.54.23; both `dev`s pushed (Core `f091ed4fe`, downstream `34f9655d3`); shared Core synced; `git merge dev` into t1015 and t1037 both sides, each `contains dev: yes`.
-- Accepted: the worker's in-place edits to `node-run/run.ts` (3 lines, which is at 800 lines) and `tools.ts` (+3), both outside its listed paths. The lead added the pointer from `build-loop.md` "What A Press Changed".
-- Known gaps: recovery-harness presses do not feed the self-change memory. A control outside a carousel that changes it without `aria-controls` reads as no effect.
-
-### 2026-11-25 - t1042 (W1 leftovers) and t1041 (asked column names) integrated (fluxiq 0.54.22); t1043 opened
-- t1042 changed:
-  - Recovery carries the page channel and `core.full_page`. Its opening capture rides navigate with no url, and `web.recovery.inspect` is withdrawn.
-  - `core.full_page` had answered "unavailable" for the web domain, because Core read a bare view where the domain publishes it under its member. Core now reads both.
-  - No model text says to look (`tool-failure.ts`, `failure-brief.ts`, `no-effect.ts`).
-  - `structure/held-now.ts` binds a handle the page still gives an element, for both detect and the recovery press.
-- t1041 changed: a renamed column takes the asked name as its label. Site-word matching moves into the name rewrite, and saved steps re-resolve.
-- Validation: the lead's runs.
-  - **t1042:**
-    - `pnpm --filter fluxiq check` exit 0.
-    - Core groups over `runtime/adaptation runtime/llm answer-first` printed `Tests 4784 passed (4784)`, then `Tests 508 passed (508)`, `all groups passed`.
-    - Core audit passed; domain `llm-evidence runtime/tests output-nodes` `# tests 2321 # pass 2321 # fail 0`; domain check exit 0; extension `# tests 4168 # pass 4168`; downstream audit passed; model-text ok.
-    - The worker's scripted run-mww7zdb0 passed 4 of 4.
-  - **t1041:**
-    - Domain `llm-evidence output-nodes actions/extraction extraction runtime/tests` `# tests 2457 # pass 2457 # fail 0`; domain check exit 0; extension `# tests 4168 # pass 4168`; audit passed; model-text ok.
-    - Its scripted run-mww8s1va passed 4 of 4, with `"columns":["name","price","rating"]` in the answer turns (the lead read attempts 1 and 2).
-  - **Merges:** `pnpm task finish` both: audits passed, and Core `pnpm check` passed for t1042. Core bumped to 0.54.22; both `dev`s pushed (Core `75cb3957d`, downstream `14151363b`); shared Core synced; `git merge dev` into t1015 and t1037 both sides, each `contains dev: yes`.
-- Found by t1041's Opus retry: a carousel flipping during a press makes the press look lasting. The act is then carried, and Core projects its own not-held before-placeholder through the domain projector, so a right answer stays unconfirmed. Dev's baseline passed only by timing.
-  - The cause is in domain `press-effect/change/statement.ts:58` and Core `judge-evidence/summary.ts:107` and `witnesses.ts:127`.
-  - t1043 is opened for it (worker-heavy, slot 4; proof: a forced-race test plus three clean scripted runs) and must land before any live run.
-
-### 2026-11-25 - W1 (t1036) integrated with W2 combined (fluxiq 0.54.21); the scripted bigbox run passes 4 of 4; t1041, t1042 and W3 phase 2 dispatched
-- Changed:
-  - **W1's D1-D8, D10, D11, D14, D15:**
-    - page deltas keyed by the URL without its query, within a 20,000-character page budget;
-    - `core.full_page` and stable `tN` handles;
-    - no look withdrawal, no `web.find_on_page`, no capture node;
-    - earlier rounds carried as compact state;
-    - no judge call on an unchanged state;
-    - the judge wants a before state only after a lasting act.
-  - **Combining with W2 in W1's lane** (worker t1036-g):
-    - three conflicts in the scripted model resolved;
-    - handles in tests now come from `pageChannel.fullPage`;
-    - the carried-repair tests answer DeepSeek's required decision tool call;
-    - the dead `withdrawn-actions.ts` is deleted.
-  - **Round 2 of the same worker:**
-    - the refusal words no longer tell the model to look;
-    - `detect` binds a handle that is still on the page.
-- Validation: the lead's run on the t1036 trees, with W2 and `dev` merged in.
-  - Core: `pnpm --filter fluxiq check` exit 0. `vitest-groups --groups=parallel,real-sql` over `runtime/llm runtime/models runtime/result-verification runtime/answer-first framework/automation-service/service/answer-first runtime/project-agents runtime/adaptation` printed `Test Files 890 passed (890)`, `Tests 7884 passed (7884)`, then `Test Files 77 passed (77)`, `Tests 525 passed (525)`, `all groups passed`. Core audit `passed (577 warning(s), 903 baselined)`; Core libraries built.
-  - Domain: `llm-evidence output-nodes actions/extraction extraction runtime/tests element-fingerprint target-reacquire state-diff` printed `# tests 2558 # pass 2558 # fail 0`; domain check exit 0.
-  - Extension: `# tests 4168 # pass 4168 # fail 0`.
-  - Test-runner build exit 0; scripted-model and flow-chart tests `# tests 138 # pass 138`; downstream audit passed; model-text ok.
-  - `pnpm task finish t1036`: downstream audit passed; Core `pnpm check` passed with its contract tests.
-  - Core bumped to 0.54.21; both `dev`s pushed (Core `9b44c1dc6`, downstream `3ccaca97d`); shared Core synced and built.
-- Evidence (the worker's run, which the lead read): the scripted bigbox run `run-mww1qgyl-bf8909a0` printed `status: passed`.
-  - Attempt 1 explored and was confirmed: 16 rows, 15 calls, 32 s.
-  - Attempts 2-4 ran `flow.f9e2d740` with each continuation held: 1, 0 and 0 calls, about 14 s each.
-  - No file in the run carries `read_invalid`, `before_state_missing` or `judged_unsure`.
-  - `attempt-1/flow.png` shows the expected Flow: navigate, type, category, Delivery, sort, then a loop of read and next page. The consent and offer detours are left out.
-- Found:
-  - **The answer's column headers are the site's words (`link_text | price | number_2`), not the asked names.** Diagnosed in `reports/t1036/h-column-names-diagnosis.md`: `retained-schema.ts` labels a renamed column with the site word, a behaviour from t982/t997 → t1041.
-- Then:
-  - `git merge dev` into t1015 (fast-forward) and t1037 on both sides, each `contains dev: yes`.
-  - Opened t1041 (asked column names, worker) and t1042 (W1 leftovers: recovery gets the page channel and loses its look; no look wording in `tool-failure.ts`; reads and presses bind a handle still on the page; worker-heavy).
-  - Resumed W3 for phase 2, which also owns the fixed tool list (`core.run_flow` from the first decision), the look phrasings in its files, `EXTRACTION_FROM`, and drafted reads keeping their stored handle.
-  - The `maxStepsWithoutProgress` removal follows W3, since it crosses W3's files.
-
-### 2026-11-25 - W2 (t1038) integrated (fluxiq 0.54.20); lanes merged with dev
-- **Changed:**
-  - D12: decisions go as native tool calls (Anthropic auto with one call, DeepSeek required); `outputSchema` is gone from the user message; the withdrawn-action allowance is gone from `decision-check.ts`.
-  - D13: a read detects its own list and keeps every column.
-  - Older fixes: the read payload kept `rejectedObservations` without their samples (the cause of `web_judge.read_invalid`); the scripted server misrouted a continued judge.
-  - At integration the lead applied W2's replacement for `judge-continues-decider.test.ts`, and updated `read-columns/tests/split-rows-read.test.ts`, which still expected the old refusal words ("this read's handle names" is now "this read names").
-- Validation: the lead's run on the t1038 trees with `dev` merged in.
-  - Core `vitest-groups --groups=parallel,real-sql` over `runtime/llm runtime/models runtime/result-verification framework/automation-service runtime/flow-authoring/bootstrap runtime/project-agents` printed `all groups passed: parallel, real-sql` (real-sql `Test Files 256 passed`, `Tests 1611 passed | 1 skipped`).
-  - `pnpm --filter fluxiq check` exit 0; Core audit `passed (574 warning(s), 903 baselined)`; Core libraries built.
-  - Domain `llm-evidence output-nodes actions/extraction extraction`: first `# tests 2265 # pass 2264 # fail 1` (the split-rows wording), then after the fix `# pass 2265 # fail 0`.
-  - Domain check exit 0, after the first attempt refused on a partly rebuilt Core; test-runner build exit 0; scripted-model and flow-chart tests `# tests 131 # pass 131`.
-  - Downstream audit passed; model-text ok.
-  - `pnpm task finish t1038`: downstream audit passed; Core `pnpm check` passed with its contract tests (`system-prompt`, `extraction-vocabulary`, `issue-feedback`).
-  - Core version bumped to 0.54.20; both `dev`s pushed (Core `3078cc4a3`, downstream `6f32a792b`); shared Core synced to `3078cc4a3` and built.
-- **Then:** `git merge dev` into t1015 (fast-forward) and into t1037 on both sides; each printed `contains dev: yes`. The t1036 lane holds W2 through the branch merge and takes `dev` once its combining worker stops before its Lab run.
-- **Not verified live:** strict-tool limits, how often Sonnet makes no tool call under auto, real token counts.
-
-### 2026-11-25 - Every lane merged with dev; W2 committed on its branch; t1040 opened
-- Why: the user (angry): "merge all test runs before doing more tests ... MERGE TO DEV AND MERGE TEST LANES AFTER ANY SERIOUS UPDATES". t1039 had reached `dev` while W1 kept running scripted Lab runs on a tree without it.
-- Done:
-  - `git merge dev` (at `3b610be39`) into t1015, t1036, t1037 and t1038. For t1036 the lead stashed only the one overlapping file (`docs/architecture/testing-facility.md`), merged, then popped it; no conflict.
-  - Core `dev` had not moved, so the Core trees needed nothing.
-  - `pnpm install --frozen-lockfile` in each lane, for `@resvg/resvg-wasm`.
-  - W1 told to start no new run until dev was in.
-  - The rule added to AGENTS.md, "Branches And Worktrees".
-  - t1040 opened: the Lab's behind-dev guard is extended from live runs to every run.
-  - W2 committed WIP on its branch (Core `81536c5cb`, downstream `21a36692e`, both pushed).
-- Validation:
-  - `git merge-base --is-ancestor dev HEAD` printed `contains dev: yes` for all four downstream lanes.
-  - The same check on each lane's Core and the shared Core: `yes`.
-  - The installs printed `Done in 1.2s` to `Done in 1.4s`, with one resvg package present in each lane.
-
-### 2026-11-25 - t1037 (W3) phase 1 verified on its branch
-- Changed: Core `runtime/flow-authoring/draft/{compose,amendment/edits}/**` (new), draft `step`/`entry`/amendment files, `decision-handlers/amendment.ts` (gated on `draftEdits: "framework"`), `draft-amendment-feedback`, `held-amendments.ts`, `ui/activity-action/refusal-words.ts`; reports `reports/t1037-auto-draft.md` and `reports/t1037/{compose,edits,replay}.md`. Committed as Core `adbafa688` and merged with Core dev (`8a3e79572`); downstream reports merged with dev (`c14eccd4b`).
-- Validation: the lead's run on the merged tree. Core groups over `flow-authoring`, `runtime/llm`, `ui/activity-action` and `answer-first`: parallel `Tests  8230 passed | 2 skipped (8232)`, real-sql `Tests  526 passed (526)`, "all groups passed". `pnpm --filter fluxiq check` exit 0. Core audit `passed (573 warning(s), 903 baselined)`. Downstream audit `passed (261 warning(s), 551 baselined)`. `model-text: ok`.
-- Follow-up: phase 2 after W1 merges.
-
-### 2026-11-25 - Dispatch: briefs, t1034 first, three sub-supervisors
-- Changed:
-  - Briefs `page-diff-delivery-plan/briefs/{common,t1036-page-diff-delivery,t1037-auto-draft,t1038-native-decisions-one-read}.md`. A read-only search mapped each workstream's files. One file was shared, `anthropic/decision-check.ts`, and was given to W2, with the look-withdrawal interface fixed in both briefs.
-  - t1034 verified and integrated first, because it touched the decision reading, the adapter and look withdrawal that W1 and W2 rebuild (ledger in the data-first plan).
-  - W3 (t1037) opened and was dispatched before t1034 merged, since it shares no file with it. W1 (t1036) and W2 (t1038) started from the post-t1034 heads.
-- Validation: `node scripts/structure-audit.mjs` on dev after the briefs: `structure-audit: passed (261 warning(s), 551 baselined)`.
-- Follow-up: the sub-supervisors' reports; integration order W1, W2, W3.
-
-### 2026-11-25 - Handoff: decided and planned, not dispatched
-- Changed:
-  - The user's decisions were recorded in AGENTS.md and here: Sonnet for Lab runs, page diffs and no look, page search dropped, the framework drafting the Flow.
-  - The t1035 audit is on dev.
-  - The Sonnet bigbox run ran once (run-mwvgjb8c, $0.80, oracle: wrong item).
-  - Orphaned background processes of this session were stopped: 15 `tail -F` left by stopped Monitors, 2 paid-round watcher scripts, 4 old verification shells.
-- Validation: not validated: plan and records only. The lead's verification of t1034 was stopped unfinished (TaskStop) at wrap-up; the worker's own run: `vitest-groups` gave 794/794 and 86/86, domain `llm-evidence` gave 1778 pass 0 fail, checks exit 0, audits passed.
-- Follow-up: Current State "Next".
-
-### 2026-11-25 - Planned on the user's instruction; build dispatched
-- Changed: this document; AGENTS.md rule "The page reaches the model as run-scoped diffs; there is no look command". Lab runs start on Sonnet (AGENTS.md, same day).
-- Evidence used: the five 11-24 bigbox recordings in `fxwork/recorded-evidence/t1015-bigbox/`. Page views are 4-11 KB. Input tokens per request run from 25k to 276k, with a median of about 24k uncached.
-- Validation: not validated: plan only.
-- Follow-up: the sub-supervisor's report (P1-P4).
+### Earlier entries
+- The 2026-11-25 entries are in [archive/ledger-2026-11-25.md](page-diff-delivery-plan/archive/ledger-2026-11-25.md).
+- Validation: not validated: a pointer to moved entries, nothing ran.
