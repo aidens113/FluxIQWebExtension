@@ -242,6 +242,16 @@ const SCROLL_REQUEST_DESCRIPTION = "The scroll request, with only the keys mode,
   + "untilStable requires maxScrolls, a whole number above zero: the most scrolls it makes. "
   + "Use untilStable to load every row of a list that grows in place as it scrolls before reading it.";
 
+/**
+ * What the model is told a select takes (t1081, bigbox `run-mwytbimp-e0c33977` steps 0014 and 0026): it wrote `label` beside the
+ * target, then `option: {label}` with no `by`, because both parameters were shown bare. The example is a generic option, never a site's.
+ */
+const SELECT_VALUE_DESCRIPTION = "Names the option to choose: its value, or its visible words exactly as the page view prints them in [ | ] after the select's line. "
+  + "Send this or option, never both; label and text are not parameters.";
+const SELECT_OPTION_DESCRIPTION = "Names the option to choose, an object with by and the one key it names. "
+  + "by is value (then value), label (then label, the visible words) or index (then index, a whole number from 0). "
+  + "Without by the option is not read. Send this or value.";
+
 export const webAutomationOutputNodeDefinitions: AutomationStudioNodeDefinition[] = webAutomationActionDefinitions.map((definition) =>
   createWebAutomationOutputNodeDefinition(definition)
 );
@@ -361,7 +371,11 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     WEB_AUTOMATION_NEW_TAB_PARAMETER
   ];
   if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }, WEB_AUTOMATION_SUBMIT_PARAMETER, requiresChosen];
-  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("option", "Option")];
+  if (outputId === "web.dom.select") return [
+    ...selectorParameters,
+    { id: "value", label: "Value", valueType: "string", defaultValue: "", description: SELECT_VALUE_DESCRIPTION, example: "the option's visible words", ui: { control: "text" } },
+    { ...structured("option", "Option"), description: SELECT_OPTION_DESCRIPTION, example: { by: "label", label: "the option's visible words" } }
+  ];
   if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("modifiers", "Modifiers"), requiresChosen];
   if (outputId === "web.dom.scroll") return [
     ...selectorParameters,

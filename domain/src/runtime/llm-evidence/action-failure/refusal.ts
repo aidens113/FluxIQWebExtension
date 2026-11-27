@@ -30,6 +30,8 @@ import { webAutomationNextPageAnswerValue } from "../../../actions/next-page";
 import { webAutomationScrollRequestIssues } from "../../../actions/scroll-request-issues";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { rejectionDetail, type WebLlmToolRejectionCode, type WebLlmToolRejectionDetail, type WebLlmToolRejectionReason } from "../tool-rejection";
+import { WEB_SELECT_OPTION_CODE_PREFIX } from "../rejection-next";
+import { webAutomationSelectOptionIssue } from "../../../actions/select-option-issue";
 import { webActionReadShortfall, type WebActionReadShortfall } from "./read-shortfall";
 import type { WebFailedActionResult } from "./result";
 import { webActionabilityFromPayload } from "../../../actions/actionability";
@@ -160,6 +162,7 @@ export function webActionFailureRefusal(result: WebFailedActionResult, sent?: { 
   const filtersDropped = droppedFilters(result);
   const withoutValue = parameterWithoutValue(result);
   const scrollKeys = withoutValue === undefined ? unreadableScrollKeys(result, sent) : undefined;
+  const selectIssue = selectOptionIssue(result);
   // This marker is the client's closed reason, never its field/page text.
   const incompleteText = result.status !== "timed_out" && result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED
     && typeof result.failure.actual === "string" && result.failure.actual.startsWith("incomplete_text:");
@@ -179,6 +182,8 @@ export function webActionFailureRefusal(result: WebFailedActionResult, sent?: { 
       ? readDetail(shortfall)
       : withoutValue !== undefined
         ? rejectionDetail({ reason: "parameter_has_no_value", target: undefined, instead: undefined, missing: [withoutValue], requestId: undefined })
+      : selectIssue !== undefined
+        ? rejectionDetail({ reason: "parameter_not_readable", target: undefined, instead: [`${WEB_SELECT_OPTION_CODE_PREFIX}${selectIssue}`], missing: ["option"], requestId: undefined })
       : scrollKeys !== undefined
         ? rejectionDetail({ reason: "parameter_not_readable", target: undefined, instead: scrollKeys.codes, missing: scrollKeys.missing.length > 0 ? scrollKeys.missing : undefined, requestId: undefined })
       : filtersDropped !== undefined
@@ -346,4 +351,13 @@ function readDetail(shortfall: WebActionReadShortfall): WebLlmToolRejectionDetai
     waitStoppedOn: shortfall.waitStoppedOn,
     paginationStop: shortfall.paginationStop
   });
+}
+
+/**
+ * Why a select named no option, for an INVALID_PARAMETER refusal that leads its `actual` with one of the closed
+ * phrases `webAutomationSelectOptionIssue` writes (t1081). Never a value the model sent.
+ */
+function selectOptionIssue(result: WebFailedActionResult): "unnamed" | "unreadable" | undefined {
+  if (result.status === "timed_out" || result.failure?.code !== WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER) return undefined;
+  return webAutomationSelectOptionIssue.readFrom(result.failure.actual);
 }

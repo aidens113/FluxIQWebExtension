@@ -20,6 +20,7 @@ import {
 import { webAutomationExtractionSummaryValue, webAutomationRecordedExtraction, type WebAutomationExtractListRequest } from "../actions/extraction";
 import { webAutomationStructureDetectionValue } from "../extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
+import { webAutomationSelectOptionIssue } from "../actions/select-option-issue";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
 import { webAutomationResultObstruction } from "../actions/obstruction";
@@ -181,6 +182,20 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
   const unreadable = refused.filter((field) => required.includes(field) || field === "requiresChosen");
   if (unreadable.length > 0) {
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unreadableFieldMessage(normalized.actionType, unreadable), failure: unreadableFieldFailure(normalized.actionType, unreadable) };
+  }
+  // A select that names no option can never succeed, so it is refused at once as an invalid parameter, not retried (t1081).
+  const optionIssue = normalized.actionType === "web.dom.select" ? webAutomationSelectOptionIssue.of(parameters, lifted.option) : undefined;
+  if (optionIssue !== undefined) {
+    return {
+      commandId: command.commandId,
+      status: "rejected",
+      actionType: command.actionType,
+      message: "Not dispatched: this select names no option it can choose.",
+      failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, {
+        expected: "web.dom.select with an option named by value, label or index",
+        actual: webAutomationSelectOptionIssue[optionIssue]
+      })
+    };
   }
   // A well-formed request for the Encrypt column, which is not built yet (D13,
   // D14). Read as `include` it would send the values in clear; read as `exclude`

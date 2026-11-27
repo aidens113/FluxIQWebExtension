@@ -13,6 +13,7 @@ import type { WebLlmToolRejectionReason } from "../tool-rejection";
 import { webLlmListMadeOn } from "./list-made-on";
 import { webLlmListWords } from "./list-words";
 import { webLlmUnknownColumn } from "./unknown-column";
+import { selectOptionNext } from "./select-option-next";
 
 /** A read whose items are on the page and not shown (t903): what shows them, then the same read. */
 const NOT_RENDERED_NEXT = "The read found its items, but the page does not show them: they sit inside something closed, such as a menu, a panel or a tab. Show them first, by a hover or a click on the control that opens what holds them, then run the same read again.";
@@ -41,7 +42,7 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     // read whose words named no line, by its code there, says how to name the list instead (t1038).
     : reason === "list_not_on_page" ? (webLlmListWords.isRefused(instead) ? webLlmListWords.next : webLlmListMadeOn.isRead(instead) ? webLlmListMadeOn.next(target, instead) : listNotOnPageNext(target))
     // Read off the key codes in `instead`, so a repeat that passes them back says it again.
-    : reason === "parameter_not_readable" ? scrollKeysNext(instead)
+    : reason === "parameter_not_readable" ? (selectOptionNext(instead) ?? scrollKeysNext(instead))
     // Read off the kind code in `instead`, so a repeat that passes it back says it again.
     : reason === "handle_not_a_field" ? notAFieldNext(instead) : reason === "handle_wrong_kind_of_control" ? webPlanScriptedChoiceMove(instead)
     // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
