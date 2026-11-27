@@ -7,6 +7,16 @@ project first? do i ask fluxiq? do i use the panel chat or the extension chat? e
 UNDERSTAND. CLICKING THE PROJECT NAME IN EXTENSION SHOULDNT MINIMIZE OR MAXIMIZE CONVERSATIONS OR WHATEVER IS
 HAPPENING THERE. DO A FULL AUDIT AND FIX ALL THAT."
 
+**The user's direction, the same day (now a standing rule in AGENTS.md):** "having large majority of config and
+adding keys and all that in the panel. This would go for all clients. Managing projects, creating new ones, all that
+in the panel NOT the client. The client is just for showing whats going on. You should be able to SEE all projects and
+the current flow being worked on from lcient ofc".
+- So keys, settings, and creating or managing projects move to the panel for every client.
+- The extension shows every project and the Flow being worked on, and its run.
+- Lead's reading: the extension keeps its chat, the same conversation the panel shows, as the way a person asks for
+  work.
+- Remove or move every config or project-management control the extension has now, and point it at the panel.
+
 **Goal.** One obvious way for a person to make and run a Flow from the extension, with the panel consistent with it.
 Projects, chats and syncing must be understandable without knowing FluxIQ's internals. Fix every defect the audit
 finds; do not just list them.
