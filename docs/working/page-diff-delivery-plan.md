@@ -153,6 +153,38 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-27 - Both replays diagnosed on 0.54.35; t1082 (kestrel harness) integrated; t1083-t1088 dispatched
+- **Live on 0.54.35.** Both first attempts were right; both replays failed. The lead stopped both runs. Spend is about $33.20 of $50.
+  - **Bigbox run-mwz29d50:** attempt 1 right (17 calls, $0.65).
+    - Attempt 2's replay skipped "Add to cart" as already done, which is correct.
+    - "View cart", written on the panel only an add opens, was then passed over as `executor.state.not_arisen`, and the cart read ran on the product page. Since t1073, a navigating press is skippable.
+    - Attempt 3's standalone judge saw no page text, said `unknown`, and repaired.
+    - `better-flow.ts` then kept the unproven Flow over the repair judged yes.
+  - **Kestrel run-mwz2jc4w:** attempt 1 right (20 calls, $1.35; the badge fix held).
+    - Attempt 2's search landed on the site's bot check, a third address. `seen.ts` read that as `not_seen`, and the replay stopped.
+    - The judge reply at 0088 came back in the wrong shape (non-strict tool).
+    - About $0.70 of attempt 2 was two Core defects: which read is the result, and rows not credited.
+  - Debugs `debugs/run-mwz29d50-c3a32a9c.md` and `debugs/run-mwz2jc4w-0c207128.md`; reports `reports/run-mwz29d50-bigbox.md` and `reports/run-mwz2jc4w-kestrel.md`.
+- **Decision (lead's, under the user's 2026-11-19 rule that the judge sees the whole trail).** A judge not continuing a decider gets page views, within the page budget, whole lines, in this order:
+  1. the end view;
+  2. the before view;
+  3. the pages lasting acts were pressed on;
+  4. the pages the steps landed on, newest first.
+- **t1082** (worker): a provider-free kestrel harness from live attempt 1. On dev, attempt 2's replayed type step fails `core.step.effect_not_seen`, as live; its re-exploration then ended with 9 rows, which t1085 is checking against K3.
+- **Dispatched**, each fix with an offline proof on its recording (briefs under `page-diff-delivery-plan/briefs/`):
+  - t1083 (worker-heavy): F1, a passed-over navigation still reaches its route, plus K1, a third address is `unknown`;
+  - t1084 (worker-heavy): F2, standalone judge page views;
+  - t1085 (worker-heavy): F3, proof beats no proof; the drop-copy check; K3, the result read and credited rows;
+  - t1086 (worker): the bigbox harness's panel form and an evidence-reading scripted judge;
+  - t1087 (worker): K4, a strict judge answer, and K5, row handles;
+  - t1088 (worker): K2, a replay stop looks at the page again before handing over.
+- Validation: t1082 was checked by the lead:
+  - `node --test` on its two test files: `# pass 14`, `# fail 0`;
+  - `structure-audit: passed (265 warning(s), 550 baselined)`;
+  - `effect_not_seen` is present in `steps/0026-flow-web.output.dom-type/meta.json`;
+  - the finish's audit passed; merge `ab750226a`.
+- Follow-up: integrate t1083-t1088. Then both harnesses must pass 4 of 4 before any paid run.
+
 ### 2026-11-27 - Kestrel nearly right, bigbox replay found two more defects; t1076-t1081 integrated (fluxiq 0.54.35)
 - **Live:**
   - **Kestrel run-mwyt3s48:** the ten owed auctions, in order and correctly filtered. One title had a badge glued on ("New listingKestrel…"), so the oracle marked it wrong.
