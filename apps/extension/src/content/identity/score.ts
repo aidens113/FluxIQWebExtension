@@ -227,18 +227,22 @@ function scoreReadTarget(target: RecordedIdentity, read: NonNullable<ReturnType<
 /**
  * A marked target's ranking without its words, settled by its destination
  * (`./destination/`, t1071 F1): the candidate among the leaders -- at the floor
- * or above, within the margin of the best -- that is the one visible link leading
- * where the target always led. None leading there is the control gone, unless two
- * visible links lead there, which is a tie the destination cannot break.
+ * or above, within the margin of the best -- that is the one visible link in its
+ * region leading where the target always led. None leading there is the control
+ * gone, unless two visible links in one region lead there, which is a tie the
+ * destination cannot break; and two leaders that each confirm in their own
+ * region are a tie as well, since the ranking within the margin never picks
+ * (t1079 F2).
  */
 function ledToDestination(plain: CandidateSelection, destination: string): CandidateSelection {
   const dropped = plain.dropped ? { dropped: plain.dropped } : {};
   const best = plain.ranked[0]?.score.normalizedScore ?? 0;
   const leaders = plain.ranked.filter((scored) => scored.score.normalizedScore >= TARGET_SCORE_FLOOR && best - scored.score.normalizedScore < TARGET_SCORE_MARGIN);
   const verdicts = plain.ranked.map((scored) => destinationVerdict(destination, scored.element));
-  const chosen = leaders.find((scored) => verdicts[plain.ranked.indexOf(scored)] === "confirms");
+  const confirming = leaders.filter((scored) => verdicts[plain.ranked.indexOf(scored)] === "confirms");
+  const chosen = confirming.length === 1 ? confirming[0] : undefined;
   if (chosen) return { outcome: "resolved", chosen, runnerUp: plain.ranked.find((scored) => scored !== chosen), ranked: plain.ranked, ...dropped };
-  return verdicts.includes("shared") ? { outcome: "ambiguous", ranked: plain.ranked, ...dropped } : { outcome: "unmatched", ranked: plain.ranked, ...dropped };
+  return confirming.length > 1 || verdicts.includes("shared") ? { outcome: "ambiguous", ranked: plain.ranked, ...dropped } : { outcome: "unmatched", ranked: plain.ranked, ...dropped };
 }
 
 /** How close two scores are to count as the same score, not a lead: float noise only. */
