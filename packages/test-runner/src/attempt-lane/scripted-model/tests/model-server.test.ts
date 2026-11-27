@@ -70,6 +70,22 @@ ${task}` }] },
   assert.equal(JSON.parse(text).kind, "evidence_tool_decision");
 });
 
+test("a check continuing a decider sent as tools answers through core_check_answer with its whole reply; one without that tool keeps its text answer", async (t) => {
+  const verdict = { kind: "diagnosis", summary: "Request appears met.", diagnosis: { answersRequest: "yes", defects: [] }, confidence: 0.8 };
+  const server = await startScriptedModelServer({ script: { taskId: "task-one", replies: { loop_verification: [() => verdict, () => verdict] } }, key: KEY });
+  t.after(() => server.close());
+  const ask = JSON.stringify({ taskKind: "loop_verification", context: {} });
+  const tools = [{ name: "core_run_node", description: "Run one node.", input_schema: { type: "object" } }, { name: "core_check_answer", description: "The answer of the check.", input_schema: { type: "object" } }];
+  const continued = await streamed(await post(server.origin, body({ messages: [{ role: "user", content: ask }], tools, tool_choice: { type: "auto" } })));
+  const started = continued.events.find((event) => event.type === "content_block_start")!.content_block as { type: string; name: string };
+  assert.deepEqual([started.type, started.name], ["tool_use", "core_check_answer"]);
+  const input = continued.events.flatMap((event) => (event.type === "content_block_delta" ? [(event.delta as { partial_json?: string }).partial_json ?? ""] : [])).join("");
+  assert.deepEqual(JSON.parse(input), verdict);
+  const own = await streamed(await post(server.origin, body({ messages: [{ role: "user", content: ask }], output_config: { format: { type: "json_schema", schema: { type: "object", properties: { kind: {} } } } } })));
+  assert.equal(JSON.parse(own.text).kind, "diagnosis", "a check asked on its own request still answers in text");
+  assert.deepEqual(server.refusals(), []);
+});
+
 test("what the script does not expect fails loudly with its kind, and is never answered", async (t) => {
   const server = await startScriptedModelServer({ script: SCRIPT, key: KEY });
   t.after(() => server.close());

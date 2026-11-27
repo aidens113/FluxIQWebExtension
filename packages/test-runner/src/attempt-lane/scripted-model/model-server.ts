@@ -22,6 +22,8 @@ export type ScriptedModelServer = {
 };
 
 const MESSAGES_PATH = "/v1/messages";
+/** The tool a check continuing the decider answers with (Core's `AUTOMATION_STUDIO_ANTHROPIC_JUDGE_ANSWER_TOOL`, t1065). */
+const JUDGE_ANSWER_TOOL = "core_check_answer";
 
 function readBody(request: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -115,11 +117,18 @@ export async function startScriptedModelServer(input: { script: ScriptedModelScr
         refused(read.kind, read.ordinal, `The script for ${input.script.taskId} could not answer request ${read.ordinal} of kind ${read.kind}: ${error instanceof Error ? error.message : String(error)}`);
         return;
       }
-      // A decision asked with tools is answered as the one tool call it is; any other request keeps its text answer.
+      // A decision asked with tools is answered as the one tool call it is. A check that continues a decider sent as
+      // tools answers by calling `core_check_answer` with its whole reply, as Core asks a real model to (t1065): a text
+      // answer there is not read, and is asked again in the check's conversation. Any other request keeps its text answer.
+      const answerTool = read.kind === "loop_verification" ? (read.tools ?? []).find((tool) => tool.name === JUDGE_ANSWER_TOOL) : undefined;
       let stream: string;
       try {
         if (read.kind === "evidence_tool_decision" && (read.tools ?? []).length > 0) {
           const call = scriptedModelToolCall(value, read.tools ?? []);
+          stream = anthropicToolStreamBody({ model: read.model, call, usage: scriptedModelUsage(Buffer.byteLength(body), Buffer.byteLength(JSON.stringify(call.input))) });
+        } else if (answerTool) {
+          if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("a check's reply must be an object to answer through core_check_answer");
+          const call = { name: answerTool.name, input: value as Record<string, unknown> };
           stream = anthropicToolStreamBody({ model: read.model, call, usage: scriptedModelUsage(Buffer.byteLength(body), Buffer.byteLength(JSON.stringify(call.input))) });
         } else {
           const text = scriptedModelReplyText(value, read.jsonText);
