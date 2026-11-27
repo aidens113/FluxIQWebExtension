@@ -1,4 +1,4 @@
-# Brief t1090: two judge follow-ups from t1084 and t1087
+# Brief t1089: two judge follow-ups from t1084 and t1087
 
 **Goal.** Finish two judge changes that crossed lane boundaries.
 
@@ -32,7 +32,7 @@
 - Read `docs/working/page-diff-delivery-plan/reports/t1084.md` ("Things you should know") and
   `result-verification/judge-evidence/page-views.ts`.
 
-**Owned.** Core (`C:/Users/osrs_/FluxStuff/fxwork/t1090/!FluxIQ`):
+**Owned.** Core (`C:/Users/osrs_/FluxStuff/fxwork/t1089/!FluxIQ`):
 - `runtime/result-verification/flow-less/**`;
 - `runtime/result-verification/judge-evidence/**`;
 - `runtime/llm/anthropic/**`;
@@ -40,13 +40,13 @@
 - their tests.
 
 **Must not touch.**
-- `framework/automation-service/service/answer-first/**` (t1089).
+- `framework/automation-service/service/answer-first/**` (t1090).
 - `engine/**` and `domain/src/**`.
 - `packages/test-runner/**` (t1091).
 - The judge answer tool's strictness. It stays non-strict: the platform refused its strict grammar, as the header of
   `strict-answer-schema.ts` records.
 
-**Checks.** Put heavy commands through `node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1090-<label> -- <cmd>`.
+**Checks.** Put heavy commands through `node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1089-<label> -- <cmd>`.
 - The tests beside the changed files: `node ../../scripts/vitest-groups.mjs --groups=parallel,real-sql <dirs>` from
   `packages/fluxiq`, plus `src/runtime/result-verification` and `src/runtime/llm/anthropic` whole.
 - `node scripts/structure-audit.mjs` (Core). Group by shared prefix; no one-file groups.
@@ -54,5 +54,5 @@
 
 No `node -e`, no git, no live or paid runs.
 
-**Report.** `docs/working/page-diff-delivery-plan/reports/t1090.md` in the downstream tree
-(`C:/Users/osrs_/FluxStuff/fxwork/t1090/!FluxIQWebExtension`), ending with the return contract.
+**Report.** `docs/working/page-diff-delivery-plan/reports/t1089.md` in the downstream tree
+(`C:/Users/osrs_/FluxStuff/fxwork/t1089/!FluxIQWebExtension`), ending with the return contract.
