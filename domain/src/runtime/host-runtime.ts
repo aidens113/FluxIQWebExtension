@@ -115,6 +115,7 @@ import { createWebStatePlacesMemo, webAutomationStateDiff, webStateDiffPlaces, w
 import { createWebSourcePlaces, webAutomationReacquireTarget, webAutomationReturnToSourcePlace, webAutomationReacquireUnboundTarget } from "./target-reacquire";
 import { webCapturedTargetObservation, createWebTargetPlaces, type WebTargetScope } from "./target-reacquire/identity";
 import { createWebRuntimeRepeatMemo } from "./runtime-repeat";
+import { webAutomationReachRouteEffect } from "./route-reach";
 
 /**
  * Core's public host port, shared by the engine and domain adapters.
@@ -367,7 +368,10 @@ export function createWebAutomationHostRuntime(untimed: WebAutomationHostRuntime
     reacquireTarget: (request) => webAutomationReacquireTarget(request),
     reacquireUnboundTarget: (request) => webAutomationReacquireUnboundTarget(request, targetPlaces, gateway.dispatch),
     // Back to where that source ran before it is re-run, when the page moved (t786).
-    returnToSourcePlace: (request) => webAutomationReturnToSourcePlace(request, sourcePlaces, gateway.dispatch)
+    returnToSourcePlace: (request) => webAutomationReturnToSourcePlace(request, sourcePlaces, gateway.dispatch),
+    // A step passed over as never arisen still owes where its recorded effect went:
+    // the page is brought there by a link it shows, or the recorded destination (t1083, `./route-reach/`).
+    reachRouteEffect: (request) => webAutomationReachRouteEffect(request, gateway.dispatch)
   };
 }
 

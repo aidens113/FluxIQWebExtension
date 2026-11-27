@@ -1,4 +1,4 @@
-# Brief t1089: the answer comes from every result read of one list
+# Brief t1090: the answer comes from every result read of one list
 
 **Goal.** When two non-intermediate reads of the same list stand in the draft, the draft and the result ledger
 disagree:
@@ -30,18 +30,18 @@ a new one.
 - The fold rule (D2).
 - Compose's `isResult` (`runtime/flow-authoring/draft/compose/compose.ts`, as t1085 left it).
 
-**Owned.** Core (`C:/Users/osrs_/FluxStuff/fxwork/t1089/!FluxIQ`):
+**Owned.** Core (`C:/Users/osrs_/FluxStuff/fxwork/t1090/!FluxIQ`):
 - `framework/automation-service/service/answer-first/result/**`;
 - `answer-first/result-feed/**`;
 - `runtime/flow-authoring/draft/compose/**`, if needed;
 - their tests.
 
 **Must not touch.**
-- `runtime/result-verification/**` and `runtime/llm/**` (t1090).
+- `runtime/result-verification/**` and `runtime/llm/**` (t1089).
 - `engine/**` and `domain/src/**`.
 - `packages/test-runner/**` (t1091).
 
-**Checks.** Put heavy commands through `node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1089-<label> -- <cmd>`.
+**Checks.** Put heavy commands through `node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1090-<label> -- <cmd>`.
 - A unit test of that shape: two result reads of one list with different extractions, page 2 then page 1, giving the
   merged and deduplicated rows. It fails on today's code.
 - The tests beside the changed files: `node ../../scripts/vitest-groups.mjs --groups=parallel,real-sql <dirs>` from
@@ -49,10 +49,10 @@ a new one.
 - `node scripts/structure-audit.mjs` (Core).
   - Stay within directory budgets by grouping files that share a prefix (`tests/<prefix>/tests/`).
   - Never make a one-file group, and never append unrelated tests to another file.
-- **Provider-free:** `FLUXIQ_LAB_INSTANCE=t1089 pnpm lab attempt auction-marketplace --task auction-marketplace-kestrel-auctions --authoring-mode answer-first --scripted-model --attempts 4`
+- **Provider-free:** `FLUXIQ_LAB_INSTANCE=t1090 pnpm lab attempt auction-marketplace --task auction-marketplace-kestrel-auctions --authoring-mode answer-first --scripted-model --attempts 4`
   in the downstream tree, through the heavy slot. Report each attempt's verdict, calls and rows.
 
 No `node -e`, no git, no live or paid runs.
 
-**Report.** `docs/working/page-diff-delivery-plan/reports/t1089.md` in the downstream tree
-(`C:/Users/osrs_/FluxStuff/fxwork/t1089/!FluxIQWebExtension`), ending with the return contract.
+**Report.** `docs/working/page-diff-delivery-plan/reports/t1090.md` in the downstream tree
+(`C:/Users/osrs_/FluxStuff/fxwork/t1090/!FluxIQWebExtension`), ending with the return contract.
