@@ -18,7 +18,13 @@
 //   text, with the contents of every sensitive control inside it left out. The
 //   text comes from `textOutsideSensitiveControls` (`content/sensitive-text.ts`),
 //   the one text reader snapshots, accessible names and the extract verb share,
-//   collapsed exactly as the extract verb's `readableText` collapses it. That
+//   read `"readable"`: its pieces are joined the way the page shows them, with
+//   a space between two the page draws apart -- blocks, and an inline label
+//   spaced off the words beside it -- so a styled "New listing" label before a
+//   title reads "New listing Kestrel…" and never "New listingKestrel…"
+//   (`run-mwyt3s48-b943f344`, t1077). Where the page already spaced its pieces
+//   the value is what it was. It is collapsed exactly as the extract verb's
+//   `readableText` collapses it. That
 //   function is not imported: `action-runtime/` wires this directory in, and
 //   reaching past its barrel into `extract.ts` would be a crossing the
 //   structure audit counts. The tightest statement is what the page declares --
@@ -125,7 +131,7 @@ function readColumn(item: Element, name: string, header: string, completeness: "
 
 function readText(element: Element): string {
   return tightestStatedValue(element)
-    ?? normalizeText(hostsOpenShadowRoot(element) ? drawnText(element) : textOutsideSensitiveControls(element));
+    ?? normalizeText(hostsOpenShadowRoot(element) ? drawnText(element) : textOutsideSensitiveControls(element, "readable"));
 }
 
 /**
