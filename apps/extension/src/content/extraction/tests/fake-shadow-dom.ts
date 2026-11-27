@@ -15,8 +15,32 @@
 //
 // `fakeShadowDom()` installs the globals the readers ask (`Node` and the form
 // control classes they test `instanceof` against) and returns the builders.
+// `fakeShadowDom({ layout: true })` also lays its pages out, for the readers
+// that ask how the page draws a piece (`sensitive-text.ts`, "readable"): every
+// element's document then has a window whose `getComputedStyle` answers the
+// element's tag's default display (inline for phrasing tags, block otherwise),
+// a 16px font, and whatever its `style` attribute declares on top, as
+// `margin-right: 6px; font-size: 12px`. Without it nothing is laid out, as
+// before. The setting holds for the test file's whole bundle.
 
 type FakeChild = FakeElement | FakeText;
+
+/** The tags a page's default stylesheet draws inline. */
+const INLINE_TAGS = new Set(["A", "ABBR", "B", "BDI", "BDO", "CITE", "CODE", "EM", "I", "IMG", "KBD", "LABEL", "MARK", "Q", "S", "SMALL", "SPAN", "STRONG", "SUB", "SUP", "TIME", "U"]);
+
+/** The window a laid-out fake page answers computed styles from, once `fakeShadowDom({ layout: true })` installs it. */
+let layoutView: { getComputedStyle(element: FakeElement): Record<string, string> } | undefined;
+
+/** An element's computed style in a laid-out fake page: its tag's default display, a 16px font, and its `style` attribute's declarations. */
+function computedStyle(element: FakeElement): Record<string, string> {
+  const style: Record<string, string> = { display: INLINE_TAGS.has(element.tagName) ? "inline" : "block", fontSize: "16px", direction: "ltr" };
+  for (const declaration of (element.getAttribute("style") ?? "").split(";")) {
+    const [property, ...value] = declaration.split(":");
+    if (property === undefined || value.length === 0) continue;
+    style[property.trim().replace(/-([a-z])/gu, (_, letter: string) => letter.toUpperCase())] = value.join(":").trim();
+  }
+  return style;
+}
 type FakeParent = FakeElement | FakeShadowRoot;
 
 class FakeText {
@@ -112,6 +136,10 @@ class FakeElement extends FakeParentNode {
   readonly tagName: string;
   parentNode: FakeParent | null = null;
   shadowRoot: FakeShadowRoot | null = null;
+  /** The element's document, which has a window only in a laid-out fake page (header). */
+  get ownerDocument(): { defaultView: typeof layoutView } {
+    return { defaultView: layoutView };
+  }
   private readonly attrs = new Map<string, string>();
   assigned: FakeChild[] | undefined;
   constructor(tag: string, attributes: Record<string, string>) {
@@ -199,8 +227,12 @@ class FakeElement extends FakeParentNode {
   }
 }
 
-/** Installs the globals the readers need and returns the builders: an element, a shadow root attached to a host, and a slot's assignment. */
-export function fakeShadowDom() {
+/**
+ * Installs the globals the readers need and returns the builders: an element, a shadow root attached to a host, and a slot's assignment.
+ * `layout: true` lays the file's pages out (header).
+ */
+export function fakeShadowDom(options: { layout?: boolean } = {}) {
+  if (options.layout === true) layoutView = { getComputedStyle: computedStyle };
   const globals = globalThis as Record<string, unknown>;
   globals.Node ??= { ELEMENT_NODE: 1, TEXT_NODE: 3, DOCUMENT_FRAGMENT_NODE: 11 };
   for (const name of ["HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement"]) globals[name] ??= class {};

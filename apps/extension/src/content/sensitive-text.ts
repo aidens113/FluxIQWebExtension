@@ -40,9 +40,9 @@ import { isSensitiveFormControl } from "./element-traits";
  * `""` when the element is, or sits inside, a sensitive control. `"all"` reads
  * as `textContent` does; `"own"` reads only the element's own text nodes,
  * joined by a space, so a container does not inherit its children's words;
- * `"readable"` reads as `"all"` does, but with a space where the page lays a
- * child out as a block of its own (`readableText`). Whitespace is returned as
- * found; collapsing it is the caller's.
+ * `"readable"` reads as `"all"` does, but with a space where the page draws a
+ * child apart from the text beside it (`readableText`). Whitespace is returned
+ * as found; collapsing it is the caller's.
  */
 export function textOutsideSensitiveControls(element: Element, extent: "all" | "own" | "readable" = "all"): string {
   const text = extent === "own" ? ownText(element) : element.textContent ?? "";
@@ -86,15 +86,21 @@ function hasTextBearingSensitiveDescendant(root: Element): boolean {
 
 /**
  * The text a reader sees as words: `textContent`, less every subtree rooted at
- * a sensitive control, with a space wherever the page lays a child out as a
- * block of its own -- a block, a flex or grid item, a list item, a table part,
- * a line break -- and the text on either side would otherwise run together.
- * `textContent` joins every piece with nothing between, so a store chip drawn
- * as two stacked lines read "Pickup or delivery?Carden Falls Supercenter" and a
- * cart link "🛒1$3.97" (lane B's bigbox run, 2026-10-01). Inline pieces stay
- * joined, as a reader sees them: `$10<sup>47</sup>`, `Ultra<b>Strong</b>`.
- * Without a window -- a Node test -- nothing is laid out, and the text is
- * `textContent`'s.
+ * a sensitive control, with a space wherever the page draws a child apart from
+ * the text beside it and the text on either side would otherwise run together.
+ * A child is drawn apart when it is laid out as a block of its own -- a block,
+ * a flex or grid item, a list item, a table part, a line break -- or when it is
+ * an inline box whose edge the page spaces off by at least a space's width
+ * (`spacedEdges`). `textContent` joins every piece with nothing between, so a
+ * store chip drawn as two stacked lines read "Pickup or delivery?Carden Falls
+ * Supercenter" and a cart link "🛒1$3.97" (lane B's bigbox run, 2026-10-01),
+ * and a title link holding a styled "New listing" label, spaced off the title
+ * by its margin, read "New listingKestrel 35…" (`run-mwyt3s48-b943f344`, t1077).
+ * Inline pieces drawn flush stay joined, as a reader sees them:
+ * `$10<sup>47</sup>`, `Ultra<b>Strong</b>`. A space is added only where neither
+ * side already has whitespace, so text whose pieces the page already spaced
+ * reads exactly as `textContent` does once collapsed. Without a window -- a
+ * Node test -- nothing is laid out, and the text is `textContent`'s.
  */
 function readableText(root: Element): string {
   const view = root.ownerDocument?.defaultView ?? undefined;
@@ -113,10 +119,10 @@ function readableText(root: Element): string {
         continue;
       }
       if (child.nodeType !== Node.ELEMENT_NODE || isSensitiveFormControl(child as Element)) continue;
-      const block = laidOutAsBlock(child as Element, view);
-      if (block) breakBefore = true;
+      const apart = drawnApart(child as Element, view);
+      if (apart.before) breakBefore = true;
       walk(child);
-      if (block) breakBefore = true;
+      if (apart.after) breakBefore = true;
     }
   };
   walk(root);
@@ -129,12 +135,58 @@ function laidOut(element: Element): boolean {
   return Boolean(view && typeof view.getComputedStyle === "function" && (element.childNodes?.length ?? 0) > 0);
 }
 
-/** Whether the page lays the element out as a block of its own: anything but an inline, `contents` or undrawn box, and a line break. */
-function laidOutAsBlock(element: Element, view: Window | undefined): boolean {
-  if (element.tagName === "BR") return true;
-  if (!view || typeof view.getComputedStyle !== "function") return false;
-  const display = view.getComputedStyle(element)?.display;
-  return typeof display === "string" && display !== "" && !display.startsWith("inline") && display !== "contents" && display !== "none";
+/** Which sides of an element the page draws apart from the text beside it. */
+type DrawnApart = { before: boolean; after: boolean };
+
+const FLUSH: DrawnApart = { before: false, after: false };
+const BLOCK: DrawnApart = { before: true, after: true };
+
+/**
+ * Where the page draws the element apart from its neighbours' text: on both
+ * sides when it lays the element out as a block of its own -- anything but an
+ * inline, `contents` or undrawn box, and a line break -- and, for an inline
+ * box, on each side the page spaces off (`spacedEdges`).
+ */
+function drawnApart(element: Element, view: Window | undefined): DrawnApart {
+  if (element.tagName === "BR") return BLOCK;
+  if (!view || typeof view.getComputedStyle !== "function") return FLUSH;
+  const style = view.getComputedStyle(element);
+  const display = style?.display;
+  if (typeof display !== "string" || display === "" || display === "contents" || display === "none") return FLUSH;
+  return display.startsWith("inline") ? spacedEdges(style) : BLOCK;
+}
+
+/**
+ * The share of its font size a gap must reach to read as a word break: about
+ * the width of a space, which is a quarter to a third of an em in common
+ * faces. A smaller gap is kerning or a hairline a reader still sees as one word.
+ */
+const WORD_GAP_EM = 0.25;
+
+/** The font size assumed where the page states none in pixels: the browsers' default. */
+const DEFAULT_FONT_PX = 16;
+
+/**
+ * Which edges of an inline box the page spaces off from the text beside it:
+ * the margin, border and padding on that side, together at least a space wide
+ * in the box's own font (`WORD_GAP_EM`). A label drawn with a margin before the
+ * words it precedes, or a pill with padding and a border, is a separate piece a
+ * person reads apart; a `<b>` or `<sup>` the page draws flush is not. The start
+ * side is the left in left-to-right text and the right in right-to-left text.
+ */
+function spacedEdges(style: CSSStyleDeclaration): DrawnApart {
+  const font = pixels(style.fontSize) || DEFAULT_FONT_PX;
+  const gap = (side: "Left" | "Right"): boolean =>
+    pixels(style[`margin${side}`]) + pixels(style[`border${side}Width`]) + pixels(style[`padding${side}`]) >= WORD_GAP_EM * font;
+  const left = gap("Left");
+  const right = gap("Right");
+  return style.direction === "rtl" ? { before: right, after: left } : { before: left, after: right };
+}
+
+/** A computed length in pixels, and 0 for anything that is not one (`auto`, absent, a stand-in that states none). */
+function pixels(value: string | undefined): number {
+  const parsed = Number.parseFloat(value ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 /** `textContent`, less every subtree rooted at a sensitive control, in document order. */
