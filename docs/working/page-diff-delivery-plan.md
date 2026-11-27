@@ -153,6 +153,41 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-26 - The judge fixes integrated: t1065, t1066, t1067, t1068 and t1069 (fluxiq 0.54.32)
+- **t1065** (worker-heavy; `reports/t1065.md`): a continuing judge always answers in a form Core reads, and does so in its own conversation.
+  - Every Anthropic decider request carries `core_check_answer` with the same bytes, so the cache holds. The judge answers by calling it, and a decider that calls it is refused.
+  - A reply that is not read (prose, or a decision-tool call) is answered in the same conversation, never by a judge that sees less.
+  - A continuation carries the decider's whole last turn, recalled rows included.
+  - **Found on the way:** the purse held every continuation at the size of the judge's standalone request. `measureInput` now measures what is sent. A judge that never answers ends on the purse, or on the check's deadline when calls are near free.
+  - **Offline on run-mwy3btww:** 0034, 0077 and 0104 read as yes, and 0130 carries the c50 rows.
+  - The answer tool is not strict: 6 strict decision tools use 23 of the 24 optional parameters allowed.
+- **t1066** (worker; `reports/t1066.md`): live attempts draw `flow.png` from the steps the run wrote, and every chart line goes to the Lab log.
+- **t1067** (worker-heavy; `reports/t1067.md`): every read reaches the judge with its rows, including pages the framework draft dropped.
+  - A standalone judge carries the end view, and the before view after a lasting act.
+  - The domain: an add on a keyed grid card names its item ("This acted on item 1/2 (ValueRidge Essentials Paper Towels, 1 Roll, $1.28)").
+- **t1068** (worker; `reports/t1068.md`): a `result` edit on a second copy refuses `second_copy`. Stale look and search words are gone.
+  - Its whole-decision all-or-none rule broke `dropped-act`, where a guard's put-back reverted drops on other steps. The lead's integration run caught it.
+- **t1069** (worker; `reports/t1069.md`): an amendment is atomic per step. A struck step's edits are skipped and the decision is re-applied, so no trace is left on openers, reversals or claims, and the guards' put-backs leave the rest applied.
+- **The lead's own fixes:**
+  - the explorer prompt snapshot, which t1068's wording changed;
+  - the cause of t1065's real-sql out-of-memory: a test wire answering in old JSON text on near-free calls.
+- **Open:**
+  - `stalled-provider.test.ts` and other wall-clock deadline tests miss under load; move them to fake clocks;
+  - a never-continuing judge's first ask carries no page views (`flow-less/judge.ts`, `verify.ts`);
+  - a re-asked continuation carries page views twice on the rare `continues_the_decider_again` path;
+  - Core still requires a Flow's `llmExecutionSettings.maxCalls`;
+  - round restarts wipe the decider's evidence;
+  - a failed sort's page stays in context;
+  - `refusal-run.ts` passes no `recoverAt`.
+- Validation: the lead's runs.
+  - **t1065:** vitest groups over `runtime/{llm,models,result-verification} answer-first deepseek-bootstrap programs/automation-studio` printed parallel `Tests  6149 passed` and 1 load-timing miss (`stalled-provider`, which passes alone at `4 passed`), and real-sql `Tests  826 passed (826)`.
+  - **t1068:** the groups over `flow-authoring answer-first/completion runtime/answer-first` printed `Tests  4725 passed | 2 skipped` and `19 passed`.
+  - **t1067:** `Tests  2790 passed` and `509 passed`; domain `node-run` printed `# pass 619 # fail 0`; domain check exit 0.
+  - **Integrated state on t1069**, covering all four Core fixes: groups over `runtime/{flow-authoring,result-verification,llm,models,answer-first} answer-first` printed `Tests  10631 passed | 2 skipped (10633)` and `Tests  531 passed (531)`.
+  - `pnpm --filter fluxiq check` exit 0 on each; audits passed; t1066 runner tests printed `# tests 249 # pass 249`.
+  - Each Core finish ran `pnpm check` and the contracts: passed.
+  - Core is at 0.54.32 (`768ea46b4`), downstream `2db89deae`, both pushed; the shared Core is synced and the lanes merged.
+
 ### 2026-11-26 - Live bigbox stopped by the person; the audit found the judge cannot read its own answers; t1063 integrated (fluxiq 0.54.31); t1065-t1068 dispatched
 - **Live run run-mwy3btww-31d32e0d** (Sonnet, attempt 1): the person stopped it after 73 calls (14 of them judge calls), $3.16 and 538 s, with "0 rows stored, 0 shown". Round spend is about $12.40 of $50.
   - Debug: `language-driven-flow-loop-plan/debugs/run-mwy3btww-31d32e0d.md`. Audit: `reports/run-mwy3btww-audit.md` (worker-heavy).
