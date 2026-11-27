@@ -255,7 +255,8 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
         await writeFile(path.join(folder, "person-hand-offs.json"), JSON.stringify(person.snapshotOf(attempt.ordinal) ?? null, null, 2));
         await pictureOfAnswer(opened, attempt, folder, log);
         // This attempt's Flow as it stands now (the saved Flow, or the newest draft), from the shared step files; it never fails or holds up the attempt.
-        await writeFlowChart(folder, { runDirectory: evidence, evidenceDirectory: folder, attempt: attempt.ordinal, saved: attempt.outcome.saved?.flowId !== undefined }).catch(/* best-effort: a picture never decides the run */ () => undefined);
+        const chart = await writeFlowChart(folder, { runDirectory: evidence, stepsDirectory, evidenceDirectory: folder, attempt: attempt.ordinal, saved: attempt.outcome.saved?.flowId !== undefined }).catch((failed: unknown) => `Flow chart: not written (${failed instanceof Error ? failed.message : String(failed)})`);
+        log(`[attempt] attempt ${attempt.ordinal} ${chart}`);
       },
     });
     // Each attempt's score is kept as it ends, so a series that ends early still keeps what its earlier attempts were judged to be.
@@ -340,7 +341,8 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   } finally {
     // The Flow as it stands, drawn from the step files before the run ends, whatever ended it; it never fails or holds up the run.
     await Promise.resolve().then(async () => {
-      const line = await writeFlowChart(evidence);
+      const line = await writeFlowChart(evidence, { runDirectory: evidence, stepsDirectory });
+      log(`[attempt] ${line}`);
       await appendFile(path.join(evidence, "attempt-report.txt"), `${line}\n`).catch(/* best-effort: the report may not exist on a run that stopped early */ () => undefined);
     }).catch(/* best-effort: a picture never decides the run */ () => undefined);
     // What the network guard blocked is named in the report, whatever ended the run: a frame that never loaded is otherwise a silent gap.

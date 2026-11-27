@@ -20,6 +20,19 @@ test("a run's chart is written as flow.svg and a real flow.png, and the report l
   assert.ok((await readFile(path.join(dir, "flow.svg"), "utf8")).startsWith("<svg"));
 });
 
+test("a live-shaped run, whose steps are outside the bundle, still gets its chart beside the bundle", async () => {
+  const bundle = await tempDirectory();
+  const stepsHome = await tempDirectory();
+  await writeRunFixture(stepsHome);
+  const line = await writeFlowChart(bundle, { runDirectory: bundle, stepsDirectory: path.join(stepsHome, "steps") });
+  assert.match(line, /flow\.png .*shows the draft, 4 nodes/u);
+  assert.ok((await stat(path.join(bundle, "flow.png"))).size > 5000);
+  assert.ok((await readFile(path.join(bundle, "flow.svg"), "utf8")).startsWith("<svg"));
+  // Without naming where the steps are, the bundle holds none, which is the defect this guards.
+  const blind = await tempDirectory();
+  assert.match(await writeFlowChart(blind, { runDirectory: blind }), /none written/u);
+});
+
 test("a broken Flow writes flow-chart-error.txt and does not throw", async () => {
   const dir = await tempDirectory();
   const line = await writeFlowChart(dir, { ...SAMPLE_FLOW, nodes: undefined as unknown as ChartFlow["nodes"] });
