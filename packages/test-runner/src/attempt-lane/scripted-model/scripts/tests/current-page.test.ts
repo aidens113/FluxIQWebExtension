@@ -14,7 +14,11 @@ const text = (lines: Line[]) => lines.map((line) => line.text).join("\n");
 
 function request(views: Line[][]): ScriptedModelRequest {
   const records = views.map((lines, index) => ({ callId: `call.${index + 1}`, toolId: "core.run_node", value: { ok: true, pageView: { key: KEY, lines } as unknown as JsonValue } }));
-  const evidence = automationStudioLlmPageChannelProjection(records, { member: "pageView" });
+  const { history, window } = automationStudioLlmPageChannelProjection(records, { member: "pageView" });
+  return wire([...history, ...(window ? [window] : [])]);
+}
+
+function wire(evidence: unknown[]): ScriptedModelRequest {
   return { kind: "evidence_tool_decision", ordinal: 1, model: "fixture", jsonText: true, message: "", payload: { taskKind: "evidence_tool_decision", context: { evidenceLoop: { evidence } } } } as unknown as ScriptedModelRequest;
 }
 
@@ -29,9 +33,26 @@ test("the first result's page is read whole", () => {
 
 test("changes after the whole page are applied in order: lines gone, arrived and reworded", () => {
   const both = request([first, second]);
-  const evidence = (both.payload as { context: { evidenceLoop: { evidence: Array<{ value: { pageView: Record<string, unknown> } }> } } }).context.evidenceLoop.evidence;
-  assert.equal(typeof evidence[1]!.value.pageView.changes, "string", "Core's projection sent the second view as changes");
+  const evidence = (both.payload as { context: { evidenceLoop: { evidence: Array<{ toolId: string; value: Record<string, unknown> }> } } }).context.evidenceLoop.evidence;
+  const window = evidence.find((entry) => entry.toolId === "core.page_window")!.value as { pages: Array<{ shown: Array<Record<string, unknown>> }> };
+  assert.equal(typeof window.pages[0]!.shown[1]!.changes, "string", "Core's projection sent the second view as changes");
   assert.equal(currentPageOf(both), text(second));
+});
+
+test("the page the window marks current is read, not another page it still holds", () => {
+  const cart: Line[] = [{ key: "PAGE", text: 'PAGE "Cart"' }, { key: "t1", text: 't1 button "Checkout"' }];
+  const records = [first, cart].map((lines, index) => ({ callId: `call.${index + 1}`, toolId: "core.run_node", value: { ok: true, pageView: { key: index ? "https://shop.test/cart" : KEY, lines } as unknown as JsonValue } }));
+  const { history, window } = automationStudioLlmPageChannelProjection(records, { member: "pageView" });
+  assert.equal(currentPageOf(wire([...history, window])), text(cart));
+});
+
+test("a request from before the page window is read from the deliveries its results carry", () => {
+  const changes = ["  t2 field \"Search\"", "+ t5 button \"Next page\""].join("\n");
+  const inPlace = [
+    { callId: "call.1", toolId: "core.run_node", value: { ok: true, pageView: { key: KEY, whole: "PAGE one\nt2 field \"Search\"" } } },
+    { callId: "call.2", toolId: "core.run_node", value: { ok: true, pageView: { key: KEY, since: "call.1", changes } } }
+  ];
+  assert.equal(currentPageOf(wire(inPlace)), "PAGE one\nt2 field \"Search\"\nt5 button \"Next page\"");
 });
 
 test("an unchanged view leaves the page as it was, and three views in a row compose", () => {
