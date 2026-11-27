@@ -109,10 +109,10 @@ const decide = decideFor(false);
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, acts: ["modify_existing", "create_new"], process: scriptedTaskProcess(TASK) });
 const judge: ScriptedReply = (request) => scriptedJudgement(request, { answersRequest: "yes", summary: "The cart read answers the request; the fixture oracle verifies every record." });
 
-/** What the task names on the chosen item, in the words the product page shows it in. The instruction itself says "4.5", so the rating is matched beside its review count. */
+/** What the task names on the chosen item, in the words the product page shows it in. The instruction itself says "4.5", so the rating is matched in the page's own "N out of 5 Stars" words (listing/rating-markup.ts); the pickup line is the item's own "Pickup today" right after its "(N)" review count, as the judge request shows an item (a rail's "Pickup today at <store>" heading is not it). */
 export const BIGBOX_CHOSEN_ITEM_CONDITIONS: readonly ShownCondition[] = Object.freeze([
-  { what: "rating line of at least 4.5", words: /\b(?:4\.[5-9]|5\.0)\b[^"]{0,30}reviews?/u },
-  { what: "pickup-today line", words: /Pickup today/u },
+  { what: "rating line of at least 4.5", words: /\b(?:4\.[5-9]|5\.0) out of 5 Stars/u },
+  { what: "pickup-today line", words: /\([\d,]+\)[\s\S]{0,25}?Pickup today/u },
 ]);
 const judgeEvidence: ScriptedReply = (request) =>
   evidenceReadingJudgement(request, { answersRequest: "yes", summary: "The chosen item shows its rating and pickup today, and the cart read answers the request." }, BIGBOX_CHOSEN_ITEM_CONDITIONS);

@@ -86,8 +86,9 @@ test("the panel form opens the first listing, adds on the product page and opens
 test("the panel form's judge says unknown unless it is shown a rating of 4.5 or more and pickup today, and yes when it is", () => {
   const panel = scriptedModelScriptFor("bigbox-retail-new-store-cheapest-towels", "panel");
   const ask = (text: string) => panel.replies.loop_verification![0]!({ kind: "loop_verification", ordinal: 1, model: "fixture", jsonText: true, message: "", payload: { context: { instruction: "rated 4.5 or better", pageText: text, resultSummary: { recordSets: [] } } } } as unknown as ScriptedModelRequest) as { diagnosis: { answersRequest: string } };
+  assert.equal(ask("4.6 out of 5 Stars. 938 reviews Pickup today at Carden Falls").diagnosis.answersRequest, "unknown");
   assert.equal(ask("Cart - the instruction says 4.5").diagnosis.answersRequest, "unknown");
-  assert.equal(ask("4.6 (938 reviews) Pickup today").diagnosis.answersRequest, "yes");
-  assert.equal(ask("4.3 (938 reviews) Pickup today").diagnosis.answersRequest, "unknown");
+  assert.equal(ask("4.6 out of 5 Stars. 938 reviews, (938), Pickup today").diagnosis.answersRequest, "yes");
+  assert.equal(ask("4.3 out of 5 Stars. 938 reviews, (938), Pickup today").diagnosis.answersRequest, "unknown");
   assert.throws(() => scriptedModelScriptFor("bigbox-retail-new-store-cheapest-towels", "nope"), /no form/);
 });
