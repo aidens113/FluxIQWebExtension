@@ -10,7 +10,7 @@
 // - and each descendant that names itself or carries a value: an `<img>`
 //   gives its `src` and its `alt`, an `<a href>` gives its words as `text`
 //   under its path and its URL as a `link` under the path and "url"
-//   (`offersOwnText` says why both), a form control
+//   (`link-words/` says why both, and when only the URL), a form control
 //   gives its live `value`, an element with a test id gives its `text`, an
 //   icon badge -- no words, but an accessible name -- gives that name
 //   (`badge-name.ts`), and a remaining leaf with words in it gives its `text`.
@@ -52,6 +52,11 @@
 // column naming the mark there is no way to say which items a read wants (C5).
 // So every item of the run offers its sources, each is kept once, and each sits
 // at the position it had in the item that first offered it.
+//
+// **A label some items carry in the same words is a mark, offered alone and
+// never glued into another column** (t1077): it is proposed as a `badge` mark,
+// and a link whose words are a title span's once such labels are left out
+// offers only its URL (`item-mark/word-mark.ts`, `link-words/`).
 //
 // Coverage is the share of the run's items the field resolves in, and a field
 // that does not resolve in every item is proposed optional, so a record that
@@ -132,7 +137,8 @@ import { readField } from "./field-reader";
 import { fieldElement } from "./field-element";
 import { itemAttributeSources } from "./item-attributes";
 import { offersOwnLink } from "./item-link";
-import { ownStateMarkSources, stateMarkSources } from "./item-mark";
+import { ownStateMarkSources, stateMarkSources, wordMarks, type WordMarks } from "./item-mark";
+import { isTextLeaf, offersOwnText } from "./link-words";
 import { pruneEquivalentFieldPaths } from "./path-equivalence";
 import { keptSources } from "./field-budget";
 import { itemShape } from "./item-shape";
@@ -226,7 +232,8 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
   // first descendants are its chrome and its value is further down. The kept
   // ones return to document order (`field-budget/`).
   // A state column's selector names its element only while on, so the split by kind, which widens selectors, never sees it (`item-mark/`).
-  const found = fieldSources(item, run);
+  const marks = wordMarks(run);
+  const found = fieldSources(item, run, marks);
   const sources = [...separateKinds(found.filter((source) => source.mark !== "state"), run, (owner, element) => pathWithinItem(owner, element)?.label), ...found.filter((source) => source.mark === "state")];
   const measured = sources.map((source, position) => ({ source, position, coverage: coverageOf(source, run) }));
   const kept = keptSources(measured);
@@ -236,9 +243,21 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
     const key = webAutomationExtractionFieldKey(label, taken);
     taken.add(key);
     // A badge is a mark only under a name every item gives it; one named per item is that item's data (`badge-name.ts`).
-    const mark = source.accessibleName === true ? (label === source.label ? undefined : "badge" as const) : source.mark;
+    const mark = source.accessibleName === true ? (label === source.label ? undefined : "badge" as const) : source.mark ?? wordMark(source, marks);
     return { key, label, spec: proposedFieldSpec({ ...source, mark }, coverage), coverage };
   });
+}
+
+/**
+ * `"badge"` for a plain text column whose element is a label some items carry
+ * in the same words (`item-mark/word-mark.ts`). Its label stays its path: a
+ * label written by the page, such as "Price:", would otherwise become a key
+ * that names what it only stands beside, and the model sees its words as the
+ * column's sample.
+ */
+function wordMark(source: FieldSource, marks: WordMarks): "badge" | undefined {
+  const plain = source.kind === "text" && !source.sensitive && source.lines !== true && source.definition === undefined && source.pressable !== true;
+  return plain && source.selector !== undefined && marks(source.selector) ? "badge" : undefined;
 }
 
 /**
@@ -299,7 +318,7 @@ export function proposedFieldSpec(source: FieldSource, coverage: number): WebAut
  * are the ones the run's usual item gives rather than whichever item came
  * first.
  */
-function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
+function fieldSources(item: Element, run: readonly Element[], marks: WordMarks): FieldSource[] {
   const columns = columnSources(item);
   if (columns.length > 0) return columns;
   const collected = new Map<string, { source: FieldSource; position: number; labels: Map<string, number> }>();
@@ -318,7 +337,7 @@ function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
       walkedShapes.add(shape);
     }
     let position = 0;
-    const offered: FieldSource[] = [...ownLinkSources(candidate), ...itemAttributeSources(candidate, run), ...ownStateMarkSources(candidate), ...elementSources(candidate, peers)];
+    const offered: FieldSource[] = [...ownLinkSources(candidate), ...itemAttributeSources(candidate, run), ...ownStateMarkSources(candidate), ...elementSources(candidate, peers, marks)];
     for (const source of offered) {
       position += 1;
       const identity = JSON.stringify([source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? "", source.lines === true,
@@ -386,7 +405,7 @@ function columnSources(item: Element): FieldSource[] {
 }
 
 /** What the item's descendants offer, in document order, one source per element but for an image. */
-function elementSources(item: Element, peers: readonly Element[]): FieldSource[] {
+function elementSources(item: Element, peers: readonly Element[], marks: WordMarks): FieldSource[] {
   const sources: FieldSource[] = [];
   const definitions = definitionFieldSources(item);
   // Each container of positional lines met in this item, with the selector it
@@ -421,7 +440,12 @@ function elementSources(item: Element, peers: readonly Element[]): FieldSource[]
       sources.push({ kind: "attribute", label: `${label} src`, selector, attribute: "src", sensitive });
       sources.push({ kind: "attribute", label: `${label} alt`, selector, attribute: "alt", sensitive });
     } else if (tag === "a" && element.getAttribute("href") !== null) {
-      if (offersOwnText(item, element)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
+      // A span inside the link that is a word mark over the run is no part of the link's own words (`link-words/`).
+      const marked = (leaf: Element): boolean => {
+        const leafName = selectorWithinItem(item, leaf, peers);
+        return leafName !== undefined && marks(leafName.selector);
+      };
+      if (offersOwnText(item, element, marked)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
       sources.push({ kind: "link", label: `${label} ${LINK_LABEL_SUFFIX}`, selector, sensitive });
     } else if (VALUE_TAGS.has(tag)) {
       // A control is offered under what kind of control it is, and not at all
@@ -489,43 +513,6 @@ function badgeLabel(source: FieldSource, run: readonly Element[]): string {
  * label is the only thing a model choosing columns can tell them apart by.
  */
 const LINK_LABEL_SUFFIX = "url";
-
-/**
- * Whether a link's own words are a column of their own.
- *
- * **Until 2026-09-28 they never were.** An `<a href>` offered one source, its
- * URL, and nothing else, so on a listing whose title is `h2 > a` -- most of
- * them -- the only column that held the title held its address. Live run
- * `run-mulwm2dc-0bd95f22` mapped `title` to it, stored twelve rows of URLs, and
- * its verifier said exactly that; the re-author, choosing from the same
- * columns, could not fix it, because no column held the words.
- *
- * A link with no words (an image link) offers none. Nor does one whose words
- * are all one descendant's that is offered on its own -- `<a><span>Title
- * </span></a>` already proposes the span -- so the same value is not put in
- * front of the model twice under two labels -- nor does one inside an element
- * with a test id that says the same words, as the catalog's
- * `<h3 data-testid="product-name"><a data-testid="product-link">` does, since the
- * heading is already offered by its id. Nor does a link that wraps a whole
- * card: its words are every value on the card run together, which is no column
- * at all, and each of those values is offered on its own. The words are read
- * through the one sensitive-text reader, only to decide this, and never carried
- * anywhere.
- */
-function offersOwnText(item: Element, link: Element): boolean {
-  const words = collapsed(textOutsideSensitiveControls(link));
-  if (words === "" || statedMoreTightly(item, link)) return false;
-  const leaves = Array.from(link.querySelectorAll("*")).filter(isTextLeaf);
-  if (leaves.length > MAX_LINK_TEXT_LEAVES) return false;
-  if (leaves.some((inner) => collapsed(textOutsideSensitiveControls(inner)) === words)) return false;
-  for (let outer = link.parentElement; outer && outer !== item; outer = outer.parentElement) {
-    if (testIdFor(outer) !== undefined && collapsed(textOutsideSensitiveControls(outer)) === words) return false;
-  }
-  return true;
-}
-
-/** More words-holding elements than this inside a link make it a card rather than a title. */
-const MAX_LINK_TEXT_LEAVES = 2;
 
 /** Whether the element sits inside a form control of this item, whose contents are the control's own. */
 function withinValueControl(item: Element, element: Element): boolean {
@@ -738,15 +725,6 @@ function testIdSelector(element: Element): string | undefined {
     if (value) return `[${attribute}="${value.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"]`;
   }
   return undefined;
-}
-
-/**
- * Whether the element holds words of its own and no elements. The text is read
- * through the one sensitive-text reader, so a marked control's contents do not
- * even decide that a field exists, and it is never carried anywhere.
- */
-function isTextLeaf(element: Element): boolean {
-  return element.children.length === 0 && collapsed(textOutsideSensitiveControls(element)) !== "";
 }
 
 /**
