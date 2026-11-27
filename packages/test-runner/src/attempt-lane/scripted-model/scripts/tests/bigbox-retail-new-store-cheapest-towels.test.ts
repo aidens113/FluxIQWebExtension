@@ -63,3 +63,31 @@ test("a repair that starts on the results the replay left opens the cart by its 
   const before = decide(left.replace("2 $5.25", "1 $3.97"));
   assert.equal(before.callId, "add");
 });
+
+test("the panel form opens the first listing, adds on the product page and opens the cart from the Added to cart panel", () => {
+  const panel = scriptedModelScriptFor("bigbox-retail-new-store-cheapest-towels", "panel");
+  const go = panel.replies.evidence_tool_decision![0]!;
+  const step = (shown: string, ...ids: string[]) => {
+    const request: ScriptedModelRequest = { kind: "evidence_tool_decision", ordinal: 1, model: "fixture", jsonText: true, message: "", payload: { taskKind: "evidence_tool_decision", context: { evidenceLoop: { evidence: [...made("cookies", "picker", "store", "search", "department", "today", "sort", ...ids), { callId: "core.current_view", toolId: "core.current_view", value: { groups: [{ group: "top", callId: "page", value: { page: shown } }] } }] } } } };
+    return (go(request) as { decision: Decision }).decision;
+  };
+  const listing = 'URL ~?q=paper+towels&sort=price_low   (~ = http://127.0.0.1:1/scenarios/bigbox-retail/search)\nt380 link "\u{1F6D2} 1 $3.97" ~\nt900 link "Store roll" ~/ip/store-roll/418830166\nt1295 button "+ Add"';
+  const open = step(listing);
+  assert.equal(open.callId, "open");
+  assert.equal(open.input?.parameters?.target.handle, "t900");
+  const product = 'URL ~/ip/store-roll/418830166   (~ = http://127.0.0.1:1/scenarios/bigbox-retail)\nt1583 button "Add to cart"';
+  assert.equal(step(product, "open").input?.parameters?.target.handle, "t1583");
+  const panelPage = product + '\nt1600 button "x"\n\u2713 Added to cart\nt1615 link "View cart" same href as t1389';
+  const cart = step(panelPage, "open", "add");
+  assert.equal(cart.callId, "cart");
+  assert.equal(cart.input?.parameters?.target.handle, "t1615");
+});
+
+test("the panel form's judge says unknown unless it is shown a rating of 4.5 or more and pickup today, and yes when it is", () => {
+  const panel = scriptedModelScriptFor("bigbox-retail-new-store-cheapest-towels", "panel");
+  const ask = (text: string) => panel.replies.loop_verification![0]!({ kind: "loop_verification", ordinal: 1, model: "fixture", jsonText: true, message: "", payload: { context: { instruction: "rated 4.5 or better", pageText: text, resultSummary: { recordSets: [] } } } } as unknown as ScriptedModelRequest) as { diagnosis: { answersRequest: string } };
+  assert.equal(ask("Cart - the instruction says 4.5").diagnosis.answersRequest, "unknown");
+  assert.equal(ask("4.6 (938 reviews) Pickup today").diagnosis.answersRequest, "yes");
+  assert.equal(ask("4.3 (938 reviews) Pickup today").diagnosis.answersRequest, "unknown");
+  assert.throws(() => scriptedModelScriptFor("bigbox-retail-new-store-cheapest-towels", "nope"), /no form/);
+});

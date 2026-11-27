@@ -62,3 +62,18 @@ function citedRows(set: Record<string, unknown>): Array<{ row: string; column: s
     return column === undefined ? [] : [{ row: text(column), column, value: text(column) }];
   });
 }
+
+/** One condition the task names on the chosen item, as the words a judge must be shown it in. */
+export type ShownCondition = Readonly<{ what: string; words: RegExp }>;
+
+/**
+ * A judge that reads its evidence: it answers `said` only when the request it receives shows every condition (the
+ * script gives the words), and `unknown` naming the missing ones otherwise. Test data: it makes a judge that is
+ * starved of page text fail the way a model that cannot see the conditions does.
+ */
+export function evidenceReadingJudgement(request: ScriptedModelRequest, said: ScriptedJudgement, conditions: readonly ShownCondition[]): Record<string, unknown> {
+  const shown = JSON.stringify(request.payload ?? {});
+  const missing = conditions.filter((condition) => !condition.words.test(shown)).map((condition) => condition.what);
+  if (missing.length === 0) return scriptedJudgement(request, said);
+  return scriptedJudgement(request, { answersRequest: "unknown", summary: `The request shows no ${missing.join(" and no ")}, so the conditions cannot be checked.`, observed: `Not shown: ${missing.join("; ")}.` });
+}
