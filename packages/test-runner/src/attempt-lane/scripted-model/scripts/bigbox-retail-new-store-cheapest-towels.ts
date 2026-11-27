@@ -3,7 +3,7 @@
 // words, never by a handle that changes between runs.
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, toolCall, callsMade } from "./evidence.js";
-import { scriptedJudgement } from "./judgement.js";
+import { evidenceReadingJudgement, scriptedJudgement, type ShownCondition } from "./judgement.js";
 import { scriptedTaskProcess } from "./processing-declarations.js";
 
 const TASK = "bigbox-retail-new-store-cheapest-towels";
@@ -34,13 +34,14 @@ type Field = { key: string; name?: string; sample?: string };
 type DraftStep = { step: number; does?: { target?: string }; disposition?: string };
 type Act = { id: string; todo?: string; choices?: readonly { id: string; todo?: string }[] };
 
-const decide: ScriptedReply = (request) => {
+const decideFor = (panel: boolean): ScriptedReply => (request) => {
   const page = currentPageOf(request);
   // Progress is read from the page as well as from this attempt's own calls: a repair of a replayed Flow starts from the page the replay left.
   const made = new Set(callsMade(request));
   const onCart = /^URL .*\/cart\)/mu.test(page);
   const sorted = /^URL .*sort=price_low/mu.test(page);
   const added = /link "[^"]*\b(?:[2-9]|\d\d+) \$\d/u.test(page);
+  const onProduct = /^URL .*\/ip\//mu.test(page);
   if (onCart || sorted) for (const id of ["cookies", "picker", "store", "search", "department", "today", "sort"]) made.add(id);
   if (onCart || (sorted && added)) made.add("add");
   if (onCart) made.add("cart");
@@ -61,6 +62,16 @@ const decide: ScriptedReply = (request) => {
   if (!made.has("today")) return check("Keep what can be ready today.", "today", /checkbox "Today(?: \(\d+\))?" .*group="Speed"/u);
   if (!made.has("sort")) {
     return toolCall("Sort by lowest price.", "sort", "core.run_node", { node: "web.output.dom-select", parameters: { target: { handle: need(page, /select "Sort by"/u, "sort control") }, value: "price_low" }, consequences: [] }, true);
+  }
+  if (panel) {
+    // The product page's own path: open the first listing, press its Add to cart, then the panel's "View cart" that follows "Added to cart".
+    if (!made.has("open") && !onProduct) return click("Open the first listing.", "open", need(page, /link ".*" \S*\/ip\//u, "first listing"));
+    made.add("open");
+    // The buy box may need a second press before the item is added (it wakes on the first).
+    const addedPanel = /Added to cart/u.test(page);
+    if (!made.has("add") && !addedPanel) return click("Add the item to the cart.", "add", need(page, /button "Add to cart"/u, "Add to cart button"), ["modify_existing"]);
+    if (!made.has("add2") && !addedPanel && made.has("add") && !made.has("cart")) return click("Add the item to the cart again, as the first press only woke the box.", "add2", need(page, /button "Add to cart"/u, "Add to cart button"), ["modify_existing"]);
+    if (!made.has("cart")) return click("Open the cart from the panel.", "cart", controlAfter(page, /Added to cart/u, /link "View cart"/u, "View cart"));
   }
   if (!made.has("add")) return click("Add the cheapest qualifying item.", "add", need(page, /button "\+ Add"/u, "+ Add button"), ["modify_existing"]);
   if (!made.has("cart")) return click("Open the cart.", "cart", need(page, /link "[^"]*\d+ \$\d[^"]*"/u, "cart link"));
@@ -85,16 +96,26 @@ const decide: ScriptedReply = (request) => {
   const acts = (Array.isArray(draft?.acts) ? draft.acts : []) as readonly Act[];
   const open = acts.flatMap((act) => (act.choices?.length ? act.choices.filter((choice) => choice.todo !== undefined).map((choice) => choice.id) : act.todo !== undefined ? [act.id] : []));
   const steps = (Array.isArray(draft?.steps) ? draft.steps : []) as readonly DraftStep[];
-  const adding = steps.find((step) => step.does?.target === "+ Add" && step.disposition === "kept");
+  const adding = steps.find((step) => step.does?.target === (panel ? "Add to cart" : "+ Add") && step.disposition === "kept");
   const marked = evidence.some((entry) => entry.callId.startsWith("core.amendment_check"));
   if (open.length > 0 && adding && !marked) {
-    return { kind: "evidence_tool_decision", summary: "Mark the + Add step as the act of adding the item.", decision: { kind: "amend_draft", amendments: [{ step: adding.step, change: "keep", act: open[0] }] } };
+    return { kind: "evidence_tool_decision", summary: "Mark the add step as the act of adding the item.", decision: { kind: "amend_draft", amendments: [{ step: adding.step, change: "keep", act: open[0] }] } };
   }
   return { kind: "evidence_tool_decision", summary: "The cart was read.", decision: { kind: "complete", result: { summary: `Set ${STORE} as the store, added the cheapest qualifying item for pickup and read the cart.` } } };
 };
 
+const decide = decideFor(false);
+
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message }, acts: ["modify_existing", "create_new"], process: scriptedTaskProcess(TASK) });
 const judge: ScriptedReply = (request) => scriptedJudgement(request, { answersRequest: "yes", summary: "The cart read answers the request; the fixture oracle verifies every record." });
+
+/** What the task names on the chosen item, in the words the product page shows it in. The instruction itself says "4.5", so the rating is matched in the page's own "N out of 5 Stars" words (listing/rating-markup.ts); the pickup line is the item's own "Pickup today" right after its "(N)" review count, as the judge request shows an item (a rail's "Pickup today at <store>" heading is not it). */
+export const BIGBOX_CHOSEN_ITEM_CONDITIONS: readonly ShownCondition[] = Object.freeze([
+  { what: "rating line of at least 4.5", words: /\b(?:4\.[5-9]|5\.0) out of 5 Stars/u },
+  { what: "pickup-today line", words: /\([\d,]+\)[\s\S]{0,25}?Pickup today/u },
+]);
+const judgeEvidence: ScriptedReply = (request) =>
+  evidenceReadingJudgement(request, { answersRequest: "yes", summary: "The chosen item shows its rating and pickup today, and the cart read answers the request." }, BIGBOX_CHOSEN_ITEM_CONDITIONS);
 
 export const BIGBOX_RETAIL_NEW_STORE_CHEAPEST_TOWELS_SCRIPT: ScriptedModelScript = Object.freeze({
   taskId: TASK,
@@ -104,3 +125,17 @@ export const BIGBOX_RETAIL_NEW_STORE_CHEAPEST_TOWELS_SCRIPT: ScriptedModelScript
     loop_verification: Array.from({ length: 8 }, () => judge),
   },
 });
+
+/** The script's form: `plain` (the default) adds from the results card; `panel` adds on the product page and opens the cart from its "Added to cart" panel, judged on evidence. */
+export function bigboxRetailNewStoreCheapestTowelsScript(form: string = "plain"): ScriptedModelScript {
+  if (form === "plain") return BIGBOX_RETAIL_NEW_STORE_CHEAPEST_TOWELS_SCRIPT;
+  if (form !== "panel") throw new Error(`This script has no form "${form}". It has plain and panel`);
+  return Object.freeze({
+    taskId: TASK,
+    replies: {
+      panel_command: Array.from({ length: 4 }, () => startAttempt),
+      evidence_tool_decision: Array.from({ length: 60 }, () => decideFor(true)),
+      loop_verification: Array.from({ length: 8 }, () => judgeEvidence),
+    },
+  });
+}
