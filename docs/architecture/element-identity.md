@@ -144,6 +144,137 @@ clicked.
 An impostor carrying the recorded label passes, by construction: nothing in a
 fingerprint can distinguish two controls a page has made identical.
 
+## Words That Change As State (t1071, F1)
+
+Verified against source on 2026-11-26. Live run `run-mwyfc9uf-215bbd84`
+(bigbox, four attempts on one site) saved a click on the header's cart link by
+its words, "🛒 1 $3.97". The next attempt met the same link reading "🛒 2 $5.25".
+Playback refused it four times as `web.target.not_found`, because the words were
+the only signal the step carried that could corroborate it, and they were the
+cart's count and total.
+
+**The build marks the words as a value.** The domain's target store
+(`domain/src/runtime/llm-evidence/plan-resolution/self-changing/state-words.ts`,
+wired into `target-packets.ts`) remembers each control's wordings. A control
+here is its frame, shadow hosts and selector, plus its tag, id, test id and
+label. Beside the wordings it keeps the wordings the control's own act left in
+the same document, and every destination path the control led to.
+
+A control's words are state when two conditions hold:
+- it was shown in two or more wordings that its own act did not cause;
+- it is a link that always led to one path.
+
+Its saved identity then keeps the words, so the save-time guard still counts
+them, and gains two fields:
+- `readsWords: true`, the mark a read's target already carries. It means the
+  words are a value an earlier step may have changed: the page never vetoes on
+  them, and they never settle a marked link.
+- `href`, set to that destination.
+
+The mark is applied in two places:
+- when a handle is resolved (`resolve` and `resolveOn`), so the live act already
+  carries it;
+- when Core assembles a draft from an act's absolute parameters (`absoluteIntent`,
+  then `resolve-plan-node.ts`).
+
+**The `href` path convention.** A kept destination is the link's path from the
+site root, written as `/…` with no origin, query or fragment. For example, the
+bigbox step is saved with `href: "/scenarios/bigbox-retail/cart"`. The extension
+reads `href` as a kept destination only when two conditions hold:
+- the target is marked `readsWords`;
+- `href` is such a path: it starts with `/` but not `//` (`identity/destination/recorded.ts`).
+
+A recorded step's `href` is a whole address (`describe-element.ts`), so a
+recorded read of a link is not mistaken for one. The origin is left out on
+purpose, so a Lab run on another port still matches.
+
+**What does not count as staying the same:**
+- An id, test id or label. These are often the template's rather than the
+  control's: every product card's title link can carry
+  `data-testid="product-link"`, unique on each product page yet naming a
+  different product on each. They help tell two controls apart, but they never
+  qualify a control's words as state.
+- A selector the capture gave to several elements. It names no single control
+  and counts for nothing.
+- Words the control's own act left in its document, such as "Get coupons" that
+  became "Collected", or "Follow" that became "Following". These stay identity,
+  and the change is the step's effect (t442, t447), in this attempt and in later
+  ones.
+- A control with no destination, such as a badge on a button ("Alerts 3"). It
+  keeps its words as identity, as before.
+- A class that toggles with the state. The control's address and stable facts
+  must be unchanged for its wordings to be compared at all.
+
+**The page confirms a marked link by where it leads.**
+`identity/destination/verdict.ts` reads a candidate's own destination: the path
+of its `href`, only for an `a` or `area` that leads somewhere on the same origin
+and is not an action link (`action-link.ts`). The candidate gets one of three
+verdicts:
+- `confirms`: it is shown, leads to the kept path, and no other visible link in
+  its root leads there;
+- `shared`: another visible link also leads there, so the destination tells
+  them apart no better than a tie;
+- `elsewhere`: anything else, including a hidden link. A closed mini cart's
+  "View cart" is no rival and no answer.
+
+Each level uses the verdict differently:
+- **The veto.** It judges the target without its words, counts the destination
+  as the distinguishing question, and accepts only `confirms` in rule 2.
+  Rule 1 still applies: if the page contradicts everything else the recording
+  named, the candidate is refused whatever its destination.
+- **Level 2** (`score.ts`). The one confirming candidate among the leaders wins.
+  A leader scores at or above the floor and within the margin of the best. If no
+  candidate confirms, the result is `unmatched`; if a link is `shared`, it is
+  `ambiguous`.
+
+The destination is never added to a score or subtracted from one. Together with
+the words being a value, this keeps the rule that a control is never found by
+one attribute alone while others disagree.
+
+The offline proof replays the run's sequence (look, add, look, click the link)
+through the domain runtime, the gateway mapping and this resolver
+(`apps/extension/src/content/tests/cart-link-replay.test.ts`). On attempt 2's
+page the saved step resolves to the header link. The step saved before the mark
+is still refused. A link with the same words and place that leads elsewhere is
+refused, and so is a second visible link to the cart.
+
+## A Draft's Absolute Target And Its Act Witnesses (t1071, F3)
+
+A draft keeps the exact parameters an act resolved. At assembly the domain
+correlates them with the retained captures to find the control's intent
+(`plan-resolution/control-intents/absolute.ts`). When the same identity matches
+captures from two or more sources, assembly needs a witness: an act made from
+one of those sources whose view names the target exactly. Every witness and
+every match must agree on intent, and zero witnesses refuses as
+`web.handle.ambiguous`. A source is a location, document (`timeOrigin`), frame
+and layer.
+
+The target store is kept per project and Flow, so it outlives an attempt, and
+every attempt of a task runs under one Flow. Until t1071 the only witness was
+the first act on each handle. In the bigbox run that was attempt 1's press of
+"🛒 1 $3.97". Attempt 2 pressed the link as "🛒 2 $5.25", which then read the
+same on the search page and the cart page. That act left no witness, so its
+repaired draft was refused at `absolute.ts:73-74` (zero witnesses) and no repair
+was ever saved.
+
+**Each act is now a witness of its own source**
+(`control-intents/witnesses.ts`). A later attempt's act is in a new document,
+so it is a new source with a witness of its own. Two copies are kept when they
+differ:
+- the control as the act's own capture showed it;
+- the identity the act ran with on that page, which is the views' agreement and
+  is what the draft step carries.
+
+The first act from one source stands, so an undo in the same document never
+replaces it (t743). Two things are unchanged:
+- The first-act-per-handle record (`acted`) still alone supplies the identity a
+  candidate step restores (t442 F1).
+- `absolute.ts`'s rules still apply in full. A witness establishes lineage only
+  for a target whose identity it names exactly, and the state mark above
+  (`readsWords`, `href`) is left out of that comparison.
+
+The offline proof is in `plan-resolution/control-intents/tests/later-attempt.test.ts`.
+
 ## Level 2: Candidates And Scoring
 
 **Enumeration** (`identity/candidates.ts`) collects, from the current

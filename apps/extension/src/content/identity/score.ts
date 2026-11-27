@@ -14,6 +14,7 @@ import { createWebElementMatcher, type WebElementFingerprint as ElementFingerpri
 import { isVolatileIdentifier, quotedAnchors, selectorQuotesVolatileIdentifier } from "../selector";
 import type { TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
+import { destinationVerdict, recordedDestination } from "./destination";
 import { DRAWING_ATTRIBUTE } from "./drawing-attribute";
 import { pageTokens, type PageTokens } from "./page-tokens";
 import { recordedPlaceRefusal, type RecordedPlace } from "./place";
@@ -85,6 +86,12 @@ export type RecordedIdentity = {
    * (`./read-words.ts`, t743 D2b): they break ties and never lower a candidate.
    */
   readsWords?: boolean | undefined;
+  /**
+   * Where the link always led, on a target whose words the build saw change as
+   * state (`./destination/`, t1071 F1): beside `readsWords`, a candidate leading
+   * there and nowhere else on the page corroborates it. Never scored.
+   */
+  href?: string | undefined;
 };
 
 /**
@@ -205,6 +212,9 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
  */
 function scoreReadTarget(target: RecordedIdentity, read: NonNullable<ReturnType<typeof readWordsOf>>, candidates: TargetCandidate[]): CandidateSelection {
   const plain = scoreTargetCandidates(read.unworded, candidates);
+  // Words that change as state never settle it; where the link always led does, or nothing does (`./destination/`, t1071 F1).
+  const destination = recordedDestination(target);
+  if (destination !== undefined) return ledToDestination(plain, destination);
   if (plain.outcome === "resolved") return plain;
   const settled = settledByWords(plain, read, candidates);
   if (settled) return settled;
@@ -212,6 +222,23 @@ function scoreReadTarget(target: RecordedIdentity, read: NonNullable<ReturnType<
   if (!plain.ranked.length) return worded;
   // The words may confirm the element the rest chose; they may never choose another over it (header).
   return worded.outcome === "resolved" && worded.chosen.element === plain.ranked[0]!.element ? worded : plain;
+}
+
+/**
+ * A marked target's ranking without its words, settled by its destination
+ * (`./destination/`, t1071 F1): the candidate among the leaders -- at the floor
+ * or above, within the margin of the best -- that is the one visible link leading
+ * where the target always led. None leading there is the control gone, unless two
+ * visible links lead there, which is a tie the destination cannot break.
+ */
+function ledToDestination(plain: CandidateSelection, destination: string): CandidateSelection {
+  const dropped = plain.dropped ? { dropped: plain.dropped } : {};
+  const best = plain.ranked[0]?.score.normalizedScore ?? 0;
+  const leaders = plain.ranked.filter((scored) => scored.score.normalizedScore >= TARGET_SCORE_FLOOR && best - scored.score.normalizedScore < TARGET_SCORE_MARGIN);
+  const verdicts = plain.ranked.map((scored) => destinationVerdict(destination, scored.element));
+  const chosen = leaders.find((scored) => verdicts[plain.ranked.indexOf(scored)] === "confirms");
+  if (chosen) return { outcome: "resolved", chosen, runnerUp: plain.ranked.find((scored) => scored !== chosen), ranked: plain.ranked, ...dropped };
+  return verdicts.includes("shared") ? { outcome: "ambiguous", ranked: plain.ranked, ...dropped } : { outcome: "unmatched", ranked: plain.ranked, ...dropped };
 }
 
 /** How close two scores are to count as the same score, not a lead: float noise only. */
