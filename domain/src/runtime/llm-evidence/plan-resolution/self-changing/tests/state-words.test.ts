@@ -44,15 +44,42 @@ function store() {
   return { targets, stores, element };
 }
 
-test("a link seen in two wordings, always leading to one place, keeps its words marked as a value and carries its path", async () => {
+test("a link seen in two wordings, always leading to one place, keeps its words marked as a value and carries its address", async () => {
   const { targets, element } = store();
-  targets.remember(SCOPE, capture("/search?q=towels", 1, [{ words: "Cart 1 $3.97", href: `${ORIGIN}/cart?from=search` }]));
+  targets.remember(SCOPE, capture("/search?q=towels", 1, [{ words: "Cart 1 $3.97", href: `${ORIGIN}/cart?view=full#top` }]));
   assert.equal((await element("t1", "/search?q=towels")).readsWords, undefined, "one wording says nothing yet");
-  targets.remember(SCOPE, capture("/cart", 2, [{ words: "Cart 2 $5.25", href: `${ORIGIN}/cart` }]));
+  targets.remember(SCOPE, capture("/cart", 2, [{ words: "Cart 2 $5.25", href: `${ORIGIN}/cart?view=full` }]));
   const marked = await element("t1", "/cart");
   assert.equal(marked.readsWords, true);
-  assert.equal(marked.href, "/cart", "the path, without its query");
+  assert.equal(marked.href, "/cart?view=full", "the path and its query, without its fragment (t1079 F1)");
   assert.equal(marked.visibleText, "Cart 2 $5.25", "the words stay: the save-time guard still counts them");
+});
+
+test("a link whose words change together with its query is two links taking turns in one place (t1079 F1)", async () => {
+  const { targets, element } = store();
+  targets.remember(SCOPE, capture("/list", 1, [{ selector: "main > nav > a:nth-of-type(2)", words: "Open", href: `${ORIGIN}/open?tab=new` }]));
+  targets.remember(SCOPE, capture("/list", 2, [{ selector: "main > nav > a:nth-of-type(2)", words: "Closed", href: `${ORIGIN}/open?tab=closed` }]));
+  const kept = await element("t1", "/list");
+  assert.equal(kept.readsWords, undefined, "the words say which link it is");
+  assert.equal(kept.href, undefined);
+});
+
+// Live run `run-mwytbimp-e0c33977` (bigbox): the two captures the store kept of the results page's pagination slot,
+// as the content script described them (client_gateway_trace_events, snapshot `interactiveElements`). On page 1 the
+// slot is the link "2" to `...&page=2`; on page 2 a "Previous page" arrow shifts it, and the same slot is the link "1"
+// to the first page. Before t1079 the rule read both as `/scenarios/bigbox-retail/search`, marked the slot, and the
+// saved step lost the words "2" and the `page=2` query that said which link it was.
+test("run-mwytbimp's pagination slot, link \"2\" on page 1 and link \"1\" on page 2, is not one link whose words changed", async () => {
+  const { targets, element } = store();
+  const root = "/scenarios/bigbox-retail/search?q=paper+towels&facet=fulfillment_method%3APickup";
+  const slot = "main > div > section > nav > a:nth-of-type(2)";
+  targets.remember(SCOPE, capture(root, 1, [{ selector: slot, words: "2", href: `${ORIGIN}${root}&page=2` }]));
+  targets.remember(SCOPE, capture(`${root}&page=2`, 2, [{ selector: slot, words: "1", href: `${ORIGIN}${root}` }]));
+  targets.remember(SCOPE, capture(root, 3, [{ selector: slot, words: "2", href: `${ORIGIN}${root}&page=2` }]));
+  const step = await element("t1", root);
+  assert.equal(step.readsWords, undefined, "its words stay identity");
+  assert.equal(step.href, undefined, "and no address is carried in place of them");
+  assert.equal(step.visibleText, "2");
 });
 
 test("a link whose words change with where it leads is not one control whose words changed", async () => {
@@ -86,4 +113,26 @@ test("a selector the capture gave to several links counts for none of them", asy
   targets.remember(SCOPE, capture("/list", 1, [{ words: "Open 1", href: `${ORIGIN}/open` }, { words: "Open 2", href: `${ORIGIN}/open` }, { selector: "#solo", words: "Solo", href: `${ORIGIN}/solo` }]));
   targets.remember(SCOPE, capture("/list", 2, [{ words: "Open 3", href: `${ORIGIN}/open` }, { selector: "#solo", words: "Solo", href: `${ORIGIN}/solo` }]));
   assert.equal((await element("t1", "/list")).readsWords, undefined);
+});
+
+// Provider-free run `run-mwyueo09-ea0204c3` (bigbox, scripted; reproduced as `run-mwyw05h7-46d7d38f`): the header's
+// cart link sits at `body > div:nth-of-type(1) > header > ...` on a results page, where a support chat `div` follows
+// the page, and at `body > div > header > ...` on the cart page, where it does not. Keyed by its selector, its two
+// wordings were kept apart, one each, and the click saved at the results page's address was never marked.
+test("a link whose selector differs between pages is still one link: its two wordings make its words state (t1079)", async () => {
+  const { targets, element } = store();
+  const cart = `${ORIGIN}/cart`;
+  targets.remember(SCOPE, capture("/search?q=towels", 1, [{ selector: "body > div:nth-of-type(1) > header > div > nav > a:nth-of-type(3)", words: "Cart 1 $3.97", href: cart }]));
+  targets.remember(SCOPE, capture("/cart", 2, [{ selector: "body > div > header > div > nav > a:nth-of-type(3)", words: "Cart 2 $5.25", href: cart }]));
+  const step = await element("t1", "/search?q=towels");
+  assert.equal(step.readsWords, true, "the step saved at the results page's address is marked");
+  assert.equal(step.href, "/cart");
+  assert.equal(step.visibleText, "Cart 1 $3.97");
+});
+
+test("two links one capture shows to one place in one region name no one link, so neither's words become state", async () => {
+  const { targets, element } = store();
+  targets.remember(SCOPE, capture("/home", 1, [{ selector: "header > a.cart", words: "Cart 1", href: `${ORIGIN}/cart` }, { selector: "header > a.basket", words: "Basket", href: `${ORIGIN}/cart` }]));
+  targets.remember(SCOPE, capture("/home", 2, [{ selector: "header > a.cart", words: "Cart 2", href: `${ORIGIN}/cart` }]));
+  assert.equal((await element("t1", "/home")).readsWords, undefined);
 });
