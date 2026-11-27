@@ -43,6 +43,21 @@ function reply(content: JsonObject): Response {
   }), { status: 200, headers: { "content-type": "application/json" } });
 }
 
+/**
+ * `response` billed for the size of what was sent (about four characters a token), as a provider bills a call, rather
+ * than a flat 21 tokens. Since Core t1056 (user, 2026-11-24: no arbitrary call limit ends a run) no count of refused
+ * decisions ends a loop; only the result, the purse, the loop budget's tokens or clock, or a person's Stop do (Core
+ * `docs/architecture/automation-studio/failure-control.md`, "No count ends a loop"). Billed a flat 21 tokens, a model
+ * that keeps completing a Flow that cannot be tested whole made thousands of decisions before the Flow's purse ran out,
+ * well past the test's own time; billed as sent, the same purse ends it as soon as it would end a live run's.
+ */
+async function billedAsSent(init: RequestInit | undefined, response: Response): Promise<Response> {
+  const answer = record(await response.json());
+  const promptTokens = Math.ceil(String(init?.body ?? "").length / 4);
+  return new Response(JSON.stringify({ ...answer, usage: { prompt_tokens: promptTokens, completion_tokens: 7, total_tokens: promptTokens + 7 } }),
+    { status: response.status, headers: { "content-type": "application/json" } });
+}
+
 async function fixture(root: string, options: { missingDeclaration?: true; missingStart?: true; unresolvedSavedBinding?: true } = {}) {
   let text = "";
   let opened = false;
@@ -126,11 +141,11 @@ async function fixture(root: string, options: { missingDeclaration?: true; missi
         const right = text === "right";
         if (!right && prepareRepair) { const prepare = prepareRepair; prepareRepair = undefined; await prepare(); }
         assert.ok(sent.includes(right ? "right" : "wrong"), "judge must receive the actual observed message");
-        return reply({ kind: "diagnosis", summary: right ? "The message is right." : "The message is wrong.",
+        return billedAsSent(init, reply({ kind: "diagnosis", summary: right ? "The message is right." : "The message is wrong.",
           diagnosis: right ? { answersRequest: "yes" } : { answersRequest: "no", changed: "Set the editor message to right.",
             // A current no names the defect it rests on (Core t752); this Flow stores no rows, so it names the step whose act
             // was wrong, which Core finds in its record of the steps the run took (Core t766).
-            defects: [{ kind: "act_wrong", step: "type", row: "the editor message", requestWords: "set its message to right" }] } });
+            defects: [{ kind: "act_wrong", step: "type", row: "the editor message", requestWords: "set its message to right" }] } }));
       }
       assert.equal(task, "evidence_tool_decision", "fixture accepts only actual judge and repair tasks");
       phase = "repair";
@@ -168,7 +183,7 @@ async function fixture(root: string, options: { missingDeclaration?: true; missi
         assert.equal(typeof faulty?.step, "number");
         decision = { kind: "amend_draft", amendments: [{ step: Number(faulty?.step), change: "drop" }] };
       } else decision = { kind: "complete", result: { summary: "The editor message is right." } };
-      return deepSeekDecisionReply(body, { kind: "evidence_tool_decision", summary: "Repair only the message.", decision });
+      return billedAsSent(init, deepSeekDecisionReply(body, { kind: "evidence_tool_decision", summary: "Repair only the message.", decision }));
     }
   });
   const native = new AutomationStudioNativeNodeRuntime({ permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS, runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES })
@@ -285,6 +300,8 @@ test("actual saved repair refuses a missing declaration before full-test actions
     assert.ok(harness.replacementChecked(), "a valid faulty-step replacement must reach the real full-test gate");
     assert.equal(run.status, "failed");
     assert.ok(JSON.stringify(detail?.metadata).includes("llm_evidence_loop.full_run_required"), "actual carried provenance gap must refuse whole-test acceptance");
+    // Since Core t1056 no count of refused completions ends the repair: it ends when the Flow's purse is spent.
+    assert.ok(JSON.stringify(detail?.metadata).includes("flow_bootstrap.evidence_budget_exhausted"), "the refused repair must end on its purse, never on a count");
     assert.deepEqual(repair, [], "no reset or action may run with missing source provenance");
   } finally {
     await harness?.service.close();
