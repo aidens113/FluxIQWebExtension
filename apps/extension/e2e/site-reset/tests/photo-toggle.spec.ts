@@ -217,7 +217,7 @@ test("installed gateway project build presses a dialog toggle back on its post's
       if (turn.step === 23) tests.push(record(last("core.test_subflow")));
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 32, maxCallsPerRun: 48, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const { declarations, reads } = observed;
     const clicks = { clicksBeforeLike, clicksAfterLike, clicksBeforeOther, clicksAfterOther, clicksBeforeUnlike, clicksAfterUnlike, clicksBeforeTrialUnlike, clicksAfterTrialUnlike, end: observed.clicks() };

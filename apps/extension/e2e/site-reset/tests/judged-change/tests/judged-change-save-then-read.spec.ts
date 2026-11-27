@@ -107,9 +107,9 @@ test("installed gateway project build judges a save then read by the change, wit
       if (turn.step === 7) return send("trial.first", call("trial.first", "core.test_subflow", candidate));
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    const supervise = supervisorWithEffect({ permitted: ["modify_existing"], maxIterations: 24, effect: { kind: "end_state", state: "the job is on my saved jobs" } });
+    const supervise = supervisorWithEffect({ permitted: ["modify_existing"], effect: { kind: "end_state", state: "the job is on my saved jobs" } });
     const provider = bindScriptedProvider(installed, {
-      task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: judge.verify,
+      task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify,
       supervisor: turn => {
         if (turn.step > 2) dispatched = turn.last("project.dispatch");
         return supervise(turn);

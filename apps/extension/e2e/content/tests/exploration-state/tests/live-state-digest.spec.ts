@@ -94,7 +94,7 @@ test("recovery exploration reduces a live page change, reversal, and successful 
     instructions: [],
     runDetail: detail,
     recoveryContext: buildAutomationStudioRuntimeRecoveryContext({ detail }),
-    runBudget: new AutomationStudioLlmRunBudgetLedger({ maxCallsPerRun: 8, maxTotalTokensPerRun: 200_000, maxOutputTokensPerRun: 100_000 }),
+    runBudget: new AutomationStudioLlmRunBudgetLedger({ maxTotalTokensPerRun: 200_000, maxOutputTokensPerRun: 100_000 }),
     maxEstimatedCostUsd: 0.05,
     recoveryDeadline: startAutomationStudioRecoveryDeadline({ startedAtMs: Date.now() })
   });

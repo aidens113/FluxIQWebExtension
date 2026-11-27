@@ -137,7 +137,7 @@ test("installed gateway project build witnesses a trial's navigating press by th
           return done();
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const outcomes = observed.outcomes;
     const looks = outcomes.map((outcome, index) => ({ outcome, index })).filter((entry) => entry.outcome.call.startsWith("site-reset.look."));

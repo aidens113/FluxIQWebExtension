@@ -68,8 +68,8 @@ test("installed gateway project build on crossborder witnesses an add-to-cart by
       return turn.complete({ subflowKey: "main", ...candidate });
     };
     const provider = bindScriptedProvider(installed, {
-      task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify,
-      supervisor: supervisorWithEffect({ permitted: ["create_new"], maxIterations: 20, effect: { kind: "change", direction: "adds", count: 1, what: "one product in the cart" } })
+      task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify,
+      supervisor: supervisorWithEffect({ permitted: ["create_new"], effect: { kind: "change", direction: "adds", count: 1, what: "one product in the cart" } })
     });
     const { ending, failure } = await build.run();
     const siteChanges = judge.siteChanges();
@@ -143,7 +143,7 @@ test("installed gateway project build on crossborder tells a press that names a 
       pressed = record(last("core.run_node"));
       return complete({ subflowKey: "main" });
     };
-    bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 12, maxCallsPerRun: 20, builder, verify: judgeLog().verify });
+    bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, builder, verify: judgeLog().verify });
     const { ending, failure } = await build.run();
     await keepDiagnostic(testInfo, "change-cart-other-tab.json", { ending, failure, reference, pressed, outcomes: observed.outcomes, pages });
     expect(reference).toMatch(/^destination-[1-9][0-9]{0,2}$/u);

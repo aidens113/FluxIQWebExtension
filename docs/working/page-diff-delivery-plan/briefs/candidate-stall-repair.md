@@ -16,15 +16,17 @@ loop detection ends a round as a stall:
 2. For each reachable path, give a stall the bootstrap's repair round. Reuse the unfinished-build phases; never copy
    them. The path's tests must then end on the result or the purse.
 3. For an unreachable path, change nothing and report the evidence. The lead decides on removal.
-4. Downstream, remove the call-count fields from the Lab and e2e contracts:
-   - `packages/test-contracts/src/llm-validation.ts`: `maxCallsPerRun`, `LLM_LAB_MAX_CALLS_PER_RUN`, and "retries must
-     fit within maxCallsPerRun";
-   - `apps/extension/e2e/site-reset/scripted-provider.ts`.
+4. Downstream, remove the call counts the e2e scripted provider and its specs pass into Core:
+   - `maxCallsPerRun` and `maxIterations` in `apps/extension/e2e/site-reset/scripted-provider.ts` and
+     `change-proof.ts`;
+   - the specs that pass them to `bindScriptedProvider` or put them in a brief.
 
-   Records already on disk may still carry the field, so read it as optional and ignored, never required.
+   The Lab's own contracts (`packages/test-contracts`, `packages/test-runner`) belong to task t1064; do not touch
+   them. A brief's `maxIterations`, where Core still reads one, is a local bound that ends nothing: drop it from the
+   specs only if Core no longer takes it.
 
 **Owned.** Core: `flow-bootstrap-commands/candidate-generation.ts` and its tests; `project-build/**`; and, read-only
-unless step 2 needs an exported seam, `unfinished-build/**`. Downstream: the two files in step 4 and their tests.
+unless step 2 needs an exported seam, `unfinished-build/**`. Downstream: `apps/extension/e2e/**` for step 4 only.
 
 **Must not touch.** Answer-first (`service/answer-first/**`, `runtime/answer-first/**`), the purse
 (`runtime/llm/build-purse/**`), and the evidence loop (`runtime/llm/evidence-loop*`). Live lanes run against those.
@@ -33,7 +35,7 @@ unless step 2 needs an exported seam, `unfinished-build/**`. Downstream: the two
 - vitest over the changed directories;
 - `pnpm --filter fluxiq check` through the heavy gate;
 - `node scripts/structure-audit.mjs`;
-- downstream, `pnpm --filter @fluxiq-web-extension/test-contracts test` and the domain check.
+- downstream, the extension's typecheck (`pnpm --filter @fluxiq-web-extension/extension check`), which covers the e2e specs.
 
 No `node -e`, no git, no paid or live runs.
 

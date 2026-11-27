@@ -198,7 +198,7 @@ test("a site part and its action part pinned from two Flows: the row crosses the
         throw error;
       }
     };
-    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder });
+    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder });
     const { ending, failure } = await build.run();
     Object.assign(diagnostic, { ending, failure, answers, builderError });
     await keepDiagnostic(testInfo, "pinned-calls-build.json", diagnostic);
@@ -294,7 +294,6 @@ test("a site part and its action part pinned from two Flows: the row crosses the
           throw new Error("diagnostic.a_replay_called_a_model");
         }
       },
-      maxCallsPerRun: 1,
       maxEstimatedCostUsd: 0
     }));
     const freshBoard = async (): Promise<string[]> => {
@@ -532,7 +531,7 @@ test("a site part and action part written in the script format: the row crosses 
         }
       }
     };
-    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder: (turn) => {
+    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, builder: (turn) => {
       try {
         return scripted(turn);
       } catch (error) {
@@ -566,7 +565,7 @@ test("a site part and action part written in the script format: the row crosses 
     service.bindLlmExecutionProvider(() => ({ provider: { metadata: { provider: "throws", model: "none" }, runTask: async () => {
       providerCalls += 1;
       throw new Error("diagnostic.a_replay_called_a_model");
-    } }, maxCallsPerRun: 1, maxEstimatedCostUsd: 0 }));
+    } }, maxEstimatedCostUsd: 0 }));
     const freshBoard = async (): Promise<string[]> => {
       await installed.resetLab();
       await readyBoard(page, origin);
@@ -666,7 +665,7 @@ test("a site part and action part written in the script format: the row crosses 
     } as unknown as JsonObject;
     const order: string[] = [];
     let trialAnswer: JsonObject = {};
-    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: () => "", maxIterations: 12, maxCallsPerRun: 30,
+    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: () => "",
       verify: () => {
         order.push("judge");
         return { summary: "The roles were kept.", diagnosis: { answersRequest: "yes", observed: "The roles were kept." } };

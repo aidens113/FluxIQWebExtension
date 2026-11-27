@@ -225,7 +225,7 @@ test("installed gateway project build checks a computation-only repair of a grid
         defects: [{ kind: "kept_not_asked", row: linkShown(shown, UNPINNED[3]!), requestWords: RECENT }]
       } : undefined
     }, shownBy);
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 60, builder, supervisor, verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, builder, supervisor, verify });
     const { ending, failure } = await build.run();
 
     const proof = offlineFirstProof(await readStepLog(stepsDirectory));

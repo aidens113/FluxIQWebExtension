@@ -24,7 +24,7 @@ test("installed newest-likes build requires an observed state choice, preserves 
     flowId = flow.flowId;
     const instruction = await service.saveFlowGenerationInstruction({ projectId, flowId, instruction: photoToggleScenario.task });
     const provider = bindScriptedProvider(installed, { task: photoToggleScenario.task, permitted: ["modify_existing"], instructionSourceId: () => instruction.instructionId,
-      maxIterations: 24, maxCallsPerRun: 36, builder: script.builder, verify: script.judge.verify });
+      builder: script.builder, verify: script.judge.verify });
     counter.restore();
     const result = await service.generateFlowBootstrapAdaptation({ projectId, flowId, evidenceGuided: true, authoringMode: "project",
       caller: { actorUserId: "diagnostic", actorSessionId: "diagnostic" }, startLocation: page.url() }).catch(async error => {

@@ -137,7 +137,7 @@ export function proofsOf(siteChange: JsonObject | undefined): string[] {
  * The scripted supervisor of the default run (one plan, one build brief, completion on its answer) with a typed
  * `effect` on the one part and any `unchanged` things on the task, so the judge is asked to judge a change.
  */
-export function supervisorWithEffect(options: { permitted: string[]; maxIterations: number; effect: JsonObject; unchanged?: string[] }): (turn: SupervisorTurn) => ScriptedAnswer {
+export function supervisorWithEffect(options: { permitted: string[]; effect: JsonObject; unchanged?: string[] }): (turn: SupervisorTurn) => ScriptedAnswer {
   return turn => {
     if (turn.step === 1) {
       const plan = turn.plan();
@@ -146,7 +146,8 @@ export function supervisorWithEffect(options: { permitted: string[]; maxIteratio
       return turn.call("plan", "project.write_plan", { ...plan, taskSpec: { ...spec, parts, ...(options.unchanged ? { unchanged: options.unchanged } : {}) } });
     }
     if (turn.step === 2) {
-      const brief = { kind: "build", subflowKey: "main", parts: ["p1"], entry: { caseId: "observed-current", predecessors: [] }, permittedActs: options.permitted, maxIterations: options.maxIterations };
+      // Core sizes the brief from the purse; a brief's turn count only lowers that share and ends nothing (t1063).
+      const brief = { kind: "build", subflowKey: "main", parts: ["p1"], entry: { caseId: "observed-current", predecessors: [] }, permittedActs: options.permitted };
       return turn.call("dispatch", "project.dispatch", { reason: "Exercise the change proof.", briefs: [brief] });
     }
     return turn.complete(record(turn.last("project.dispatch")?.complete));

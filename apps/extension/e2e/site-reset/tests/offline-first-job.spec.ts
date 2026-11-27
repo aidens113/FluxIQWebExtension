@@ -217,7 +217,7 @@ test("installed gateway project build checks a computation-only repair offline a
         defects: [{ kind: "asked_missing", row: missing[label]!, column: "title", value: missing[label]!, requestWords: LIST }]
       }
     }, shownBy);
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 60, builder, supervisor, verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, builder, supervisor, verify });
     const { ending, failure } = await build.run();
 
     const proof = offlineFirstProof(await readStepLog(stepsDirectory));

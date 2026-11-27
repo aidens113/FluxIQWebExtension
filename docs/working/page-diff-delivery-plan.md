@@ -153,6 +153,42 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-26 - Live bigbox stopped by the person; the audit found the judge cannot read its own answers; t1063 integrated (fluxiq 0.54.31); t1065-t1068 dispatched
+- **Live run run-mwy3btww-31d32e0d** (Sonnet, attempt 1): the person stopped it after 73 calls (14 of them judge calls), $3.16 and 538 s, with "0 rows stored, 0 shown". Round spend is about $12.40 of $50.
+  - Debug: `language-driven-flow-loop-plan/debugs/run-mwy3btww-31d32e0d.md`. Audit: `reports/run-mwy3btww-audit.md` (worker-heavy).
+- **The decider was right by step 0020 (about $0.35):** it added the single roll at $1.28, rated 4.5, "Pickup today". Every step after that was the check failing to accept a right answer.
+- **Findings, in order of impact:**
+  1. **No continuing judge answered in a form Core reads (7 of 7, 6 of them yes).**
+     - 4 wrote prose before the JSON and 3 called a tool. This is a regression from t1038: the decider went to native tools, and a continuing judge keeps them.
+     - Task **t1065** (worker-heavy): a judge answer tool in every decider request so the cache holds; prose or another tool is answered in the same conversation; rows the decider recalled reach the continuation.
+  2. **The fallback judge saw no page views and no rows from the reads that found the answer.**
+     - The t1037 draft drops non-result reads, and t1048 feeds the judge only reads still in the draft. The add act names no item.
+     - Task **t1067** (worker-heavy): every read goes to the judge, and an act names what it acted on.
+  3. **One amendment at 0144 emptied the result** (2 rows to 0, `processing_schema_missing`). `keep` was refused but `result` was applied anyway. That is why there was no table.
+     - Task **t1068** (worker): an amendment applies all of its edits or none, and the result edit is checked like keep. The same task removes stale look and search words.
+  4. **The Lab's flow chart fails on every live run:** it reads the bundle's `steps/`, while live runs write theirs under `lab-runs/`.
+     - Task **t1066** (worker). The lead drew this run's chart by hand (`attempt-1/flow.png`).
+  5. **Also found, not yet assigned:**
+     - round restarts wipe the decider's evidence, so c50 was recalled 4 times;
+     - a failed sort's whole page rode in 75 requests (24.6k characters);
+     - route-state entries repeat the full control list.
+- **The heavy gate's "memory telemetry is stale"** held the launch for one poll. The sample is stamped mid-probe and compared after it (MeritPrompts `tools/heavy-slot/policy.mjs:28`). It is noted, not fixed.
+- **t1063 integrated:** a candidate build takes no loopSignal and is steered and retested, never ended on a stall. The project supervisor's dead stall branch is removed, and the e2e specs pass no call counts.
+- Validation: the lead's runs on t1063.
+  - vitest over `flow-bootstrap-commands project-build candidate-failure` printed `Tests  322 passed (322)`;
+  - `pnpm --filter fluxiq check` exit 0;
+  - both audits passed;
+  - Core libraries build exit 0;
+  - extension check exit 0;
+  - the Core finish (`pnpm check` and contracts) passed.
+  - Core is at 0.54.31, both `dev`s pushed, the shared Core synced.
+- **Next:** integrate t1065, t1066, t1067 and t1068, then prove offline on this recording:
+  - replies 0034, 0077 and 0104 read as yes;
+  - a fallback judge carries the c50 rows;
+  - 0144 leaves the result at step 13 with 2 rows.
+
+  Then rerun bigbox live on Sonnet with `--attempts 4`, and the three other lanes after it.
+
 ### 2026-11-26 - t1064 (the Lab carries no call count) integrated; live bigbox launched; t1063 running
 - **The first live launch failed before Chrome opened ($0):**
   - the Lab's prelude build broke on `live-llm-plan.test.ts`, which imported the call backstop t1056 deleted;

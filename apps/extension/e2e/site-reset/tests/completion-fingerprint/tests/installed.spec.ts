@@ -273,7 +273,7 @@ test("installed completion preserves the original click fingerprint across histo
       }
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: () => instructionId, maxIterations: 26, maxCallsPerRun: 48,
+    bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: () => instructionId,
       builder: async (turn) => {
         try {
           return await builder(turn);

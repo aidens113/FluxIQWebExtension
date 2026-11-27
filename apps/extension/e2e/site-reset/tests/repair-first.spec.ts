@@ -179,7 +179,7 @@ test("installed gateway project build refuses an ending after one failed brief u
       log("end blocked");
       return turn.complete({ ended: "blocked", reason: "The saved job's link is still not on the job's own page." });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, maxIterations: 12, maxCallsPerRun: 40, builder, supervisor });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, builder, supervisor });
     const { ending, failure } = await build.run();
 
     const own = activity.filter(event => event.subject?.projectId === resolved?.projectId);

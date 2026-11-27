@@ -76,8 +76,8 @@ test("installed gateway project build judges an office checkout whose address is
       return turn.complete({ subflowKey: "main", ...candidate });
     };
     const provider = bindScriptedProvider(installed, {
-      task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: judge.verify,
-      supervisor: supervisorWithEffect({ permitted: ["create_new", "modify_existing"], maxIterations: 24, effect: { kind: "end_state", state: "the checkout delivers to the other saved address" } })
+      task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, builder, verify: judge.verify,
+      supervisor: supervisorWithEffect({ permitted: ["create_new", "modify_existing"], effect: { kind: "end_state", state: "the checkout delivers to the other saved address" } })
     });
     const { ending, failure } = await build.run();
     const siteChanges = judge.siteChanges();
