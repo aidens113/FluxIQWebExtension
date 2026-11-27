@@ -35,6 +35,18 @@
 // say it was not done, and a Next carried from an earlier attempt was held on
 // every replay of the Flow (company-website `run-mwxixc4p-b7945aed`). Still not
 // on the path the step moved to: a page there may have done it another way.
+//
+// **A page that left without arriving is not absence (t1083, K1).** A step that
+// moved the page keeps where it started (`from`) beside where it went (`path`,
+// `./sign.ts`). A page on neither, showing none of what the step took away from
+// its start nor any of what it brought, has left where the step found it: the act
+// did something, and the page is somewhere between -- a robot check that lets the
+// visitor on by itself. That is `unknown`. Kestrel `run-mwz2jc4w-0c207128`: a
+// search typed with `submit` landed on the site's "Pardon the wait" check, every
+// look within the effect wait read `not_seen`, and the replay stopped on an act
+// that had landed. An effect signed before `from` was kept reads "none of what it
+// took away is shown" alone as having left. A page still on `from` is judged as
+// before, and so is a step that never moved (an Add to cart: no `path`).
 
 import type { JsonObject } from "fluxiq/core";
 import { WEB_ROUTE_EFFECT_FORMAT } from "./format";
@@ -53,8 +65,19 @@ export function webAutomationRouteEffectSeen(effect: JsonObject, observed: JsonO
   const now = webRoutePageFeatures(observed);
   if (path !== undefined && path === now.path) return "unknown";
   const shown = new Set(now.controlHashes);
-  if (added.length >= MIN_ADDED_FOR_ABSENCE && !added.some((hash) => shown.has(hash))) return "not_seen";
+  if (added.length >= MIN_ADDED_FOR_ABSENCE && !added.some((hash) => shown.has(hash)) && !leftWithoutArriving(effect, now.path, shown)) return "not_seen";
   return standsWhereFound(effect.marked, now.markedHashes) ? "not_seen" : "unknown";
+}
+
+/**
+ * Whether a step that moved the page finds it neither where it started nor where it
+ * went, with nothing of the start it took away still shown (header, t1083): it left,
+ * and has not arrived. An effect without `from` is read by what it took away alone.
+ */
+function leftWithoutArriving(effect: JsonObject, nowPath: string, shown: ReadonlySet<string>): boolean {
+  if (typeof effect.path !== "string") return false;
+  if (typeof effect.from === "string" && effect.from === nowPath) return false;
+  return hashes(effect.removed) && !effect.removed.some((hash) => shown.has(hash));
 }
 
 /** Whether the page shows every control the step took away, under its heading, and none it brought (header, t1062). */

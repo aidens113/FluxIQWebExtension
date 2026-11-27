@@ -106,6 +106,7 @@ test("an effect of another version, or a malformed one, never holds", () => {
 });
 
 test("an effect holds hashes only, never page text, keeps the 16 smallest and stays under 2,048 characters", () => {
+  // Its one part that is not a hash is where the step went (t1083): an address, its query left out, never page text.
   const before = routeState({ location: "https://shop.test/journeys/mykonos", path: "/journeys/mykonos", title: "Mykonos planner", controls: Array.from({ length: 300 }, (_, index) => `Wishlist holiday ${index}`) });
   const after = routeState({
     location: "https://shop.test/basket/summer-checkout",
@@ -117,7 +118,9 @@ test("an effect holds hashes only, never page text, keeps the 16 smallest and st
   const effect = webAutomationRouteEffect(before, after);
   const json = JSON.stringify(effect);
   assert.ok(json.length < 2_048, `effect is ${json.length} characters`);
-  assert.doesNotMatch(json, /mykonos|journey|wishlist|holiday|summer|unlock|basket|proceed|checkout|voucher|planner|shop/iu);
+  assert.equal(effect.destination, "/basket/summer-checkout");
+  const { destination: _destination, ...hashed } = effect;
+  assert.doesNotMatch(JSON.stringify(hashed), /mykonos|journey|wishlist|holiday|summer|unlock|basket|proceed|checkout|voucher|planner|shop/iu);
   const added = effect.added as string[];
   const removed = effect.removed as string[];
   assert.equal(added.length, 16);
@@ -125,11 +128,45 @@ test("an effect holds hashes only, never page text, keeps the 16 smallest and st
   assert.deepEqual(added, [...added].sort());
   assert.ok([...added, ...removed].every((hash) => /^[0-9a-f]{8}$/u.test(hash)));
   assert.match(String(effect.path), /^[0-9a-f]{8}$/u);
+  assert.match(String(effect.from), /^[0-9a-f]{8}$/u);
   // Both marked samples full too (t1062): names under their headings, hashes only.
   const marked = effect.marked as { added: string[]; removed: string[] };
   assert.equal(marked.added.length, 16);
   assert.equal(marked.removed.length, 16);
   assert.ok([...marked.added, ...marked.removed].every((hash) => /^[0-9a-f]{8}$/u.test(hash)));
-  assert.deepEqual(Object.keys(effect).sort(), ["added", "marked", "path", "removed", "v"]);
+  assert.deepEqual(Object.keys(effect).sort(), ["added", "destination", "from", "marked", "path", "removed", "v"]);
   assert.equal(webAutomationRouteEffectHolds(effect, after), true);
+});
+
+// Where a step that moved the page started and went (t1083). `from` lets `../seen.ts` tell a page that left
+// without arriving (kestrel `run-mwz2jc4w-0c207128`, a search that landed on a robot check) from one still where
+// the step found it; `destination` lets a run that passed the step over still reach where it went (bigbox
+// `run-mwz29d50-c3a32a9c`, the drawer's "View cart").
+test("a step that moved the page keeps where it started and where it went; one that did not keeps neither", () => {
+  const product = routeState({ location: "https://bigbox.test/ip/towels/418830166", path: "/ip/towels/418830166", controls: ["Add to cart", "View cart"] });
+  const cart = routeState({ location: "https://bigbox.test/cart?coupon=SPRING#lines", path: "/cart", controls: ["Check out", "Remove"] });
+  const moved = webAutomationRouteEffect(product, cart);
+  assert.equal(moved.from, webAutomationRouteEffect(cart, product).path, "the start's path shape, as a route signature writes it");
+  assert.notEqual(moved.from, moved.path);
+  assert.equal(moved.destination, "/cart", "the path only: its query and fragment are not the route");
+  const stayed = webAutomationRouteEffect(product, routeState({ location: "https://bigbox.test/ip/towels/418830166", path: "/ip/towels/418830166", controls: ["Add to cart", "View cart", "Continue shopping"] }));
+  assert.equal(stayed.path, undefined);
+  assert.equal(stayed.from, undefined);
+  assert.equal(stayed.destination, undefined);
+});
+
+test("a step that went to another origin keeps that origin with the path", () => {
+  const shop = routeState({ location: "https://shop.test/checkout", path: "/checkout", controls: ["Pay with wallet"] });
+  const wallet = routeState({ location: "https://pay.example/approve?session=withheld", path: "/approve", controls: ["Approve", "Cancel"] });
+  assert.equal(webAutomationRouteEffect(shop, wallet).destination, "https://pay.example/approve");
+});
+
+test("a destination that would take the effect past Core's bound is left out, and the rest of the effect is kept", () => {
+  const long = `/${"segment-".repeat(260)}`;
+  const before = routeState({ location: "https://shop.test/cart", path: "/cart", controls: ["Check out"] });
+  const after = routeState({ location: `https://shop.test${long}`, path: long, controls: ["Pay", "Back"] });
+  const effect = webAutomationRouteEffect(before, after);
+  assert.equal(effect.destination, undefined);
+  assert.equal(typeof effect.path, "string");
+  assert.ok(JSON.stringify(effect).length <= 2_048);
 });

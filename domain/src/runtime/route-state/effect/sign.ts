@@ -13,7 +13,21 @@
 //     `before` has not, sorted;
 //   - `removed`: the same for the names `before` has and `after` has not;
 //   - `path`: the path shape `after` is on, present only when the step moved
-//     to another shape.
+//     to another shape;
+//   - `from`: the path shape `before` was on, beside `path` and only with it
+//     (t1083, kestrel `run-mwz2jc4w`): a page on neither shape has left where
+//     the step found it without arriving where it went, so `./seen.ts` does not
+//     call it absence;
+//   - `destination`: where the step went, beside `path` and only with it
+//     (t1083, bigbox `run-mwz29d50`): the path of `after`'s address, without its
+//     query, or the whole origin and path when the step went to another origin.
+//     A step passed over because the page its control sat on never came still
+//     owes this route, and the host brings the page here
+//     (`../../route-reach/`). It is the one part of an effect that is not a
+//     hash: an address is no page text, and the step's identity never holds it
+//     (`../../llm-evidence/packet-fingerprint/from-packet.ts` keeps `href` out
+//     of identity on purpose). It is left out when keeping it would take the
+//     effect past Core's bound, which would cost the step its whole effect.
 //
 // **What the page changes by itself is not the act's (t496).** A banner that
 // turns every few seconds turned between the look an act was made from and the
@@ -51,6 +65,7 @@
 // Hashes only, as the rest; well inside the bound with both samples full.
 
 import type { JsonObject } from "fluxiq/core";
+import { AUTOMATION_STUDIO_ROUTE_SIGNATURE_MAX_CHARACTERS } from "fluxiq/runtime/automation-host";
 import { WEB_ROUTE_EFFECT_FORMAT } from "./format";
 import { webRoutePageFeatures } from "../page-features";
 
@@ -63,11 +78,34 @@ export function webAutomationRouteEffect(before: JsonObject, after: JsonObject, 
   const tries = [new Set([...selfChanging, ...pageRaised]), selfChanging];
   const effect = tries.map((left) => signed(from.controlHashes, to.controlHashes, left)).find((tried) => (tried.added as string[]).length > 0)
     ?? signed(from.controlHashes, to.controlHashes, NONE);
-  if (to.path !== from.path) effect.path = to.path;
+  if (to.path !== from.path) {
+    effect.path = to.path;
+    // Where it started, and where it went (header, t1083).
+    effect.from = from.path;
+  }
   // Where on the page, as well as what (t1062): only a step that took a control away from under its heading says it.
   const marked = { added: smallestMissing(to.markedHashes, from.markedHashes, NONE), removed: smallestMissing(from.markedHashes, to.markedHashes, NONE) };
   if (marked.removed.length > 0) effect.marked = marked;
+  const destination = effect.path === undefined ? undefined : destinationOf(before, after);
+  if (destination !== undefined && JSON.stringify({ ...effect, destination }).length <= AUTOMATION_STUDIO_ROUTE_SIGNATURE_MAX_CHARACTERS) effect.destination = destination;
   return effect;
+}
+
+/** Where `after` is, as the step reached it from `before`: its path, or its origin and path when the two origins differ; nothing without a readable address (header). */
+function destinationOf(before: JsonObject, after: JsonObject): string | undefined {
+  const to = addressOf(after);
+  if (to === undefined) return undefined;
+  const from = addressOf(before);
+  return from !== undefined && from.origin === to.origin ? to.pathname : `${to.origin}${to.pathname}`;
+}
+
+/** A route state's `page.location` as an http(s) address, or nothing. */
+function addressOf(state: JsonObject): URL | undefined {
+  const page = state.page;
+  const location = typeof page === "object" && page !== null && !Array.isArray(page) ? page.location : undefined;
+  if (typeof location !== "string" || !URL.canParse(location)) return undefined;
+  const url = new URL(location);
+  return url.protocol === "http:" || url.protocol === "https:" ? url : undefined;
 }
 
 /**
