@@ -153,6 +153,35 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-27 - First live round after the judge fixes (fluxiq 0.54.32): three passes, bigbox right with non-deterministic later attempts, kestrel stopped; t1070-t1073 dispatched
+- **The provider-free check first caught a Lab defect:** the scripted model answered a continuing check in text, and t1065's protocol re-asks that. The lead fixed it in `scripted-model/model-server.ts` (dev `29e34e992`). The scripted bigbox run then passed 4 of 4: attempt 1 made 15 calls with 1 judge call, and attempts 2 to 4 ran the saved Flow.
+- **Live, on Sonnet, `--attempts 4`, $5 per build, watcher on:**
+
+  | Task | Lane | Result | Attempt 1 | Later attempts |
+  | --- | --- | --- | --- | --- |
+  | bigbox `new-store-cheapest-towels` (run-mwyfc9uf) | t1015 | right 4 of 4; not deterministic | 15 calls, $0.51, 1 judge | 8, 5 and 6 calls (repair, explore, explore) |
+  | company-website `apprentices` (run-mwyfoz8s) | t1059 | passed | 18 calls, $0.44 | 1 (the judge's check), 0, 0 |
+  | job-board `remote-rust-roles` (run-mwyfoz8o) | t1060 | passed | 28 calls, $1.16 | 8 (repair after a wrong judge no), 1, 0 |
+  | crossborder `free-hubs-under-ten` (run-mwyfx9fs) | t1061 | passed | 35 calls, $1.64 (column binding) | 1 (the judge's check), 0, 0 |
+  | auction `kestrel-auctions` (run-mwyg0x66) | t1059 | stopped by the lead at $2.44 | about 14 blind `set_result_processing` calls, refused with no reason; loop handling did not help | not run |
+
+  - Round spend is about $19.80 of $50.
+  - The tasks that change the site are held until the later-attempt fix: batteries, dining tables, invitations, stranger requests and glaze.
+- **Causes** (`reports/run-mwyfc9uf-later-attempts.md`, worker-heavy):
+  - **Bigbox later attempts:**
+    - **F1:** the header cart link was saved by its words, "🛒 1 $3.97", which read "🛒 2 $5.25" the next time.
+    - **F3:** a repair could not assemble (`web.handle.ambiguous`), because the domain's target record carries over between attempts.
+  - **Job-board:**
+    - **F4:** the judge was not shown the sort key, and said no without naming a contradiction.
+    - **F5:** the saved Flow pages twice.
+  - **Kestrel:** a processing refusal says only `record_output.process_invalid_condition`. The likely culprit is a `(?i)` regex flag.
+- **Dispatched:**
+  - **t1070** (worker-heavy): processing refusals name the part and why. It also writes the kestrel and free-hubs debugs.
+  - **t1071** (worker-heavy): controls are saved by what stays the same, and each attempt's acts are recorded (F1, F3).
+  - **t1072** (worker-heavy): the judge sees sort and filter values, and a no with no contradiction is unknown (F4).
+  - **t1073** (worker): a follow-on step's lasting nature comes from its consequences, not its verb; superseded paging is dropped from the draft; plus the checklist wording and the Lab wording (F2, F5, F6, F7).
+- Validation: the oracle verdicts and Lab summaries quoted above, from each run's Lab log under the session scratchpad `live-round/`. The watcher fired on free-hubs, where the lead read it as progress and did not stop it, and on kestrel, which the lead stopped.
+
 ### 2026-11-26 - The judge fixes integrated: t1065, t1066, t1067, t1068 and t1069 (fluxiq 0.54.32)
 - **t1065** (worker-heavy; `reports/t1065.md`): a continuing judge always answers in a form Core reads, and does so in its own conversation.
   - Every Anthropic decider request carries `core_check_answer` with the same bytes, so the cache holds. The judge answers by calling it, and a decider that calls it is refused.
