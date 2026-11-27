@@ -8,6 +8,7 @@ import { EVERYTHING_STORE_DOUBLE_ADD_SCRIPT } from "./everything-store-batteries
 import { professionalNetworkAcceptMessagedScript } from "./professional-network-accept-messaged-invitations.js";
 import { localClassifiedsSaveDiningTablesScript } from "./local-classifieds-save-dining-tables.js";
 import { BIGBOX_RETAIL_RATED_DELIVERY_TOWELS_SCRIPT } from "./bigbox-retail-rated-delivery-towels.js";
+import { BIGBOX_RETAIL_NEW_STORE_CHEAPEST_TOWELS_SCRIPT } from "./bigbox-retail-new-store-cheapest-towels.js";
 import { socialNetworkDeleteStrangerRequestsScript } from "./social-network-feed-delete-stranger-requests.js";
 
 export { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
@@ -20,6 +21,7 @@ const SCRIPTS: Readonly<Record<string, (form?: string) => ScriptedModelScript>> 
   "company-website-apprentices": () => COMPANY_WEBSITE_APPRENTICES_SCRIPT,
   "company-website-saturday-certificate": companyWebsiteSaturdayCertificateScript,
   "bigbox-retail-rated-delivery-towels": () => BIGBOX_RETAIL_RATED_DELIVERY_TOWELS_SCRIPT,
+  "bigbox-retail-new-store-cheapest-towels": () => BIGBOX_RETAIL_NEW_STORE_CHEAPEST_TOWELS_SCRIPT,
   "crossborder-marketplace-free-hubs-under-ten": (form) => crossborderMarketplaceFreeHubsUnderTenScript("crossborder-marketplace-free-hubs-under-ten", form),
   "crossborder-marketplace-free-hubs-under-ten-timed-check": (form) => crossborderMarketplaceFreeHubsUnderTenScript("crossborder-marketplace-free-hubs-under-ten-timed-check", form),
   "everything-store-batteries-and-descaler": () => EVERYTHING_STORE_DOUBLE_ADD_SCRIPT,

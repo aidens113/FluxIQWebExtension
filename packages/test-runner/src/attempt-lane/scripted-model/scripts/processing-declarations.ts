@@ -13,6 +13,7 @@ const DECLARATIONS: Readonly<Record<string, JsonObject>> = Object.freeze({
     sort: [{ field: "date", order: "asc", as: "date" }, { field: "time", order: "asc", as: "text" }],
     columns: ["date", "time"],
   },
+  "bigbox-retail-new-store-cheapest-towels": { columns: ["item", "quantity", "price"] },
   "bigbox-retail-rated-delivery-towels": {
     where: [{ field: "name", contains: "paper towel" }, { field: "name", contains: ["holder", "dispenser"], not: true }, { field: "rating", atLeast: 4.5 }, { field: "ad", is: "absent" }, { field: "fulfillment", contains: "Delivery" }],
     // The script selects Highest rating first; a stable rating sort preserves that site's tie order.
