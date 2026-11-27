@@ -606,8 +606,8 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
     const actual = nodeDefinitionId !== FACT_TARGET_NODE_ID && SELECTOR_NODE_IDS.has(nodeDefinitionId)
       ? stores.targets.absoluteIntent(scope, parameters, scope.onPage, scope.reach) : undefined;
     if (actual?.status === "ambiguous") return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [] }] };
-    return actual?.status === "found"
-      ? { status: "resolved", parameters: written, assumed, views: [], controlIntent: actual.controlIntent }
+    return actual?.status === "found" || actual?.parameters !== undefined // Words seen changing as state, marked as a value (`self-changing/state-words.ts`, t1071).
+      ? { status: "resolved", parameters: actual.parameters ?? written, assumed, views: [], controlIntent: actual.status === "found" ? actual.controlIntent : undefined }
       : { status: "unchanged" };
   }
 

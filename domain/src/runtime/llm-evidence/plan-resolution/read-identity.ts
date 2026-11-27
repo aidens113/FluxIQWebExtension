@@ -28,8 +28,10 @@
 // an element's text where it equals its name (`../elements.ts`), so a name that
 // arrives with no text beside it may be the words themselves and is treated as
 // them; a name shown beside different words (an `aria-label`, a title) is the
-// element's own and still has to agree. A press's target is not marked: its
-// words say which control it is.
+// element's own and still has to agree. A press's target is not marked here: its
+// words say which control it is -- unless the build saw them change as state, a
+// cart link's count and total, when the store marks them the same way for the
+// same reason and adds what stays (`self-changing/state-words.ts`, t1071 F1).
 //
 // The nodes that read text: `web.dom.extract` in text, value or html mode (the
 // structured `extract`, else the legacy `options.mode`; an attribute read reads

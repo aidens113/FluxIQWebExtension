@@ -218,8 +218,9 @@ Diagnosis only. No code was changed, and no live, paid or git command was run.
 - **Cause.**
   - The judge's result evidence gives the processing's declaration and counts (`runtime/result-verification/flow-less/question.ts:16`).
     The kept rows are shown in the asked columns only: title, company, salary, link.
-  - So `posted`, the declared sort key, is absent from the final rows. Only page 1's raw rows carry it; pages 2 and 3
-    are labels only.
+  - So `posted`, the declared sort key, is absent from the final rows the judge is shown. (Corrected by t1072: 0101's
+    `resultEvidence.pages` held every page's rows whole, `posted` included; only `readPages.keptRows` is labels. The
+    judge was simply not shown the kept rows with their keys.)
   - The judge (0101, fresh request) said no "only because the sort cannot be confirmed". Its instruction allows "no"
     only on a concrete contradiction (`question.ts:31`), and the verdict was accepted anyway.
   - The model had no tool to show `posted` for the final rows (0103-0119).

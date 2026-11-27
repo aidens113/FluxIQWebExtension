@@ -61,6 +61,10 @@
 // the name, the label, the id or the test id -- must agree exactly, because a
 // partial agreement is what a different action with a similar label looks like.
 //
+// `destination/` is what else corroborates a link whose words the build saw
+// change as state (t1071): marked like a read and carrying the path it always
+// led to, it is confirmed by being the one visible link on the page leading there.
+//
 // `read-words.ts` is the one exception to words deciding: a target a read step
 // marked `readsWords` is judged by the veto and ranked by the scorer without
 // the words it reads, which only break an exact tie or confirm a winner, since

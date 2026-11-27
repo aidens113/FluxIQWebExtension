@@ -110,7 +110,11 @@
 //
 // None of it is new in what the model is shown: the model names an element
 // only by its handle. Never a value, a checked state, a selected option or a
-// link target: those are contents.
+// link target: those are contents. One exception, added after resolution and
+// never kept in the store: a control whose words the build saw change as state
+// carries them marked `readsWords`, and the path its link always led to as
+// `href`, so the page confirms it by what stays the same
+// (`self-changing/state-words.ts`, `target-packets.ts` `stateWorded`, t1071 F1).
 
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
 import { webElementIdentitySignals } from "../../../element-fingerprint";
