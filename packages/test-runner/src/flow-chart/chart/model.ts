@@ -31,7 +31,7 @@ export type ChartOutput =
   | { kind: "none"; why: string };
 
 /** Where to read a run's chart from. `evidenceDirectory` holds this attempt's answer (default the run folder); `saved` says the attempt saved a Flow (default: its `attempt.json` says so). */
-export type ChartRead = { runDirectory: string; evidenceDirectory?: string; attempt?: number; saved?: boolean };
+export type ChartRead = { runDirectory: string; /** Where the step files are when not `<runDirectory>/steps`: a live run writes them beside the Lab's run bundle. */ stepsDirectory?: string; evidenceDirectory?: string; attempt?: number; saved?: boolean };
 
 /** Everything the picture draws, read from the run's own files. */
 export type ChartFlow = {
