@@ -19,6 +19,7 @@
 import { randomBytes } from "node:crypto";
 import { rm } from "node:fs/promises";
 import path from "node:path";
+import type { JsonObject } from "fluxiq/core";
 import type { Page } from "@playwright/test";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../../coordinator.js";
@@ -33,6 +34,7 @@ import { assertExpectedFacts, playwrightScenarioFactProbe } from "../../scenario
 import { loadScenarioManifest } from "../../scenarios.js";
 import { MATRIX_CHECKS, matrixRunStopCode, stepOfNode, type MatrixCaseEvidence, type MatrixCheckResult } from "../checks/index.js";
 import { compileMatrixFlow, MatrixAuthoringGap, type CompiledMatrixFlow } from "../compile/index.js";
+import { MATRIX_SIGNED_EFFECTS } from "../effects/index.js";
 import * as flows from "../flows/index.js";
 import type { RecoveryMatrixCase, RecoveryMatrixRow } from "../matrix-row.js";
 import { requirementRefusal } from "./requirement-refusal.js";
@@ -116,7 +118,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
     await removeRunOwnedTopologyState(setup).catch(/* best-effort: only the setup session's own directory */ () => undefined);
     if (!projectId) throw new RunnerFailure("environment.missing", "The matrix workspace's Core created no project");
     try {
-      compiled = await compileMatrixFlow({ fluxiqRoot: setup.allocation.fluxiqRoot, projectId, flowId: `flow.recovery-matrix.${matrixCase.caseId}`, flowName: `Recovery matrix ${matrixCase.caseId}: ${matrixCase.title}`.slice(0, 120), taskInstructions: matrixCase.taskInstructions, script });
+      compiled = await compileMatrixFlow({ fluxiqRoot: setup.allocation.fluxiqRoot, projectId, flowId: `flow.recovery-matrix.${matrixCase.caseId}`, flowName: `Recovery matrix ${matrixCase.caseId}: ${matrixCase.title}`.slice(0, 120), taskInstructions: matrixCase.taskInstructions, script, routeEffects: signedEffectsOf(matrixCase.routeEffects) });
     } catch (error) {
       if (error instanceof MatrixAuthoringGap) return (outcome = finish({ ...base, verdict: "blocked", reasons: [error.message], missingRecords: [], observed: { handles: error.handles.map(item => item.path) }, compiled: null, run: null, attempts: [], accounting: null, measures: null, perturbationReport: null }));
       // A library with no Call Subflow node cannot save a Flow that calls a part: the capability, not the script, is missing.
@@ -312,4 +314,13 @@ async function goalFactsHeld(browser: ReplayBrowser, scenarioOrigin: string, fac
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+/** The effects a case names, as `../effects/` holds them. */
+function signedEffectsOf(named: Readonly<Record<string, string>> | undefined): Readonly<Record<string, JsonObject>> {
+  return Object.fromEntries(Object.entries(named ?? {}).map(([step, exportName]) => {
+    const effect = MATRIX_SIGNED_EFFECTS[exportName];
+    if (effect === undefined) throw new RunnerFailure("fixture.invalid", `Matrix case names no signed effect ${exportName}`);
+    return [step, effect];
+  }));
 }
