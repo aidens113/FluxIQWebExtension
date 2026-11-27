@@ -153,6 +153,31 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-27 - Reruns stopped on two new defects; t1074 and t1075 integrated (fluxiq 0.54.34, @fluxiq/contracts 0.25.0)
+- **Live reruns after t1070-t1073:**
+  - **Bigbox run-mwynbry2:** the lead stopped it after attempt 2. The replay found the cart link (t1071 worked), but pressed "+ Add" a second time.
+  - **Kestrel run-mwyn25dg:** the lead stopped it after 40 decisions with no act. Refusals now had reasons (t1070 worked), but every declaration kept 0 rows.
+  - Debugs: `debugs/run-mwynbry2-f3c88dc7.md` and `debugs/run-mwyn25dg-3ba0b41c.md`; report `reports/run-mwynbry2-double-add.md`.
+  - Spend is about $24.60 of $50.
+- **t1075** (worker-heavy), the double add:
+  - `requiresChosen` (t1030, latent since 2026-11-24) counted as identity in `target-keys.ts`, so the saved step no longer matched attempt 1's carried act.
+  - Run parameters now live in one exported list. Every identity reader uses it (`target-keys`, `learned-paces`, `explored-toggles`, `toggle/tie`, `step-still-done`), and a source scan fails the build if any reader strips its own subset.
+  - By-hand acts are stamped with their step's plan key.
+  - A later attempt's judge sees carried acts and the evidence they landed with.
+  - **Follow-up:** plan keys are positions (move them to draft step ids); carried evidence is in memory only and lost on a Core restart.
+- **t1074** (worker-heavy), the data step:
+  - Every recorded `anyOf` (31/31) meant alternatives, but the evaluator required every group, so the groups now are alternatives, each row decided by the groups with evidence for it. 0053's declaration over the 46 recorded rows keeps exactly the ten owed auctions.
+  - Asked columns are placed on the read's keys by name, by values, or by the declaration's order, and shown under the request's names as a view.
+  - Held processing rebinds through a renamed read's aliases.
+  - A re-read of a list at an address replaces that list's page across steps (bigbox's stale cart row).
+  - Docs and the migration note are updated, so contracts bumps to 0.25.0.
+  - **Left:** absolute-versus-relative link normalisation before duplicates are compared, which the lead takes as a separate cleaning change.
+- Validation: the lead's runs.
+  - **t1074:** contracts printed `Tests  427 passed`; groups over `answer-first flow-authoring node-tools conversations result-verification` printed `Tests  7662 passed | 2 skipped` and `674 passed`; check exit 0; audit passed; Core libraries exit 0; domain check exit 0; domain `llm-evidence` printed `# pass 1840 # fail 0`; model-text ok.
+  - **t1075**, merged with t1074: groups over `answer-first runtime/answer-first engine/automation flow-authoring/bootstrap` printed `Tests  6144 passed | 2 skipped` and `517 passed`; check exit 0; audit passed.
+  - Both Core finishes ran `pnpm check` and the contracts: passed.
+  - Core `2112d5aa8` (0.54.34) and downstream `1cc954cf8` were pushed; the shared Core is synced and the four lanes merged.
+
 ### 2026-11-27 - t1070, t1071, t1072 and t1073 integrated (fluxiq 0.54.33, @fluxiq/contracts 0.24.0)
 - **t1070** (worker-heavy): a refused processing declaration names each broken part, its field and operator, and the reason (JavaScript's own regex message, or the 200-character limit with how to split it). A leading `(?i)`/`(?m)`/`(?s)` is read as that flag, and the tool says the patterns are JavaScript.
   - The contracts parser returns `refusals`, so contracts bumps to 0.24.0 (breaking below 1.0, so minor).
