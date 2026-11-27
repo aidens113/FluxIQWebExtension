@@ -52,6 +52,8 @@ const STORE_SEARCH = "/scenarios/everything-store/s?k=wireless+earbuds&rh=plus";
 const STORE_CARD = '[data-component="search-result"][data-sku]';
 /** The Hammerline auction with the longest bid history (thirteen bids). */
 const BID_HISTORY_LISTING = "315018264403";
+/** The marketplace's auctions for the Kestrel 35 search: some cards carry a "New listing" label before their title. */
+const AUCTION_RESULTS = "/scenarios/auction-marketplace/sch/i.html?_nkw=kestrel+35&LH_Auction=1";
 
 type Detected = Extract<WebAutomationStructureDetection, { ok: true }>;
 
@@ -234,6 +236,58 @@ test("auction-marketplace: the largest list on a bid history is its rows, read b
     expect(amount).toMatch(/\d/u);
     expect(wire, `the detection quotes no cell (${amount})`).not.toContain(amount);
   }
+});
+
+// t1077 (`run-mwyt3s48-b943f344`): a listing under a day old draws a styled
+// "New listing" label in its own span before the title, inside the title link.
+// Detection offered the link's words as a column -- the label glued onto the
+// title -- beside the clean title, and a model chose it. Now the label is a
+// badge column of its own, the link offers only its URL, and no column reads a
+// title with the label on it.
+test("auction-marketplace: a label some cards carry before the title is its own badge column, and the title column is every card's title", async ({ openHarness, page }) => {
+  test.setTimeout(90_000);
+  const harness = await openHarness("auction-marketplace");
+  await apply(harness, "consent", { choice: "rejected" });
+  await apply(harness, "dismiss-promo");
+  await apply(harness, "dismiss-greeting");
+  await open(harness, AUCTION_RESULTS);
+  await expect(page.locator('ul[aria-busy="false"] > li').first()).toBeVisible();
+  const structure = await detected(harness);
+  // Each card's title and label as the page draws them: the title is the heading's last span, the label a span before it.
+  const cards = await page.evaluate((item) => [...document.querySelectorAll(item)].map((card) => {
+    const spans = [...card.querySelectorAll("a > div > span")];
+    return { title: spans.at(-1)?.textContent ?? "", label: spans.length > 1 ? spans[0]!.textContent : null };
+  }), structure.proposal.item);
+  expect(cards.length).toBe(structure.proposal.itemCount);
+  expect(cards.filter((card) => card.label !== null).length, "some cards carry the label, or this proves nothing").toBeGreaterThanOrEqual(2);
+  expect(cards.filter((card) => card.label === null).length).toBeGreaterThan(0);
+
+  const reply = await harness.runAction({ commandId: "extract-auction-results", actionType: "web.dom.extract_list", extractList: requestFrom(structure) });
+  expect(reply).toMatchObject({ status: "succeeded" });
+  const records = (reply.extracted as Array<Record<string, string | null>>).slice(0, cards.length);
+  expect(records).toHaveLength(cards.length);
+  const fields = structure.proposal.fields.filter((field) => field.spec.handling !== "exclude");
+  const column = (key: string) => records.map((record) => record[key] ?? null);
+  // No offered column starts with the label's words, but the label's own.
+  const labelWords = cards.find((card) => card.label !== null)!.label!;
+  for (const field of fields) {
+    for (const value of column(field.key)) {
+      if (typeof value === "string" && value.startsWith(labelWords)) expect(value, field.key).toBe(labelWords);
+    }
+  }
+  // One column is every card's title, on every card.
+  const titles = cards.map((card) => card.title);
+  const title = fields.filter((field) => field.spec.kind === "text" && JSON.stringify(column(field.key)) === JSON.stringify(titles));
+  expect(title.map((field) => field.key), JSON.stringify(fields.map((field) => [field.key, field.spec.selector]))).toHaveLength(1);
+  // The label is one badge column, read where a card carries it and nowhere else.
+  const labels = cards.map((card) => card.label);
+  const label = fields.filter((field) => JSON.stringify(column(field.key)) === JSON.stringify(labels));
+  expect(label.map((field) => field.spec.mark)).toEqual(["badge"]);
+  // It is the page's one mark drawn in words: the advertisements' label, spelled one letter per span, is no mark letter by letter.
+  expect(fields.filter((field) => field.spec.kind === "text" && field.spec.mark === "badge").map((field) => field.key)).toEqual(label.map((field) => field.key));
+  // The title link offers its address and not its words.
+  const linkSelectors = new Set(fields.filter((field) => field.spec.kind === "link").map((field) => field.spec.selector));
+  expect(fields.filter((field) => field.spec.kind === "text" && linkSelectors.has(field.spec.selector)).map((field) => field.key)).toEqual([]);
 });
 
 test("job-board: the largest list on a fifty-result page is every card, past the filter menus and the header", async ({ openHarness, page }) => {
