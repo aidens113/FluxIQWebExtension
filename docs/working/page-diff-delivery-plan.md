@@ -153,6 +153,37 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-27 - t1070, t1071, t1072 and t1073 integrated (fluxiq 0.54.33, @fluxiq/contracts 0.24.0)
+- **t1070** (worker-heavy): a refused processing declaration names each broken part, its field and operator, and the reason (JavaScript's own regex message, or the 200-character limit with how to split it). A leading `(?i)`/`(?m)`/`(?s)` is read as that flag, and the tool says the patterns are JavaScript.
+  - The contracts parser returns `refusals`, so contracts bumps to 0.24.0 (breaking below 1.0, so minor).
+  - Kestrel's cause is confirmed: `(?i)` (Invalid group), and 13 of 14 patterns over 200 characters.
+- **t1071** (worker-heavy, downstream only):
+  - **F1:** words the build saw change are a value (`readsWords`), and a unique root-relative destination path (`href`) confirms a link.
+  - **F3:** each act witnesses its own source, so a later attempt's repair assembles. The refusing line was `absolute.ts:73-74`.
+  - Docs: `element-identity.md`, `build-loop.md`.
+- **t1072** (worker-heavy): the judge sees each kept row's sort and filter values (`keptRows`) and the processor's sort-order reading (`hiddenSortKeys`). A no that names no contradiction reads as unsure, which changes 2 of the 124 recorded nos.
+- **t1073** (worker):
+  - **F2:** a follow-on step lasts by what it declares, not its verb.
+  - **F5:** a superseded paging loop leaves the draft.
+  - **F6:** checklist borrowing.
+  - **F7:** Lab wording.
+  - Docs: the lead documented `executor.state.not_arisen` and the superseded-loop exception in `automation-studio.md` and `flow-authoring.md`.
+- **Open, from t1070's debugs:**
+  - an `anyOf` whose derived column is missing on some rows withholds the whole group;
+  - held processing is not rebound through a rename map when the result moves to a renamed read (free-hubs);
+  - a page-link click inside a read/Next repeat looped a replay 17 passes (kestrel).
+- **Also open:**
+  - the state-route return limit (`AUTOMATION_STUDIO_STATE_ROUTE_RETURN_LIMIT`, 3) ends a playback; review it against the no-arbitrary-limits rule;
+  - wall-clock deadline tests miss under load.
+- Validation: the lead's runs.
+  - **t1070:** contracts `vitest run src/record-sets` printed `Tests  413 passed (413)`; groups over `flow-authoring node-tools answer-first` printed `Tests  5411 passed | 2 skipped` and `524 passed`; check exit 0; audit passed; Core libraries exit 0; domain check exit 0; domain `llm-evidence` printed `# pass 1833 # fail 0`.
+  - **t1071:** domain tests printed `# pass 2347 # fail 0`; extension `content` printed `# pass 1968 # fail 0`; domain and extension checks exit 0; audit passed; model-text ok.
+  - **t1072:** groups printed `Tests  2841 passed` and `509 passed`; check exit 0; audit passed.
+  - **t1073:** groups over `flow-authoring answer-first engine/automation executor` printed `Tests  6356 passed | 2 skipped` and `527 passed`; check exit 0; audit passed; runner `result-line` printed `# pass 7`.
+  - Each merged-with-dev overlap retest passed: t1072 `2209 + 19`; t1070 `2349 + 13`.
+  - Each Core finish ran `pnpm check` and the contracts: passed.
+  - Core is at `9c023c281` (0.54.33), downstream `2a64d5480`, both pushed; the shared Core is synced and the four lanes merged.
+
 ### 2026-11-27 - First live round after the judge fixes (fluxiq 0.54.32): three passes, bigbox right with non-deterministic later attempts, kestrel stopped; t1070-t1073 dispatched
 - **The provider-free check first caught a Lab defect:** the scripted model answered a continuing check in text, and t1065's protocol re-asks that. The lead fixed it in `scripted-model/model-server.ts` (dev `29e34e992`). The scripted bigbox run then passed 4 of 4: attempt 1 made 15 calls with 1 judge call, and attempts 2 to 4 ran the saved Flow.
 - **Live, on Sonnet, `--attempts 4`, $5 per build, watcher on:**
