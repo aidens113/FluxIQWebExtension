@@ -155,14 +155,16 @@ cart's count and total.
 
 **The build marks the words as a value.** The domain's target store
 (`domain/src/runtime/llm-evidence/plan-resolution/self-changing/state-words.ts`,
-wired into `target-packets.ts`) remembers each control's wordings. A control
-here is its frame, shadow hosts and selector, plus its tag, id, test id and
-label. Beside the wordings it keeps the wordings the control's own act left in
-the same document, and every destination path the control led to.
+wired into `target-packets.ts`) remembers each link's wordings. Since t1079 a
+link here is what stays the same about it: its frame and shadow hosts, tag, id,
+test id, label, class names, region (landmark and dialog) and the whole address
+it leads to, never its selector (see the t1079 section below). Beside the wordings it keeps the wordings the control's own act left in
+the same document, and every address the control led to: its path and its query,
+without its fragment (t1079 F1).
 
 A control's words are state when two conditions hold:
 - it was shown in two or more wordings that its own act did not cause;
-- it is a link that always led to one path.
+- it is a link that always led to one address, path and query alike.
 
 Its saved identity then keeps the words, so the save-time guard still counts
 them, and gains two fields:
@@ -177,9 +179,10 @@ The mark is applied in two places:
 - when Core assembles a draft from an act's absolute parameters (`absoluteIntent`,
   then `resolve-plan-node.ts`).
 
-**The `href` path convention.** A kept destination is the link's path from the
-site root, written as `/…` with no origin, query or fragment. For example, the
-bigbox step is saved with `href: "/scenarios/bigbox-retail/cart"`. The extension
+**The `href` path convention.** A kept destination is the link's address from the
+site root, written as `/…` with its query and with no origin or fragment (the
+query since t1079). For example, the bigbox step is saved with
+`href: "/scenarios/bigbox-retail/cart"`. The extension
 reads `href` as a kept destination only when two conditions hold:
 - the target is marked `readsWords`;
 - `href` is such a path: it starts with `/` but not `//` (`identity/destination/recorded.ts`).
@@ -202,18 +205,19 @@ purpose, so a Lab run on another port still matches.
   ones.
 - A control with no destination, such as a badge on a button ("Alerts 3"). It
   keeps its words as identity, as before.
-- A class that toggles with the state. The control's address and stable facts
-  must be unchanged for its wordings to be compared at all.
+- A class that toggles with the state. The link's stable facts, its class names
+  among them, must be unchanged for its wordings to be compared at all; such a
+  link stays unmarked.
 
 **The page confirms a marked link by where it leads.**
 `identity/destination/verdict.ts` reads a candidate's own destination: the path
-of its `href`, only for an `a` or `area` that leads somewhere on the same origin
-and is not an action link (`action-link.ts`). The candidate gets one of three
-verdicts:
-- `confirms`: it is shown, leads to the kept path, and no other visible link in
-  its root leads there;
-- `shared`: another visible link also leads there, so the destination tells
-  them apart no better than a tie;
+and query of its `href`, only for an `a` or `area` that leads somewhere on the
+same origin and is not an action link (`action-link.ts`). The candidate gets one
+of three verdicts:
+- `confirms`: it is shown, leads to the kept address, and no other visible link
+  in its region leads there;
+- `shared`: another visible link in its region also leads there, so the
+  destination tells them apart no better than a tie;
 - `elsewhere`: anything else, including a hidden link. A closed mini cart's
   "View cart" is no rival and no answer.
 
@@ -224,8 +228,8 @@ Each level uses the verdict differently:
   named, the candidate is refused whatever its destination.
 - **Level 2** (`score.ts`). The one confirming candidate among the leaders wins.
   A leader scores at or above the floor and within the margin of the best. If no
-  candidate confirms, the result is `unmatched`; if a link is `shared`, it is
-  `ambiguous`.
+  candidate confirms, the result is `unmatched`; if a link is `shared`, or two
+  leaders each confirm in their own region, it is `ambiguous`.
 
 The destination is never added to a score or subtracted from one. Together with
 the words being a value, this keeps the rule that a control is never found by
@@ -236,7 +240,88 @@ through the domain runtime, the gateway mapping and this resolver
 (`apps/extension/src/content/tests/cart-link-replay.test.ts`). On attempt 2's
 page the saved step resolves to the header link. The step saved before the mark
 is still refused. A link with the same words and place that leads elsewhere is
-refused, and so is a second visible link to the cart.
+refused, and so is a second visible link to the cart among the header's own
+links. Since t1079 an open mini cart's "View cart" no longer makes it a tie.
+
+### Words And The Whole Address, Rivals Within A Region (t1079)
+
+Verified against source on 2026-11-27. Live run `run-mwytbimp-e0c33977`
+(bigbox) saved a click on the results page link "2" with the mark above, and
+every later attempt refused it as `web.target.ambiguous` (sixteen candidates,
+"2" at 0.51 and the header's `href="#"` links at 0.42).
+
+**F1: words are state only while the whole address stays.** The pagination
+slot `main > div > section > nav > a:nth-of-type(2)` is the link "2"
+(`...&page=2`) on page 1. On page 2 a "Previous page" arrow shifts the slot, and
+it is the link "1" (no `page`). Read by its path alone, both led to `/search`,
+so the rule took two links taking turns in one place for one link whose words
+changed. The mark then removed the words "2" and the `page=2` query, the two
+things that said which link it was. The rule now compares the path and the
+query (the fragment aside), in the domain (`state-words.ts`) and in the
+extension (`destination/recorded.ts`, `destination/verdict.ts`). Words and
+address that change together are two controls; a selector, however
+positional, never makes them one. The bigbox cart link keeps its mark: "🛒 1
+$3.97" and "🛒 2 $5.25" both lead to `/cart`.
+
+The proofs:
+- `self-changing/tests/state-words.test.ts` feeds the run's stored captures of
+  the slot ("2" to `...&page=2`, "1" to the first page). The rule as t1071 left
+  it marks the slot; it no longer does.
+- A scratch Chromium run of the real resolver against the stored page-1 HTML
+  (store object `b3069613…`, attempt 2's failure page) with trace row 585's
+  command: as sent, the t1071 code gives the run's own `web.target.ambiguous`
+  ("2" 0.51 and eleven more); saved without the mark, the step resolves to the
+  link "2" (`&page=2`) by its selector, score 0.708.
+
+**F2: a rival is counted only within the candidate's region**
+(`destination/region.ts`). A region is the nearest dialog or landmark the link
+sits in; a link in none has its whole root, as before. A visible link to the
+same address in another region, such as an open mini cart's "View cart" beside
+the header's links, is another way to go there, not a second reading of the one
+link, so it no longer makes the header link a tie. Two candidates that each
+confirm in their own region are `ambiguous` at Level 2: the ranking within the
+margin never picks.
+
+**Defect 2: a link keyed by its selector lost its own wordings.** Provider-free
+run `run-mwyueo09-ea0204c3` (bigbox, scripted, already on t1071) still failed
+the header cart link on attempts 2 to 4 as `web.target.not_found`. Reproduced
+as `run-mwyw05h7-46d7d38f` (step 0040, the click by "🛒1$3.97"), the cause was
+not a lost mark but a mark never made. The build did see both wordings. On a
+results page the shell's support chat `div` follows the page `div`, so the link
+is `body > div:nth-of-type(1) > header > div > nav > a:nth-of-type(3)`. On the
+cart page there is no chat, so it is `body > div > header > …`. "1 $3.97" was
+kept under both selectors and "2 $5.25" under the second only, and the click was
+saved at the first, whose key held one wording.
+
+The rule now keys a link by what stays the same, as listed above, and keeps,
+per address, which links captures showed there. A step saved by its address
+finds the link it named: the one at that address whose own words were shown
+there. The fix has two guards:
+- A link one capture shows twice by those facts (two links to one place in one
+  region, alike in every stable fact) names no one link, and its words are never
+  state.
+- Hidden links (`hidden: true`) are not counted.
+
+The class names are what keep the header's `href="#"` links apart from the
+cart link on the cart page. The evidence spells an empty fragment as the page's
+own address (`llm-evidence/location.ts`), so "Sign In" there reads as a second
+link to the cart. The proofs:
+- `self-changing/tests/state-words.test.ts`, "a link whose selector differs
+  between pages is still one link";
+- `content/tests/cart-link-replay.test.ts`, "the header link at another
+  selector on the cart page". It fails on the t1071 rule and passes now.
+
+That fixture's stub page now describes elements as the content script does: the
+class in `attributes`, and the closed mini cart's link left out, since a
+snapshot describes rendered elements only.
+
+What F2 does not yet do: the saved identity carries the landmark's role
+(`context.landmark`) but not its name. The content script captures it (the
+pagination nav arrives as `landmarkName: "Pagination"`), and the domain's
+evidence element (`llm-evidence/elements.ts`) and packet fingerprint
+(`packet-fingerprint/from-packet.ts`) drop it, so the place gate
+(`identity/place.ts`) cannot tell the header's links from a pagination nav.
+Carrying it would have kept the header crowd out of run-mwytbimp's ranking.
 
 ## A Draft's Absolute Target And Its Act Witnesses (t1071, F3)
 
