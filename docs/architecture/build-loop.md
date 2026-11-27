@@ -359,7 +359,10 @@ Repair resolution uses only the runtime's exact retained packet binding.
 
 A host-held absolute target can receive the companion without changing its
 parameters only when its full observed identity, selector and frame match one
-unique retained source. Multiple matching sources refuse. Missing evidence
+unique retained source. Multiple matching sources refuse unless an act from one
+of them witnesses the target, and every witness and match agree. Each act,
+a later attempt's too, witnesses its own source
+([element identity](element-identity.md#a-drafts-absolute-target-and-its-act-witnesses-t1071-f3)). Missing evidence
 preserves the existing unchanged result and supplies no safety claim. Model
 absolute selectors remain refused, and annotation-shaped fields in model or
 saved JSON never supply authority. The companion does not grant permission,

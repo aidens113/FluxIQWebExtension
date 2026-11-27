@@ -41,8 +41,9 @@ export function webPlanAbsoluteControlIntent(parameters: JsonObject, targets: It
   if (typeof target?.selector !== "string" || !isJsonRecord(target.element)) return { status: "absent" };
   const frameId = parameters.browserFrameId ?? 0;
   if (typeof frameId !== "number" || !Number.isSafeInteger(frameId) || frameId < 0) return { status: "absent" };
-  // Annotation-shaped saved/model fields are never compared as identity or read as authority.
-  const { controlIntent: _intent, intent: _tag, responseOnly: _response, readsWords: _read, ...identity } = target.element;
+  // Annotation-shaped saved/model fields are never compared as identity or read as authority; nor is a state mark, the
+  // words-as-value flag and the destination a control whose words change carries (`../self-changing/state-words.ts`, t1071).
+  const { controlIntent: _intent, intent: _tag, responseOnly: _response, readsWords: _read, href: _destination, ...identity } = target.element;
   const names = (captured: Captured): boolean => captured.selector === target.selector && (captured.frameId ?? 0) === frameId
     && (location === undefined || captured.intentSource.location === location)
     && (parameters.browserFrameUrlPath === undefined || parameters.browserFrameUrlPath === captured.frameUrlPath)

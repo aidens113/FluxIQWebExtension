@@ -99,6 +99,8 @@
 //
 // The first act's identity is lent only to its retained source. Saving an
 // undo's later state in its place would make the Flow author the undo (t743).
+// Yet every act, a later attempt's too, witnesses its own source for a draft's
+// absolute target (`control-intents/witnesses.ts`, t1071 F3).
 //
 // **A candidate names only what evidence printed (t378, lane B C4).** A capture
 // holds every element, and the page view prints only those with words or a
@@ -168,7 +170,7 @@
 import type { JsonObject } from "fluxiq/core";
 import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation";
 import { collectWebLlmControlIntents } from "../control-intent";
-import { sameWebPlanControlIntent, webPlanAbsoluteControlIntent, webPlanControlIntentSource } from "./control-intents";
+import { createWebPlanActWitnesses, sameWebPlanControlIntent, webPlanAbsoluteControlIntent, webPlanControlIntentSource, type WebPlanActWitnesses } from "./control-intents";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { agreedIdentity, webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
@@ -177,13 +179,13 @@ import { webControlViewOf, webResetCollections, webTargetSpot, type WebControlVi
 import type { WebToggleSignature } from "../../../actions/toggle-signature";
 import { webPlanLearnedToggles, webPlanToggleLookOf, type WebPlanToggleLook } from "./handle-control";
 import { webPlanActEffect } from "./act-effect";
-import { createWebLlmSelfChangingNames, type WebLlmSelfChangingNames } from "./self-changing";
+import { createWebLlmSelfChangingNames, createWebLlmStateWords, type WebLlmSelfChangingNames, type WebLlmStateWords, type WebLlmStateWordsMark } from "./self-changing";
 import { webLlmFrameUrlPath } from "./frame-url-path";
 import { webLlmPressableTargets } from "./pressable-targets";
 import { webLlmPrintedTargetHandles } from "./printed-handles";
 import { webLlmNotAFieldTargets, type WebLlmNotAFieldKind } from "./typing-targets";
 import { createWebLlmStepViews, webLlmDialogControlPlaces, type WebLlmPlanStepMove, type WebLlmStepViews } from "./step-views";
-import { webPlanAcrossViews, webPlanMovedTarget } from "./view-merge";
+import { webPlanAcrossViews, webPlanMarkRenumbered, webPlanMovedTarget } from "./view-merge";
 import { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
 
 const RETAINED_PAGES_PER_FLOW = 8;
@@ -262,7 +264,7 @@ export type WebLlmTargetPackets = {
   /** A bare handle for an act on the page at `page`: that page's, `stale` when only another page holds it (header, t486). */
   resolveOn(scope: WebLlmTargetScope, handle: string, page: string): WebLlmTargetResolution;
   /** Correlate a host-held absolute target only against this Flow's actual retained targets. */
-  absoluteIntent(scope: WebLlmTargetScope, parameters: JsonObject, location: string | undefined, reach?: WebLlmTargetReach): ReturnType<typeof webPlanAbsoluteControlIntent>;
+  absoluteIntent(scope: WebLlmTargetScope, parameters: JsonObject, location: string | undefined, reach?: WebLlmTargetReach): ReturnType<typeof webPlanAbsoluteControlIntent> & { parameters?: JsonObject };
 };
 
 type PageTarget = {
@@ -290,14 +292,15 @@ type PageTargets = Map<string, PageTarget>;
  * a press of exploration's changed the page for (header). `acted`: each handle exploration acted
  * on, as the view the first act was made from showed it, with what that act made true (header). `partial`: the pages
  * whose newest view was a look the browser cut short (header). `selfChanging`: what its pages were seen changing by
- * themselves (header, t496). `steps`: its dialog views and where its presses led (header, t748 U1).
+ * themselves (header, t496). `steps`: its dialog views and where its presses led (header, t748 U1). `witnesses`: every
+ * act, a witness of its own source (header, t1071 F3).
  */
 type FlowPages = {
   pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>;
   /** Per page, the document (`navigation.timeOrigin`) its newest whole view showed, where it said (header, t741 C2). */
   documents: Map<string, number>; history: WebLlmViewHistory<PageTarget>;
   printed: Set<string>; pressed: Set<string>; acted: Map<string, ActedTarget>; partial: Set<string>; selfChanging: WebLlmSelfChangingNames;
-  steps: WebLlmStepViews<PageTarget>;
+  witnesses: WebPlanActWitnesses<PageTarget>; steps: WebLlmStepViews<PageTarget>; stateWords: WebLlmStateWords;
   /** The signatures this Flow's presses of toggling controls produced (CC9). */
   learned: WebToggleSignature[];
 };
@@ -321,8 +324,10 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       printed: new Set<string>(),
       pressed: new Set<string>(),
       acted: new Map<string, ActedTarget>(),
+      witnesses: createWebPlanActWitnesses<PageTarget>(2 * ACTED_PER_FLOW),
       partial: new Set<string>(),
       selfChanging: createWebLlmSelfChangingNames(),
+      stateWords: createWebLlmStateWords(),
       steps: createWebLlmStepViews(acrossView, (target: PageTarget) => target.element.context?.dialog !== undefined, webLlmDialogControlPlaces),
       learned: []
     };
@@ -339,9 +344,10 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flowOf(scope);
       const targets = targetsOf(binding);
       flow.selfChanging.captured(binding);
+      flow.stateWords.captured(binding, targets);
       flow.steps.captured(binding.evidence.location, dialogsOf(binding), flow.history.record(binding.evidence.location, targets), targets, false);
       printedBy(flow, binding);
-      markRenumbered(flow, binding, targets);
+      webPlanMarkRenumbered(flow, binding, targets);
       keep(flow, binding.evidence.location, acrossViews(flow.pages.get(binding.evidence.location), targets));
       flow.partial.delete(binding.evidence.location);
     },
@@ -351,6 +357,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const seen = targetsOf(binding);
       const partial = binding.evidence.truncated === true || (binding.captureProvenance !== undefined && (binding.captureProvenance.scope.kind === "single-frame" || binding.captureProvenance.coverage !== "complete"));
       flow.selfChanging.captured(binding);
+      flow.stateWords.captured(binding, seen);
       flow.steps.captured(location, dialogsOf(binding), flow.history.record(location, seen), seen, partial);
       printedBy(flow, binding);
       // A look that described every control says which have gone, as a shown
@@ -358,7 +365,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       // cannot, so it only adds. Since t200 nothing else cuts a look.
       const before = flow.pages.get(location);
       if (!partial) {
-        markRenumbered(flow, binding, seen);
+        webPlanMarkRenumbered(flow, binding, seen);
         keep(flow, location, acrossViews(before, seen));
         flow.partial.delete(location);
         return;
@@ -392,12 +399,13 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       if (flow === undefined || handle === undefined) return;
       // Where every press led (header, t748 U1); nowhere known when nothing was captured after it.
       flow.steps.pressedInto(handle, after?.evidence.location ?? "", after === undefined ? "" : dialogsOf(after));
-      // The first act's view only (header); a look the capture cut short before the control says nothing of it.
-      if (flow.acted.has(handle)) return;
+      flow.stateWords.acted(handle, { binding: before, targets: targetsOf(before) }, after === undefined ? undefined : { binding: after, targets: targetsOf(after) }); // Words its own act left are its effect (`self-changing/state-words.ts`, t1071).
       // A handle from this document before a reload (a robot check's) is the one control here at the address the act resolved it to; several or none is no witness (t877).
       const named = targetsOf(before).has(handle) ? undefined : resolveOnPage(flow, handle, before.evidence.location);
       const target = named === undefined ? targetsOf(before).get(handle) : named.ok ? [...targetsOf(before).values()].find((each) => addressOf(each) === addressOf(named)) : undefined;
       if (target === undefined || target.shared) return;
+      flow.witnesses.witness(handle, target, flow.pages.get(before.evidence.location)?.get(handle), (left, right) => addressOf(left) === addressOf(right)); // Every act, a later attempt's too (header).
+      if (flow.acted.has(handle)) return; // The first act's view only (header); a look the capture cut short before the control says nothing of it.
       flow.acted.set(handle, { ...target, effect: webPlanActEffect(before, after, flow.selfChanging.of(before.evidence.location)) });
       for (const oldest of flow.acted.keys()) if (flow.acted.size > ACTED_PER_FLOW) flow.acted.delete(oldest); else break;
     },
@@ -409,22 +417,24 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flows.get(scopeKey(scope));
       if (!flow) return { ok: false, code: "unknown" };
       const current = resolveCurrent(flow, handle, location);
-      if (reach !== "view_history") return checkedIntent(pressedBefore(flow, handle, current), true);
+      if (reach !== "view_history") return stateWorded(flow, checkedIntent(pressedBefore(flow, handle, current), true));
       const standing = after === undefined ? current : inStandingView(flow, handle, location, after, current);
       const reached = resolveFromHistory(flow, handle, location, standing);
       // A candidate names only what evidence printed, and saves a control acted on as the act found it (header).
-      return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : checkedIntent(actedAs(flow, handle, pressedBefore(flow, handle, reached)));
+      return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : stateWorded(flow, checkedIntent(actedAs(flow, handle, pressedBefore(flow, handle, reached))));
     },
     resolveOn(scope, written, page) {
       const handle = canonicalWebLlmTargetHandle(written) ?? written;
       const flow = flows.get(scopeKey(scope));
       if (!flow) return { ok: false, code: "unknown" };
-      return checkedIntent(pressedBefore(flow, handle, resolveOnPage(flow, handle, page)), true);
+      return stateWorded(flow, checkedIntent(pressedBefore(flow, handle, resolveOnPage(flow, handle, page)), true));
     },
     absoluteIntent(scope, parameters, location, reach) {
       const flow = flows.get(scopeKey(scope));
       const targets = flow === undefined ? [] : reach === "view_history" ? flow.history.targets() : [...flow.pages.values()].flatMap((page) => [...page.values()]);
-      return webPlanAbsoluteControlIntent(parameters, targets, location, flow !== undefined && (reach === "view_history" || location === undefined) ? flow.acted.values() : []);
+      const intent = webPlanAbsoluteControlIntent(parameters, targets, location, flow !== undefined && (reach === "view_history" || location === undefined) ? flow.witnesses.values() : []);
+      const marked = intent.status === "ambiguous" || flow === undefined ? undefined : stateWordedParameters(flow, parameters);
+      return marked === undefined ? intent : Object.assign(intent, { parameters: marked });
     }
   };
 }
@@ -597,12 +607,8 @@ function resolveOnPage(flow: FlowPages, handle: string, page: string): WebLlmTar
 
 /** A location without its query and fragment: the document it names, whatever state it is in. */
 function documentPath(location: string): string {
-  try {
-    const url = new URL(location);
-    return `${url.origin}${url.pathname}`;
-  } catch {
-    return location.replace(/[?#].*$/su, "");
-  }
+  const url = URL.canParse(location) ? new URL(location) : undefined;
+  return url === undefined ? location.replace(/[?#].*$/su, "") : `${url.origin}${url.pathname}`;
 }
 
 /** Each described element's target in one capture, marked shared where the capture gave its address to several. */
@@ -696,49 +702,6 @@ function missing(code: "unknown" | "stale", renumberedByReload: boolean): WebLlm
   return renumberedByReload ? { ok: false, code, renumberedByReload: true } : { ok: false, code };
 }
 
-/** Handles marked per page, at most; the oldest mark goes first. */
-const MARKED_PER_PAGE = 4096;
-/** The navigation type of a document reached by reloading it (Navigation Timing). */
-const RELOAD_NAVIGATION_TYPE = "reload";
-
-/**
- * Before `targets` replace the page's view: unmark the handles it shows again,
- * and, when it is the first view of a document reached by reload, mark each
- * handle it dropped whose control -- tag and words -- it shows under another
- * handle (see the header).
- */
-function markRenumbered(flow: FlowPages, binding: WebLlmSnapshotBinding, targets: PageTargets): void {
-  const location = binding.evidence.location;
-  const marked = flow.renumbered.get(location) ?? new Set<string>();
-  for (const handle of targets.keys()) marked.delete(handle);
-  const before = flow.pages.get(location);
-  const origin = binding.evidence.navigation?.timeOrigin;
-  const previous = flow.documents.get(location);
-  // The same document both views name is no new load, whatever its type says (header).
-  const newDocument = origin === undefined || previous === undefined || origin !== previous;
-  if (origin === undefined) flow.documents.delete(location);
-  else flow.documents.set(location, origin);
-  if (before !== undefined && newDocument && binding.evidence.navigation?.type === RELOAD_NAVIGATION_TYPE) {
-    const shown = new Set([...targets.values()].map(controlWords).filter((words): words is string => words !== undefined));
-    for (const [handle, target] of before) {
-      const words = controlWords(target);
-      if (!targets.has(handle) && words !== undefined && shown.has(words)) marked.add(handle);
-    }
-  }
-  for (const oldest of marked) {
-    if (marked.size <= MARKED_PER_PAGE) break;
-    marked.delete(oldest);
-  }
-  if (marked.size > 0) flow.renumbered.set(location, marked);
-  else flow.renumbered.delete(location);
-}
-
-/** A control's tag and words, which a reload does not change; nothing for a wordless control, which only its place tells apart. */
-function controlWords(target: PageTarget): string | undefined {
-  const words = target.element.accessibleName ?? target.element.visibleText;
-  return words === undefined || words.trim() === "" ? undefined : `${target.element.tagName ?? ""}\0${words.replace(/\s+/gu, " ").trim()}`;
-}
-
 /** Keep `targets` as the newest view of the page at `location`, letting the oldest page go past the bound. */
 function keep(flow: FlowPages, location: string, targets: PageTargets): void {
   flow.pages.delete(location);
@@ -786,6 +749,26 @@ function resolved(target: PageTarget, learned: readonly WebToggleSignature[] = [
 
 function controlOf(target: PageTarget, learned: readonly WebToggleSignature[]): WebControlView | undefined {
   return target.toggle === undefined ? undefined : webControlViewOf(target.toggle.reading, target.toggle.role, learned);
+}
+
+/** `resolution`, its words marked as a value and its destination carried, where the build saw them change as state (`self-changing/state-words.ts`, t1071 F1). */
+function stateWorded(flow: FlowPages, resolution: WebLlmTargetResolution): WebLlmTargetResolution {
+  const mark = resolution.ok ? flow.stateWords.of(resolution) : undefined;
+  if (resolution.ok && mark !== undefined) resolution.element = markedIdentity(resolution.element, mark);
+  return resolution;
+}
+
+/** A host absolute target's parameters with its identity marked as `stateWorded` marks a handle's; nothing when there is nothing to mark. */
+function stateWordedParameters(flow: FlowPages, parameters: JsonObject): JsonObject | undefined {
+  const { selector, element, browserFrameId } = parameters;
+  if (typeof selector !== "string" || element === null || typeof element !== "object" || Array.isArray(element) || element.readsWords === true) return undefined;
+  const identity = element as WebPlanElementIdentity;
+  const mark = flow.stateWords.of({ selector, frameId: typeof browserFrameId === "number" ? browserFrameId : undefined, element: identity });
+  return mark === undefined ? undefined : { ...parameters, element: markedIdentity(identity, mark) as unknown as JsonObject };
+}
+
+function markedIdentity(element: WebPlanElementIdentity, mark: WebLlmStateWordsMark): WebPlanElementIdentity & { readsWords: true; href: string } {
+  return { ...element, readsWords: true, href: mark.destination };
 }
 
 /** A known semantic disagreement is an ambiguous control, never compatible absence. */
