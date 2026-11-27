@@ -153,6 +153,42 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 
 ## Work Ledger
 
+### 2026-11-27 - Kestrel nearly right, bigbox replay found two more defects; t1076-t1081 integrated (fluxiq 0.54.35)
+- **Live:**
+  - **Kestrel run-mwyt3s48:** the ten owed auctions, in order and correctly filtered. One title had a badge glued on ("New listingKestrel…"), so the oracle marked it wrong.
+  - **Bigbox run-mwytbimp:** the lead stopped it in attempt 3.
+    - Attempt 1 took 31 calls (sort failures, page flip-flops, cache rewrites).
+    - Attempt 2's replay stopped `web.target.ambiguous` on the page link "2".
+  - Debugs: `debugs/run-mwyt3s48-b943f344.md` and `debugs/run-mwytbimp-e0c33977.md`; reports `reports/run-mwyt3s48-kestrel.md` and `reports/run-mwytbimp-bigbox.md`.
+  - Spend is about $28.40 of $50. The lead paused live runs to prove fixes offline first.
+- **t1076** (worker), a provider-free harness for bigbox `new-store-cheapest-towels`, so its later attempts run without a provider. Its first run reproduced a later-attempt cart-link failure.
+- **t1077** (worker-heavy): a label some cards carry is its own column, and text reads the way the page shows it.
+  - The content harness shows the same 75 failures on plain `dev` before and after, so none are new. Those 75 are pre-existing and open.
+- **t1078** (worker): an edit the draft already holds is answered as standing, and its repeats climb loop detection as `draft_amendments_refused`.
+- **t1079** (worker-heavy): words count as state only while a link's whole address stays the same, and links are keyed by stable facts and region, never by their position.
+  - The harness passes 4 of 4, with attempts 2-4 on the saved Flow (1, 0 and 0 calls).
+- **t1080** (worker-heavy): earlier prompt records stay byte-unchanged, and the current pages sit in one trailing `core.page_window`.
+  - Replay of run-mwytbimp: estimated cache writes fall 85%, and the input cost estimate falls about 29%.
+  - The scripted model reads the window.
+  - Caching the window when it is unchanged measured as noise, so it was not kept.
+- **t1081** (worker): a select that names no option is refused at once with the shape it needs.
+  - The dead-end-press rule was removed unwired, so its cause stays open: `dead-end.ts` misses a return through a fresh load.
+- **Open:**
+  - the 75 content-harness failures on `dev`;
+  - carry the landmark name into saved identity (`elements.ts`, `from-packet.ts`);
+  - `dead-end.ts` and fresh loads;
+  - plan keys are positions, and carried evidence is lost on a Core restart (t1075 follow-up);
+  - link normalisation before duplicates are compared;
+  - the state-route return limit;
+  - wall-clock tests.
+- Validation: the lead's runs.
+  - **t1077:** content `# pass 1977`; the content harness `75 failed | 544 passed`, and the same 75 on `dev`; scripted free-hubs passed.
+  - **t1078:** groups `Tests 858 passed` and `49 passed` after its fix; earlier, `4416 + 511` with one test reconciled.
+  - **t1079:** domain `# pass 1895`, extension `# pass 1970`, checks exit 0, audit passed; the worker's harness run passed 4 of 4.
+  - **t1080:** groups over `llm adaptation answer-first` `Tests 4841 passed` and `511 passed`, check exit 0; scripted bigbox passed 4 of 4 and free-hubs passed.
+  - **t1081:** domain `# pass 2445`, extension `# pass 1977`, select spec `12 passed`, checks exit 0.
+  - Each finish passed its gates. Core `f0b7d9f76` (0.54.35) and downstream `accd6abf7` were pushed; the shared Core is synced and the lanes merged.
+
 ### 2026-11-27 - Reruns stopped on two new defects; t1074 and t1075 integrated (fluxiq 0.54.34, @fluxiq/contracts 0.25.0)
 - **Live reruns after t1070-t1073:**
   - **Bigbox run-mwynbry2:** the lead stopped it after attempt 2. The replay found the cart link (t1071 worked), but pressed "+ Add" a second time.
