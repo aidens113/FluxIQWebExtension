@@ -615,7 +615,11 @@ separated from the part of the flow that does actions & interacts with the clien
 
 **Every chat message is written for the person** (user, 2026-11-28): "EVERY SINGLE MESSAGE should be completely tailored
 towards the human! No bullshit, easy to understand from the user's POV, not sounding like a complete bot (NO EM DASHES)".
-This covers every message the product shows a person, in the extension and the panel.
+This covers every message the product shows a person, in the extension and the panel. How (user, the same day): "we can
+basically do like a wrapper where every time we call model we tell it to generate short msg for user explaining exactly
+whats happening. Rather than random core messages that dont make much sense." So every model call also returns a short
+message for the person, and that is what the chat shows; Core's own canned messages remain only for moments with no model
+call (a page loading, a humanness pause).
 
 **Audit Core for extension logic** (user, 2026-11-28): "an immediate audit needs to be done on whether the extension logic is
 being contaiminated into the core fluxiq repo." Tracked in the full-page plan, phase 0.
