@@ -1,4 +1,4 @@
-# Brief t1097: the structure audit refuses a one-file test group
+# Brief t1098: the structure audit refuses a one-file test group
 
 **Goal.** The audit caps a directory at 25 source files and tells you to "group them by feature (shared filename
 prefix)". Core's convention for a group is `tests/<group>/tests/*.test.ts`.
@@ -29,9 +29,9 @@ Today's groups are the four t1096 ones above, plus any t1093 or t1088 left. The 
 check them.
 
 **Trees.**
-- Core: `C:/Users/osrs_/FluxStuff/fxwork/t1097/!FluxIQ`.
-- Downstream: `C:/Users/osrs_/FluxStuff/fxwork/t1097/!FluxIQWebExtension`.
-- Branch `task/t1097-no-one-file-test-groups`.
+- Core: `C:/Users/osrs_/FluxStuff/fxwork/t1098/!FluxIQ`.
+- Downstream: `C:/Users/osrs_/FluxStuff/fxwork/t1098/!FluxIQWebExtension`.
+- Branch `task/t1098-no-one-file-test-groups`.
 
 **Owned.**
 - Core `scripts/structure-audit.mjs`, `scripts/structure-audit/**`, the tests beside them, `.structure-baseline.json`,
@@ -40,7 +40,7 @@ check them.
 
 **Must not touch.** Product source (only test files move), and the main checkouts.
 
-**Checks.** Put heavy commands through `node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1097-<label> -- <cmd>`.
+**Checks.** Put heavy commands through `node C:/Users/osrs_/FluxStuff/fxwork/.heavy-slots/heavy-slot.mjs run t1098-<label> -- <cmd>`.
 - `node scripts/structure-audit.mjs` in both repositories. It passes, and a planted one-file group fails, shown in the
   audit's own tests.
 - `node scripts/check/core-mirror.mjs`.
@@ -49,5 +49,5 @@ check them.
 
 No `node -e`, no git, no live or paid runs.
 
-**Report.** `docs/working/page-diff-delivery-plan/reports/t1097.md` in the downstream tree, ending with the return
+**Report.** `docs/working/page-diff-delivery-plan/reports/t1098.md` in the downstream tree, ending with the return
 contract.
