@@ -1,3 +1,4 @@
+export { BACKGROUND_SCRIPT } from "./background-script.js";
 export { CHAT_SCRIPT } from "./chat-script.js";
 export { FEED_SCRIPT } from "./feed-script.js";
 export { LISTING_SCRIPT } from "./listing-script.js";

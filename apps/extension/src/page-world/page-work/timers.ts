@@ -10,6 +10,12 @@
 // for it before spending its existing second press. No timer duration is used
 // to decide whether that command is ready.
 //
+// Each piece is counted with its callback's source text (`./callback-source.ts`),
+// so a chain of fresh closures is told from new work (`./tracker.ts`, t1094).
+// Every callback, counted or not, also runs inside the origin it was scheduled
+// with (`../work-cause/work-origins.ts`), so a request it begins can be told
+// apart from a press's own (`../request-starts.ts`).
+//
 // What is never counted:
 // - a callback scheduled again once it has already run as one (a polling loop,
 //   an animation loop, `setTimeout(poll)` from inside `poll` or after an
@@ -19,6 +25,8 @@
 // - a callback given as a string, which cannot be followed.
 
 import { PAGE_WORK_HORIZON_MS } from "../../shared/scheduled-work-event";
+import { workOrigins } from "../work-cause";
+import { createCallbackSources } from "./callback-source";
 import type { PageWorkTracker } from "./tracker";
 
 type Callable = (...args: unknown[]) => unknown;
@@ -29,12 +37,13 @@ export function installPageWorkTimers(host: Host, tracker: PageWorkTracker): boo
   /** The page's own callbacks running now, innermost last, and every one that has run: one scheduled again recurs. */
   const running: unknown[] = [];
   const ran = new WeakSet<object>();
+  const sourceOf = createCallbackSources();
   const recurs = (callback: Callable): boolean => running.includes(callback) || ran.has(callback);
-  const follow = (callback: Callable, self: unknown, args: unknown[], id: number | undefined, recurs: boolean): unknown => {
+  const follow = (callback: Callable, self: unknown, args: unknown[], id: number | undefined, recurs: boolean, origin: number): unknown => {
     running.push(callback);
     ran.add(callback);
     try {
-      return recurs ? tracker.recurring(() => callback.apply(self, args)) : callback.apply(self, args);
+      return workOrigins.enter(origin, () => recurs ? tracker.recurring(() => callback.apply(self, args)) : callback.apply(self, args));
     } finally {
       running.pop();
       tracker.end(id);
@@ -61,11 +70,12 @@ export function installPageWorkTimers(host: Host, tracker: PageWorkTracker): boo
     if (typeof callback !== "function") return setTimeoutOriginal.call(this, callback, delay, ...rest);
     const again = recurs(callback as Callable);
     const due = Number(delay) || 0;
-    const id = again ? undefined : tracker.begin(due > PAGE_WORK_HORIZON_MS ? "deferred-timer" : "timer");
+    const id = again ? undefined : tracker.begin(due > PAGE_WORK_HORIZON_MS ? "deferred-timer" : "timer", sourceOf(callback as Callable));
+    const origin = workOrigins.scheduled();
     let token: unknown;
     const passed = function (this: unknown, ...values: unknown[]): unknown {
       timeouts.delete(token);
-      return follow(callback as Callable, this, values, id, again);
+      return follow(callback as Callable, this, values, id, again, origin);
     };
     token = setTimeoutOriginal.call(this, passed, delay, ...rest);
     if (id !== undefined) timeouts.set(token, id);
@@ -83,8 +93,9 @@ export function installPageWorkTimers(host: Host, tracker: PageWorkTracker): boo
     if (typeof callback !== "function") return setIntervalOriginal.call(this, callback, delay, ...rest);
     const due = Number(delay) || 0;
     // Counted until its first run; from then on it recurs.
-    let id = recurs(callback as Callable) || due > PAGE_WORK_HORIZON_MS ? undefined : tracker.begin("timer");
+    let id = recurs(callback as Callable) || due > PAGE_WORK_HORIZON_MS ? undefined : tracker.begin("timer", sourceOf(callback as Callable));
     let fired = false;
+    const origin = workOrigins.scheduled();
     let token: unknown;
     const passed = function (this: unknown, ...values: unknown[]): unknown {
       const first = !fired;
@@ -94,7 +105,7 @@ export function installPageWorkTimers(host: Host, tracker: PageWorkTracker): boo
         intervals.delete(token);
         id = undefined;
       }
-      return follow(callback as Callable, this, values, ending, !first);
+      return follow(callback as Callable, this, values, ending, !first, origin);
     };
     token = setIntervalOriginal.call(this, passed, delay, ...rest);
     if (id !== undefined) intervals.set(token, id);
@@ -114,11 +125,12 @@ export function installPageWorkTimers(host: Host, tracker: PageWorkTracker): boo
     complete = wrap("requestAnimationFrame", function (this: unknown, callback: unknown): unknown {
       if (typeof callback !== "function") return frameOriginal.call(this, callback);
       const again = recurs(callback as Callable);
-      const id = again ? undefined : tracker.begin("frame");
+      const id = again ? undefined : tracker.begin("frame", sourceOf(callback as Callable));
+      const origin = workOrigins.scheduled();
       let token: unknown;
       const passed = function (this: unknown, ...values: unknown[]): unknown {
         frames.delete(token);
-        return follow(callback as Callable, this, values, id, again);
+        return follow(callback as Callable, this, values, id, again, origin);
       };
       token = frameOriginal.call(this, passed);
       if (id !== undefined) frames.set(token, id);

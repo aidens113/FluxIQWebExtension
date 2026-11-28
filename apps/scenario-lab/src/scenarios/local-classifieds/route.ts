@@ -31,6 +31,10 @@ export function routeClassifieds(state: ClassifiedsState, request: ScenarioRoute
     return query.category === null ? undefined : html(resultsPage(build, state, query));
   }
   if (path === "feed.json") return feed(state, request, build, now);
+  // Background traffic every page makes (`client/background-script.ts`): the analytics beacon, and the long poll this
+  // server cannot hold, answered at once with no news.
+  if (path === "collect") return { status: 204 };
+  if (path === "updates.json") return json({ messages: [], since: Number(request.query.get("since")) || 0, held: false });
   const item = /^item\/(\d{16})\/(detail\.json|receipt\.json)?$/u.exec(path);
   if (item) {
     const listing = listingById(item[1]!);

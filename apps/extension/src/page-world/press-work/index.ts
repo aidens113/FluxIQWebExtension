@@ -1,5 +1,6 @@
 import { PRESS_WORK_EVENTS } from "../../shared/press-work-event";
 import { inExtensionWorld } from "../extension-world";
+import { pressOwners } from "../work-cause";
 import { createPressWorkTracker } from "./tracker";
 import { installPressWorkHandlers } from "./handlers";
 import { installPressWorkScheduling } from "./scheduling";
@@ -15,6 +16,12 @@ export function installPressWorkWatch(): boolean {
   const handlers = installPressWorkHandlers(tracker);
   const scheduling = installPressWorkScheduling(tracker);
   add.call(window, "click", (event: Event) => tracker.capture(event, handlers.healthy() && scheduling.healthy() && handlers.covered(event)), true);
+  // The request count reads whose work a request is (t1094, `../request-starts.ts`): followed only while every hook holds.
+  pressOwners.register({
+    owners: () => tracker.current(),
+    markOf: (target) => tracker.markOf(target),
+    followed: (target) => handlers.healthy() && scheduling.healthy() && tracker.state(target) !== "unknown"
+  });
   for (const [kind, name] of Object.entries(PRESS_WORK_EVENTS)) add.call(window, name, (event: Event) => {
     const target = event.composedPath()[0];
     if (!target) return;
