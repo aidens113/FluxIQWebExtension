@@ -54,7 +54,7 @@ Related: [page-diff-delivery-plan.md](./page-diff-delivery-plan.md) (superseded 
     - moving fingerprint DOM scoring and the `selector` element kind reverses t842 and Phase T;
     - the contract changes need a compatibility plan and notice before Core is edited.
 - **Final plan (lead, 2026-11-28, after the user's decisions and the consultant's review; the user asked to be told the final plan):**
-  1. **The page:** V3, the whole page every request (every element, attribute and text node, without script and style code, SVG path data or base64). One page per request. Short handles with a strict lifetime. **Not adopted** from the consultant: task-scoped views, inspection tools, and template-collapsed records, because they conflict with the user's rules and are the parts that failed.
+  1. **The page:** under review after the user's 100k-token concern (phase 1b). Was: V3, the whole page every request (every element, attribute and text node, without script and style code, SVG path data or base64). One page per request. Short handles with a strict lifetime. **Not adopted** from the consultant: task-scoped views, inspection tools, and template-collapsed records, because they conflict with the user's rules and are the parts that failed.
   2. **No look tools.**
   3. **Several actions per call** (D8).
   4. **Extraction** of an element's whole hierarchy into a dataset. The model gets counts, a few samples and the exceptions, not every record (adopted from the consultant).
@@ -63,7 +63,15 @@ Related: [page-diff-delivery-plan.md](./page-diff-delivery-plan.md) (superseded 
   7. **The Core contamination audit's moves** (phase 0 is done): the checks first, then the 24 moves in the audit's order. The two items above need the user.
   8. **Real-site Lab tests,** each reviewed, measured by tokens and dollars per correctly completed workflow (the consultant's metric).
   9. **If real-site cost proves too high:** an A/B against a compact semantic projection on recorded workflows, decided on that number.
-- **Next session, first:** confirm this final plan with the user, then brief phases 2, 3, 3b and 6.
+- **The user's concern, the same night:** "I'm a bit concerned about full page idea considering it may send like 100k tokens in a single request which cant happen." V3 measured about 94k tokens on eldorado.
+  - **Lead's answer:** separate what the model reads from what FluxIQ keeps.
+    - "Preserve all the element's given data" is met by extraction (phase 4), which pulls a container's whole hierarchy with every attribute into a dataset the model never has to read.
+    - The model's view only needs what a decision needs: all visible text; every link, button and input with its handle; current values; and the nesting.
+    - Drop class lists of any length, inline styles, text-less layout wrappers, and tracking or data attributes from the model's view only.
+    - Nothing is cut silently. A page still too big shows explicit counts, and extraction still takes everything.
+  - **Phase 1b (first thing next session):** measure this lean view on the same 8 pages, with a token breakdown by category. Target: 15k-30k tokens for a heavy page like eldorado.
+  - If it cannot reach the target, item 9's compact or zoom view is measured against it. D1 is under review until phase 1b reports.
+- **Next session, first:** phase 1b, then confirm the plan with the user, then brief phases 2, 3, 3b and 6.
 - **Next session, in order:**
   1. Integrate t1099, t1101 and the phase 0 report: verify, merge, bump.
   2. Phase 2 (page input, V3), phase 3 (remove look tools) and phase 3b (several actions per call) in parallel: different files. Write briefs first.
