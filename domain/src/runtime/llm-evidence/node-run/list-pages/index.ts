@@ -7,3 +7,7 @@ export { webNodeListPages, type WebNodeListPages } from "./list-pages";
 export { webNodeReadAddress } from "./read-address";
 export { webNodeReadElsewhere } from "./read-elsewhere";
 export { webNodeListReadGuard, type WebNodeListReadGuardInput } from "./answer-guard";
+// Which detected lists a command turns the page of: a Next page step's, or those whose Next a press presses (t1096).
+export { webNodeTurnedLists } from "./turned-lists";
+// And the lists a turn moved, when the page showed it landed (t1096).
+export { webNodeListsTurned, type WebNodeTurnOutcome } from "./turn-landed";

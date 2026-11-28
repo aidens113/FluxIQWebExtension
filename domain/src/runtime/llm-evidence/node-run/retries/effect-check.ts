@@ -19,6 +19,9 @@
 //  - `unknown`: no expected state, nothing in it the page could be asked, a
 //    page that never answered, or held conditions beside ones nobody judged. A
 //    missing acknowledgement is never read as "did not happen".
+//
+// Where this check answers `unknown`, the dispatch reads the page instead: the
+// page the call found against the page the act left (`./page-effect.ts`, t1096).
 
 import type { AutomationNodeExpectationEvaluation, AutomationStudioLastingActCheck } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";

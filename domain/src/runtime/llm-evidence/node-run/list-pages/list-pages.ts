@@ -9,6 +9,12 @@
 // So each list a Next page moved is remembered here by its item selector, the
 // same the read's binding holds, and its reads stand wherever they run after.
 //
+// A page turn can also be shown to have landed by the page rather than by its
+// answer (t1096): one whose answer was lost and which the page check found
+// landed (`../retries/page-effect.ts`), or a press on a list's detected Next
+// whose page then moved as a page turn moves it (`./turned-lists.ts`). Either
+// moved its lists the same way, and is remembered the same way (`turned`).
+//
 // Kept per build and session, beside the build's handle stores, as the replayed
 // reads are (`../retries/replayed-reads.ts`), and never shown to anyone.
 
@@ -20,6 +26,8 @@ import type { WebNodeRun } from "../context";
 export type WebNodeListPages = {
   /** Remember the list a Next page run with `ran` (resolved) moved, where its answer `payload` says it moved one. */
   pagerAnswered(ran: JsonObject, payload: JsonValue | undefined): void;
+  /** Remember the lists, by item selector, that a page turn the page showed had landed moved (header, t1096). */
+  turned(items: readonly string[]): void;
   /** Whether a Next page of this build moved the list named by `item`. */
   wasMoved(item: string): boolean;
 };
@@ -40,15 +48,21 @@ export function webNodeListPages(run: Pick<WebNodeRun, "stores" | "request" | "s
   }
   const held = builds;
   const slot = `${webNodeBuildSlot(webNodeBuildOf(run.request).build)}\u0000${run.sessionId}`;
+  const moved = (item: string): void => {
+    const lists = [item, ...(held.get(slot) ?? []).filter((known) => known !== item)].slice(0, LISTS_PER_BUILD);
+    held.delete(slot);
+    held.set(slot, lists);
+    while (held.size > BUILDS) held.delete(held.keys().next().value!);
+  };
   return {
     pagerAnswered(ran, payload) {
       const request = ran.nextPage;
       const item = typeof request === "object" && request !== null && !Array.isArray(request) && typeof request.item === "string" ? request.item.trim() : undefined;
       if (item === undefined || webAutomationNextPageListMove(ran, payload)?.verdict !== "moved") return;
-      const lists = [item, ...(held.get(slot) ?? []).filter((known) => known !== item)].slice(0, LISTS_PER_BUILD);
-      held.delete(slot);
-      held.set(slot, lists);
-      while (held.size > BUILDS) held.delete(held.keys().next().value!);
+      moved(item);
+    },
+    turned(items) {
+      for (const item of items) if (item.trim() !== "") moved(item.trim());
     },
     wasMoved(item) {
       return held.get(slot)?.includes(item.trim()) === true;
