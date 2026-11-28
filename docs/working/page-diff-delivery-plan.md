@@ -29,7 +29,7 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
   - run 1 looped on Next page and refused repeats, now fixed by t1096;
   - run 2 (replay) was refused on every decision, now fixed by t1100;
   - run 3 (on 0.55.1) still looped. It got unusable replies, repeated full-page captures, "looking at an older view of the page" (stale handles), and a round restart. The user: "it couldnt even seem to actually be able to access the page data at all".
-- **The panel** was left running at handoff (`pnpm dev`, 127.0.0.1:3000, step log `FLUXIQ_LLM_STEP_LOG_DIR` in the lead's scratch). Point the log at `test-runs/manual-panel/<date>` on the next start.
+- **The panel** was stopped at handoff. Start it with `pnpm dev`, and set `FLUXIQ_LLM_STEP_LOG_DIR=test-runs/manual-panel/<date>` so the step log is durable.
 - **Next (in order):**
   1. Integrate t1099 and t1101 when they report: verify, merge, bump, restart the panel.
   2. **The model-input deep dive (user, 2026-11-28).** Use the three manual step logs, starting with run 3: what each decision request carries; page size and order (a 180k-character full page in 10 parts, hidden menus first); handle freshness between views; why replies are unusable on Haiku; repeat refusals that still cost calls; the interpretation that read "up to 10 pages" as `limit: 10` (`runtime/conversations/instructions/prompt.ts:45-46`). Plan it as a working doc, then fix.
