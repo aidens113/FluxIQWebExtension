@@ -26,7 +26,13 @@ Related: [page-diff-delivery-plan.md](./page-diff-delivery-plan.md) (superseded 
   - t1101 (answer-first endings tests) is working.
 
   Neither depends on this plan. t1099's status words fall under phase 6's text rule.
-- **Next:** phase 0 and phase 1 now, in parallel; phase 2 once phase 1's numbers are in.
+- **Phase 1 measured (2026-11-28, `reports/phase-1-page-size.md`, real Chromium, 8 real pages, chars/3.5 tokens):**
+  - V1 (everything) is 79k-570k tokens per page: eldorado 113k, BBC 110k, Remote OK 261k, discuss.python.org 176k, IKEA 444k, Nike 570k.
+  - V2 (no script or style bodies) cuts 15-59%. V3 (also no SVG path data or base64) cuts a further 12% on eldorado and 53% on discourse. V4 (long classes) adds little.
+  - Per decision on Sonnet 5.5: eldorado $0.26 at V1 and $0.19 at V3; big shop listings $0.92-1.18 at V1.
+  - Haiku 5.5 is $0.065 at V1 on eldorado, but its price rises 5x above 100K prompt tokens (the claude-api skill's table), so V1 costs about 6x V3 on eldorado.
+  - Pushback 1 holds. The report recommends V2 or V3 for D1. The user decides.
+- **Next:** the user's choice of V1, V2 or V3; phase 0's report; then phase 2.
 
 ## How It Works Today (the parts this plan changes)
 
