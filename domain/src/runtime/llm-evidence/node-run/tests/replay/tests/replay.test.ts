@@ -8,16 +8,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../failure";
+import { webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../../../failure";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_RUN_NODE_TOOL_ID,
   type WebLlmEvidenceGateway
-} from "../..";
-import { webNodeRecordCount } from "../replay";
-import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS, type WebLlmEvidenceToolRequest } from "../../capture";
-import { present } from "../../present";
-import { shownPageLines } from "../../page-view/tests/shown-page-lines";
+} from "../../../..";
+import { webNodeRecordCount } from "../../../replay";
+import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS, type WebLlmEvidenceToolRequest } from "../../../../capture";
+import { present } from "../../../../present";
+import { shownPageLines } from "../../../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
