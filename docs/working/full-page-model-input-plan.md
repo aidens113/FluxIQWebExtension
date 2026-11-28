@@ -69,7 +69,12 @@ Related: [page-diff-delivery-plan.md](./page-diff-delivery-plan.md) (superseded 
     - The model's view only needs what a decision needs: all visible text; every link, button and input with its handle; current values; and the nesting.
     - Drop class lists of any length, inline styles, text-less layout wrappers, and tracking or data attributes from the model's view only.
     - Nothing is cut silently. A page still too big shows explicit counts, and extraction still takes everything.
-  - **Phase 1b (first thing next session):** measure this lean view on the same 8 pages, with a token breakdown by category. Target: 15k-30k tokens for a heavy page like eldorado.
+  - **The user's refinement (same night):** "other than stripping unneeded data like long URLs, image data, parent elements data with no actual data, etc. and lists of elements will be a big one. We can certainly limit the number of results in those until model asks for more. But the model should be told that it should try to make use of currently avialable data. Since it probably wont exclude thigns like buttons in that case (usually out side of the list unless web design is super bad)". So the lean view:
+    - **Strips from the model's view:** long URLs (a short form stays; FluxIQ keeps the full one), image data, script and style bodies, class and style attributes, tracking attributes, and wrapper elements that carry no data of their own.
+    - **Keeps:** all visible text; every link, button and input with its handle; current values; and the nesting.
+    - **Shows the first few items of a long repeated list,** with one explicit line saying how many more there are, that all are captured, and that it can ask for more. "Show more of this list" is the one extra request the model gets.
+    - **Tells the model to work from the data in front of it.** Controls and paging sit outside the list, so a shortened list does not hide them.
+  - **Phase 1b (first thing next session):** measure this lean view (with list items shortened to 5 and to 10) on the same 8 pages, with a token breakdown by category. Target: 15k-30k tokens for a heavy page like eldorado.
   - If it cannot reach the target, item 9's compact or zoom view is measured against it. D1 is under review until phase 1b reports.
 - **Next session, first:** phase 1b, then confirm the plan with the user, then brief phases 2, 3, 3b and 6.
 - **Next session, in order:**
