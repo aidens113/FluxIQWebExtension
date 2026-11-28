@@ -2,7 +2,7 @@ import { soldSavesAccountFacts } from "../qualification/index.js";
 import { ACCOUNT_CONTACTS_SUBJECT, accountContactsFacts } from "../breadth/index.js";
 import { fixtureClient, page } from "../../../html.js";
 import { fnv, RADIUS_OPTIONS, SORT_OPTIONS } from "../catalog/index.js";
-import { SHELL_SCRIPT } from "../client/index.js";
+import { BACKGROUND_SCRIPT, SHELL_SCRIPT } from "../client/index.js";
 import { CONTACT_INTERVAL_MS, HUMAN_CHECK_WAIT_MS } from "../limits.js";
 import { CLASSIFIEDS_ROOT } from "../root.js";
 import type { ClassifiedsState } from "../types.js";
@@ -16,7 +16,7 @@ export type PageBuild = { seed: number; runToken: string; sheet: ClassSheet; ids
  * Flow that clicks at fixed moments meets a different page on every seed; one
  * that waits for what it needs does not.
  */
-export type PageTiming = { notifyDelay: number; chatDelay: number; detailDelay: number; feedLatency: number; checkWait: number; contactInterval: number };
+export type PageTiming = { notifyDelay: number; chatDelay: number; detailDelay: number; feedLatency: number; checkWait: number; contactInterval: number; beaconInterval: number };
 
 export function pageBuild(seed: number, runToken: string, alternateOrigin?: string): PageBuild {
   const spread = (name: string, from: number, width: number) => from + (fnv(`${seed}:${name}`) % width);
@@ -32,6 +32,7 @@ export function pageBuild(seed: number, runToken: string, alternateOrigin?: stri
       feedLatency: spread("latency", 250, 250),
       checkWait: HUMAN_CHECK_WAIT_MS,
       contactInterval: CONTACT_INTERVAL_MS,
+      beaconInterval: spread("beacon", 600, 300),
     },
     ...(alternateOrigin === undefined ? {} : { alternateOrigin }),
   };
@@ -40,7 +41,8 @@ export function pageBuild(seed: number, runToken: string, alternateOrigin?: stri
 /**
  * A whole document: the markup, the build's stylesheet, and the scripts, with
  * everything a script needs handed over as `cfg`. The shell's script always
- * runs first; `scripts` follow it in order.
+ * runs first, then the background traffic every page makes
+ * (`../client/background-script.ts`); `scripts` follow them in order.
  */
 export function classifiedsDocument(build: PageBuild, state: ClassifiedsState, title: string, body: string, scripts: readonly string[], extra: Record<string, unknown> = {}): string {
   const shadowRole = (name: string) => `x${fnv(`${build.seed}:shadow:${name}`).toString(36)}`;
@@ -68,7 +70,7 @@ mutate = async (operation, payload = {}) => {
   if (contacts) contacts.textContent = contactsAccountFacts(result.state);
   return result;
 };
-const cfg = ${JSON.stringify(config).replaceAll("<", "\\u003c")};`, SHELL_SCRIPT, ...scripts].join("\n");
+const cfg = ${JSON.stringify(config).replaceAll("<", "\\u003c")};`, SHELL_SCRIPT, BACKGROUND_SCRIPT, ...scripts].join("\n");
   const facts = `<script type="application/json" data-testid="classifieds-sold-saves-account">${soldSavesAccountFacts(state).replaceAll("<", "\\u003c")}</script>`
     + `<script type="application/json" data-testid="${ACCOUNT_CONTACTS_SUBJECT}">${accountContactsFacts(state).replaceAll("<", "\\u003c")}</script>`;
   return page(title, `${body}${facts}<style>${classifiedsStylesheet(build.sheet.keys)}</style>`, script);

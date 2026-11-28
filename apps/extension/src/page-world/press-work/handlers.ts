@@ -1,4 +1,5 @@
 import type { PressWorkTracker } from "./tracker";
+import { watchLaterListeners } from "./later-listeners";
 
 /** Observe supported registered/assigned click handlers without changing their receiver, removal identity or return value. */
 export function installPressWorkHandlers(tracker: PressWorkTracker): { healthy(): boolean; covered(event: Event): boolean } {
@@ -23,6 +24,7 @@ export function installPressWorkHandlers(tracker: PressWorkTracker): { healthy()
   if (typeof window !== "undefined") remember(window);
   if (typeof document !== "undefined") remember(document);
   let installed = true;
+  const later = watchLaterListeners(tracker, add);
   const stringify = String;
   const eventType = (value: unknown): string => {
     if (typeof value === "symbol") throw new TypeError("Cannot convert a Symbol value to a string");
@@ -32,7 +34,9 @@ export function installPressWorkHandlers(tracker: PressWorkTracker): { healthy()
     if (arguments.length < 2) return Reflect.apply(add, this, arguments);
     const convertedType = eventType(type);
     if (convertedType !== "click" || callback === null || callback === undefined) {
-      if (convertedType !== "click") tracker.taint(tracker.current());
+      // A listener the press's own work registers for another event runs outside the followed work only if that event
+      // fires: on a target the window hears, that moment is when the press stops being followed (`./later-listeners.ts`).
+      if (convertedType !== "click") later.registered(this, convertedType, tracker.current());
       return add.call(this, convertedType, callback, options);
     }
     let callbacks = wrappers.get(this);

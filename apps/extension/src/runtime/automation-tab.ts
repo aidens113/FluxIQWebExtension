@@ -353,17 +353,33 @@ function readTopDocumentId(tabId: number): Promise<string | undefined> {
 }
 
 /**
+ * The bound on `waitForTabReady`, for a page that never stops changing (a
+ * carousel moved by script every frame, a ticker redrawn many times a second).
+ * It is not what makes a step quick, and lowering it is not a fix: before t1094
+ * every step on a real site ran to it -- 20 s on each open-page step and each
+ * look on eldorado.gg -- because the wait counted every request and fresh timer
+ * the page made, and a real site's beacons, long polls and widgets never stop.
+ * The fix was the rule for which work holds the page
+ * (`page-world/page-work/tracker.ts`); this stays only as the end of a wait on
+ * a page that is still changing.
+ */
+const TAB_READY_DEADLINE_MS = 20_000;
+
+/**
  * Waits until the tab has finished moving and the page has finished drawing
- * itself, or 20 s have passed (task speed S10):
+ * itself, or `TAB_READY_DEADLINE_MS` has passed (task speed S10; t1094):
  * - by the browser's events: its load complete, no address pending, no
  *   top-frame navigation begun and not ended (`./navigation-events/epochs.ts`),
  *   and, for a tab FluxIQ drove (`drive`), the navigation heard beginning;
- * - by the page's own work: every timer it set within the horizon, animation
- *   frame, fetch and XHR it began done, recurring work left out, and its
- *   document unchanged across a task (`./navigation-events/page-work.ts`,
- *   `page-world/page-work/`). local-classifieds draws a listing's panel from a
- *   timer then a request, and its sorted results after an address rewritten in
- *   place and a delay; the load event alone said neither was there.
+ * - by the page's own word (`./navigation-events/page-work.ts`,
+ *   `page-world/page-work/`): its document unchanged for the quiet window, and
+ *   no work out that can still be drawing it -- a timer within the horizon or a
+ *   frame until it has run, a request until it answers or has gone the horizon
+ *   with nothing on the page changing since it began, recurring work and
+ *   chains of it never. local-classifieds draws a listing's panel from a timer
+ *   then a request, and its sorted results after an address rewritten in place
+ *   and a delay; the load event alone said neither was there. Its beacon and
+ *   long poll (t1094), like a real site's, change nothing and hold nothing.
  *
  * Until 2026-11-10 it waited instead for the address to stand still a whole
  * second. That second is kept only where nothing can speak for the page: a
@@ -375,15 +391,17 @@ function readTopDocumentId(tabId: number): Promise<string | undefined> {
  * (`noteSnapshotReadiness`): while no navigation event of the tab follows, the
  * same document is the tab this wait just found settled, so the next action on
  * it starts at once. A wait that ends on its deadline, or on a tab that closed,
- * proves nothing.
+ * proves nothing. The question put to the page ends with the wait, so a page
+ * that never settles is left with nothing still asking.
  */
 export function waitForTabReady(tabId: number, drive?: { epochBefore: number }): Promise<void> {
   return new Promise((resolve) => {
     let lastUrl: string | undefined;
     let stableSince = 0;
     let settling = false;
+    const startedAt = Date.now();
     const interval = setInterval(checkSettled, 250);
-    const timeout = setTimeout(done, 20_000);
+    const timeout = setTimeout(done, TAB_READY_DEADLINE_MS);
     function done(): void {
       clearTimeout(timeout);
       clearInterval(interval);
@@ -422,7 +440,7 @@ export function waitForTabReady(tabId: number, drive?: { epochBefore: number }):
         if (isTransientNavigationUrl(url)) return;
         if (settling) return;
         settling = true;
-        if (!await settledOnEvidence(tabId, drive) && Date.now() - stableSince < 1_000) {
+        if (!await settledOnEvidence(tabId, drive, TAB_READY_DEADLINE_MS - (Date.now() - startedAt)) && Date.now() - stableSince < 1_000) {
           settling = false;
           return;
         }
@@ -441,11 +459,11 @@ export function waitForTabReady(tabId: number, drive?: { epochBefore: number }):
  * still in flight, the page declares a refresh due soon, or no page world can
  * speak for the page -- and the old second then decides.
  */
-async function settledOnEvidence(tabId: number, drive: { epochBefore: number } | undefined): Promise<boolean> {
+async function settledOnEvidence(tabId: number, drive: { epochBefore: number } | undefined, withinMs: number): Promise<boolean> {
   if (drive !== undefined && tabNavigationEpochs.of(tabId) === drive.epochBefore) return false;
   if (tabNavigationEpochs.inFlight(tabId)) return false;
   if (await refreshDeclaredSoon(tabId)) return false;
-  return await pageWorkSettled(tabId);
+  return await pageWorkSettled(tabId, withinMs);
 }
 
 function isTransientNavigationUrl(url: string | undefined): boolean {

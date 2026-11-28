@@ -17,7 +17,9 @@
 // the page world remembers the count against the element and cancels the event,
 // which is how the content script knows the page world is there. After the
 // press it dispatches `REQUEST_SINCE_EVENT` on the same element; the page world
-// cancels it when a request has begun since that element's mark. Both answers
+// cancels it when a request has begun since that element's mark that the press
+// may have caused -- not one begun by work the page set going before the mark,
+// such as a beacon loop (t1094, `page-world/request-starts.ts`). Both answers
 // are read from `dispatchEvent`'s return on the same call stack, and nothing is
 // written to the page. This module imports nothing: both bundles include it.
 
