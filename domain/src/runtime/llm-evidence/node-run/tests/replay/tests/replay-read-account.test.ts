@@ -11,11 +11,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
-import { webNodeReplayStatement } from "../replay";
-import { webNodeReplayReadRows } from "../replay-answer";
-import { WEB_LLM_WITHHELD_TEXT } from "../../withheld";
-import { WEB_NODE_REJECTED_ROWS_CHECK, WEB_NODE_REPLAY_READ_ROWS_NOTE } from "../rejected-rows";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../../..";
+import { webNodeReplayStatement } from "../../../replay";
+import { webNodeReplayReadRows } from "../../../replay-answer";
+import { WEB_LLM_WITHHELD_TEXT } from "../../../../withheld";
+import { WEB_NODE_REJECTED_ROWS_CHECK, WEB_NODE_REPLAY_READ_ROWS_NOTE } from "../../../rejected-rows";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const EXTRACT = "web.output.dom-extract_list";

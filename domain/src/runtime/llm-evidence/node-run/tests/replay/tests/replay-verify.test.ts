@@ -14,9 +14,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
-import { shownPageLines } from "../../page-view/tests/shown-page-lines";
-import { webNodeReplayCall } from "../replay";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../../..";
+import { shownPageLines } from "../../../../page-view/tests/shown-page-lines";
+import { webNodeReplayCall } from "../../../replay";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";

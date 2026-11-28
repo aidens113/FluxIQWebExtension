@@ -7,7 +7,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { webNodeReplayPermissionReason } from "../replay-answer";
+import { webNodeReplayPermissionReason } from "../../../replay-answer";
 
 test("a replayed step the person already declined says so", () => {
   assert.equal(webNodeReplayPermissionReason({ kind: "refused", requestId: "permission-request:1", declined: true }), "consequences_declined");

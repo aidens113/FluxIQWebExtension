@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../../..";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 
 const PROJECT = { projectId: "project.unreadable", flowId: "flow.unreadable" };
 const START = "http://127.0.0.1:41873/scenarios/job-board/";
