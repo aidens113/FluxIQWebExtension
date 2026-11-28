@@ -67,3 +67,27 @@ test("a saved read of the list, which has no handle, answers with the key its de
   const answered = webAutomationExtractListAnswered(read, { extracted: [] }) as JsonObject;
   assert.equal(answered.listKey, keyOf(handles, seats));
 });
+
+test("the lists a control is the detected Next of: this Flow's, in its frame, by a `next` way only, most recent first (t1096)", () => {
+  const handles = createWebLlmExtractionHandles();
+  const NEXT = "nav.pager > a.next";
+  const paged = (item: string, extra: Partial<WebLlmExtractionBindingRetained> = {}): WebLlmExtractionBindingRetained => {
+    const kept = binding(handles.reserve(), item, extra);
+    return { ...kept, extractList: { ...kept.extractList, paginate: { next: NEXT, maxPages: 3 } } };
+  };
+  handles.retain(SCOPE, paged(SEATS));
+  handles.retain(SCOPE, paged(SHOWINGS));
+  handles.retain(SCOPE, paged(SEATS));
+  handles.retain(SCOPE, paged("main > ul.framed > li", { frameId: 3 }));
+  handles.retain({ projectId: "project.one", flowId: "flow.other" }, paged("main > ul.other > li"));
+  const numbered = binding(handles.reserve(), "main > ol.numbered > li");
+  handles.retain(SCOPE, { ...numbered, extractList: { ...numbered.extractList, paginate: { mode: "numbered", pages: NEXT, maxPages: 3 } } });
+  handles.retain(SCOPE, binding(handles.reserve(), "main > ol.unpaged > li"));
+
+  assert.deepEqual(handles.pagedBy(SCOPE, NEXT, undefined), [SEATS, SHOWINGS], "each item once, the latest detection first");
+  assert.deepEqual(handles.pagedBy(SCOPE, ` ${NEXT} `, 0), [SEATS, SHOWINGS], "the top frame is frame 0 too");
+  assert.deepEqual(handles.pagedBy(SCOPE, NEXT, 3), ["main > ul.framed > li"], "a list in another frame is that frame's");
+  assert.deepEqual(handles.pagedBy(SCOPE, "nav.pager > a.prev", undefined), [], "another control is the Next of nothing");
+  assert.deepEqual(handles.pagedBy(SCOPE, "", undefined), []);
+  assert.deepEqual(handles.pagedBy({ projectId: "project.one", flowId: "flow.none" }, NEXT, undefined), [], "another Flow's lists are not seen");
+});

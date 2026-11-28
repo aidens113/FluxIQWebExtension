@@ -88,6 +88,15 @@ test("a list move that reached a person-only check uses the existing typed hando
   assert.equal(result.nextPage, undefined, "a check is not a fabricated moved or ended answer");
 });
 
+test("a Next with no request fails before any gesture, at dispatch, stating nothing was acted", async () => {
+  const { nextPage: _nextPage, ...bare } = COMMAND;
+  const { result, asked } = await run({ outcome: "moved", by: "next" }, bare);
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.stage, "dispatch");
+  assert.equal(result.failure?.effect, "unacted");
+  assert.equal(asked.length, 0, "the page was never asked to move");
+});
+
 test("a list that moved succeeds with how it moved and the page it shows, and asks no route", async () => {
   const { result } = await run({ outcome: "moved", by: "following", page: 3 });
   assert.equal(result.status, "succeeded");

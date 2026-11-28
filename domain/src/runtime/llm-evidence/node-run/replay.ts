@@ -400,7 +400,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // since redrawn re-reads the list it came from and is scoped to the same row,
   // fresh, for its last retries (`./retries/replay-row-reacquire.ts`, t786).
   const reacquire = webNodeReplayRowReacquire(run, { item: value.item, parameters: ran, metadata: toolMetadata(run.request), readRows: flowRows });
-  const { result, lastingAct, failure: controlFailure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran), reacquire);
+  const { result, lastingAct, failure: controlFailure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) }, { found: before }, webNodeEffectCheck(run, ran), reacquire);
   const actionability = webActionabilityFromPayload(result);
   assertActive(run.request.signal);
   // One the check showed landed counts as done, whatever its lost answer said.

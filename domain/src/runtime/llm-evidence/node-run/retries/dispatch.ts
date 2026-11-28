@@ -68,6 +68,8 @@ import type { WebNodeRun } from "../context";
 import { webNodeRetriedAnswer } from "./answer";
 import { webNodeRetryReacquire, type WebNodeReacquire } from "./reacquire";
 import { webNodeRetryWait } from "./wait";
+import { webNodePageEffectCheck } from "./page-effect";
+import type { WebLlmSnapshotBinding } from "../../sanitize";
 import type { WebNodeDispatchCapture } from "../frozen-execution";
 
 /** What the gateway answers one command with. */
@@ -97,14 +99,19 @@ export type WebNodeRetriedDispatch = {
  * `node` is the catalog's description of the node: its definition id,
  * whether running it changes the page, and the consequences the call declared
  * (`declared`, as the call wrote them: `[]` for none; absent on a read and on a
- * call that declared nothing). `noted`, when given, is told how many attempts there were.
+ * call that declared nothing). `noted`, when given, is the call's own record: it
+ * is told how many attempts there were, and the page it holds as `found`, read
+ * before the command went out, is what a lasting act whose answer was lost is
+ * checked against when its declared check cannot say (`./page-effect.ts`, t1096);
+ * `turns`, the lists whose page the command turns (`../list-pages/turned-lists.ts`),
+ * makes a press on a list's Next a page turn there, as a Next page step is.
  * `reacquire`, when given, finds the node's stale target again (header, t786).
  */
 export async function webNodeDispatchWithRetries(
   run: Pick<WebNodeRun, "gateway" | "sessionId" | "request">,
   node: { definitionId: string; effect: "observe" | "mutate"; declared?: JsonValue | undefined },
   command: { actionType: string; parameters: JsonObject; metadata: JsonObject },
-  noted?: { attempts?: number },
+  noted?: { attempts?: number; found?: WebLlmSnapshotBinding | undefined; turns?: readonly string[] | undefined },
   checkEffect?: AutomationStudioLastingActCheck<WebNodeDispatchResult>,
   reacquire?: WebNodeReacquire,
   capture?: WebNodeDispatchCapture
@@ -125,7 +132,8 @@ export async function webNodeDispatchWithRetries(
       return answer;
     },
     read: (result) => webNodeRetryReading(result, command),
-    checkEffect,
+    // The step's declared check first; where it cannot say, the page the call found against the page the act left (t1096).
+    checkEffect: webNodePageEffectCheck(run, { actionType: command.actionType, pager: (noted?.turns?.length ?? 0) > 0 }, () => noted?.found, checkEffect),
     reacquire: reacquire === undefined ? undefined : webNodeRetryReacquire(run, command, reacquire, answers, capture),
     delay: webNodeRetryWait,
     signal: run.request.signal

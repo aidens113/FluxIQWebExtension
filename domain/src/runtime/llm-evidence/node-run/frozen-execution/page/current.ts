@@ -3,7 +3,7 @@ import type { WebLlmSnapshotBinding } from "../../../sanitize";
 import { webNodeBuildOf } from "../../build-state";
 import type { WebNodeRun } from "../../context";
 import type { WebNodePageOptions } from "./options";
-import { webNodeReadablePage } from "./readable";
+import { webNodeReadPage } from "./read-page";
 
 /**
  * The page as it stands, or nothing at all.
@@ -22,11 +22,24 @@ import { webNodeReadablePage } from "./readable";
  * The capture is still taken, so the calls made are the same whichever tab the
  * build was handed. A look alone reads the page through `webNodeReadablePage`.
  *
+ * **An arrived build's unreadable page is not "no page".** Where the build has
+ * arrived, a look that could not read the page (timed out, the channel closed)
+ * is raised as `page_unreadable` with the host's failure, so the call is refused
+ * for what happened and the model is never told to go to the start page it has
+ * already reached. The one exception is a call that moves the page itself
+ * (`movesPage`): a navigation is the way out of an unreadable page, so it
+ * proceeds from nowhere as it does from the blank tab.
+ *
  * A build that was told no start location is unchanged in every respect: the
  * refusal is raised as it always was, because there is nowhere to send the
  * model and "the page could not be read" is then the whole truth.
  */
-export async function webNodeCurrentPage(run: WebNodeRun, request: WebLlmEvidenceToolRequest, options?: WebNodePageOptions): Promise<WebLlmSnapshotBinding | undefined> {
-  const page = await webNodeReadablePage(run, request, options);
-  return run.request.startLocation === undefined || run.arrivals.arrived(webNodeBuildOf(run.request).build) ? page : undefined;
+export async function webNodeCurrentPage(run: WebNodeRun, request: WebLlmEvidenceToolRequest, options?: WebNodePageOptions, movesPage = false): Promise<WebLlmSnapshotBinding | undefined> {
+  const read = await webNodeReadPage(run, request, options);
+  const arrived = run.request.startLocation === undefined || run.arrivals.arrived(webNodeBuildOf(run.request).build);
+  if (read.kind === "unreadable") {
+    if (run.request.startLocation !== undefined && (!arrived || movesPage)) return undefined;
+    throw read.rejection;
+  }
+  return arrived ? read.page : undefined;
 }

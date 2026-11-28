@@ -98,3 +98,9 @@ test("explicit original ambiguity outranks a dispatch or target stage and a reco
     assert.equal(webLastingActStatement("web.dom.type", {}, original, reconstructed).effect, "ambiguous");
   }
 });
+
+test("a Next refused before any gesture, its record stating unacted at dispatch, stays unacted", () => {
+  const refused = { ...webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, { actual: "nothing was sent to the page" }), effect: "unacted" as const };
+  assert.equal(refused.stage, "dispatch");
+  assert.equal(webLastingActStatement("web.dom.next_page", {}, refused, refused).effect, "unacted");
+});
