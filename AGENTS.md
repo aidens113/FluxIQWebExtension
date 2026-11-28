@@ -486,6 +486,14 @@ Run artifacts and browser profiles are disposable. Keep them in ignored
 run-scoped directories; never commit captures or expose credentials, cookies,
 authorization headers, pairing tokens, or recorded page data.
 
+**Lab tests run on real websites, properly reviewed** (user, 2026-11-28): "From now on I want all lab tests to be
+on real websites, properly reviewed, and we need to deep dive into how the model is getting fed information right
+now." This supersedes the rule below for Lab tests: they target real sites, and every run is reviewed (its steps,
+what the model was sent, the UI), not only scored. The Lab's launch entries still refuse anything outside the ten
+realistic scenarios, so they must change before the next Lab round; until then the ten-scenario rule binds only
+provider-free unit and harness checks. The model-input deep dive is the next work (page-diff-delivery-plan,
+Current State).
+
 **Lab and browser test runs use only the ten realistic scenarios** (user,
 2026-09-29): everything-store, crossborder-marketplace, bigbox-retail,
 job-board, local-classifieds, auction-marketplace, photo-social,
