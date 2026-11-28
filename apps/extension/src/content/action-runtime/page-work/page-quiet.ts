@@ -23,7 +23,7 @@ import { pageSettledInPage } from "../../../shared/scheduled-work-settled";
 
 /** A question put to the page: whether it settles before `endsAt`, and the way to stop asking. */
 export type PageQuiet = {
-  /** True once the page's work is done and its document held still a task; false where it cannot say, or at `endsAt`. */
+  /** True once no work that can still be drawing the page is out and its document held still for the quiet window (t1094); false where it cannot say, or at `endsAt`. */
   readonly settled: Promise<boolean>;
   /** Stops asking: `settled` answers false if it had not answered. Safe to call more than once. */
   stop(): void;
@@ -42,7 +42,7 @@ export function askPageQuiet(endsAt: number, options: { afterFrames?: boolean } 
   const settled = (async () => {
     try {
       if (options.afterFrames === true && !await framesDrawn(FRAMES_BEFORE_ASKING, controller.signal)) return false;
-      return await pageSettledInPage(PAGE_WORK_WATCHED_EVENT, PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT, controller.signal);
+      return await pageSettledInPage(PAGE_WORK_WATCHED_EVENT, PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT, { signal: controller.signal });
     } finally {
       clearTimeout(deadline);
     }

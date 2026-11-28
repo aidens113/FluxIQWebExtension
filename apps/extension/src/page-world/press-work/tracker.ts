@@ -65,6 +65,15 @@ export function createPressWorkTracker() {
       return () => { if (!finished) { finished = true;
         for (const owner of owners) owner.pending -= 1; } };
     },
+    /** Whether any of `owners` is a press still being watched. */
+    live(owners: readonly Mark[]): boolean {
+      return owners.some((owner) => !owner.released);
+    },
+    /** The mark armed on `target`, while it stands: what `current` holds while that press's work runs (t1094, `../work-cause/`). */
+    markOf(target: EventTarget): object | undefined {
+      const mark = marked.get(target);
+      return mark && !mark.released ? mark : undefined;
+    },
     state(target: EventTarget): "unknown" | "pending" | "idle" {
       const mark = marked.get(target);
       return !mark || mark.released || !mark.observed || mark.unknown ? "unknown" : mark.pending > 0 ? "pending" : "idle";

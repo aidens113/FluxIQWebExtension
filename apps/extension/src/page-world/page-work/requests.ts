@@ -4,8 +4,12 @@
 // is told by its entry, never by the page's promise: a handler on that promise
 // would change whether its rejection reaches the page's `unhandledrejection`.
 // One begun by recurring work is not counted (`./timers.ts`). A fetch whose
-// entry never comes stays outstanding, and readiness waits on it as on any
-// other work the page has not finished.
+// entry never comes stays outstanding; whether it still holds the page is the
+// tracker's rule (`./tracker.ts`, t1094): a request that changes nothing stops
+// holding a horizon after it began, so a long poll, a stream or a beacon a
+// blocker swallowed no longer holds readiness to its deadline. A fetch is
+// counted with its address without the query, so a beacon sent again and again
+// is one chain; an XHR's address is not read, and each is its own.
 //
 // Each wrapper calls the original with the same receiver and arguments and
 // returns what it returns: the page behaves as it would without the extension.
@@ -36,14 +40,14 @@ export function installPageWorkRequests(host: Record<string, unknown>, tracker: 
     /* best-effort: with no resource timeline a fetch is never told answered, and readiness waits on it as unfinished work */
     complete = false;
   }
-  const wrap = (owner: object | undefined, name: string, track: (self: unknown, args: unknown[], id: number) => void): void => {
+  const wrap = (owner: object | undefined, name: string, track: (self: unknown, args: unknown[], id: number) => void, sourceOf: (args: unknown[]) => string | undefined = () => undefined): void => {
     const original = owner === undefined ? undefined : (owner as Record<string, unknown>)[name];
     if (typeof original !== "function") {
       complete = false;
       return;
     }
     const wrapped = function (this: unknown, ...args: unknown[]): unknown {
-      const id = tracker.begin("request");
+      const id = tracker.begin("request", sourceOf(args));
       if (id !== undefined) track(this, args, id);
       try {
         return (original as Callable).apply(this, args);
@@ -69,7 +73,7 @@ export function installPageWorkRequests(host: Record<string, unknown>, tracker: 
     }
     fetches.push({ id, url });
     if (fetches.length > WAITING_FETCHES_MAX) fetches.shift();
-  });
+  }, (args) => requestSource(requestUrl(args[0], URLClass)));
   const Xhr = host.XMLHttpRequest as { prototype?: object } | undefined;
   wrap(Xhr?.prototype, "send", (self, _args, id) => {
     try {
@@ -88,4 +92,9 @@ function requestUrl(input: unknown, URLClass: typeof URL): string | undefined {
   // An address that does not parse is a fetch whose answer cannot be matched: it stays outstanding.
   if (asked === undefined || base === undefined || typeof URLClass.canParse !== "function" || !URLClass.canParse(asked, base)) return undefined;
   return new URLClass(asked, base).href;
+}
+
+/** A request's source for the tracker's chains: its address without the query or fragment. */
+function requestSource(url: string | undefined): string | undefined {
+  return url === undefined ? undefined : url.split(/[?#]/u, 1)[0];
 }

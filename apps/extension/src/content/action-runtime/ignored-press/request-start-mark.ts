@@ -6,6 +6,12 @@
 // a response ends, so a press whose answer waits on a slow server read as
 // ignored and was pressed again. The page world sees the request as the page
 // makes it, and that is the press reaching the server, whatever the page shows.
+//
+// Since t1094 the page world answers only for a request the press may have
+// caused (`page-world/request-starts.ts`): one begun in the press's own work,
+// or one whose cause it cannot rule out. A beacon or poller the page set going
+// before the press does not answer for it, so a press the page ignored can be
+// pressed again although the page's background kept talking to its server.
 
 import { REQUEST_HEALTH_EVENT, REQUEST_MARK_EVENT, REQUEST_PENDING_EVENT, REQUEST_SINCE_EVENT } from "../../../shared/request-start-event";
 
