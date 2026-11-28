@@ -197,6 +197,16 @@ the package's ports, and rendering, stream models and styles change in Core. The
 automation runtime is imported as `fluxiq/automation`; `fluxiq/automation-studio` is only
 Core's panel controller.
 
+**The panel owns configuration and projects; clients show what is happening** (user, 2026-11-27): "my suggestion
+with unifiying UI is having large majority of config and adding keys and all that in the panel. This would go for
+all clients. Managing projects, creating new ones, all that in the panel NOT the client. The client is just for
+showing whats going on. You should be able to SEE all projects and the current flow being worked on from lcient
+ofc". So keys, settings, and creating or managing projects live in the panel for every client (extension, SDK,
+FluxNode). A client shows the work: every project and the Flow being worked on. Lead's reading, not the user's
+words: the client keeps its chat, since the extension is chat-first (2026-09-29) and its chat is how a person asks
+for work, and that chat is the same conversation the panel shows. Being built as t1095
+(`docs/working/ui-unification-plan.md`).
+
 Workspace packages link to FluxIQ Core in the sibling `!FluxIQ` checkout
 (`C:\Users\osrs_\FluxStuff\!FluxIQ` on this machine; the copies under `F:\` are stale).
 Changes there are allowed when needed to complete work here. Before the first
