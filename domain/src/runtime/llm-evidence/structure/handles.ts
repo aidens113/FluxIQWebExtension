@@ -44,11 +44,17 @@
 // of the lists detection found, and the step that ran keeps the handle and what
 // it stands for, never the `tN` (`elementRecordOf`).
 //
+// `pagedBy` answers which retained lists name a control as their detected Next
+// (t1096), so a plain press on that control is known for the page turn it is:
+// whether it landed is then read off the page as a Next page step's is
+// (`../node-run/retries/page-effect.ts`), and the list it moved stands where it
+// went (`../node-run/list-pages/`).
+//
 // This store is for one authoring session. A step that is saved keeps what its
 // handle stands for itself (`../plan-resolution/extraction/saved-list.ts`, t869),
 // so a later attempt, another Flow or a restarted process does not depend on it.
 
-import type { WebAutomationExtractField, WebAutomationExtractListRequest } from "../../../actions/extraction";
+import type { WebAutomationExtractField, WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { webAutomationExtractListKey } from "../../../output-nodes";
 import { present } from "../present";
 
@@ -167,6 +173,13 @@ export type WebLlmExtractionHandles = {
   elementRecord(scope: WebLlmExtractionHandleScope, named: string, binding: Omit<WebLlmExtractionBinding, "handle">): string;
   /** The list `elementRecord` last issued for the target handle `named` in this scope, while it is retained. */
   elementRecordOf(scope: WebLlmExtractionHandleScope, named: string): string | undefined;
+  /**
+   * The item selectors of the lists retained for this project and Flow whose detected way to their next page is the
+   * control `selector` names, in frame `frameId` (`undefined` for the top one): a press on that control turns their
+   * page, as a Next page step on them would (t1096). Only a detected `next` control counts; most recent first, each
+   * item once, and none when no list here names it.
+   */
+  pagedBy(scope: WebLlmExtractionHandleScope, selector: string, frameId: number | undefined): string[];
 };
 
 /** How many (project, Flow, frame, item) lists are remembered, and how many keys one list keeps; also how many element records are remembered by the target handle that named them. */
@@ -260,9 +273,27 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
       const key = scopeKey(scope);
       const handle = records.get(`${key}\0${named}`);
       return handle !== undefined && retained.get(handle)?.scope === key ? handle : undefined;
+    },
+    pagedBy(scope, selector, frameId) {
+      const key = scopeKey(scope);
+      const control = selector.trim();
+      const items: string[] = [];
+      if (control === "") return items;
+      for (const entry of [...retained.values()].reverse()) {
+        const { binding } = entry;
+        if (entry.scope !== key || nextControl(binding.extractList.paginate) !== control || (binding.frameId ?? 0) !== (frameId ?? 0)) continue;
+        if (!items.includes(binding.extractList.item)) items.push(binding.extractList.item);
+      }
+      return items;
     }
   };
   return store;
+}
+
+/** The selector of the Next control a detected pagination names, trimmed; nothing for any other way on (load more, scrolling, numbered pages). */
+function nextControl(paginate: WebAutomationExtractListPagination | undefined): string | undefined {
+  if (paginate === undefined || (paginate.mode !== undefined && paginate.mode !== "next") || !("next" in paginate)) return undefined;
+  return paginate.next.trim();
 }
 
 /** A binding's meaning without its name, which two handles for one element record share. */

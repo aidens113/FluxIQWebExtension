@@ -61,9 +61,27 @@ class NextPageFault extends Error implements WebAutomationFailureCarrier {
   }
 }
 
+/**
+ * A command refused before any gesture: the request is missing, so nothing reached the page. It says so on its
+ * record (`dispatch` stage, `effect: "unacted"`, mirroring playback's `invalidRequest`), so the domain's lasting-act
+ * statement keeps a Next that never ran unacted instead of calling it ambiguous.
+ */
+class NextPageRefusal extends Error implements WebAutomationFailureCarrier {
+  readonly failure: WebAutomationFailureRecord;
+
+  constructor(reason: string) {
+    super(reason);
+    this.name = "NextPageRefusal";
+    this.failure = {
+      ...webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, { expected: "nextPage naming the list's item selector", actual: `${reason}; nothing was sent to the page` }),
+      effect: "unacted"
+    };
+  }
+}
+
 export async function nextPageAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const request = action.nextPage;
-  if (!request) return deps.failure(action, new Error("web.dom.next_page needs nextPage parameters."), startedAt);
+  if (!request) return deps.failure(action, new NextPageRefusal("web.dom.next_page needs nextPage parameters."), startedAt);
   // Above humanness 0 the pager's control is pressed as a person presses it, and the result says how
   // (`action-runtime/humanness/pager-press.ts`); at 0 the step and its result are exactly as before.
   const human = commandHumanness(action);

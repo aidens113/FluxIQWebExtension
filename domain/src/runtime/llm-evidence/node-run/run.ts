@@ -73,6 +73,7 @@ import { withClearedWait } from "./cleared-wait";
 import { webCoveredTarget } from "./covered-target";
 import { webLayerOwnControls, webRuntimeClearsLayers } from "./layer";
 import type { WebNodeRun } from "./context";
+import type { WebNodeCallRecord } from "./call-record";
 import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
 import { webNodeShownControlWords } from "./control-words";
@@ -83,13 +84,13 @@ import { webNodeBuildOf, type WebNodeBuildKey } from "./build-state";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webNodeCallWithDeclarationBeside } from "./nested-consequences";
 import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRefusal } from "./start-location";
-import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
+import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused, webListReadOwnDetection, webListReadRecordSchema } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNextPageListNamed } from "../action-failure";
-import { webNodeListReadGuard } from "./list-pages";
+import { webNodeListReadGuard, webNodeListsTurned, webNodeTurnedLists } from "./list-pages";
 import { webAutomationNextPageListMove } from "../../../output-nodes/next-page";
 import { webNodeWithHandleShape } from "./handle-shape";
 import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
@@ -110,51 +111,6 @@ const PRESS_AGAIN = "The press landed and the page did not change. Some pages ta
 
 /** What the call reports to the draft Core is accruing (`AS/runtime/flow-draft/`). */
 export type WebNodeDraftStatement = NonNullable<WebLlmEvidenceToolExecution["draft"]>;
-
-/**
- * What one call was, accumulated as the call proceeds, so a refusal raised at
- * any point records the same facts a success does.
- *
- * `assumed` is set once the resolution has run and then stands for every
- * refusal after it -- a missing declaration, a permission the person has not
- * given, another origin, and the page's own failure, which arrives as an
- * exception caught outside the block the resolution ran in. Threading it
- * through each of those call sites instead would mean the one site somebody
- * forgot silently lost the guess, which is the shape of defect this field
- * exists to close.
- */
-type WebNodeCallRecord = {
-  actionId?: string;
-  effect?: "observe" | "mutate";
-  proposes?: boolean;
-  call?: JsonObject;
-  parameters?: JsonObject;
-  status?: string;
-  assumed?: WebLlmNameAssumption[] | undefined;
-  /**
-   * The page as the call found it, once it has been read: the state a refusal
-   * says it found (`stateDigests.before`), and, for a refusal raised before the
-   * node's command went out, the state it left as well.
-   */
-  found?: WebLlmSnapshotBinding | undefined;
-  /** The node's command has gone to the page. From here a refusal cannot say the page is as it was found; only a page captured afterwards says what the call left. */
-  acted?: true;
-  /** The handle a lasting act on the page it stays on named, set as its command goes out: a robot check met after that still records the act's pre-act witness (t877). */
-  witness?: string | undefined;
-  /**
-   * The step as a succeeded call of this node would have stated it, written
-   * just before its command goes out: what the model may be shown (`input`),
-   * what the Flow keeps (`ranWith`), and what a replay needs (`replay`).
-   *
-   * Read only when the command met a robot check (`personNeeded`). Core then
-   * asks the person, and on Continue the call stands with this statement --
-   * the navigation or press did happen, and the person cleared what stood
-   * behind it -- so it is the same statement a success would have made
-   * (`personDraft`).
-   */
-  standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement; control: string | undefined; reads: string | undefined };
-  attempts?: number; // how many times the command went out, Core's default retries included (`./retries/`)
-};
 
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
@@ -270,7 +226,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         { resultReason: undefined, nodeId: undefined, assumed: undefined }
       ), looked, looked);
     }
-    current = await timing.look("look.before", () => currentPage(run, run.request, frozen.kind === "selected" ? { includeHidden: true, scope: { ...frozen.call.scope, kind: "single-frame" } } : undefined));
+    current = await timing.look("look.before", () => currentPage(run, run.request, frozen.kind === "selected" ? { includeHidden: true, scope: { ...frozen.call.scope, kind: "single-frame" } } : undefined, webMovesThePage(node)));
     const preparing = Date.now();
     // Absent from nowhere, which leaves the state this call found unsaid.
     record.found = current;
@@ -432,6 +388,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // target/extraction maps; only a proven current operational locator changes.
     const dispatchParameters = frozen.kind === "selected" ? webNodeFrozenDispatchParameters(frozen.call, ran) : capture?.parameters ?? webNodeDispatchParameters(node, ran);
     const reacquire = await webNodeScopedReacquire(run, { definitionId: node.definitionId, handle, parameters: dispatchParameters, before: current, look: (options) => readablePage(run, run.request, options) });
+    record.turns = webNodeTurnedLists(run, node.actionType, dispatchParameters); // A press on a list's Next is a page turn, as a Next page is: a lost answer is judged so, a landing moves the list (t1096).
     if (frozen.kind === "selected" && !frozen.consume()) return refusal(undefined, "target_unobserved", undefined, record);
     timing.record("prepare", preparing, Date.now());
     record.acted = true;
@@ -508,6 +465,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const composing = Date.now();
     const after = pressed.after;
     if (after) run.shown(after);
+    webNodeListsTurned(run, record.turns, { lastingAct, answeredPress: node.definitionId === PRESS_NODE_ID && result.status === "succeeded", found: current, after }); // A turn the page showed had landed moved its lists (`./list-pages/turn-landed.ts`, t1096).
     // What the node read, whole, for a node that reads. Never the raw page:
     // the look's payload is nothing else, and a press, a type or a navigation
     // carries the extension's own snapshot of the page and record of the

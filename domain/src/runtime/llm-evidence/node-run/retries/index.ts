@@ -7,6 +7,10 @@
 export { webNodeRetriedAnswer } from "./answer";
 export { webNodeDispatchWithRetries, type WebNodeDispatchResult, type WebNodeRetriedDispatch } from "./dispatch";
 export { webNodeEffectCheck } from "./effect-check";
+// Where the declared check cannot say, the page the call found against the page the act left (t1096).
+export { webNodePageEffectCheck } from "./page-effect";
+// Whether a page moved as a list turning its page moves it: the address, the current mark, the first row (t1096).
+export { webNodePageMove } from "./page-move";
 export { webNodeLookUntilPresent } from "./look";
 // A stale target found again, once, before the last retries (t786).
 export { webNodeLookedUpReacquire } from "./looked-up-reacquire";
