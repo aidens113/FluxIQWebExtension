@@ -1,4 +1,4 @@
-// The strip's "Open data in FluxIQ": the data page when the last run collected rows, the run's page when it
+// The strip's "Open data in FluxIQ panel": the data page when the last run collected rows, the run's page when it
 // did not, nothing while it runs, and never an address that is not http(s).
 
 import assert from "node:assert/strict";
@@ -37,11 +37,11 @@ test("rows collected: the data page; none: the run's page; running or never run:
     strip.show({ flowId: "flow.one", name: "One" });
     const link = fake(strip.element).byClass("strip-data-link")[0]!;
     assert.equal(link.hidden, false);
-    assert.equal(link.textContent, "Open data in FluxIQ");
+    assert.equal(link.textContent, "Open data in FluxIQ panel");
     link.dispatch("click");
     shown = row({});
     strip.draw();
-    assert.equal(link.textContent, "Open run in FluxIQ");
+    assert.equal(link.textContent, "Open run in FluxIQ panel");
     link.dispatch("click");
     assert.deepEqual(opened, ["https://flux.example/data", "https://flux.example/runs/run-7"]);
     shown = row({ running: true });

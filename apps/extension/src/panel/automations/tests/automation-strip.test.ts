@@ -42,9 +42,8 @@ function setup() {
     exportDataset: async (...args) => { calls.push(args.slice(0, 4)); state = { ...state, rows: state.rows.map((row) => ({ ...row, exporting: true })) }; strip.draw(); }
   };
   let requestCalls = 0;
-  // The strip's read of the shown Flow's humanness (`humanness/`) is not one of the requests these tests count.
   const request: PanelStore["request"] = async (message) => {
-    if (message.type !== RUNTIME_MESSAGES.panelFlowHumannessRead) requestCalls++;
+    requestCalls++;
     return { ok: false, sentence: "Failed", detail: "Try later" };
   };
   const strip = createAutomationStrip(request, controller);
@@ -121,15 +120,15 @@ test("disabled Run falls back to Open and external/hidden focus is untouched", a
 test("notice opener and failed request survive unchanged strip refresh", async () => focused(async (doc) => {
   const view = setup();
   view.update({ notice: { sentence: "Open for details", openFluxIQ: true } });
-  const opener = view.root.byClass("open-fluxiq")[1]!.children[0]!;
+  const opener = view.root.byClass("open-fluxiq")[2]!.children[0]!;
   opener.focus();
   opener.dispatch("click");
   view.update({ name: "Pending rename" });
-  assert.equal(view.root.byClass("open-fluxiq")[1]!.children[0], opener);
+  assert.equal(view.root.byClass("open-fluxiq")[2]!.children[0], opener);
   assert.equal(opener.disabled, true, "pending request remains the same disabled button");
   await Promise.resolve();
   view.update({ name: "After-error rename", notice: { sentence: "Updated details", detail: "More", openFluxIQ: true } });
-  assert.equal(view.root.byClass("open-fluxiq")[1]!.children[0], opener);
+  assert.equal(view.root.byClass("open-fluxiq")[2]!.children[0], opener);
   assert.equal(doc.activeElement, opener);
   assert.match(view.root.textContent, /Couldn't open FluxIQ/u);
   assert.equal(view.requestCalls(), 1);
@@ -205,22 +204,23 @@ test("passive matching-flow names emit once after draw, keep controls, and unsub
   assert.equal(heard.length, 1);
 }));
 
-test("the strip carries the shown Flow's own humanness: read when shown, its starting value from each status", async () => withFakeDocument(async () => {
+test("the strip's humanness is a link into the FluxIQ panel that opens the shown Flow, and it reads nothing", async () => withFakeDocument(async () => {
   const sent: Array<{ type: string; [key: string]: unknown }> = [];
   const request = (async (message: { type: string; [key: string]: unknown }) => {
     sent.push(message);
-    return message.type === RUNTIME_MESSAGES.panelFlowHumannessRead ? { ok: true, value: { ok: true, payload: {} } } : { ok: false, sentence: "Failed" };
+    return { ok: true, value: {} };
   }) as PanelStore["request"];
   const state: AutomationsState = { ownerRevision: 0, mode: "list", working: false, runInFlight: false, rows: [{ flowId: "f", name: "Orders", lines: [], running: false, stoppable: false, exporting: false, datasets: [] }] };
   const controller = { state: () => state, observe: () => false, setWorking: () => {}, refresh: async () => {}, focus: async () => {}, run: async () => {}, stop: async () => {}, exportDataset: async () => {} } as AutomationsController;
   const strip = createAutomationStrip(request, controller);
-  strip.render({ connectionState: "connected", settings: { humanness: 35 } } as unknown as Parameters<typeof strip.render>[0]);
   strip.show({ flowId: "f", name: "Orders" });
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  const section = fake(strip.element).byClass("flow-humanness")[0]!;
-  assert.equal(section.hidden, false);
-  assert.equal(section.byClass("flow-humanness-toggle")[0]!.textContent, "Humanness · 35");
-  assert.deepEqual(sent, [{ type: RUNTIME_MESSAGES.panelFlowHumannessRead, flowId: "f" }]);
-  strip.show(undefined);
-  assert.equal(section.hidden, true);
+  const root = fake(strip.element);
+  assert.equal(root.byClass("flow-humanness").length, 0, "no slider on the strip");
+  assert.deepEqual(sent, [], "showing a Flow reads no humanness");
+  const link = root.byClass("open-fluxiq").map((node) => node.children[0]!).find((node) => node.textContent === "Change in the FluxIQ panel")!;
+  link.dispatch("click");
+  await Promise.resolve();
+  assert.deepEqual(sent, [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId: "f" }]);
+  const words = root.byClass("open-fluxiq").map((node) => node.children[0]!.textContent);
+  assert.ok(words.includes("Open in FluxIQ panel"));
 }));

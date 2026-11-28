@@ -9,7 +9,8 @@
 // here: its relays pass a named project through untouched.
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../shared/protocol";
-import { askCoreForFirstProject, fetchProjectFromCoreSnapshot } from "./core-api";
+import type { PanelRelayResponse } from "../../shared/protocol";
+import { askCoreForFirstProject, fetchProjectFromCoreSnapshot, writeCoreActiveProject } from "./core-api";
 import type { ProjectChoice, ProjectChoiceStorage } from "../projects/index";
 
 // A Core answer is reused this long, so a burst of reads (the panel opening,
@@ -79,6 +80,14 @@ export class ProjectContext {
     this.chosen = stored;
     this.deps.onProjectName?.();
     return true;
+  }
+
+  /**
+   * Tells Core the person's current project, so the panel and every other client read the same one.
+   * The browser's own copy (`choose`) stays as the fallback for a Core that cannot be reached.
+   */
+  shareChoice(projectId: string): Promise<PanelRelayResponse> {
+    return writeCoreActiveProject({ coreApiUrl: this.deps.settings().coreApiUrl, token: this.deps.session().token }, { activeProjectId: projectId });
   }
 
   /** The project the person chose, or undefined when this browser follows Core. */

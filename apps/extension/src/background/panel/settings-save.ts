@@ -10,7 +10,6 @@
 // person set it, and effective settings keep requests off where they are used.
 
 import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
-import { normalizeHumanness } from "@fluxiq/contracts/automation";
 import type { FluxIQSettings } from "../../shared/protocol";
 import { requestsChoice } from "../capture-policy/index";
 
@@ -39,6 +38,5 @@ export function mergeSettings(
     const value = record[field];
     if (typeof value === "boolean") next[field] = value;
   }
-  if (typeof record.humanness === "number" && Number.isFinite(record.humanness)) next.humanness = normalizeHumanness(record.humanness);
   return next;
 }

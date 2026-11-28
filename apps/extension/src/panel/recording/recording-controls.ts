@@ -4,9 +4,10 @@
 //                  "Start recording", the name the Lab presses), shown while
 //                  connected and idle. One press asks what FluxIQ should learn
 //                  from it and starts recording this tab; the chat stays on screen.
-//   newAutomation  the automations tab's "New automation" section: "Show FluxIQ
-//                  how" (the same name) and "Extract data from this page", each
-//                  with a line saying what it does or why it can't
+//   extractEntry   the automations tab's "Extract data from this page", with a
+//                  line saying what it does or why it can't. There is no second
+//                  "show it how" button and no "New automation" card: the chat is
+//                  the one way to start a Flow, and "Show me how" is its composer's
 //   bar            a slim bar under the top bar, on every tab, while a
 //                  recording runs: how many steps, "Extract Data From This
 //                  Page", and "Stop recording" (the Lab's name). It also holds
@@ -44,7 +45,7 @@ export type RecordingControls = {
   /** "Show me how", for the composer. */
   readonly recordButton: HTMLButtonElement;
   readonly bar: HTMLElement;
-  readonly newAutomation: HTMLElement;
+  readonly extractEntry: HTMLElement;
   render(status: ExtensionStatus): void;
   /** Whether FluxIQ is working, held steady by the shell; redraws when it changes. */
   setWorking(working: boolean): void;
@@ -80,16 +81,11 @@ export function createRecordingControls(context: PanelContext, options: Recordin
     hidden: true,
     attrs: { type: "button", "aria-label": "Start recording", title: IDLE_WORDS }
   }, [recordIcon(), createElement("span", { className: "composer-record-text", text: "Show me how" })]);
-  const recordNew = createElement("button", { className: "small-button", text: "Show FluxIQ how", attrs: { type: "button", "aria-label": "Start recording" } });
-  const recordLine = createElement("p", { className: "card-line" });
   const extractionHost = createElement("div", { className: "extraction-entry" });
   const extraction = mountExtractionPanel(extractionHost, { prepare: startRecordingIfIdle });
   const extractLine = createElement("p", { id: "extractDataLine", className: "card-line" });
   const extractSlot = createElement("div", { className: "new-automation-extract" }, [extractionHost]);
-  const newAutomation = createElement("section", { className: "new-automation", attrs: { "aria-label": "New automation" } }, [
-    createElement("h3", { className: "new-automation-title", text: "New automation" }),
-    createElement("p", { className: "card-line", text: "Tell FluxIQ what to do in the Chat tab, or show it how." }),
-    createElement("div", { className: "new-automation-row" }, [recordNew, recordLine]),
+  const extractEntry = createElement("section", { className: "new-automation", attrs: { "aria-label": "Extract data" } }, [
     createElement("div", { className: "new-automation-row" }, [extractSlot, extractLine])
   ]);
 
@@ -125,7 +121,6 @@ export function createRecordingControls(context: PanelContext, options: Recordin
   const bar = createElement("section", { className: "recording-bar", hidden: true, attrs: { "aria-label": "Recording", "aria-live": "polite" } }, [barRow, popupLine, block, notice, finish.element]);
 
   recordButton.addEventListener("click", () => void startRecording());
-  recordNew.addEventListener("click", () => void startRecording());
   stopButton.addEventListener("click", () => void send(RUNTIME_MESSAGES.stopRecording, stopButton, (status) => status.recordingState !== "recording"));
   okButton.addEventListener("click", () => void send(RUNTIME_MESSAGES.dismissRecordingLock, okButton, (status) => status.recordingBlock === undefined));
 
@@ -141,7 +136,7 @@ export function createRecordingControls(context: PanelContext, options: Recordin
   /** Asks what FluxIQ should learn, then starts recording this tab; undefined once it started. */
   async function begin(): Promise<Refusal | undefined> {
     finish.reset();
-    const description = await requestRecordingDescription(newAutomation, { popup });
+    const description = await requestRecordingDescription(extractEntry, { popup });
     if (description === undefined) return { cancelled: true };
     await pending.write({ description, known: await knownRecordings(), at: Date.now() });
     const result = await store.request({ type: RUNTIME_MESSAGES.startRecording, description });
@@ -207,8 +202,6 @@ export function createRecordingControls(context: PanelContext, options: Recordin
     recordButton.hidden = record.hidden || !connected;
     recordButton.disabled = record.disabled || sending;
     recordButton.title = record.reason ?? IDLE_WORDS;
-    recordNew.disabled = record.disabled || record.hidden || sending;
-    recordLine.textContent = record.hidden ? "Recording now. Stop it from the bar at the top." : record.reason ?? IDLE_WORDS;
 
     const extract = extractControl(status, working);
     extraction.setAvailable(!extract.disabled, extract.line);
@@ -240,5 +233,5 @@ export function createRecordingControls(context: PanelContext, options: Recordin
     rerender();
   }
 
-  return { recordButton, bar, newAutomation, render, setWorking };
+  return { recordButton, bar, extractEntry, render, setWorking };
 }

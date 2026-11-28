@@ -41,17 +41,12 @@ export const RUNTIME_MESSAGES = {
   panelConversationRead: "fluxiq.panel.conversationRead",
   panelConversationSend: "fluxiq.panel.conversationSend",
   panelConversationAnswer: "fluxiq.panel.conversationAnswer",
-  // The chat's thread list: a person's own name for a thread, and deleting one (`background/panel/thread-change-relay.ts`).
-  panelConversationRename: "fluxiq.panel.conversationRename",
-  panelConversationDelete: "fluxiq.panel.conversationDelete",
   // One Flow's or one task's own humanness: read a Flow's, and set or clear either (`background/panel/humanness-relay.ts`).
-  panelFlowHumannessRead: "fluxiq.panel.flowHumannessRead",
   panelFlowHumannessSet: "fluxiq.panel.flowHumannessSet",
   panelTaskHumannessSet: "fluxiq.panel.taskHumannessSet",
   // The panel's projects: list, create, and choose the one every call without its own project uses
   // (`background/projects/`); `panelChanges` is the worker's push when Core's gateway reports work.
   panelListProjects: "fluxiq.panel.listProjects",
-  panelCreateProject: "fluxiq.panel.createProject",
   panelSelectProject: "fluxiq.panel.selectProject",
   panelChanges: "fluxiq.panel.changes",
   panelStopRun:"fluxiq.panel.stopRun",
@@ -74,10 +69,9 @@ export const RUNTIME_MESSAGES = {
   panelRenameTask: "fluxiq.panel.renameTask",
   panelRemoveTask: "fluxiq.panel.removeTask",
   panelModelReadiness: "fluxiq.panel.modelReadiness",
+  // The person's own starting humanness, read from Core (`identity-access` `get-my-preferences`, t1095); the browser keeps none.
+  panelStartingHumanness: "fluxiq.panel.startingHumanness",
   // The model key card: save, replace and remove the person's own key (secret-keys, t928).
-  panelModelKeySave: "fluxiq.panel.modelKeySave",
-  panelModelKeyReplace: "fluxiq.panel.modelKeyReplace",
-  panelModelKeyRemove: "fluxiq.panel.modelKeyRemove",
   panelGenerateFromRecording: "fluxiq.panel.generateFromRecording",
   panelTestGeneratedAutomation: "fluxiq.panel.testGeneratedAutomation",
   panelSaveGeneratedAutomation: "fluxiq.panel.saveGeneratedAutomation",

@@ -28,6 +28,6 @@ export function createExtensionChatTransport(
     models: modelsPort(request),
     modelKeys: modelKeysPort(request, undefined, (listener) => subscribeModelAccess(listen, listener)),
     results: resultsPort(request, listen, download),
-    ...(status === undefined ? {} : { taskSettings: taskSettingsPort(request, status) })
+    ...(status === undefined ? {} : { taskSettings: taskSettingsPort(request) })
   };
 }

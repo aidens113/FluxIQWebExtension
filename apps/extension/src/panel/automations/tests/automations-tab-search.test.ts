@@ -40,7 +40,7 @@ function setup(options: { tasks?: boolean; library?: boolean } = {}) {
   const hooks: AutomationsTabHooks = {
     choose: () => undefined,
     review: document.createElement("div"),
-    newAutomation: document.createElement("div"),
+    extract: document.createElement("div"),
     ...(options.tasks === false ? {} : { tasks: createTasksScreen({ port, results: port.results, memory: createFakeTasksMemory(), projectId: () => "project-1", now: () => NOW, debounceMs: 0 }) }),
     ...(options.library === false ? {} : { library: {
       element: document.createElement("div"),
@@ -67,7 +67,7 @@ function setup(options: { tasks?: boolean; library?: boolean } = {}) {
 test("without tasks or a library the tab has no search box and no switch", async () => withFakeDocument(async () => {
   const connected = statusWith({ connectionState: "connected", paired: true });
   const request = async <T>(): Promise<PanelResult<T>> => ({ ok: true, value: { payload: { flows: [], runs: [] } } as T });
-  const tab = createAutomationsTab({ surface: "sidepanel", store: { request, current: () => connected, subscribe: () => () => undefined } }, { choose: () => undefined, review: document.createElement("div"), newAutomation: document.createElement("div") });
+  const tab = createAutomationsTab({ surface: "sidepanel", store: { request, current: () => connected, subscribe: () => () => undefined } }, { choose: () => undefined, review: document.createElement("div"), extract: document.createElement("div") });
   const root = fake(tab.element);
   assert.equal(root.querySelectorAll("input").length, 0);
   assert.equal(root.byClass("segment-button").length, 0);

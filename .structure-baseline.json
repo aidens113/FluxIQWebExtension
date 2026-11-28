@@ -189,7 +189,7 @@
     },
     "statement-packing": {
       "apps/extension/src/panel/extraction/tests/panel-draft-recovery.test.ts": 71,
-      "apps/extension/src/panel/shell/tests/mount-panel-navigation.test.ts": 63,
+      "apps/extension/src/panel/shell/tests/mount-panel-navigation.test.ts": 62,
       "apps/extension/src/background/tests/extraction-preview-ownership.test.ts": 58,
       "apps/extension/src/panel/extraction/read-recovery/tests/createExtractionReadRecovery.test.ts": 56,
       "apps/extension/src/panel/extraction/tests/panel.test.ts": 54,

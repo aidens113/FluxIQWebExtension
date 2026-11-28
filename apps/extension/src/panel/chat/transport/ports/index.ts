@@ -2,7 +2,7 @@
 export { activityPort, type RuntimeListen } from "./activity";
 export { changesPort } from "./changes";
 export { conversationPort } from "./conversation";
-export { modelKeysPort, readModelAccess, subscribeModelAccess, COULD_NOT_CHECK_KEY, KEY_WRITE_MESSAGES } from "./model-keys";
+export { modelKeysPort, readModelAccess, subscribeModelAccess, COULD_NOT_CHECK_KEY } from "./model-keys";
 export { modelsPort } from "./models";
 export { recordingsPort } from "./recordings";
 export { runsPort } from "./runs";

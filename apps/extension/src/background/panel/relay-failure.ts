@@ -5,7 +5,7 @@ import type { PanelRelayFailureCode, PanelRelayResponse } from "../../shared/pro
 
 const SENTENCES: Record<Exclude<PanelRelayFailureCode, "unreachable" | "timed_out" | "refused" | "failed" | "not_paired">, string> = {
   forbidden: "Only the FluxIQ panel can do that.",
-  no_project: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again.",
+  no_project: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one.",
   invalid_request: "That request is missing something FluxIQ needs."
 };
 

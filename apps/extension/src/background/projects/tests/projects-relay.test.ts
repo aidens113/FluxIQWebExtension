@@ -1,5 +1,5 @@
-// Coverage of projects-relay.ts: list, create and choose a project through
-// Core's `projects` and `create-project`, with the choice dropped when its
+// Coverage of projects-relay.ts: list and choose a project through
+// Core's `projects` and the per-person context write, with the choice dropped when its
 // project is gone and owners never passed on.
 
 import assert from "node:assert/strict";
@@ -37,7 +37,6 @@ const projectsAnswer: PanelRelayResponse = {
 
 test("the message names are the panel's own", () => {
   assert.equal(RUNTIME_MESSAGES.panelListProjects, "fluxiq.panel.listProjects");
-  assert.equal(RUNTIME_MESSAGES.panelCreateProject, "fluxiq.panel.createProject");
   assert.equal(RUNTIME_MESSAGES.panelSelectProject, "fluxiq.panel.selectProject");
   assert.equal(RUNTIME_MESSAGES.panelChanges, "fluxiq.panel.changes");
 });
@@ -71,18 +70,39 @@ test("Core's refusal comes back as it was, and the choice is untouched", async (
   assert.deepEqual(h.choices, []);
 });
 
-test("creating sends the name alone and returns the project", async () => {
-  const h = harness({ "create-project": { ok: true, payload: { project: { id: "p9", name: "Nine", ownerUserId: "x" } } } });
-  const reply = await relayProjects({ type: RUNTIME_MESSAGES.panelCreateProject, name: "  Nine ", description: "ignored" }, h.context);
-  assert.deepEqual(reply, { ok: true, project: { id: "p9", name: "Nine" } });
-  assert.deepEqual(h.calls, [{ endpoint: "create-project", payload: { name: "Nine" } }]);
+test("creating a project is no longer a message: projects are made in the panel or by the first message", async () => {
+  assert.equal((RUNTIME_MESSAGES as Record<string, unknown>).panelCreateProject, undefined);
+  const h = harness({});
+  assert.equal(await relayProjects({ type: "fluxiq.panel.createProject", name: "Nine" }, h.context), undefined);
+  assert.deepEqual(h.calls, []);
 });
 
-test("creating without a name asks for one and calls nothing", async () => {
-  const h = harness({});
-  const reply = await relayProjects({ type: RUNTIME_MESSAGES.panelCreateProject, name: "   " }, h.context) as { ok: boolean };
-  assert.equal(reply.ok, false);
-  assert.deepEqual(h.calls, []);
+test("a chosen project is written to Core before the browser keeps it", async () => {
+  const h = harness({ projects: projectsAnswer });
+  const shared: string[] = [];
+  const context: ProjectsRelayContext = { ...h.context, shareChoice: async (projectId) => {
+      shared.push(projectId);
+      return { ok: true, payload: null };
+    }
+  };
+  assert.deepEqual(await relayProjects({ type: RUNTIME_MESSAGES.panelSelectProject, projectId: "p2" }, context), { ok: true });
+  assert.deepEqual(shared, ["p2"]);
+  assert.deepEqual(h.choices, [{ projectId: "p2", name: "Two" }]);
+});
+
+test("Core's 403 is shown as its sentence and the choice is not made", async () => {
+  const h = harness({ projects: projectsAnswer });
+  const refusal: PanelRelayResponse = { ok: false, code: "refused", httpStatus: 403, error: "This browser is bound to another project." };
+  const context: ProjectsRelayContext = { ...h.context, shareChoice: async () => refusal };
+  assert.deepEqual(await relayProjects({ type: RUNTIME_MESSAGES.panelSelectProject, projectId: "p2" }, context), refusal);
+  assert.deepEqual(h.choices, []);
+});
+
+test("an unreachable Core leaves the browser's copy as the choice", async () => {
+  const h = harness({ projects: projectsAnswer });
+  const context: ProjectsRelayContext = { ...h.context, shareChoice: async () => ({ ok: false, code: "unreachable", error: "FluxIQ could not be reached." }) };
+  assert.deepEqual(await relayProjects({ type: RUNTIME_MESSAGES.panelSelectProject, projectId: "p2" }, context), { ok: true });
+  assert.deepEqual(h.choices, [{ projectId: "p2", name: "Two" }]);
 });
 
 test("choosing a listed project keeps it with its name", async () => {
