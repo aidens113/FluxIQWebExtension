@@ -28,10 +28,37 @@ type Host = EventTarget & {
 /** Where the stand-in clock is set once the page world has installed: long after the document's first change. */
 const SETTLED_AT = 60_000;
 
+const PAGE_GLOBALS = ["window", "chrome", "document", "PerformanceObserver", "MutationObserver", "performance"] as const;
+
+/** The tests whose globals are already stood in, so a second page in one test does not take the first page's stand-ins as the originals. */
+const standingIn = new WeakSet<TestContext>();
+
+/**
+ * Stands the page globals in for the rest of `t`, and puts back what was there before its first page once it ends.
+ * node:test runs a test's `after` hooks in the order they were added, so a restore per page would end on the first
+ * page's stand-ins whenever a test opens two, leaving `performance` without `getEntriesByType` for every later file.
+ */
+function standIn(t: TestContext): void {
+  if (standingIn.has(t)) return;
+  standingIn.add(t);
+  const globals = globalThis as Record<string, unknown>;
+  const previous = PAGE_GLOBALS.map((name) => [name, Object.getOwnPropertyDescriptor(globals, name), globals[name]] as const);
+  t.after(() => {
+    for (const [name, descriptor, value] of previous) {
+      if (!descriptor) {
+        delete globals[name];
+        continue;
+      }
+      Object.defineProperty(globals, name, descriptor);
+      // Node's `performance` is an accessor that keeps whatever was last set in it, so the value goes back through it too.
+      if (descriptor.set) globals[name] = value;
+    }
+  });
+}
+
 function page(t: TestContext, options: { hidden?: boolean; observer?: boolean } = {}) {
   const globals = globalThis as Record<string, unknown>;
-  const names = ["window", "chrome", "document", "PerformanceObserver", "MutationObserver", "performance"];
-  const previous = Object.fromEntries(names.map((name) => [name, globals[name]]));
+  standIn(t);
   let deliver: (entries: Entry[]) => void = () => undefined;
   class TimelineStandin {
     constructor(private readonly callback: (list: { getEntries(): Entry[] }) => void) {}
@@ -64,7 +91,6 @@ function page(t: TestContext, options: { hidden?: boolean; observer?: boolean } 
     MutationObserver: options.observer === false ? undefined : ObserverStandin,
     performance: { now: () => clock.at }
   });
-  t.after(() => { Object.assign(globals, previous); });
   const installed = installPageWorkWatch();
   clock.at = SETTLED_AT;
   let drained = 0;
@@ -112,13 +138,15 @@ test("a document that changed is busy for the quiet window, then still", (t) => 
 
 test("a timer due within the horizon keeps the page busy until its callback has run; one due later never does", async (t) => {
   const p = page(t);
-  p.host.setTimeout((() => undefined), (PAGE_WORK_HORIZON_MS + 500));
+  const due = p.host.setTimeout((() => undefined), (PAGE_WORK_HORIZON_MS + 500));
   assert.equal(p.busy(), false, "a timer due later is the page acting in its own time");
   p.host.setTimeout((() => undefined), 30);
   assert.equal(p.busy(), true);
   await later(60);
   assert.equal(p.busy(), false);
   assert.equal(p.drained(), 1, "the count falling to none is announced");
+  // Not left to fire after the test, when this page's window is no longer the global one.
+  p.host.clearTimeout(due);
 });
 
 test("a deferred one-shot is visible to command readiness without holding ordinary navigation readiness", (t) => {
@@ -199,8 +227,10 @@ test("an interval counts until its first run, an animation-frame loop its first 
   assert.equal(p.busy(), false, "an animation loop is the page's heartbeat");
 
   const hidden = page(t, { hidden: true });
-  hidden.host.requestAnimationFrame((() => undefined));
+  const frame = hidden.host.requestAnimationFrame((() => undefined));
   assert.equal(hidden.busy(), false, "a hidden document draws no frames");
+  // Not left to draw after the test, when this page's window is no longer the global one.
+  hidden.host.cancelAnimationFrame(frame);
 });
 
 test("an XHR is counted until its loadend, and a cleared timer is done", (t) => {
