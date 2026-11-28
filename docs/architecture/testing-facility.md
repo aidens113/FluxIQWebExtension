@@ -1465,6 +1465,33 @@ query) since the last reset. The gated user-script probe
 | `professional-network` | `in-place-paging` | People-search Next patches each existing row in place (same elements, new text and href), then disables | `runtime/typed-browser-readiness` |
 
 
+### Background traffic
+
+Real sites never go quiet on the network. Since t1094 local-classifieds makes the background traffic
+they make, on every page and in every rendering, with no mode to arm it
+(`apps/scenario-lab/src/scenarios/local-classifieds/client/background-script.ts`):
+
+- an analytics beacon, `GET collect?ev=...`, answered `204`: the page view, then a heartbeat every
+  0.6-0.9 s by seed (`beaconInterval`) for as long as the page is open, each beat scheduled by a fresh
+  closure after the last one answered;
+- a long poll for messages, `GET updates.json?since=...&wait=25`, asked again at once when it answers.
+  The Lab's routes answer synchronously and cannot hold a request open, so the server answers at once
+  with no news and `held: false`, and the page falls back to asking every 25 s. A spec that needs the
+  request held holds it with Playwright's routing, as a real long-poll server would.
+
+Neither changes the document. The traffic is what shows a step's readiness waiting for the page to be
+drawn, not for the network to stop. `apps/extension/e2e/content/tests/page-readiness/` asks the page
+the worker's readiness question with the long poll held. The page is ready at once after a load and
+when idle, and the two local-classifieds waits readiness was built for still hold: the listing panel
+a timer then a request draws (t891), and the sort that rewrites the address (t893). Before t1094 the
+same question ran to the worker's 20 s deadline on these pages
+(`docs/working/page-diff-delivery-plan/reports/t1094.md`).
+
+The beacon also tests presses. The radius picker's Apply ignores its first press after a change.
+`apps/extension/e2e/content/tests/page-readiness/tests/background-press.spec.ts` presses it once a
+round, as a Flow's step does, and counts the beacons that reached the Lab during the press. With the
+press answered only by requests it may have caused, each ignored first press is followed by one more.
+
 ## Recording lane and Flow lane
 
 The default `lab run` on isolated targets records a described demonstration.

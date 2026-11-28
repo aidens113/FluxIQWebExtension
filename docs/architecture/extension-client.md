@@ -2912,23 +2912,57 @@ no top-frame navigation is in flight (it begins at `onBeforeNavigate` and ends a
 `onErrorOccurred`); and, for a navigation FluxIQ drove (`updateTabUrl`, a new tab), the drive has been
 heard beginning.
 
-The page says it has finished drawing itself. The page world counts the work the page schedules for
-itself, each piece until it is done:
+The page says it has finished drawing itself: its document has not changed for the quiet window
+(`PAGE_QUIET_WINDOW_MS`, 100 ms), and no work is out that can still be drawing it. The page world
+counts the work the page schedules for itself:
 - a timer due within `PAGE_WORK_HORIZON_MS` (1 s);
 - an animation frame;
 - a `fetch`, until its resource-timing entry;
 - an XHR, until its `loadend`.
 
 Recurring work is never counted: a callback scheduled again once it has run, an interval once it has
-fired, and whatever such a callback begins. That is how a page that polls forever leaves readiness
-alone, by its own evidence rather than a time limit. The worker injects a function that asks the page
-world and waits for its count to drain (`fluxiq:page-work-drained`). It confirms one task later, with
-the document unchanged across that task by a `MutationObserver`.
+fired, and whatever such a callback begins.
+
+**Which counted work holds the page (t1094).** Readiness is what the next step needs: the document it
+will act on, drawn and no longer changing.
+- A timer or frame that begins new work holds the page until it has run; the horizon bounds it.
+- A request, and a timer or frame that continues a chain, holds it until it is done or until the
+  document has gone the horizon unchanged since the request or the chain began.
+- A chain is the same source again within a horizon of the last piece ending, or while one is still
+  out. A timer's or frame's source is its callback's text, so a loop of fresh closures is one chain. A
+  fetch's source is its address without the query, so a beacon sent again and again is one chain. An
+  XHR's address is not read, so each XHR is its own.
+
+Work that changes the document keeps holding, because each change starts the horizon again: a list
+fetched and then drawn, or a chain that draws as it goes, is waited for until the drawing stops. Work
+that changes nothing stops holding a horizon after it began, and never holds again: a change the page
+makes later, for other work, does not wake it, so it adds no horizon to the steps after it. That covers a long poll, a stream, an
+analytics beacon, a request a blocker swallowed (no resource entry ever comes), and an animation loop
+that moves nothing in the document (`page-world/page-work/tracker.ts`, `document-changes.ts`,
+`callback-source.ts`).
+
+Before t1094 every counted request and every fresh timer held the page until it finished. A real
+site's network never finishes, so on the user's eldorado.gg run every open-page step and nearly every
+look ran to the 20 s deadline (`page.navigate` 20,155 ms, `send.capture_snapshot` 20,558 ms). A wait
+that ends on its deadline proves nothing, so the next action waited again. The deadline is kept only to
+bound a page that never stops changing, such as a carousel moved by script every frame. Lowering it
+was never the fix.
+
+The worker injects a function that asks the page world (`shared/scheduled-work-settled.ts`). The page
+is settled at once when the page world says it is not busy. Otherwise the function asks again a task
+after the count drains (`fluxiq:page-work-drained`), and every 50 ms in between, because work that
+changes nothing stops holding with time rather than with an event. The question is bounded by what is
+left of the worker's wait, so a page that never settles keeps nothing still asking. The page world
+watches its document from `document_start` with one `MutationObserver`, so a question asked at any
+moment knows how long the page has been still. A page world that cannot observe its document says it
+is not counting.
 
 This is what the realistic sites need. local-classifieds draws a listing's panel from a 500-1000 ms
 timer and then a request, and draws its sorted results after rewriting the address in place, a short
 delay and a request. The load event alone said neither was there (`run-mwaliwap-12e3ad05`,
-`run-mwalxlxu-efd58e23`).
+`run-mwalxlxu-efd58e23`). Since t1094 its pages also make background traffic, an analytics beacon every
+0.6-0.9 s and a long poll, and both waits still hold while that traffic is left alone
+(`e2e/content/tests/page-readiness/`).
 
 Until 2026-11-11 the wait needed the address to stand still for one second instead. That second is
 kept only where nothing can speak for the page:
@@ -2947,8 +2981,8 @@ the next action waited in the worker: an injected question and 80-200 ms before 
 local-classifieds after its radius and sort rewrote the address (`run-mwaqjkxp-ae3d862c`). The proof
 now follows the document, and each content script remembers the address it last found the page settled
 at. An action that finds the address moved since asks the page world the same question the worker
-asked, through the same function, before the action's own clock starts. An idle page answers within a
-task. A page still drawing what the new address says (local-classifieds clears its results, rewrites
+asked, through the same function, before the action's own clock starts. An idle page answers at
+once. A page still drawing what the new address says (local-classifieds clears its results, rewrites
 the address and requests the new ones) is waited for. Where no page world counts, the address must
 stand still the old second. The wait is bounded by the worker's 20 s readiness deadline, and a wait
 that ran out proves nothing. A child frame's content script sees only its own address, so an action
@@ -2960,7 +2994,7 @@ scrolling the list's end into view. On a list already at its end, both were wait
 of a replayed read's 2.3 s on local-classifieds. Both now also ask the page world, after two animation
 frames so the page's `scroll` handlers and `IntersectionObserver` callbacks have run. A reveal that set
 a load going is counted work, so its growth is seen first. When the work is done and the document held
-still a task, the window closes. A page that cannot say keeps the window: no page world, or a hidden
+still for the quiet window, the window closes. A page that cannot say keeps the window: no page world, or a hidden
 tab, which draws no frames. Work the page world does not count is the remaining gap, chiefly a list
 fed over a WebSocket.
 
@@ -2996,6 +3030,34 @@ Then the windows close, and the settled look (`ignored-press/settled-look.ts`) r
 section as it stands, with no `QUIET_MS` or `HELD_MS` to wait. Before this, local-classifieds'
 location chip and its sort box each spent 0.8-1.2 s in the content script after the press. Work still
 running, and work the page world cannot follow (an `async` handler), keep the waits they had.
+
+**Only the press's own requests answer for it** (t1094, `page-world/request-starts.ts`,
+`page-world/work-cause/`, `page-world/press-work/later-listeners.ts`). Until t1094 any request the page
+began after a press counted as that press reaching the server. A real site's beacon lands in most
+800 ms press windows, so a press the page had ignored was not pressed again. local-classifieds'
+radius Apply, which ignores its first press, failed a saved Flow that way (`run-mwznq45m-4adad633`,
+attempt 3). Each request is now recorded with what caused it, and a press is answered only by a
+request it may have caused:
+- **Caused by the press.** A request begun in the press's own work: its click handlers, and the
+  timers, frames, microtasks and `then` callbacks they chain into, as `press-work/` follows them.
+- **Not the press's.** A request begun in another armed press's work.
+- **Not the press's.** A request begun in a timer, interval or frame lineage started before the
+  press. Every timer, interval and frame carries the origin it was scheduled with
+  (`work-cause/work-origins.ts`): the origin of the callback that scheduled it, or a fresh one. So
+  a beacon loop keeps the origin of whatever started it, however many fresh closures it schedules.
+- **Unsure, so the press's.** Any other request (from an event, a promise continuation, a message)
+  is counted as the press's, so a press that may have landed is never pressed again.
+- **The one exception.** A `GET` or `HEAD` fetch to an address the page's own background already
+  asked for before the press is not counted, when the press's work was wholly followed. That is a
+  beacon whose next timer was set by the last beacon's answer. A request that can change anything
+  is never excused this way: any other method, an XHR, a `sendBeacon`, a socket message.
+
+**When a press counts as wholly followed.** Its click was seen, its handlers ran synchronously, and
+every hook is intact. A listener for another event that the press's work registers used to end that
+at once. Now it ends only when that event reaches a target the window hears. Targets the window
+cannot hear end it at once, as before: a target outside the document, a closed shadow root,
+`unload`, `beforeunload`. Where the page world says its hooks hold, the press no longer reads the
+resource timeline, which cannot tell one request's cause from another's.
 
 **The press moment** (`content/action-runtime/acted-at/`). Each action records when it first acted on
 the page (the press, the key, the value set) as `actedAt`. The domain's payload carries it

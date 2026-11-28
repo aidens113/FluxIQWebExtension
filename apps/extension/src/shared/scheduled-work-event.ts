@@ -13,9 +13,16 @@
 // a callback begins) is the page's own heartbeat, not the page being drawn, and
 // is never counted.
 //
+// Since t1094 not all counted work holds the page: a request, or a timer or
+// frame that continues a chain of the same work, stops holding it once the
+// document has gone `PAGE_WORK_HORIZON_MS` unchanged since it began, so a real
+// site's beacons, long polls and widgets, which change nothing, no longer hold
+// readiness to its deadline (`page-world/page-work/tracker.ts`).
+//
 // The asker dispatches `PAGE_WORK_WATCHED_EVENT` on `window`, which the page
 // world cancels when it is counting, and `PAGE_WORK_BUSY_EVENT`, which it
-// cancels while any counted work is outstanding. Each time the count falls to
+// cancels while work that holds the page is outstanding or the document changed
+// within `PAGE_QUIET_WINDOW_MS`. Each time the count falls to
 // none the page world dispatches `PAGE_WORK_DRAINED_EVENT` on `window`, with no
 // detail. All three are read from `dispatchEvent`'s return on the same call
 // stack; nothing of the page's work -- an address, a callback -- leaves the page
@@ -41,3 +48,12 @@ export const PAGE_WORK_DRAINED_EVENT = "fluxiq:page-work-drained";
  * that clock waited for goes unwaited.
  */
 export const PAGE_WORK_HORIZON_MS = 1_000;
+
+/**
+ * How long the document must have gone unchanged for the page to be settled
+ * (t1094): long enough for a renderer that commits across several tasks and
+ * frames (six at 60 Hz) to have finished, short enough to cost an idle page
+ * nothing a person would notice. Before t1094 one task was enough, because
+ * every request and fresh timer had to finish first.
+ */
+export const PAGE_QUIET_WINDOW_MS = 100;

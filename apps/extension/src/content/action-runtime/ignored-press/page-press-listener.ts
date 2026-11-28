@@ -9,7 +9,11 @@
 //   entry of initiator type fetch, xmlhttprequest or beacon that started after
 //   the press, read through a `PerformanceObserver` (which still sees entries
 //   once the timeline buffer is full), flushed with `takeRecords`, and through
-//   `getEntriesByType` where there is no observer. A resource entry is only
+//   `getEntriesByType` where there is no observer. Since t1094 the page world
+//   answers only for requests the press may have caused, so a beacon the page
+//   sends on its own clock is not the press's answer; where the page world
+//   says all its hooks hold, the timeline -- which cannot tell one request's
+//   cause from another's -- is not read. A resource entry is only
 //   written once its response ends, so until 2026-10-12 a press whose page
 //   awaited the server before it changed anything read as ignored whenever
 //   the server took longer than the window, and was pressed again:
@@ -83,10 +87,12 @@ function contentScriptPage(): PressPage {
 export function listenForPressAnswer(pressed: Element, note: (signal: PressSignal) => void, page: PressPage = contentScriptPage()): PressListener {
   const document = pressed.ownerDocument;
   const view = (document?.defaultView ?? undefined) as PressWindow | undefined;
+  const mark = page.markRequestStarts?.(pressed);
   const listeners = [
     listenForChange(pressed, page, note),
-    listenForRequestStarts(pressed, page, note),
-    listenForRequests(page, note),
+    listenForRequestStarts(mark, note),
+    // The page world sees every request the timeline would, as it begins, and knows what caused it (t1094).
+    mark?.healthy?.() === true ? NOTHING : listenForRequests(page, note),
     listenForLeaving(document, view, note),
     listenForFocus(pressed, document, note)
   ];
@@ -124,9 +130,8 @@ function listenForChange(pressed: Element, page: PressPage, note: (signal: Press
   };
 }
 
-/** A request the page began after the mark, read from the page world on every flush. */
-function listenForRequestStarts(pressed: Element, page: PressPage, note: (signal: PressSignal) => void): PressListener {
-  const mark = page.markRequestStarts?.(pressed);
+/** A request the page began after the mark that the press may have caused, read from the page world on every flush. */
+function listenForRequestStarts(mark: RequestStartMark | undefined, note: (signal: PressSignal) => void): PressListener {
   if (!mark) return NOTHING;
   return {
     flush() {

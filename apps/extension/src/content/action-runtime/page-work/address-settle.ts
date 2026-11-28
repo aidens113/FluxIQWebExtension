@@ -29,7 +29,12 @@ import { askPageQuiet } from "./page-quiet";
 /** What an action's start found: no move, a move the page finished, a move whose address then stood still, or the deadline. */
 export type AddressSettle = "unmoved" | "settled" | "still" | "deadline";
 
-/** The worker's readiness deadline (`runtime/automation-tab.ts` `waitForTabReady`), which this wait takes the place of for a move in place. */
+/**
+ * The worker's readiness deadline (`runtime/automation-tab.ts` `waitForTabReady`), which this wait takes the place of
+ * for a move in place: the bound for a page that never stops changing, not what makes the wait short. Before t1094 a
+ * real site's background traffic held every such wait to it; the page world's rule for which work holds the page
+ * (`page-world/page-work/tracker.ts`) is the fix, and lowering this would not have been one.
+ */
 export const ADDRESS_SETTLE_DEADLINE_MS = 20_000;
 /** How long an address must stand still where nothing can speak for the page: the worker's old clock. */
 const ADDRESS_STILL_MS = 1_000;
