@@ -1,4 +1,4 @@
-// The switcher's port asks the background for the list and for a new project, keeps only well-formed
+// The switcher's port asks the background for the list, keeps only well-formed
 // projects, and rejects with the sentence a person reads when the background refuses.
 
 import assert from "node:assert/strict";
@@ -23,14 +23,12 @@ test("list asks for the projects and keeps the well-formed ones", async () => {
   assert.deepEqual(projects, [{ id: "a", name: "Alpha", updatedAt: "2026-11-16T00:00:00Z" }, { id: "b", name: "Beta" }]);
 });
 
-test("create sends the name and answers the project", async () => {
-  const { sent, request } = requesting({ ok: true, value: { ok: true, project: { id: "p9", name: "Fresh" } } });
-  assert.deepEqual(await extensionProjectsPort(request).create("Fresh"), { id: "p9", name: "Fresh" });
-  assert.deepEqual(sent, [{ type: RUNTIME_MESSAGES.panelCreateProject, name: "Fresh" }]);
+test("the port offers no create: projects are made by FluxIQ and managed in the FluxIQ panel", () => {
+  const port = extensionProjectsPort(requesting({ ok: true, value: {} }).request);
+  assert.equal("create" in port, false);
 });
 
 test("a refusal rejects with its sentence, and an unreadable reply with a plain one", async () => {
   await assert.rejects(extensionProjectsPort(requesting({ ok: false, sentence: "FluxIQ refused that." }).request).list(), /FluxIQ refused that\./u);
   await assert.rejects(extensionProjectsPort(requesting({ ok: true, value: { ok: true } }).request).list(), /could not be read/u);
-  await assert.rejects(extensionProjectsPort(requesting({ ok: true, value: { ok: true } }).request).create("x"), /could not be read/u);
 });

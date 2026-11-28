@@ -1,7 +1,7 @@
 import type { ChatConversationPort } from "@fluxiq/ui-components";
 import { RUNTIME_MESSAGES } from "../../../../shared/constants";
 import { present } from "../../../../shared/present";
-import type { PanelConversationDeleteRequest, PanelConversationReadRequest, PanelConversationRenameRequest, PanelConversationSendRequest } from "../../../../shared/protocol";
+import type { PanelConversationReadRequest, PanelConversationSendRequest } from "../../../../shared/protocol";
 import type { PanelStore } from "../../../state";
 import { payloadOf, threadChangeOf } from "../reply";
 import { personActivationIsActive } from "./person-activation";
@@ -12,9 +12,10 @@ type Typed = { type: string };
 const PRESS_IT_YOURSELF = "Press the answer yourself to give it.";
 
 /**
- * Core's conversation through the background's relays. The thread list's four
- * (`listAllThreads`, `newThread`, `renameThread`, `deleteThread`) write each
- * field of their message by name against its contract in `shared/protocol.ts`.
+ * Core's conversation through the background's relays. The thread list's two
+ * (`listAllThreads`, `newThread`) write each field of their message by name against
+ * its contract in `shared/protocol.ts`. Rename and Delete are not here: managing chats is
+ * the FluxIQ panel's, so the thread list offers neither.
  * New chat is an open, never a message: it goes as `kind: "open"`, so the
  * background does not put the sending status on the page.
  *
@@ -52,17 +53,6 @@ export function conversationPort(request: PanelStore["request"], activation: () 
       subjectKind: opening.subjectKind,
       subjectId: opening.subjectId,
       title: opening.title
-    }))),
-    renameThread: async (change) => threadChangeOf(await request(present<Typed & PanelConversationRenameRequest>({
-      type: RUNTIME_MESSAGES.panelConversationRename,
-      projectId: change.projectId,
-      conversationId: change.conversationId,
-      title: change.title
-    }))),
-    deleteThread: async (change) => threadChangeOf(await request(present<Typed & PanelConversationDeleteRequest>({
-      type: RUNTIME_MESSAGES.panelConversationDelete,
-      projectId: change.projectId,
-      conversationId: change.conversationId
     })))
   };
 }

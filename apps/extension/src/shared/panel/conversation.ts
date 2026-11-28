@@ -1,6 +1,6 @@
 // The panel's conversation requests: the messages the chat sends the
 // background worker for Core's threads (`background/panel/conversation-relay.ts`
-// and `thread-change-relay.ts`). `protocol.ts` re-exports them, so they are
+// and the relay). `protocol.ts` re-exports them, so they are
 // named from there as every other panel message is.
 
 /**
@@ -60,29 +60,6 @@ export type PanelConversationSendRequest = {
    * or `project` with no id, is the project's own thread.
    */
   fresh?: boolean | undefined;
-};
-
-/**
- * `panelConversationRename` (`rename-conversation`): a person's own name for a
- * thread. Core trims `title` and refuses an empty one or one over 200
- * characters in its own words. `projectId` is the thread's own, from its list
- * row; left out, Core looks for the thread in every project this browser may
- * change, and is never sent the session's project in its place.
- */
-export type PanelConversationRenameRequest = {
-  projectId?: string | undefined;
-  conversationId: string;
-  title: string;
-};
-
-/**
- * `panelConversationDelete` (`delete-conversation`): removes a thread, every
- * turn and every question in it. Core refuses one whose work is still running
- * (`conversation_run_active`) in its own words. `projectId` as for a rename.
- */
-export type PanelConversationDeleteRequest = {
-  projectId?: string | undefined;
-  conversationId: string;
 };
 
 /** `answer-ask`: the person's answer to a question FluxIQ asked in a thread. */

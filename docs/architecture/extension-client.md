@@ -226,7 +226,9 @@ background. The background takes the project from the paired browser's
 session and opens `/programs/automation-studio?project=...&flow=...` on the
 configured HTTP(S) Core address, with both IDs encoded as query parameters.
 It ignores a panel-supplied project or token and refuses an automation link
-when the session has no project. Generic Open FluxIQ buttons still open the
+when the session has no project. `panelOpenFluxIQ` may also carry `conversationId` and `projectId` (both or
+neither), which open `/chats/<conversationId>?project=<projectId>` on the panel
+origin, both encoded. Generic Open FluxIQ buttons still open the
 configured panel address. Only the side panel and popup may request either
 kind of link; content pages are refused before settings or session context
 are read. Opening a link makes no authenticated program call and places no
@@ -719,6 +721,16 @@ Current server message groups:
   project (see [Project Focus](#project-focus))
 
 ### Project Focus
+
+**The current project is Core's (t1095, I5).** When the person switches project, `relayProjects`
+(`panelSelectProject`) first POSTs `{ activeProjectId }` to `/api/client-gateway/automation-studio-context`
+(`writeCoreActiveProject`, `background/connection/core-api.ts`) with the client's own token, so the panel and every
+client read the same per-person value from the snapshot. A refusal (403: a client bound to another project) is
+returned as Core's sentence and the choice is not made; an unreachable Core leaves the browser's copy
+(`choice-storage.ts`) as the offline fallback. Core's value is adopted from the snapshot as before. There is no
+`panelCreateProject` message: projects are made in the FluxIQ panel, or by the first message (`first-project`), and
+the `no_project` failure says so. The all-chats list reads project conversations only (`list-conversations`);
+the per-person assistant threads (`list-panel-threads`) are not asked for.
 
 Core pushes `server.activity` to a session only for the session's own project,
 which pairing set (and a reconnect leaves unset, when the session hears every
@@ -1438,8 +1450,6 @@ fields written by name and Core's payload returned as sent:
 | --- | --- |
 | `panelConversationRead`, `kind: "list-all"` | `list-conversations` `{ projectId ?? null, limit }` (every permitted project when absent) |
 | `panelConversationSend`, `kind: "open"`, `fresh: true` (New chat) | `open-conversation` with `fresh: true`; never shown as "sending" |
-| `panelConversationRename` (`fluxiq.panel.conversationRename`) | `rename-conversation` `{ projectId?, conversationId, title }` |
-| `panelConversationDelete` (`fluxiq.panel.conversationDelete`) | `delete-conversation` `{ projectId?, conversationId }` |
 
 Rename and delete are accepted only from the side panel or popup, like every
 panel message. Core refuses a delete while a run still uses the thread
@@ -1466,7 +1476,6 @@ message, one Core call each:
 
 | Panel message | Core endpoint and body |
 | --- | --- |
-| `flowHumannessRead` (`fluxiq.panel.flowHumannessRead`) `{ projectId?, flowId }` | `get-flow-metadata-detail`; answers `metadata.humanness` |
 | `flowHumannessSet` `{ projectId?, flowId, humanness: number \| null }` | `update-flow-settings` `{ projectId, flowId, flow: { flowId, metadata: { humanness } } }`; `null` clears |
 | `taskHumannessSet` `{ projectId?, taskId, humanness: number \| null }` | `update-task-settings` `{ projectId, taskId, humanness }` |
 

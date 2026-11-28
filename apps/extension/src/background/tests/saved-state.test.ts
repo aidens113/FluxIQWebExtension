@@ -84,9 +84,7 @@ test("the stored request choice is read as the person set it, before any policy 
   assert.deepEqual(malformed.repaired, ["requestsEnabled"]);
 });
 
-test("humanness is kept when valid, clamped and repaired when out of range, dropped when not a number, and absent stays absent", () => {
-  assert.deepEqual(readSavedSettings({ ...defaults, humanness: 40 }, defaults), { value: { ...defaults, humanness: 40 }, repaired: [] });
-  assert.deepEqual(readSavedSettings({ ...defaults, humanness: 150 }, defaults), { value: { ...defaults, humanness: 100 }, repaired: ["humanness"] });
-  assert.deepEqual(readSavedSettings({ ...defaults, humanness: "x" }, defaults), { value: defaults, repaired: ["humanness"] });
-  assert.equal("humanness" in readSavedSettings({ ...defaults }, defaults).value, false);
+test("an old stored humanness is ignored: Core owns the person's starting value", () => {
+  assert.deepEqual(readSavedSettings({ ...defaults, humanness: 40 }, defaults), { value: defaults, repaired: [] });
+  assert.deepEqual(readSavedSettings({ ...defaults, humanness: "x" }, defaults), { value: defaults, repaired: [] });
 });

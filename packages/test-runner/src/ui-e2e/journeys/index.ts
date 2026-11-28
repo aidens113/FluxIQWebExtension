@@ -7,6 +7,7 @@
 export * from "./dataset-judgement.js";
 export * from "./dataset-panel.js";
 export * from "./extension-project.js";
+export * from "./extension-shots.js";
 export * from "./extraction.js";
 export * from "./failure-log.js";
 export * from "./failure-presentation.js";
@@ -18,5 +19,6 @@ export * from "./provider-free-run.js";
 export * from "./recorded-task.js";
 export * from "./restart-reuse.js";
 export * from "./saved-flow.js";
+export * from "./screenshots.js";
 export * from "./session.js";
 export * from "./timeline.js";

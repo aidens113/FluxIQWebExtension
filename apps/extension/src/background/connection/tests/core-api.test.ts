@@ -15,7 +15,7 @@ import type { AddressInfo } from "node:net";
 import test, { type TestContext } from "node:test";
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
-import { callCoreProgram, fetchProjectFromCoreSnapshot, fetchProjectIdFromCoreSnapshot, uploadTraceArtifact } from "../core-api";
+import { callCoreProgram, writeCoreActiveProject, fetchProjectFromCoreSnapshot, fetchProjectIdFromCoreSnapshot, uploadTraceArtifact } from "../core-api";
 import { ProjectContext } from "../project-context";
 import { SessionWrites } from "../session";
 
@@ -50,6 +50,30 @@ test("posts to the program endpoint with the token as bearer and no cookie, and 
   assert.equal(requests[0]?.init.credentials, "omit");
   assert.deepEqual(requests[0]?.init.headers, { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${TOKEN}` });
   assert.equal(requests[0]?.init.body, JSON.stringify({ projectId: "p-1", conversationId: "c-1" }));
+});
+
+test("the current project is written to Core's context route with the client's token, and nothing else", async (t) => {
+  const requests = stubFetch(t, () => json(200, { ok: true, payload: { activeProjectId: "p-2" } }));
+  const reply = await writeCoreActiveProject(credentials, { activeProjectId: "p-2" });
+  assert.deepEqual(reply, { ok: true, payload: { activeProjectId: "p-2" } });
+  assert.equal(requests[0]?.url, "http://127.0.0.1:3000/api/client-gateway/automation-studio-context");
+  assert.equal(requests[0]?.init.method, "POST");
+  assert.equal(requests[0]?.init.credentials, "omit");
+  assert.deepEqual(requests[0]?.init.headers, { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${TOKEN}` });
+  assert.equal(requests[0]?.init.body, JSON.stringify({ activeProjectId: "p-2" }));
+});
+
+test("a 403 on the context write comes back as Core's sentence; an unreachable Core as unreachable; no token sends nothing", async (t) => {
+  let respond: () => Response = () => json(403, { ok: false, error: "This browser is bound to another project." });
+  const requests = stubFetch(t, () => respond());
+  assert.deepEqual(await writeCoreActiveProject(credentials, { activeProjectId: "p-2" }), {
+    ok: false, code: "refused", httpStatus: 403, error: "This browser is bound to another project."
+  });
+  respond = () => { throw new TypeError("fetch failed"); };
+  assert.deepEqual(await writeCoreActiveProject(credentials, { activeProjectId: "p-2" }), { ok: false, code: "unreachable", error: "FluxIQ could not be reached." });
+  const sent = requests.length;
+  assert.equal((await writeCoreActiveProject({ coreApiUrl: credentials.coreApiUrl, token: undefined }, { activeProjectId: "p" })).ok, false);
+  assert.equal(requests.length, sent);
 });
 
 test("without a token nothing is sent", async (t) => {

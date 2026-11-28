@@ -35,6 +35,9 @@ const STOP_SAYS = "Stop the task";
 const POPUP_CLOSES = "This window closes when you click the page. Press the FluxIQ button to come back and press Continue.";
 const NO_PIN_HERE = "This panel can't take your PIN.";
 const AFTER_THE_TASK = "You can confirm this once the task has ended.";
+/** Core refuses a client's answer to a card the FluxIQ panel's tools raised, in these words (`ask.assistant.` ids). */
+const ASSISTANT_ASK_PREFIX = "ask.assistant.";
+const IN_THE_PANEL = "This question was asked by the FluxIQ panel's tools. Answer it in the FluxIQ panel.";
 
 /** What the words depend on besides the record. */
 export type AskPresentContext = {
@@ -48,6 +51,21 @@ export type AskPresentContext = {
 export function presentAsk(value: unknown, context: AskPresentContext): ChatAskPresentation | null {
   const ask = askRecordOf(value);
   if (ask === null) return null;
+  if (ask.askId.startsWith(ASSISTANT_ASK_PREFIX)) return panelOnly(ask, context);
+  return worded(ask, context);
+}
+
+/**
+ * A card the panel's own tools raised is read-only here: every action is marked `reauthorize`, which this host never
+ * handles, so the chat draws no answer buttons and offers the Open in FluxIQ panel control instead (it lands on the thread).
+ */
+function panelOnly(ask: AskRecord, context: AskPresentContext): ChatAskPresentation {
+  const shown = worded(ask, context) ?? { ...plain(ask), actions: [], takesText: false };
+  const hand = { title: "Answer in the FluxIQ panel", description: IN_THE_PANEL, actionLabel: "Open in FluxIQ panel" };
+  return { ...shown, note: IN_THE_PANEL, takesText: false, actions: shown.actions.map((action) => ({ ...action, reauthorize: hand })) };
+}
+
+function worded(ask: AskRecord, context: AskPresentContext): ChatAskPresentation | null {
   switch (ask.kind) {
     case "permission":
       return permission(ask);

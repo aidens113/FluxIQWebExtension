@@ -3,7 +3,6 @@ import test from "node:test";
 import { defaultSettings } from "../../../shared/browser";
 import type { ExtensionStatus } from "../../../shared/protocol";
 import type { ModelAccessState } from "@fluxiq/ui-components";
-import { KEY_WRITE_MESSAGES } from "../../chat";
 import { fake, withFakeDocument } from "../../chat/tests/fake-dom";
 import type { ModelKeyReading } from "../../getting-started";
 import type { PanelContext } from "../../shell";
@@ -39,7 +38,7 @@ async function withChrome(body: () => Promise<void>): Promise<void> {
   }
 }
 
-function view(current: ExtensionStatus, reading: ModelKeyReading | "none", changeProject?: () => void) {
+function view(current: ExtensionStatus, reading: ModelKeyReading | "none") {
   const store: PanelStore = {
     current: () => current,
     subscribe(listener) {
@@ -48,10 +47,10 @@ function view(current: ExtensionStatus, reading: ModelKeyReading | "none", chang
     },
     request: (async () => ({ ok: true, value: {} })) as PanelStore["request"]
   };
-  return createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, { ...(reading === "none" ? {} : { setup: { readModelKey: async () => reading } }), ...(changeProject === undefined ? {} : { changeProject }) });
+  return createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, reading === "none" ? {} : { setup: { readModelKey: async () => reading } });
 }
 
-test("settings read top down: connection, model, behaviour, permissions, appearance, help, then Advanced holding the addresses and Forget", async () => {
+test("settings read top down: connection, model, panel links, behaviour, permissions, appearance, help, then Advanced holding the addresses and Forget", async () => {
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
     const settings = view(status(), READY);
@@ -59,11 +58,11 @@ test("settings read top down: connection, model, behaviour, permissions, appeara
     await tick();
     const root = fake(settings.element);
     const groups = root.descendants().filter((node) => node.className.includes("settings-group ") || node.className === "settings-group").map((node) => node.getAttribute("aria-label"));
-    assert.deepEqual(groups, ["Connection", "AI key", "Behaviour", "Permissions", "Appearance", "Help", "Advanced"]);
+    assert.deepEqual(groups, ["Connection", "AI key", "In the FluxIQ panel", "Behaviour", "Permissions", "Appearance", "Help", "Advanced"]);
     const advanced = root.descendants().find((node) => node.tagName === "DETAILS")!;
     const inside = (id: string) => advanced.descendants().some((node) => node.id === id);
     for (const id of ["gatewayUrl", "coreApiUrl"]) assert.equal(inside(id), true, id);
-    for (const id of ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled", "saveSettingsButton", "disconnectButton", "humanness"]) {
+    for (const id of ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled", "saveSettingsButton", "disconnectButton"]) {
       assert.equal(inside(id), false, `${id} is out of Advanced`);
       assert.equal(root.descendants().some((node) => node.id === id), true, `${id} keeps its id`);
     }
@@ -126,7 +125,7 @@ test("the Model section says to connect, and reads nothing, while the browser is
   }));
 });
 
-test("the card's Open FluxIQ and Change model open FluxIQ's Settings at AI keys; Try now reads again and opens nothing", async () => {
+test("the card's one action opens the FluxIQ panel at AI keys; Try now reads again and opens nothing", async () => {
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
     const sent: Array<Record<string, unknown>> = [];
@@ -146,39 +145,27 @@ test("the card's Open FluxIQ and Change model open FluxIQ's Settings at AI keys;
     assert.equal(reads, 2);
     assert.deepEqual(sent.filter((message) => message.type === "fluxiq.panel.openFluxIQ"), []);
     assert.match(root.textContent, /Anthropic is ready/u);
-    named("Change model")!.dispatch("click");
+    const action = root.descendants().find((node) => node.tagName === "BUTTON" && !node.hidden && node.textContent === "Open in FluxIQ panel")!;
+    action.dispatch("click");
     await tick();
     assert.deepEqual(sent.filter((message) => message.type === "fluxiq.panel.openFluxIQ"), [{ type: "fluxiq.panel.openFluxIQ", purpose: "model-key" }]);
   }));
 });
 
-test("Save sends the key once to the background, with no password, and shows its refusal in its own words", async () => {
+test("the key card only shows the key: no form, no write message, and the line that sends the person to the FluxIQ panel", async () => {
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
     const sent: Array<Record<string, unknown>> = [];
-    const unknownMessage = "The extension doesn't know that request yet.";
-    const request = (async (message: Record<string, unknown>) => {
-      sent.push(message);
-      return message.type === KEY_WRITE_MESSAGES.save ? { ok: true, value: { ok: false, sentence: unknownMessage } } : { ok: true, value: {} };
-    }) as unknown as PanelStore["request"];
-    const store = storeWith(status(), request);
+    const store = storeWith(status(), recordingRequest(sent));
     const readModelKey = async (): Promise<ModelKeyReading> => ({ kind: "no-key" });
     const settings = createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, { setup: { readModelKey } });
     settings.shown();
     await tick();
     const root = fake(settings.element);
-    const named = (name: string) => root.descendants().find((node) => node.tagName === "BUTTON" && node.textContent === name);
-    named("Add a key")!.dispatch("click");
-    const fields = root.descendants().filter((node) => node.tagName === "INPUT" && node.getAttribute("type") === "password");
-    assert.equal(fields.length, 1, "one key field and no password field");
-    fields[0]!.value = "sk-ant-PASTED-0001";
-    named("Save and check")!.dispatch("click");
-    await tick();
-    const writes = sent.filter((message) => message.type === KEY_WRITE_MESSAGES.save);
-    assert.deepEqual(writes, [{ type: KEY_WRITE_MESSAGES.save, provider: "anthropic", key: "sk-ant-PASTED-0001", name: "Anthropic key" }]);
-    assert.equal(sent.filter((message) => JSON.stringify(message).includes("PASTED")).length, 1, "the value is in that one message only");
-    assert.match(root.textContent, new RegExp(unknownMessage.replace(/[.']/gu, "."), "u"));
-    assert.equal(root.textContent.includes("PASTED"), false);
+    assert.equal(root.descendants().filter((node) => node.tagName === "INPUT" && node.getAttribute("type") === "password").length, 0, "no key field");
+    assert.match(root.textContent, /Add or change your AI key in the FluxIQ panel/u);
+    assert.equal(root.descendants().some((node) => node.tagName === "BUTTON" && !node.hidden && ["Save and check", "Add a key", "Add another key", "Replace key", "Remove"].includes(node.textContent)), false, "no button that writes a key is shown");
+    assert.deepEqual(sent.filter((message) => String(message.type).startsWith("fluxiq.panel.modelKey")), []);
   }));
 });
 
@@ -203,29 +190,38 @@ test("approval and project are said in words, never as codes", () => {
   assert.equal(approvalLine(status({ connectionState: "error", enrolmentRefusalCode: "enrolment.revoked" })), "Access was removed. Connect again to ask for approval.");
   assert.match(projectLine(status()), /the one you chose in FluxIQ/);
   assert.equal(projectLine(status()).includes("project-1"), false);
-  assert.match(projectLine(status({ projectId: null })), /No project is chosen yet. Choose one with Change/);
+  assert.match(projectLine(status({ projectId: null })), /No project yet\. FluxIQ makes one when you send your first message/);
   assert.equal(projectLine(status({ projectName: " Company website " })), "Project: “Company website”");
   assert.equal(projectLine(status({ projectName: "Company website" })).includes("project-1"), false);
   assert.match(projectLine(status({ connectionState: "disconnected" })), /Connect to FluxIQ/);
 });
 
-test("the Project row names the project and its Change button opens the switcher, only while connected", async () => {
+test("projects and humanness are links into the FluxIQ panel, never controls here, and Save sends no humanness", async () => {
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
-    let opened = 0;
-    const settings = view(status({ projectName: "Company website" }), READY, () => { opened += 1; });
+    const sent: Array<Record<string, unknown>> = [];
+    const store = storeWith(status({ projectName: "Company website", settings: defaultSettings() }), recordingRequest(sent));
+    const settings = createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined);
     settings.shown();
     await tick();
     const root = fake(settings.element);
     assert.equal(root.byClass("settings-project-name")[0]!.textContent, "Project: “Company website”");
-    const change = root.descendants().find((node) => node.id === "changeProjectButton")!;
-    assert.equal(change.hidden, false);
-    change.dispatch("click");
-    assert.equal(opened, 1);
-    const away = view(status({ connectionState: "disconnected" }), "none", () => { opened += 1; });
-    away.shown();
+    const ids = root.descendants().map((node) => node.id);
+    for (const gone of ["changeProjectButton", "humanness"]) assert.equal(ids.includes(gone), false, `${gone} is no longer here`);
+    const named = (name: string) => root.descendants().find((node) => node.tagName === "BUTTON" && node.textContent === name);
+    named("Manage projects in the FluxIQ panel")!.dispatch("click");
     await tick();
-    assert.equal(fake(away.element).descendants().find((node) => node.id === "changeProjectButton")!.hidden, true);
+    named("Change humanness in the FluxIQ panel")!.dispatch("click");
+    await tick();
+    assert.deepEqual(sent.filter((message) => message.type === "fluxiq.panel.openFluxIQ"), [{ type: "fluxiq.panel.openFluxIQ", purpose: "projects" }, { type: "fluxiq.panel.openFluxIQ" }]);
+    const toggle = root.descendants().find((node) => node.id === "autoReconnect")!;
+    (toggle as unknown as { checked: boolean }).checked = !(toggle as unknown as { checked: boolean }).checked;
+    toggle.dispatch("change");
+    root.descendants().find((node) => node.id === "saveSettingsButton")!.dispatch("click");
+    await tick();
+    const save = sent.find((message) => message.type === "fluxiq.panel.saveSettings") as { settings: Record<string, unknown> } | undefined;
+    assert.ok(save);
+    assert.equal("humanness" in save.settings, false);
   }));
 });
 
@@ -249,7 +245,7 @@ test("the AI key card follows the pushed key state at once, with no second read"
     assert.ok(root.textContent.includes("No key"));
     push!({ kind: "no-credit", provider: "Anthropic", keyName: "Work key" });
     assert.ok(root.textContent.includes("No credit"));
-    assert.ok(root.textContent.includes("Replace key"));
+    assert.equal(root.descendants().some((node) => node.tagName === "BUTTON" && !node.hidden && node.textContent === "Replace key"), false, "no Replace key: the panel changes keys");
     push!({ kind: "ready", provider: "Anthropic", keyName: "Work key" });
     assert.ok(root.textContent.includes("Anthropic is ready, using Work key."));
     assert.equal(reads, 1, "pushes read nothing");

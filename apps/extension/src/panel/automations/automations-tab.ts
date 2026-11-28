@@ -1,9 +1,8 @@
 // The automations tab (plan 3.1, 3.5, 3.9): the person's saved automations,
 // newest first, each with what its last run did. Choosing one opens it in the
 // chat (`choose`), where the strip (`automation-strip.ts`) shows its runs,
-// Run, its data and Open in FluxIQ. Below the list, the ways to make a new
-// one: describe it in the chat, or record it (`newAutomation`, the recording
-// module's). A recording that just ended is reviewed at the top (`review`).
+// Run, its data and Open in FluxIQ. A new one is made in the chat; below the list sits
+// only the extraction entry (`extract`, the recording module's). A recording that just ended is reviewed at the top (`review`).
 //
 // What it knows and asks for is `createAutomationsController`. The list is
 // read when the tab becomes active while connected, when the connection comes
@@ -13,7 +12,7 @@
 import type { TasksScreen } from "@fluxiq/ui-components";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createElement } from "../dom";
-import { createOpenFluxIQButton } from "../open-fluxiq";
+import { createOpenFluxIQButton, OPEN_IN_PANEL } from "../open-fluxiq";
 import type { PanelContext } from "../shell";
 import { createAutomationStrip, type AutomationStrip } from "./automation-strip";
 import { createAutomationsController, type AutomationRowView } from "./controller";
@@ -33,7 +32,7 @@ export type AutomationsTabHooks = {
   /** The review of a recording that just ended, shown at the top. */
   readonly review: HTMLElement;
   /** Record a new automation, and extract data, shown under the list. */
-  readonly newAutomation: HTMLElement;
+  readonly extract: HTMLElement;
   /**
    * The person's tasks (`panel/tasks`). With this or `library`, the tab gains a search box over
    * everything and a Tasks / Library switch; without either it is the plain list below.
@@ -57,7 +56,7 @@ export type AutomationsTab = {
   setActive(active: boolean): void;
   /** Whether FluxIQ is working, held steady by the shell; Run waits while it is. */
   setWorking(working: boolean): void;
-  /** Shows the Tasks segment with its list (not an open task), where New automation is. */
+  /** Shows the Tasks segment with its list (not an open task), where the extraction entry is. */
   showTasks(): void;
 };
 
@@ -69,10 +68,10 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
 
   const offline = createElement("p", { className: "card-line", text: "Connect to FluxIQ to see your automations.", hidden: true });
   const loading = createElement("p", { className: "card-line", text: "Loading your automations...", hidden: true });
-  const empty = createElement("p", { className: "card-line", text: "No automations yet. Describe one in the chat, or record it below.", hidden: true });
+  const empty = createElement("p", { className: "card-line", text: "Describe one in the chat.", hidden: true });
   const readNotice = createElement("p", { className: "notice", hidden: true, attrs: { role: "status" } });
   const list = createElement("ul", { className: "automations-list", hidden: true, attrs: { "aria-label": "Your automations" } });
-  const fallbackOpen = createOpenFluxIQButton(request, { label: "Open FluxIQ", look: "small" });
+  const fallbackOpen = createOpenFluxIQButton(request, { label: OPEN_IN_PANEL, look: "small" });
   const fallback = createElement("div", { className: "automations-fallback", hidden: true }, [
     createElement("p", { className: "card-line", text: "Your saved automations are in FluxIQ." }),
     fallbackOpen.element
@@ -83,7 +82,7 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
   const heading = createElement("h2", { className: "automations-title", text: segmented ? "Saved automations" : "Your automations", attrs: { tabindex: "-1" } });
   empty.setAttribute("tabindex", "-1");
   const noMatch = createElement("p", { className: "card-line", hidden: true });
-  const automationParts = [heading, offline, loading, empty, readNotice, ...(segmented ? [noMatch] : []), list, fallback, hooks.newAutomation];
+  const automationParts = [heading, offline, loading, empty, readNotice, ...(segmented ? [noMatch] : []), list, fallback, hooks.extract];
   const names: SegmentName[] = library === undefined ? ["tasks"] : ["tasks", "library"];
   let text = "";
   let segment: SegmentName = "tasks";

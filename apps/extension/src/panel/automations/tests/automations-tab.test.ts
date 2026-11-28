@@ -38,7 +38,7 @@ function setup() {
     return { ok: true, value: { payload: { flows, runs: [] } } as T };
   };
   const tab = createAutomationsTab({ surface: "sidepanel", store: { request, current: () => connected, subscribe: () => () => undefined } }, {
-    choose: (row) => chosen.push(row), review: document.createElement("div"), newAutomation: document.createElement("div")
+    choose: (row) => chosen.push(row), review: document.createElement("div"), extract: document.createElement("div")
   });
   tab.element.hidden = false;
   tab.render(connected);
@@ -117,7 +117,7 @@ test("removing the last focused row moves to the visible named empty message", a
     view.rows()[0]!.focus();
     view.setFlows([]);
     await view.refresh();
-    assert.match(doc.activeElement.textContent, /No automations yet/u);
+    assert.match(doc.activeElement.textContent, /Describe one in the chat./u);
     assert.equal(doc.activeElement.hidden, false);
     assert.equal(doc.activeElement.getAttribute("tabindex"), "-1");
   } finally { view.tab.setActive(false); }

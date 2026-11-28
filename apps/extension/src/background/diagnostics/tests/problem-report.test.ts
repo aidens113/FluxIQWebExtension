@@ -114,7 +114,7 @@ test("a report is still made when FluxIQ cannot be asked for runs, and says why"
   const thrown = await report({ call: async () => { throw new Error(`boom Bearer ${TOKEN}`); } });
   assert.equal(thrown.recentRuns.available, false);
   assert.ok(!JSON.stringify(thrown).includes(TOKEN));
-  assert.deepEqual(await readRecentRuns(async () => unreachable, undefined), { available: false, reason: "FluxIQ has not said which project this browser belongs to." });
+  assert.deepEqual(await readRecentRuns(async () => unreachable, undefined), { available: false, reason: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one." });
 });
 
 test("only the side panel or the popup may ask for a report; other messages are not handled", async () => {

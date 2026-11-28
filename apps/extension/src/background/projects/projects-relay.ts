@@ -1,10 +1,11 @@
-// The panel's project messages: list the projects this browser may use, create
-// one, and choose which one every call without its own project uses.
+// The panel's project messages: list the projects this browser may use and
+// choose which one every call without its own project uses. Projects are made in
+// the FluxIQ panel, or by the first message (Core's `first-project`).
 //
-// Core's automation-studio `projects` and `create-project` are called through
+// Core's automation-studio `projects` is called through
 // the same program-call path as every other relay. What this side adds is the
-// choice: kept in the worker (`ProjectContext`) and in `chrome.storage.local`,
-// never in Core. A choice for a project that no longer exists is dropped when
+// choice: written to Core (`shareChoice`, I5) and kept in the worker (`ProjectContext`)
+// and in `chrome.storage.local` as the offline fallback. A choice for a project that no longer exists is dropped when
 // the projects are listed, and the browser follows Core's project again.
 //
 // A paired token sees `id`, `name` and `updatedAt` of each project and nothing
@@ -23,18 +24,18 @@ export type ProjectsRelayContext = {
   readonly chosenProject: () => string | undefined;
   readonly choose: (choice: ProjectChoice | null) => Promise<void>;
   readonly noteName: (projectId: string, name: string) => void;
+  /** Writes the chosen project to Core so every client agrees. Absent: the choice stays in this browser. */
+  readonly shareChoice?: (projectId: string) => Promise<PanelRelayResponse>;
 };
 
 export const PROJECT_MESSAGES: readonly string[] = [
   RUNTIME_MESSAGES.panelListProjects,
-  RUNTIME_MESSAGES.panelCreateProject,
   RUNTIME_MESSAGES.panelSelectProject
 ];
 
 /** Answers one project message; undefined for any other type. */
 export async function relayProjects(message: ProjectMessage, context: ProjectsRelayContext): Promise<unknown> {
   if (message.type === RUNTIME_MESSAGES.panelListProjects) return list(context);
-  if (message.type === RUNTIME_MESSAGES.panelCreateProject) return create(message, context);
   if (message.type === RUNTIME_MESSAGES.panelSelectProject) return select(message, context);
   return undefined;
 }
@@ -59,18 +60,6 @@ async function list(context: ProjectsRelayContext): Promise<unknown> {
   return { ok: true, projects: result.projects, selectedProjectId: selected ?? null };
 }
 
-async function create(message: ProjectMessage, context: ProjectsRelayContext): Promise<unknown> {
-  const name = typeof message.name === "string" ? message.name.trim() : "";
-  if (!name) return relayFailure("invalid_request", "Give the project a name.");
-  // Core's paired-client narrowing takes `{ name }` and nothing else.
-  const reply = await context.call("create-project", { name });
-  if (!reply.ok) return reply;
-  const project = summary((reply.payload as { project?: unknown } | null)?.project);
-  if (!project) return { ok: false, code: "failed", error: "FluxIQ created a project but did not say which one." };
-  context.noteName(project.id, project.name);
-  return { ok: true, project };
-}
-
 async function select(message: ProjectMessage, context: ProjectsRelayContext): Promise<unknown> {
   if (message.projectId === null) {
     await context.choose(null);
@@ -82,6 +71,10 @@ async function select(message: ProjectMessage, context: ProjectsRelayContext): P
   if (!result.ok) return result;
   const project = result.projects.find((candidate) => candidate.id === projectId);
   if (!project) return relayFailure("invalid_request", "FluxIQ has no such project.");
+  // Core is told first: a client bound to another project is refused with a sentence, and the choice is then not made.
+  // A Core that cannot be reached leaves the browser's own copy as the choice until it can.
+  const shared = await context.shareChoice?.(projectId);
+  if (shared && !shared.ok && shared.code !== "unreachable" && shared.code !== "timed_out" && shared.code !== "not_paired") return shared;
   await context.choose({ projectId, name: project.name });
   return { ok: true };
 }

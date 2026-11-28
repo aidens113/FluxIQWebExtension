@@ -36,16 +36,16 @@ test("the connection address hint quotes no port", () => {
 
 test("unsaved labels name every differing setting, in display order", () => {
   const saved = defaultSettings();
-  assert.deepEqual(unsavedLabels(saved, saved, { current: 0, saved: 0 }), []);
+  assert.deepEqual(unsavedLabels(saved, saved), []);
   assert.equal(unsavedSentence([]), "");
   const changed = { ...saved, coreApiUrl: `${saved.coreApiUrl}x`, autoReconnect: !saved.autoReconnect };
-  const labels = unsavedLabels(changed, saved, { current: 40, saved: 0 });
-  assert.deepEqual(labels, ["FluxIQ web address", "Starting humanness", "Reconnect automatically"]);
-  assert.equal(unsavedSentence(labels), "Not saved yet: FluxIQ web address, Starting humanness, Reconnect automatically.");
-  assert.deepEqual(unsavedLabels({ ...saved, gatewayUrl: `  ${saved.gatewayUrl} ` }, saved, { current: 0, saved: 0 }), [], "padding is not a change");
+  const labels = unsavedLabels(changed, saved);
+  assert.deepEqual(labels, ["FluxIQ web address", "Reconnect automatically"]);
+  assert.equal(unsavedSentence(labels), "Not saved yet: FluxIQ web address, Reconnect automatically.");
+  assert.deepEqual(unsavedLabels({ ...saved, gatewayUrl: `  ${saved.gatewayUrl} ` }, saved), [], "padding is not a change");
 });
 
-test("the draft bar says what is unsaved after a switch and the slider change, and clears after Save", async () => {
+test("the draft bar says what is unsaved after a switch, and clears after Save", async () => {
   await withChrome(() => withFakeDocument(async () => {
     const doc = document as unknown as { createElement(tag: string): unknown; hasFocus(): boolean };
     const create = doc.createElement;
@@ -62,12 +62,8 @@ test("the draft bar says what is unsaved after a switch and the slider change, a
     const box = toggle as unknown as { checked: boolean };
     box.checked = !box.checked;
     toggle.dispatch("change");
-    const slider = find("humanness");
-    slider.value = "35";
-    slider.dispatch("input");
-    slider.dispatch("change");
     assert.equal(line().hidden, false);
-    assert.equal(line().textContent, "Not saved yet: Starting humanness, Reconnect automatically.");
+    assert.equal(line().textContent, "Not saved yet: Reconnect automatically.");
     find("saveSettingsButton").dispatch("click");
     await tick();
     assert.equal(line().hidden, true, "nothing is listed once saved");

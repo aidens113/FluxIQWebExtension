@@ -2,6 +2,7 @@
 // the choice the panel's project messages make. Split from `FluxIQConnection`,
 // which only owns the instances this reads through.
 
+import type { PanelRelayResponse } from "../../../shared/protocol";
 import type { ProjectChoice } from "../../projects/index";
 import type { ProjectContext } from "../project-context";
 
@@ -15,6 +16,8 @@ export interface PanelProjectChoice {
   chosenProject: () => string | undefined;
   choose: (choice: ProjectChoice | null) => Promise<void>;
   noteName: ProjectContext["noteName"];
+  /** Writes the chosen project to Core (I5); a refusal comes back as Core's sentence. */
+  shareChoice: (projectId: string) => Promise<PanelRelayResponse>;
 }
 
 export class PanelProjectAccess {
@@ -39,7 +42,8 @@ export class PanelProjectAccess {
         await projects.choose(choice);
         await this.deps.announceChosen(choice?.projectId ?? null);
       },
-      noteName: (projectId, name) => projects.noteName(projectId, name)
+      noteName: (projectId, name) => projects.noteName(projectId, name),
+      shareChoice: (projectId) => projects.shareChoice(projectId)
     };
   }
 }

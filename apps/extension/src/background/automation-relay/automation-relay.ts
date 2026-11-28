@@ -18,7 +18,6 @@ import { pairedClientModelAccessState, readModelAccessState } from "@fluxiq/cont
 import { readModelKeyAvailability } from "fluxiq/ui";
 import { AUTOMATION_PANEL_MESSAGES, type PanelRelayResponse, type AutomationPanelRequest } from "../../shared/protocol";
 import type { PanelModelKeySummary } from "../../shared/model-key-messages";
-import { MODEL_KEY_MESSAGES, relayModelKey } from "../model-access/index";
 import { relayPartsRequest } from "./parts-relay";
 
 export type AutomationRelayDeps = {
@@ -27,8 +26,6 @@ export type AutomationRelayDeps = {
   readonly call: (endpoint: string, payload: Record<string, unknown>, programId?: string) => Promise<PanelRelayResponse>;
   /** The project this browser's session belongs to. */
   readonly projectId: () => string | null | undefined;
-  /** The person's saved humanness setting, 0-100; a run carries it only when above 0. */
-  readonly humanness?: () => number | undefined;
   readonly lastStoppedRecordingId: () => string | undefined;
   readonly removeRecordedStep: (activityId: string) => Promise<PanelRelayResponse>;
 };
@@ -56,10 +53,10 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
     return entryId ? deps.removeRecordedStep(entryId) : missing("entryId");
   }
   if (type === AUTOMATION_PANEL_MESSAGES.modelReadiness) return modelReadiness(deps);
-  if (MODEL_KEY_MESSAGES.has(type)) return relayModelKey(type, message, deps.call);
+  if (type === AUTOMATION_PANEL_MESSAGES.startingHumanness) return startingHumanness(deps);
 
   const projectId = text(message.projectId) ?? text(deps.projectId());
-  if (!projectId) return failure("no_project", "FluxIQ has not said which project this browser belongs to yet. Connect, then try again.");
+  if (!projectId) return failure("no_project", "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one.");
 
   switch (type) {
     case AUTOMATION_PANEL_MESSAGES.listAutomations:
@@ -68,8 +65,7 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
       // A saved automation the person runs may be repaired with their own model
       // key when the page has changed since it was built.
       const flowId = text(message.flowId);
-      const humanness = savedHumanness(deps);
-      return flowId ? deps.call("run-runtime-session", { projectId, flowId, runIntent: "explore_and_adapt", ...(humanness === undefined ? {} : { humanness }) }) : missing("flowId");
+      return flowId ? deps.call("run-runtime-session", { projectId, flowId, runIntent: "explore_and_adapt" }) : missing("flowId");
     }
     case AUTOMATION_PANEL_MESSAGES.runDetail: {
       const runId = text(message.runId);
@@ -139,11 +135,6 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
   }
 }
 
-function savedHumanness(deps: AutomationRelayDeps): number | undefined {
-  const saved = deps.humanness?.();
-  return typeof saved === "number" && saved > 0 ? saved : undefined;
-}
-
 async function listAutomations(projectId: string, deps: AutomationRelayDeps): Promise<PanelRelayResponse> {
   const flows = await deps.call("list-flow-summaries", { projectId });
   if (!flows.ok) return flows;
@@ -161,6 +152,14 @@ async function runDetail(projectId: string, runId: string, deps: AutomationRelay
   const adaptations = await deps.call("list-flow-adaptations", { projectId, flowId });
   if (!adaptations.ok) return adaptations;
   return { ok: true, payload: { runDetail: runDetailValue, adaptations: field(adaptations.payload, "adaptations") ?? field(adaptations.payload, "items") ?? [] } };
+}
+
+/** The person's own starting humanness as Core holds it (empty body only; Core refuses any field). Answered as exactly `{ startingHumanness: number | null }`. */
+async function startingHumanness(deps: AutomationRelayDeps): Promise<PanelRelayResponse> {
+  const read = await deps.call("get-my-preferences", {}, "identity-access");
+  if (!read.ok) return read;
+  const value = field(read.payload, "startingHumanness");
+  return { ok: true, payload: { startingHumanness: typeof value === "number" && Number.isFinite(value) ? value : null } };
 }
 
 async function modelReadiness(deps: AutomationRelayDeps): Promise<PanelRelayResponse> {

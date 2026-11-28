@@ -6,10 +6,6 @@ export type PanelProjectSummary = { id: string; name: string; updatedAt?: string
 /** `panelListProjects` answers this; `selectedProjectId` null means the browser follows Core's project. */
 export type PanelListProjectsReply = { ok: true; projects: PanelProjectSummary[]; selectedProjectId: string | null };
 
-/** `panelCreateProject` request and reply. */
-export type PanelCreateProjectRequest = { name: string };
-export type PanelCreateProjectReply = { ok: true; project: PanelProjectSummary };
-
 /** `panelSelectProject` request; null follows Core's project. */
 export type PanelSelectProjectRequest = { projectId: string | null };
 

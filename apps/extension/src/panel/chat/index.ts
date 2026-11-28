@@ -5,6 +5,7 @@
 // are the extension's views of the package's feed and owner context, and
 // `settings/` holds the on-page status preference for the panel's settings to
 // mount. The names the panel's other views import stay here.
+export { EXTENSION_WELCOME } from "./extension-welcome";
 export { createChatPanel, type ChatPanel, type ChatPanelOptions, type OpenFluxIQControl, type OpenFluxIQFactory } from "./chat-panel";
 export {
   actionCard,
@@ -41,4 +42,4 @@ export {
 export { createActivityFeed, createSharedActivityFeed, listenToRuntime, type ExtensionActivityFeedDeps, type SharedActivityFeed } from "./feed";
 export { createOnPageStatusSetting, onPageStatusModel, type OnPageStatusModel, type OnPageStatusSetting } from "./settings";
 export { createChatOwnerContext, type ChatOwner } from "./owner-context";
-export { KEY_WRITE_MESSAGES, modelKeysPort, readModelAccess } from "./transport";
+export { modelKeysPort, readModelAccess } from "./transport";

@@ -11,7 +11,7 @@ import { RUNTIME_MESSAGES } from "../../../../shared/constants";
 import type { PanelMessage, PanelResult } from "../../../state";
 
 type FakeAsk = { askId: string; kind: string; status: string; options?: Array<{ id: string; label: string }>; answer?: { kind: string; value: string | null } };
-type Thread = { conversationId: string; subjectKind: string; subjectId: string; revision: number; touched: number; turns: Array<{ turnId: string; author: string; text: string; ask?: FakeAsk; createdAt?: number }> };
+type Thread = { conversationId: string; subjectKind: string; subjectId: string; revision: number; touched: number; turns: Array<{ turnId: string; author: string; text: string; ask?: FakeAsk; createdAt?: number; attachment?: { kind: string; ref: string } }> };
 
 export type TargetCore = {
   sent: PanelMessage[];
@@ -58,7 +58,7 @@ export function targetCore(threads: Array<Omit<Thread, "revision" | "touched">>)
     if (message.type === RUNTIME_MESSAGES.panelConversationRead) {
       const thread = core.thread(String(message.conversationId));
       if (!thread) return { conversation: null };
-      return { conversation: { conversation: record(thread), turns: thread.turns.map((turn) => ({ ...turn, attachment: null, ask: turn.ask ?? null })), hasMore: false } };
+      return { conversation: { conversation: record(thread), turns: thread.turns.map((turn) => ({ ...turn, attachment: turn.attachment ?? null, ask: turn.ask ?? null })), hasMore: false } };
     }
     if (message.type === RUNTIME_MESSAGES.panelConversationSend) {
       let thread = typeof message.conversationId === "string" ? core.thread(message.conversationId) : undefined;

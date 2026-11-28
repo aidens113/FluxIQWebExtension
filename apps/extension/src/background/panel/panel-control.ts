@@ -26,6 +26,7 @@
 import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../shared/constants";
+import { fluxIQWebPageAddress } from "../../shared/fluxiq-web-routes";
 import type { ExtensionStatus, FluxIQSettings, PanelHandBackRunRequest, PanelStopRunRequest, PanelTakeOverRunRequest } from "../../shared/protocol";
 import { isActivityOverlayPreference } from "../activity/index";
 import { isControlPage } from "../control-page";
@@ -37,7 +38,6 @@ import { relayFailure } from "./relay-failure";
 import { handBackRun, stopRun, takeOverRun } from "./run-control";
 import { mergeSettings } from "./settings-save";
 import { PROJECT_MESSAGES, relayProjects, type ProjectsRelayContext } from "../projects/index";
-import { relayThreadChange } from "./thread-change-relay";
 
 type ControlResult = { readonly handled: false } | { readonly handled: true; readonly response: unknown };
 
@@ -70,9 +70,6 @@ const PANEL_MESSAGES: ReadonlySet<string> = new Set([
   RUNTIME_MESSAGES.panelConversationRead,
   RUNTIME_MESSAGES.panelConversationSend,
   RUNTIME_MESSAGES.panelConversationAnswer,
-  RUNTIME_MESSAGES.panelConversationRename,
-  RUNTIME_MESSAGES.panelConversationDelete,
-  RUNTIME_MESSAGES.panelFlowHumannessRead,
   RUNTIME_MESSAGES.panelFlowHumannessSet,
   RUNTIME_MESSAGES.panelTaskHumannessSet,
   ...PROJECT_MESSAGES,
@@ -104,6 +101,18 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
       await deps.openTab(page);
       return { ok: true, url: page };
     }
+    if (message.conversationId !== undefined || (message.projectId !== undefined && message.flowId === undefined && message.runId === undefined)) {
+      // A conversation opens only with its project, which finds it (`/chats/<conversationId>?project=<projectId>`).
+      const conversationId = typeof message.conversationId === "string" ? message.conversationId.trim() : "";
+      const projectId = typeof message.projectId === "string" ? message.projectId.trim() : "";
+      if (!conversationId || !projectId || conversationId.length > 2048 || projectId.length > 2048 || message.flowId !== undefined || message.runId !== undefined) {
+        return relayFailure("invalid_request", "That request needs both the conversation and its project.");
+      }
+      const chat = fluxIQWebPageAddress((await deps.readSettings()).coreApiUrl, { kind: "chat", projectId, conversationId });
+      if (!chat) return relayFailure("invalid_request", "The FluxIQ address in settings is not a web address.");
+      await deps.openTab(chat);
+      return { ok: true, url: chat };
+    }
     if (message.runId !== undefined) {
       if (typeof message.runId !== "string" || !message.runId.trim() || message.runId.length > 2048) return relayFailure("invalid_request", "A valid runId is required.");
       const projectId = await deps.relay.projectId();
@@ -120,7 +129,7 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
       }
       const projectId = await deps.relay.projectId();
       if (typeof projectId !== "string" || !projectId.trim()) {
-        return relayFailure("no_project", "FluxIQ has not said which project this browser belongs to yet. Connect, then try again.");
+        return relayFailure("no_project");
       }
       automation = { projectId: projectId.trim(), flowId: message.flowId.trim() };
     }
@@ -138,9 +147,6 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
   if (message.type === RUNTIME_MESSAGES.panelStopRun) return stopRun(message as Partial<PanelStopRunRequest>, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelTakeOverRun) return takeOverRun(message as Partial<PanelTakeOverRunRequest>, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelHandBackRun) return handBackRun(message as Partial<PanelHandBackRunRequest>, deps.relay);
-  if (message.type === RUNTIME_MESSAGES.panelConversationRename || message.type === RUNTIME_MESSAGES.panelConversationDelete) {
-    return relayThreadChange(message, deps.relay);
-  }
   if (HUMANNESS_MESSAGES.includes(message.type ?? "")) return relayHumanness(message, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelConversationSend && message.kind !== "open" && deps.activity.sending) {
     return deps.activity.sending(() => relayConversation(message, deps.relay));

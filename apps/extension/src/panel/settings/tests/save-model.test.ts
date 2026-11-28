@@ -59,10 +59,9 @@ test("Save changes is hidden until something changes, has no aria-label override
     assert.equal(bar.hidden, true);
     assert.equal(save.textContent, "Save changes");
     assert.equal(save.getAttribute("aria-label"), null);
-    const slider = find("humanness");
-    slider.value = "35";
-    slider.dispatch("input");
-    slider.dispatch("change");
+    const toggle = find("autoReconnect");
+    (toggle as unknown as { checked: boolean }).checked = !(toggle as unknown as { checked: boolean }).checked;
+    toggle.dispatch("change");
     assert.equal(save.hidden, false);
     assert.equal(bar.hidden, false);
     save.dispatch("click");

@@ -9,7 +9,7 @@
 //   one screen       chosen by `screen-state.ts`:
 //     chat             the whole panel: the chat (`panel/chat`), with a slim
 //                      strip above it while it shows one automation
-//     automations      the person's automations, and New automation
+//     automations      the person's automations, and the extraction entry
 //     settings         the gear, in place of everything else
 //     getting-started  numbered steps, in place of the chat, until the
 //                      browser is connected and approved
@@ -26,7 +26,7 @@
 //
 // The empty latest chat's "Extract data from this page" shows the Automations
 // tab and presses the extraction entry there (`#extractDataButton`, mounted by
-// `panel/recording` inside New automation, or in the recording bar while a
+// `panel/recording` in the Automations tab, or in the recording bar while a
 // recording runs), so the sheet opens exactly as its own button opens it.
 // When the entry cannot be pressed now, it gets the focus instead, beside the
 // line saying why.
@@ -54,7 +54,7 @@ import { createActivityFeed, createChatOwnerContext, createChatPanel, createShar
 import { createElement } from "../dom";
 import { bindChatProjectNavigation } from "../chat/project-navigation";
 import { createReachabilityReader, createStartView, discoveryProbe, extensionSetupPort, startGuide } from "../getting-started";
-import { createOpenFluxIQButton } from "../open-fluxiq";
+import { createOpenFluxIQButton, OPEN_IN_PANEL } from "../open-fluxiq";
 import { createProjectSelector, extensionProjectsPort } from "../projects";
 import { createRecordingControls, createRecordingReview } from "../recording";
 import { createExtensionLibrary } from "../library";
@@ -90,9 +90,14 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
 
   // A recording that ends goes to the next message, and the caret goes into the box (`panel/recording`).
   const recording = createRecordingControls(context, { attach: () => chat.attachLatestRecording(), attached: () => chat.focusComposer() });
+  /** The chat thread on screen, for "Open in FluxIQ panel" to land on (both ids, or none). */
+  const openedThread = (): { conversationId: string; projectId: string } | undefined => {
+    const target = chat.target();
+    return target.kind === "thread" ? { conversationId: target.conversationId, projectId: target.projectId } : undefined;
+  };
   // The shell reads FluxIQ's activity once; the chat shows the same feed through this stand-in.
   const sharedActivity = createSharedActivityFeed();
-  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style), { onExtract: () => openExtraction(), composer: { action: recording.recordButton }, activity: sharedActivity.source });
+  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style, undefined, openedThread), { contextLine: false, onExtract: () => openExtraction(), composer: { action: recording.recordButton }, activity: sharedActivity.source });
   const review = createRecordingReview(context, { onAttach: () => chat.attachLatestRecording() });
   const tasks = createTasksPanel(context, ports, { openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }), showAutomations: () => dispatch({ type: "tab", tab: "automations" }) });
   const library = createExtensionLibrary(store.request, ports.library, {
@@ -117,7 +122,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
       }
     },
     review: review.element,
-    newAutomation: recording.newAutomation,
+    extract: recording.extractEntry,
     ...(tasks === undefined ? {} : { tasks }),
     ...(library === undefined ? {} : { library })
   });
@@ -200,12 +205,12 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
   const projects = createProjectSelector(store.request, ports.projects ?? extensionProjectsPort(store.request), {
     openAll: () => void store.request({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "projects" })
   });
-  const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }), { setup: setupPort, changeProject: () => projects.open() });
+  const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }), { setup: setupPort });
   // Open FluxIQ opens the open automation's page, and the web panel's home otherwise.
-  const openIcon = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "icon" }, () => {
+  const openIcon = createOpenFluxIQButton(store.request, { label: OPEN_IN_PANEL, look: "icon" }, () => {
     const target = chat.target();
     return target.kind === "automation" ? target.flowId : undefined;
-  });
+  }, openedThread);
   const topBar = createTopBar({
     onTab: (tab) => dispatch({ type: "tab", tab }),
     onGear: () => dispatch({ type: "gear" }),
@@ -234,7 +239,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
   function openExtraction(): void {
     dispatch({ type: "tab", tab: "automations" });
     automations.showTasks();
-    const entry = recording.newAutomation.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`)
+    const entry = recording.extractEntry.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`)
       ?? recording.bar.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`);
     if (entry === null) return;
     if (!entry.disabled) entry.click();

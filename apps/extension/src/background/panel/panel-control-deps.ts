@@ -18,7 +18,6 @@ export function panelControlDeps(connection: FluxIQConnection, status: () => Pro
       call: (endpoint, payload) => callCoreProgram(connection.coreApiCredentials(), endpoint, payload),
       // The held project, not a snapshot fetch per call (`ProjectContext.forPanel`).
       projectId: () => connection.panelProjects.projectId(),
-      humanness: () => connection.currentSettings().humanness,
       // The page beside the panel (`chat-page.ts`). A failed query rejects, and
       // the relay says so instead of sending as if there were no page.
       pageLocation: () => chatPageLocation({

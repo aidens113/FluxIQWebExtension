@@ -1,5 +1,5 @@
 // The extension's model-keys port: each card state from a readiness reply, with and without Core's model-access
-// state, and writes sent as one relay message each, with no password, whose value appears in no answer.
+// state; keys are added in the FluxIQ panel, so the port writes nothing.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -9,7 +9,6 @@ import type { PanelResult, PanelStore } from "../../../../../state";
 import { createExtensionChatTransport } from "../../../create-extension-chat-transport";
 import { sendRecorder } from "../../../tests/send-recorder";
 import { modelKeysPort } from "../model-keys-port";
-import { KEY_WRITE_MESSAGES } from "../send-key-write";
 
 const reply = (payload: unknown) => ({ ok: true as const, value: { ok: true, payload } });
 const access = (status: string, extra: Record<string, unknown> = {}) => ({ status, message: "Core's sentence.", key: { name: "Work key", provider: "anthropic", model: "claude-haiku-5-5" }, lastCall: null, ...extra });
@@ -19,12 +18,12 @@ const stateOf = async (payload: unknown): Promise<ModelAccessState> => {
   return (read as { state: ModelAccessState }).state;
 };
 
-test("the port reads the readiness message, writes, and asks no password", async () => {
+test("the port reads the readiness message and asks no password", async () => {
   const recorder = sendRecorder(reply({ keys: [], modelAccess: access("ready") }));
   const port = modelKeysPort(recorder.request);
   await port.readState();
   assert.deepEqual(recorder.sent, [{ type: RUNTIME_MESSAGES.panelModelReadiness }]);
-  assert.equal(port.canWrite, true);
+  assert.equal(port.canWrite, false);
   assert.equal("requiresPassword" in port, false);
 });
 
@@ -50,31 +49,13 @@ test("a failed or rejected request is a failure the card words, never a state", 
   assert.deepEqual(await modelKeysPort(thrown).readState(), { ok: false, message: "Couldn't check your AI key just now." });
 });
 
-test("save, replace and remove each send one relay message and answer with Core's checked state", async () => {
+test("the port only shows the key: canWrite is false and a write sends nothing, saying where keys are added", async () => {
   const recorder = sendRecorder(reply({ modelAccess: access("ready") }));
   const port = modelKeysPort(recorder.request);
+  assert.equal(port.canWrite, false);
   const secret = "sk-ant-api03-PASTED-VALUE-0001";
-  const saved = await port.save({ provider: "anthropic", name: "Work key", value: secret });
-  const replaced = await port.replace("key-1", secret);
-  const removed = await port.remove("key-1");
-  assert.deepEqual(recorder.sent, [
-    { type: KEY_WRITE_MESSAGES.save, provider: "anthropic", key: secret, name: "Work key" },
-    { type: KEY_WRITE_MESSAGES.replace, key: secret },
-    { type: KEY_WRITE_MESSAGES.remove }
-  ]);
-  for (const answer of [saved, replaced, removed]) assert.deepEqual(answer, { ok: true, state: { kind: "ready", provider: "Anthropic", keyName: "Work key" } });
-  assert.equal(JSON.stringify([saved, replaced, removed]).includes(secret), false, "the value is in no answer");
-});
-
-test("a relay that does not know the message yet is a failed save in its own words, without the value", async () => {
-  const secret = "sk-ant-api03-PASTED-VALUE-0002";
-  const unknown = sendRecorder({ ok: true, value: { ok: false, sentence: "The extension doesn't know that request yet." } });
-  const answer = await modelKeysPort(unknown.request).save({ provider: "deepseek", value: secret });
-  assert.deepEqual(answer, { ok: false, message: "The extension doesn't know that request yet." });
-  const refused = (async (): Promise<PanelResult<never>> => ({ ok: false, sentence: "Not connected.", detail: "ws closed" })) as unknown as PanelStore["request"];
-  assert.deepEqual(await modelKeysPort(refused).save({ provider: "deepseek", value: secret }), { ok: false, message: "Not connected." });
-  const thrown = (async () => { throw new Error(secret); }) as unknown as PanelStore["request"];
-  const crashed = await modelKeysPort(thrown).remove("key-1");
-  assert.equal(crashed.ok, false);
-  assert.equal(JSON.stringify(crashed).includes(secret), false);
+  const answers = [await port.save({ provider: "anthropic", name: "Work key", value: secret }), await port.replace("key-1", secret), await port.remove("key-1")];
+  assert.deepEqual(recorder.sent, [], "no write message is sent");
+  for (const answer of answers) assert.deepEqual(answer, { ok: false, message: "Add or change your AI key in the FluxIQ panel." });
+  assert.equal(JSON.stringify(answers).includes(secret), false, "the value is in no answer");
 });
