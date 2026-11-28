@@ -54,12 +54,18 @@ test("a rejection reports the requested type exactly as it was sent", () => {
   }
 });
 
+// Since t1081 a select that names no option is refused before dispatch (`domain/src/actions/select-option-issue.ts`),
+// so the select is sent with the least that names one: the flat `value`.
+const LEAST_PARAMETERS: Readonly<Record<string, Record<string, string>>> = { "web.dom.select": { value: "M" } };
+
 test("a known action type passes through unchanged", () => {
   for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
-    const mapped = browserActionFromGatewayCommand(command(actionType));
+    const parameters = LEAST_PARAMETERS[actionType];
+    const mapped = browserActionFromGatewayCommand(command(actionType, parameters ? { parameters } : {}));
     assert.equal(isWebAutomationActionRejection(mapped), false, actionType);
-    assert.deepEqual(mapped, { commandId: "cmd-1", actionType, options: {} }, actionType);
+    assert.deepEqual(mapped, { commandId: "cmd-1", actionType, ...parameters, options: parameters ?? {} }, actionType);
   }
+  assert.ok(isWebAutomationActionRejection(browserActionFromGatewayCommand(command("web.dom.select"))), "a select naming no option is refused (t1081)");
 });
 
 test("a known command's target and parameters become the browser command's fields", () => {
