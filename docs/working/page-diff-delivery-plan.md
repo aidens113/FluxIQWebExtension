@@ -1,9 +1,9 @@
 # Page Diff Delivery Plan
 
 Status: Active
-Status detail: Planned 2026-11-25 on the user's instruction and decisions (D1-D16). W1, W2 and W3 integrated, then t1041 to t1054 (fluxiq 0.54.27). Next: the scripted round on all eight tasks, the loop-counts and recovery-counts follow-ups, then live on Sonnet.
+Status detail: Built and live-tested; replay fixes, UI unification and real-site readiness merged (fluxiq 0.55.1). The user's manual real-site tests still loop and mis-see the page. Next: the model-input deep dive and real-site Lab tests (user, 2026-11-28).
 Created: 2026-11-25
-Last updated: 2026-11-25
+Last updated: 2026-11-28
 Owner: Senior supervisor agent
 Scope: How the model sees pages: each page address's whole cleaned view once per run, then only what changed, delivered with every result; no look command; the model may ask for the whole page; page data per request stays within a limit.
 Paired document: none yet (Core gets one if the sub-supervisor opens a Core working document)
@@ -11,90 +11,39 @@ Related: [data-first-simplification-plan.md](./data-first-simplification-plan.md
 
 ## Current State
 
-- **The user's instruction (2026-11-25), recorded in AGENTS.md "The page reaches the model as run-scoped diffs; there is no look command":**
-  - send each page address's first version whole, then only the differences on that address for the rest of the run;
-  - run-specific, never stored between runs;
-  - the model can ask for the full page;
-  - "no more look command, its ridiculous";
-  - a data limit on pages so not everything is sent on every request.
-- **Why: the t1035 audit of the five 2026-11-24 bigbox runs** (`data-first-simplification-plan/reports/t1035-agent-structure-audit.md`). The lead had first told the user the model saw the page only when it looked; the audit corrected that:
-  - **The whole cleaned page already rides with every decision.** `core.current_view` was in all 463 decisions, and all 36 acts came back with the page after them. "Look" is no tool: it is `core.run_node` with `web.output.dom-capture_snapshot`, run mostly by Core itself, and the words about it confuse the model.
-  - **Requests grow from 25k to 310k input tokens.** Mostly earlier rounds' calls are carried in full (40-52% of input in the long runs); the page is 2-3% of a late request. 91% of decision spend was in calls over 100k tokens.
-  - **48% of decisions are looks and searches; 6% are acts that landed; 34% were refused.** 55 of 109 page searches looked for words already on the page in front of the model. There were 102 detections for 44 reads.
-  - **Handles go stale.** 38 of 136 page-handle uses named a handle no longer on the page, and all failed.
-  - **Replies fail to parse.** 25 were unreadable (5.4%), because the reply is a JSON string inside JSON.
-  - **Withdrawing looks changes the offered tools.** That happened 18 times, breaking the cache each time.
-  - **Judging.** 22 judge calls cost $1.29 and accepted nothing; 7 judged a state unchanged since the last no.
-- **State (2026-11-25, second session): all three workstreams dispatched.**
-  - **t1034 integrated** (fluxiq 0.54.19; both `dev`s pushed; ledger in the data-first plan). The shared Core sync followed.
-  - **W1, t1036** `page-diff-delivery`: **reported Partial, committed WIP on its branch** (Core `e9bf3fa31`, downstream `9ebf94571`, pushed). Report: `reports/t1036-page-diff-delivery.md` in its tree.
-    - **Built:** D1-D8, D10, D11, D14, D15. The page key is the URL without its query. With it, 13-14 of 32 later requests in the scripted run carried changes, up from 4-8.
-    - **The before-state cause was two things.** W1's own removal of `pageView` from the observed-state keys, now restored. And on `dev` since 11-04/11-22, `before_state_missing` was demanded after any act; the judge now asks for a before state only after a lasting act.
-    - **Its last scripted run:** zero `before_state_missing`; it was held only on `read_invalid`, which is W2's fix.
-    - **The lead accepts:**
-      - the draft stays after the history, not in the stable prefix, since it changed in 296 of 462 recorded consecutive requests;
-      - the Core directory is named `view-channel/`, because a guard test refuses "page" there.
-    - **Follow-ups the lead takes after W1 merges** (all in W1's files):
-      - `maxStepsWithoutProgress` still ends a loop, which AGENTS.md forbids;
-      - `core.run_flow` appears in the offered tools only once the draft has a step, so the tool list changes mid-run (D11);
-      - the recovery path keeps the `web.recovery.inspect` look, because it has no page channel.
-    - **For W3 phase 2:** two look phrasings remain in `flow-script-format.ts:235` and `did-not-work.ts:28`.
-    - **Combining (2026-11-25):** the lead merged W2's branch into W1's lane. Core merged clean; three conflicts arose in the scripted model. Worker t1036-g (Opus) is resolving them, fixing the W2 tests W1 breaks, running the combined checks and one scripted bigbox run (expected: attempt 1 confirmed, attempts 2-4 run the saved Flow).
-    - Built. Its P4 replay is in its report, `reports/t1036-page-diff-delivery.md`. Long runs carry 35-45% less input per request (peak 309.5k to 132.8k tokens) and 16-21% fewer uncached tokens.
-    - Its scripted bigbox Lab runs showed a blocker: the judge says yes, yet the completion is held unconfirmed (`answer_first.judged_unsure`, with `web_judge.read_invalid` and `judge_evidence.before_state_missing`), so the run repeats its work and never finishes.
-    - The lead routed `before_state_missing` to W1. Core `judge-evidence/summary.ts` wants a before state after any act, while `answer-first/witnesses` reads one only before a lasting act. Fix: require it only when a lasting act ran. W1 now owns `answer-first/witnesses/**` and `result-verification/judge-evidence/**`.
-  - **W2, t1038: integrated 2026-11-25 (fluxiq 0.54.20; see the ledger).** Its report as it stood: Its report is `reports/t1038-native-decisions-one-read.md` in its tree.
-    - **D12:** decisions go as native tool calls. Anthropic uses tool choice "auto" with one call (forcing is refused with Sonnet/Opus thinking); DeepSeek uses "required". The withdrawn-action allowance is gone from `decision-check.ts`.
-    - **D13:** a read detects its own list.
-    - **Replay over the 467 recorded decisions:** refusals fall from 25 to 4, and 23 can't be tool calls (18 named a tool that wasn't offered).
-    - **Scripted run-mwvu78hj:** 33 decisions on one fixed tool list, 12 reads, no detections, judges yes. It still ends unjudged on `before_state_missing`, which is W1's fix above.
-    - **Fixed two older defects:** the read payload kept `rejectedObservations` without their samples (the cause of `read_invalid`; `node-run/rejected-rows.ts`), and the scripted server misrouted a continued judge.
-    - **At its integration:** apply its replacement for W1's `judge-continues-decider.test.ts` (`test-runs/t1038/a1-judge-continues-decider.patch-target.ts`).
-    - **For W3 phase 2:** `EXTRACTION_FROM` in `flow-authoring/bootstrap/plan/issue-feedback.ts` still says "Detect the structure first", and an auto-drafted read must copy the stored handle and binding.
-  - **t1039 integrated** (data-first ledger): every Lab attempt writes `flow.png` of its Flow or draft, with input, real examples and output.
-  - **W3, t1037** `auto-draft`: **phase 1 done, lead-verified and committed on its branch, with both `dev` heads merged in; not merged into `dev`** (inert until wired, so not yet a complete unit). `draft/compose/` drafts from the calls that worked, with reasons for each step left out. `draft/amendment/edits/` holds six edits (keep, drop, result, repeat, unrepeat, bind), only under `draftEdits: "framework"`, which nothing sets yet. Replay: every landed act is in the framework draft on all five runs, and two runs gain the result read the model lacked. Phase 2 hook points are in its report `reports/t1037-auto-draft.md` (in its tree), "Where phase 2 hooks in": mostly W1's `evidence-loop.ts`, plus `loop-configuration.ts`, `evidence-loop-decision.ts` and W1's `result-columns.ts`; after the switch, delete the 13-edit grammar. Its open questions: no host signal for "lasting" (it errs toward keeping), and looks still listed in the draft entry. Phase 2 starts when W1 merges: the lead merges `dev` in and resumes the same sub-supervisor.
-  - Briefs: `page-diff-delivery-plan/briefs/` (`common.md` binds all three). Ids follow `pnpm task start`'s order, so W3 is t1037 and W2 is t1038.
-  - Nothing paid is running. Round spend of 11-24/25 is about $9.20 of $50: five Haiku bigbox runs and one Sonnet run.
-  - **The Sonnet run** (run-mwvgjb8c, $0.80, 90 s, 22 calls) set the store, read the cart as the result, and the product check accepted it. But the oracle marked the answer wrong: it added "Loftwell 1 Roll $1.97, 4.6 stars", which is not the cheapest towel that qualifies for pickup today at that store (`missingActs`, `unaskedChanges: cart:5520104:pickup`). Our judge, on Sonnet, accepted it, so judging pickup availability is an open defect.
-  - Other open trees: **t1015** `paid-bigbox` (the live lane, slot 1); **t1035** (the audit tree; its files are on dev; to abandon).
+- **Where it stands (2026-11-28 handoff).** The page-diff plan (D1-D16) is built. Bigbox and kestrel replay defects from the live round are fixed: both pass the provider-free harnesses 4 of 4 on fluxiq 0.55.1, calls 15-16, 1 (judge), 0, 0. The user then tested by hand on the real site eldorado.gg from the panel and found the build still loops and mis-sees the page. Their new rule (AGENTS.md, 2026-11-28): **all Lab tests run on real websites, properly reviewed, and the model's input gets a deep dive next.**
+- **Versions.** Core `dev` `586a84b27` (fluxiq 0.55.1, @fluxiq/contracts 0.26.0, @fluxiq/client-gateway-websocket 0.4.0, @fluxiq/ui-components 0.16.0), downstream `dev` `cd5f32445`. Both pushed. `main` has not moved: no full sweep ran today.
+- **Merged since the 2026-11-27 live round** (ledger): t1082-t1098, t1100.
+  - Replay fixes: a skipped navigation still reaches its route; a third address is unknown; judge pages for standalone judges; proof beats no proof; result reads; replay-stop look.
+  - Answer from every result read of one list (t1091).
+  - Strict tools fit the provider: grammar-size and named-tool refusals demote; a 4xx keeps its reason and is never waited on as silence; answer-first is the default mode (t1093, t1100).
+  - Real-site page readiness and the press check (t1094).
+  - The UI unification: the panel owns projects, keys and chat management; clients show the work; project-name click and sync request fixed (t1095).
+  - The manual run's eight loop fixes (t1096).
+  - Extension test isolation (t1097).
+  - The audit refuses one-file test groups (t1098).
+- **Running at handoff (let them reach their endpoint; integrate next session if they finish after /clear):**
+  - **t1099** (sub-supervisor) live status line with timer, plus moving the provider-free `ui:e2e` journeys onto a realistic scenario. Trees `fxwork/t1099`. Brief `briefs/t1099-live-status-ux.md`.
+  - **t1101** (worker-heavy) the 21 answer-first endings tests failing on Core `dev` (real-sql group; bisect suspects t1096's parameter check). Trees `fxwork/t1101`. Brief `briefs/t1101-answer-first-endings-tests.md`.
+- **The user's manual tests (panel, Haiku, eldorado OSRS mining accounts).** Logs in `test-runs/manual-panel/` (git-ignored):
+  - run 1 looped on Next page and refused repeats, now fixed by t1096;
+  - run 2 (replay) was refused on every decision, now fixed by t1100;
+  - run 3 (on 0.55.1) still looped. It got unusable replies, repeated full-page captures, "looking at an older view of the page" (stale handles), and a round restart. The user: "it couldnt even seem to actually be able to access the page data at all".
+- **The panel** was left running at handoff (`pnpm dev`, 127.0.0.1:3000, step log `FLUXIQ_LLM_STEP_LOG_DIR` in the lead's scratch). Point the log at `test-runs/manual-panel/<date>` on the next start.
 - **Next (in order):**
-  1. W1, W2, W3 (t1037), t1041 to t1045 and t1047 are integrated (ledger). The plan's three workstreams are built.
-     - **Under framework drafting, the scripted bigbox run passes 4 of 4** (run-mwwol1vu-1a8e7146, provider-free):
-       - every attempt read 16 rows and gave the right answer;
-       - model calls per attempt: 14, 1 (the judge), 0 and 0;
-       - attempts 2 to 4 each ran `flow.b50fa2ca`, with continuation held;
-       - the saved Flow has 7 nodes.
-     - **Open risks W3 raised:**
-       - There is no host signal for a "lasting" act. A press after the result's last read is left out of the Flow when it shows no page change, no act claim and no declared consequence. An asked act that lands unclaimed and invisibly would be left out too, unless the model keeps it. Watch for it in live runs.
-       - On an attempt that runs the saved Flow, the judge's summary lists no carried acts. This predates W3; it is a judge-evidence item.
-  2. Integrated since (fluxiq 0.54.26 and 0.54.27; ledger):
-     - t1048: the judge and the decider see every read's rows;
-     - t1049: no count of steps without progress ends anything;
-     - t1050: fake clocks for three deadline tests;
-     - t1051: the column reader;
-     - t1052: the Lab's frame-origin proof, and stale scripted declarations;
-     - t1053: a passed-over step never becomes an evidence gap;
-     - t1054: the build-cache lock race.
-  3. Next:
-     - **The user, 2026-11-26: "I think its time to start running live tests right after you fix those current running ones".** Those fixes are all integrated (ledger): t1058 and t1057 (0.54.28), t1062 (0.54.29) and t1056 (0.54.30).
-     - The follow-up `briefs/candidate-stall-repair.md` covers a stalled candidate or project build that fails instead of repairing. It is off the answer-first path, so it runs beside the live round.
-     - Now live, with `dev` merged into every lane: on Sonnet (`--llm-model claude-sonnet-5-5 --llm-max-cost-usd 5`), each run with the run watcher, `--attempts 4`, and every attempt's flow chart reviewed.
-       - First, bigbox `new-store-cheapest-towels` on t1015, the rerun of run-mwvgjb8c, which t1048 fixed; its debug is written.
-       - Then one task per site, up to four lanes at once:
-         - company-website `apprentices`, crossborder `free-hubs-under-ten`, everything-store `batteries-and-descaler`;
-         - local-classifieds `save-dining-tables`, professional-network `accept-messaged-invitations`;
-         - social-network-feed `delete-stranger-requests`, job-board `remote-rust-roles`;
-         - auction-marketplace `kestrel-auctions`, photo-social `glaze-collection`.
-       - The scripted round is now a diagnostic, not a gate. Scripted round 2 stopped on two scripted-model defects (`reports/scripted-round-2-diagnosis.md`), which t1058 fixes. Watch the watcher's alerts under `test-runs/lab-watch/`.
-  4. Also open:
-     - a list read before a filter change stays in the decider's view beside the re-read (t1048; a product call);
-     - the judge accepting a wrong item on pickup availability (above);
-     - `pinned-calls-job-board` setup wait;
-     - `tool-rejection.ts` at 799 lines;
-     - a Flow playback guard for list location (a wire change);
-     - Core `components/automation/tests/ownership.test.ts`, which timed out at 15 s in the first sweep under load and takes 1.4 s alone; act on it only if the second sweep repeats it;
-     - the second full sweep of the day and `main` promotion (`main` has not moved).
-- **The user decided both open questions (2026-11-25):** "yes lets completely drop the search command" (D15), and "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows" (D16, W3). Both are recorded in AGENTS.md.
+  1. Integrate t1099 and t1101 when they report: verify, merge, bump, restart the panel.
+  2. **The model-input deep dive (user, 2026-11-28).** Use the three manual step logs, starting with run 3: what each decision request carries; page size and order (a 180k-character full page in 10 parts, hidden menus first); handle freshness between views; why replies are unusable on Haiku; repeat refusals that still cost calls; the interpretation that read "up to 10 pages" as `limit: 10` (`runtime/conversations/instructions/prompt.ts:45-46`). Plan it as a working doc, then fix.
+  3. **Real-site Lab tests.** The Lab's launch entries refuse anything outside the ten realistic scenarios, and the provider-free `ui:e2e` journeys open synthetic scenarios. Change the guards to the new rule, define real-site tasks with oracles, and review every run (steps, model input, UI).
+  4. Live reruns of bigbox and kestrel have not happened since the fixes. About $16.80 of the $50 paid round remains, plus the user's own manual-test spend.
+- **Open:**
+  - the judge answer's shape (strict refused as too large; t1093 reverted part);
+  - `assert.ts` and `extract-list.ts` plain errors before a gesture (t1096 note);
+  - `prompt.ts` wording that `limit` counts rows;
+  - the content harness's older failures;
+  - 39 Core and 30 downstream baselined one-file test groups;
+  - the URL.canParse extension test;
+  - landmark name into identity; `dead-end.ts` and fresh loads; carried evidence lost on a Core restart; link normalisation; the state-route return limit; wall-clock tests;
+  - old fxwork worktrees (t1080-t1089 Core trees) to prune.
 
 ## Decisions
 
@@ -152,6 +101,37 @@ The lead then integrates W1 then W2, re-runs the narrow checks, and runs P5 live
 - Live acceptance as in AGENTS.md (deterministic attempts after the exploring one).
 
 ## Work Ledger
+
+### 2026-11-28 - Handoff: t1091, t1093-t1098 and t1100 integrated (fluxiq 0.55.1); manual real-site tests; the user's new rules
+- **Integrated:**
+  - **t1091:** the answer comes from every result read of one list under its latest state; overlapping rows dedupe on shared fields.
+  - **t1093:** strict tools fit the provider's grammar (demote largest first, remembered per tool-set digest); a 4xx keeps the provider's reason; answer-first is the default; `scripts/anthropic-contract-check.mjs`.
+  - **t1094:** a step waits for the page to be usable, not for a real site to go silent; a press counts only requests it caused.
+  - **t1095:** the UI unification. The panel owns projects, keys and chat management; clients show the work; the project-name click and the sync request are fixed. Core boundary: clients lose create-project, chat rename and delete, and key writes.
+  - **t1096:** the manual run's eight loop fixes.
+  - **t1097:** a leaked `performance` global from a t1094 test broke 72 extension tests in the full run.
+  - **t1098:** the audit refuses one-file test groups.
+  - **t1100:** an open nullable object kept strict tools refused; named-tool demotion; a refused request is never waited on as silence.
+- **The lead's integration fixes:**
+  - regrouped one-file test groups (t1088, t1093);
+  - type errors in t1083's and t1085's tests found by Core's gate;
+  - t1095's eager `service.conversations` at registration, and its stale assistant-tools catalog.
+- **User decisions and rules this session:**
+  - the panel owns configuration and projects, clients show what is happening (AGENTS.md, 2026-11-27);
+  - Lab tests run on real websites, properly reviewed, with a deep dive into the model's input (AGENTS.md, 2026-11-28);
+  - clear live statuses (t1099).
+- **Manual tests by the user** (panel, Haiku, eldorado): three runs, logs in `test-runs/manual-panel/`. The third still loops; it is the deep-dive input.
+- **Not done:**
+  - no live Lab rerun since the fixes;
+  - no full sweep, so `main` has not moved;
+  - no UI screenshots (the `ui:e2e` journeys open synthetic scenarios; t1099 moves them);
+  - 21 answer-first endings tests fail on Core `dev` (t1101 running).
+- Validation: the lead's runs:
+  - provider-free harnesses on the final code: kestrel `"status":"passed"` with calls `11, 1, 0, 0`; bigbox `15, 1, 0, 0`; bigbox panel `16, 1, 0, 0` (t1096 tree, merged with dev), each watcher `alerts: 0`;
+  - extension `node apps/extension/scripts/test-extension.mjs` after t1097: `# pass 4213`, `# fail 1` (the older URL.canParse);
+  - t1095 merged: Core groups `Tests 2231 passed`, `586 passed`, `pnpm check` clean;
+  - t1100's rebuilt request accepted live (HTTP 200);
+  - the endings real-sql group on dev: `Tests 21 failed | 64 passed (85)`, the same before and after t1100.
 
 ### 2026-11-27 - Free harnesses pass 4 of 4 on 0.54.36; t1086 and t1090 integrated; t1091 and t1092 running
 - **Bigbox plain** (`run` in t1086, instance t1086): 4 of 4 right. Attempt 1 explored (15 calls); attempts 2-4 ran the saved Flow.
