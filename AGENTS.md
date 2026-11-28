@@ -594,6 +594,32 @@ lands; its "one judged whole run" stands and moves to the next real attempt.
 
 **No model ladder: a task keeps the model it starts with** (user, 2026-11-20): "We're removing the ... ladder system for going to better models. from now on its just the model we start with." This supersedes the 2026-11-19 ladder (Haiku first, one sticky step up to Sonnet then Opus when stuck; t962, t964, t969). Nothing climbs to a stronger model when a task is stuck, and a loop decision no longer offers `escalate_model`. The judge stays on that same model too (user, 2026-11-20: "YES judge stays on same model so we dont burn credits"), so an unreadable judge reply is asked again on it; the build, its repairs and later attempts likewise. The starting model was Haiku for build and judge (the lead's recommendation, approved by the user 2026-11-20: "yes for everything"), measured on the scoreboard in [the data-first simplification plan](docs/working/data-first-simplification-plan.md); the no-ladder rule is built (t983, t1012). **Since 2026-11-25 Lab and live runs start on Sonnet** (user: "I think for now lets just increase model to a sonnet model"): every launch passes `--llm-model claude-sonnet-5-5`, and the build, judge, repairs and later attempts stay on it. Core's built-in default stays Haiku until the user says otherwise.
 
+**The model gets the entire page, no exceptions** (user, 2026-11-28): "we need to feed the entire page to the model, no
+exceptions. This is causing 99% of all problems. Lets completely redo the page input. Rather than some weird custom parser,
+just remove dead characters ('<','/>',etc )" and "The main issues are 100% the fact that we tried saving tokens by reducing
+data, but actually just made things 10x more complicated for no reason. That ends today." This supersedes the 2026-11-25 rule
+below on diffs and a page data limit. Plan: [full-page-model-input-plan.md](docs/working/full-page-model-input-plan.md).
+
+**No look action** (user, 2026-11-28): "remove the look action entirely. Its stupid and makes no sense. Like wdym describe an
+element? that shouldnt even be something the model needs to do." The model is never offered a tool whose only job is to look
+at or describe the page; the page is already in front of it.
+
+**Extraction takes an element's whole hierarchy as data** (user, 2026-11-28): "Rather than simply having these rigid data
+types like read a list, just extract the jsonify data straight from elements. In many cases a list of grid items or items in
+general are contained within a heriarchical element ... And preserve all the element's given data. This way the data
+processing layer will have everything it needs to work with the data & clean it up however."
+
+**Data processing is node-based and separate from actions** (user, 2026-11-28): "It should give the model access to any type
+of logical flow node processing. Basically data processing should be node-based just like normal operation, but its
+separated from the part of the flow that does actions & interacts with the client entirely."
+
+**Every chat message is written for the person** (user, 2026-11-28): "EVERY SINGLE MESSAGE should be completely tailored
+towards the human! No bullshit, easy to understand from the user's POV, not sounding like a complete bot (NO EM DASHES)".
+This covers every message the product shows a person, in the extension and the panel.
+
+**Audit Core for extension logic** (user, 2026-11-28): "an immediate audit needs to be done on whether the extension logic is
+being contaiminated into the core fluxiq repo." Tracked in the full-page plan, phase 0.
+
 **The page reaches the model as run-scoped diffs; there is no look command** (user, 2026-11-25): "rather than sending the entire page every single time, we do like a github style of data transmission ... Where we transmit the first version of the page (url), then send any differences in data on that page with specific url in the future (of the run) only ... this would be run-specific NOT something that is stored between runs. Also model should have ability to ask for full page if it needs. But no more look command, its ridiculous. ALso ensure there is a data limit on pages to ensure we dont just send everything on every singel request." So: the first time a run's model meets a page address it gets that page's whole cleaned view; afterwards it gets only what changed on that address, automatically with every result, never by calling a look; it may ask for the whole page again; page data in any one request stays within a set limit; nothing of it is kept between runs. A page address is its URL "not including the ? params" (user, 2026-11-25), so filtering, sorting or paging on the same path arrives as changes. This supersedes the 2026-10 "whole page, no element limits" reading for what each request carries. Page search goes too (user, 2026-11-25: "yes lets completely drop the search command"): there is no `find_on_page`, and the full-page request is the one way to see more than the view, hidden elements and their attributes included. Plan: [page-diff-delivery-plan.md](docs/working/page-diff-delivery-plan.md). Not yet built (2026-11-25).
 
 **The framework drafts the Flow from what landed; the model edits it** (user, 2026-11-25): "Drafting the flow automatically will help in many situations, as long as the model is able and encouraged to edit it for more efficient flows." The build's draft is written by the framework from the acts and reads that worked, in order, with dead ends and repeats left out and the asked table's read as the result. The model is able and told to edit it: loops over repeated steps, parameters for typed values, the result read, and dropping waste. This adjusts the earlier rules that the model authors the draft live and that a recording is evidence, not a script. The draft starts from what ran, and the model keeps it general. Plan: [page-diff-delivery-plan.md](docs/working/page-diff-delivery-plan.md), W3. Not yet built (2026-11-25).
