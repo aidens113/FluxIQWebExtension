@@ -174,8 +174,7 @@ test("list rename synchronizes open chat labels without read/history/draft/selec
   const calls = core.sent.length;
   const focusCalls = doc.focusCalls.length;
   await refreshRows([{ flowId: "f", name: "New orders" }]);
-  assert.equal(root.byClass("chat-context-name")[0]!.textContent, "New orders");
-  assert.equal(root.byClass("chat-context-name")[0]!.getAttribute("title"), "New orders");
+  assert.equal(root.byClass("chat-context-name").length, 0, "the strip names the open Flow; the chat's own context line is off");
   assert.equal(box.placeholder, "Message FluxIQ about New orders");
   assert.equal(root.byClass("strip-run")[0]!.getAttribute("aria-label"), "Run New orders");
   assert.ok(root.byClass("chat-msg")[0] === message);
@@ -200,13 +199,13 @@ test("missing current-list flow retains conversation and draft; return refreshes
   await refreshRows([]);
   assert.match(root.byClass("strip-lines")[0]!.textContent, /unavailable in the current list/u);
   assert.equal(root.byClass("strip-run")[0]!.disabled, true);
-  assert.equal(root.byClass("chat-context-name")[0]!.textContent, "Orders");
+  assert.equal(root.byClass("chat-context-name").length, 0);
   assert.ok(root.byClass("chat-msg")[0] === message);
   assert.equal(box.value, "Historical draft");
   assert.ok(doc.activeElement === outside);
   await refreshRows([{ flowId: "f", name: "Returned orders" }]);
   assert.doesNotMatch(root.byClass("strip-lines")[0]!.textContent, /unavailable/u);
-  assert.equal(root.byClass("chat-context-name")[0]!.textContent, "Returned orders");
+  assert.equal(root.byClass("chat-context-name").length, 0);
   assert.equal(box.value, "Historical draft");
   assert.equal(core.sent.length, calls);
   assert.ok(doc.activeElement === outside);
@@ -237,7 +236,7 @@ test("passive marker does not suppress different reentrant flow or later explici
   assert.equal(root.byClass("strip-run")[0]!.getAttribute("aria-label"), "Run Renamed first", "marker is restored before later explicit navigation");
 }));
 
-test("the empty latest chat's Extract shows Automations with the extraction sheet open, under its kept ids", async () => mounted(async ({ root, doc, byId, messages }) => {
+test("the empty chat says FluxIQ picks the project, offers no Extract start, and the extraction entry is in Automations under its kept ids", async () => mounted(async ({ root, doc, byId, messages }) => {
   // The open sheet moves itself to the body (`panel/extraction/dialog-focus.ts`) and watches it.
   const globals = globalThis as unknown as Record<string, unknown>;
   const observer = globals.MutationObserver;
@@ -246,14 +245,15 @@ test("the empty latest chat's Extract shows Automations with the extraction shee
   byId("panelTab-chat").dispatch("click"); await settle();
   assert.equal(byId("panelScreen-chat").hidden, false);
   assert.ok(messages.some((message) => message.type === M.panelModelReadiness), "the empty latest chat read the model keys");
-  const extract = root.byClass("chat-start").find((button) => button.getAttribute("data-start") === "extract")!;
-  assert.equal(extract.textContent, "Extract data from this page");
+  assert.match(root.textContent, /Tell FluxIQ what you want\. It picks the project and saves the Flow\./u);
+  assert.equal(root.byClass("chat-start").length, 0, "no second way to start: the composer is the one entry");
+  assert.doesNotMatch(root.textContent, /Show FluxIQ how|New automation/u);
+  byId("panelTab-automations").dispatch("click");
+  await settle();
   assert.equal(byId("extractionPanel").hidden, true);
   try {
-    extract.dispatch("click"); await settle();
-    assert.equal(byId("panelScreen-automations").hidden, false);
-    assert.equal(byId("panelScreen-chat").hidden, true);
-    assert.equal(byId("panelTab-automations").getAttribute("aria-selected"), "true");
+    byId("extractDataButton").dispatch("click");
+    await settle();
     assert.equal(inBody("extractionPanel")?.hidden, false, "the sheet is open");
     for (const id of ["extractDataButton", "extractionStatus", "extractionCloseButton", "extractionConfirmButton"]) assert.ok(inBody(id), id);
   } finally {

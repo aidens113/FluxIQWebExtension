@@ -13,14 +13,12 @@
 // before its first read.
 //
 // The chat's thread list reads with `kind: "list-all"`: the project it names, or
-// every project when it names none (and then the assistant's own chats too,
-// `list-panel-threads`, merged in and deduplicated) -- never the session's project in its place,
+// every project when it names none -- never the session's project in its place,
 // because a list with no project open is the list of every thread. Its New chat
 // is an open with `fresh: true`, which Core answers with a new thread rather
 // than the subject's open one. Core opens no `panel` subject: the chat with no
 // project open asks for one, and gets the session project's own thread, as an
-// open naming no subject does. Renaming and deleting a thread are
-// `thread-change-relay.ts`.
+// open naming no subject does.
 //
 // Every message offers Core what the chat can do and says where the person is:
 // - `capabilities` is always `CHAT_CAPABILITIES` (ids only: Core executes each
@@ -51,7 +49,6 @@ import type {
 import { CHAT_CAPABILITIES } from "./chat-capabilities";
 import { acceptedPageUrl } from "./page-url";
 import type { PanelRelayContext } from "./relay-context";
-import { panelThreadsAsConversations } from "./assistant-chats";
 import { relayFailure } from "./relay-failure";
 
 type ConversationMessage = { readonly type?: string; readonly [key: string]: unknown };
@@ -103,25 +100,11 @@ async function read(message: Partial<PanelConversationReadRequest> & { conversat
   }));
 }
 
-// The person's assistant chats belong to no project, so they join only the
-// every-project list. A read that fails is reported as it stands, whichever of
-// the two it was: the project chats are never shown as the whole list.
-async function listAll(projectId: string | null, limit: number | undefined, context: PanelRelayContext): Promise<PanelRelayResponse> {
-  const [projectChats, assistantChats] = await Promise.all([
-    context.call("list-conversations", defined({ projectId, limit })),
-    projectId === null ? context.call("list-panel-threads", defined({ limit })) : undefined
-  ]);
-  if (!projectChats.ok || !assistantChats) return projectChats;
-  if (!assistantChats.ok) return assistantChats;
-  const payload = (projectChats.payload ?? {}) as Record<string, unknown>;
-  const own = Array.isArray(payload.conversations) ? payload.conversations : [];
-  const seen = new Set<unknown>();
-  const merged = [...own, ...panelThreadsAsConversations((assistantChats.payload as { conversations?: unknown } | null)?.conversations)]
-    .filter((chat) => {
-      const id = (chat as { conversationId?: unknown } | null)?.conversationId;
-      return id === undefined || (!seen.has(id) && seen.add(id));
-    });
-  return { ok: true, payload: { ...payload, conversations: merged } };
+// The all-chats list is project conversations only: the project it names, or every project the
+// person may read when it names none. The per-person assistant threads (`list-panel-threads`) are
+// not asked for: Core refuses them to a paired client, and every new chat belongs to a project.
+function listAll(projectId: string | null, limit: number | undefined, context: PanelRelayContext): Promise<PanelRelayResponse> {
+  return context.call("list-conversations", defined({ projectId, limit }));
 }
 
 async function send(message: Partial<PanelConversationSendRequest>, context: PanelRelayContext): Promise<PanelRelayResponse> {
@@ -192,15 +175,8 @@ async function turnPayload(
     conversationId,
     text: body,
     capabilities: capabilitiesFor(message.capabilities),
-    onScreen: await onScreenFor(message.onScreen, context),
-    // The saved setting, sent only when it changes how the run acts: absent means 0.
-    humanness: savedHumanness(context)
+    onScreen: await onScreenFor(message.onScreen, context)
   });
-}
-
-function savedHumanness(context: PanelRelayContext): number | undefined {
-  const saved = context.humanness?.();
-  return typeof saved === "number" && saved > 0 ? saved : undefined;
 }
 
 function capabilitiesFor(requested: unknown): unknown[] {

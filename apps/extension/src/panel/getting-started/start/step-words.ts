@@ -15,8 +15,8 @@ export const APPROVE_LINE = "In FluxIQ, sign in if it asks, check that its reque
 export const ACCESS_REMOVED_LINE = "Access was removed. Connect again to ask for approval.";
 /** A connection that ended without a sign the approval is gone. */
 export const NOT_CONNECTED_LINE = "Not connected. Connect again.";
-/** The AI key is the last step; the chat shows the key card as soon as the browser is approved. */
-export const KEY_LINE = "When this browser is approved, add your AI key in the chat. Then ask FluxIQ for anything.";
+/** The AI key is the last step; keys are added in the FluxIQ panel, and the chat says when one is missing. */
+export const KEY_LINE = "Add your AI key in the FluxIQ panel. Then ask FluxIQ for anything in the chat.";
 export const SETUP_LINE = "A few steps, then ask FluxIQ for anything in the chat.";
 
 /** Where FluxIQ was found, with the "Change" that follows it on screen. */

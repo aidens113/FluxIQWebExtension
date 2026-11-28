@@ -11,10 +11,6 @@ import { createProjectSelector } from "../project-selector";
 
 const request = (async () => ({ ok: true, value: {} })) as unknown as PanelStore["request"];
 
-async function noCreate(): Promise<never> {
-  throw new Error("no");
-}
-
 test("the status's project name shows at once, with no list read", async () => {
   await withFakeDocument(async () => {
     let reads = 0;
@@ -22,8 +18,7 @@ test("the status's project name shows at once, with no list read", async () => {
       async list() {
         reads += 1;
         return [];
-      },
-      create: noCreate
+      }
     };
     const selector = createProjectSelector(request, port, { openAll: () => {} });
     selector.render(statusWith({ projectId: "p1", projectName: "Alpha" }));
@@ -37,8 +32,7 @@ test("an id without a name is named from the list", async () => {
     const port: ProjectsPort = {
       async list() {
         return [{ id: "p1", name: "Alpha" }];
-      },
-      create: noCreate
+      }
     };
     const selector = createProjectSelector(request, port, { openAll: () => {} });
     selector.render(statusWith({ projectId: "p1" }));
@@ -54,8 +48,7 @@ test("a later status that names only the id keeps the name already shown, never 
       async list() {
         reads += 1;
         return [];
-      },
-      create: noCreate
+      }
     };
     const selector = createProjectSelector(request, port, { openAll: () => {} });
     selector.render(statusWith({ projectId: "p1", projectName: "Alpha" }));

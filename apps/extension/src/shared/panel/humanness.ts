@@ -13,15 +13,6 @@
 // is refused in Core's own words, which reach the person as they stand.
 
 /**
- * `panelFlowHumannessRead`: `get-flow-metadata-detail` with `{ projectId, flowId }`.
- * Answers `PanelHumannessReply`, from Core's `flow.metadata.humanness`.
- */
-export type PanelFlowHumannessReadRequest = {
-  projectId?: string | undefined;
-  flowId: string;
-};
-
-/**
  * `panelFlowHumannessSet`: `update-flow-settings` with
  * `{ projectId, flowId, flow: { flowId, metadata: { humanness } } }`, where
  * `null` clears. Answers `PanelHumannessReply`, from the settings Core saved.
@@ -47,12 +38,6 @@ export type PanelTaskHumannessSetRequest = {
 /** What each humanness request answers: the own level as Core holds it, absent when there is none. */
 export type PanelHumannessReply = {
   humanness?: number | undefined;
-};
-
-/** The body of `get-flow-metadata-detail` the relay sends: exactly these fields. */
-export type CoreFlowHumannessReadBody = {
-  projectId: string;
-  flowId: string;
 };
 
 /**

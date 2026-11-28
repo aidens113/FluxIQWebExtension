@@ -1,5 +1,4 @@
-// One Flow's or one task's own humanness: reading a Flow's level
-// (`get-flow-metadata-detail`), and setting or clearing a Flow's
+// One Flow's or one task's own humanness: setting or clearing a Flow's
 // (`update-flow-settings`) or a task's (`update-task-settings`). A task's level
 // is read from its `list-project-tasks` row, which the automation relay's
 // `listTasks` already reads, so there is no task read here.
@@ -20,7 +19,7 @@
 
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import { present } from "../../shared/present";
-import type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelHumannessReply, PanelRelayResponse } from "../../shared/protocol";
+import type { CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelHumannessReply, PanelRelayResponse } from "../../shared/protocol";
 import type { PanelRelayContext } from "./relay-context";
 import { relayFailure } from "./relay-failure";
 
@@ -28,28 +27,22 @@ type HumannessMessage = { readonly type?: string; readonly [key: string]: unknow
 
 /** The messages this relay answers. */
 export const HUMANNESS_MESSAGES: readonly string[] = [
-  RUNTIME_MESSAGES.panelFlowHumannessRead,
   RUNTIME_MESSAGES.panelFlowHumannessSet,
   RUNTIME_MESSAGES.panelTaskHumannessSet
 ];
 
 const NO_LEVEL = "Say what humanness to use, from 0 to 100, or clear it.";
 
-/** Relays a Flow's read, or a Flow's or a task's set or clear. Undefined for any other message type. */
+/** Relays a Flow's or a task's set or clear. Undefined for any other message type. */
 export async function relayHumanness(message: HumannessMessage, context: PanelRelayContext): Promise<PanelRelayResponse<PanelHumannessReply> | undefined> {
   if (!HUMANNESS_MESSAGES.includes(message.type ?? "")) return undefined;
   const isTask = message.type === RUNTIME_MESSAGES.panelTaskHumannessSet;
   const subjectId = text(isTask ? message.taskId : message.flowId);
   if (!subjectId) return relayFailure("invalid_request", isTask ? "Say which task to change." : "Say which Flow this is for.");
-  const reading = message.type === RUNTIME_MESSAGES.panelFlowHumannessRead;
   const humanness = message.humanness;
-  if (!reading && !isLevel(humanness)) return relayFailure("invalid_request", NO_LEVEL);
+  if (!isLevel(humanness)) return relayFailure("invalid_request", NO_LEVEL);
   const projectId = text(message.projectId) ?? text(await context.projectId());
   if (!projectId) return relayFailure("no_project");
-  if (reading) {
-    const read = await context.call("get-flow-metadata-detail", present<CoreFlowHumannessReadBody>({ projectId, flowId: subjectId }));
-    return read.ok ? held(field(field(field(read.payload, "flow"), "metadata"), "humanness")) : read;
-  }
   const level = humanness as number | null;
   if (isTask) {
     const set = await context.call("update-task-settings", present<CoreTaskHumannessSetBody>({ projectId, taskId: subjectId, humanness: level }));

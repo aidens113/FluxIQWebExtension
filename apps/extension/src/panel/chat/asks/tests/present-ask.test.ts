@@ -123,3 +123,15 @@ test("no word a person reads names a machine thing", () => {
   const all = [permission(["move_money"]), panelCommand(["delete"]), personCheck].flatMap((ask) => [idle, working, { ...idle, surface: () => "popup" }].map((context) => JSON.stringify(presentAsk(ask, context))));
   for (const said of all) assert.doesNotMatch(said.replace(/"(?:id|kind|value|tone)":"[^"]*"/gu, ""), /\b(?:Flow|build|promoted|candidate|trial|judge|Core)\b/u);
 });
+
+test("a card the panel's tools raised is read-only: the sentence Core gives, every action sent to the panel, no text box", () => {
+  for (const ask of [permission(["modify_existing"], "ask.assistant.1"), { ...panelCommand(["delete"]), askId: "ask.assistant.2" }]) {
+    const shown = presentAsk(ask, idle)!;
+    assert.equal(shown.note, "This question was asked by the FluxIQ panel's tools. Answer it in the FluxIQ panel.");
+    assert.ok(shown.actions.length > 0 && shown.actions.every((action) => action.reauthorize !== undefined), "none can be pressed here");
+    assert.equal(shown.takesText, false);
+  }
+  const open = presentAsk({ askId: "ask.assistant.3", kind: "open", status: "pending", consequences: [] }, idle)!;
+  assert.equal(open.takesText, false);
+  assert.match(open.note ?? "", /Answer it in the FluxIQ panel/u);
+});

@@ -19,7 +19,7 @@
 import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { ExtensionStatus } from "../../../shared/protocol";
 import { createElement } from "../../dom";
-import { createOpenFluxIQButton } from "../../open-fluxiq";
+import { createOpenFluxIQButton, OPEN_IN_PANEL } from "../../open-fluxiq";
 import type { PanelContext } from "../../shell";
 import { createStickyError } from "../../state";
 import { discoveryProbe, type ReachabilityProbe } from "../reachability";
@@ -35,6 +35,8 @@ export type StartView = {
   autoSent(): boolean;
 };
 
+/** The key step's link: it opens the FluxIQ panel at its keys page. */
+const KEY_LINK = "Add your AI key in the FluxIQ panel";
 const KEYS: readonly StartStepKey[] = ["start", "approve", "key"];
 const MARKS: Readonly<Record<StartStepKey, string>> = { start: "1", approve: "2", key: "3" };
 const STATE_WORDS: Readonly<Record<StartStep["state"], string>> = { done: "Done", current: "Next", waiting: "In progress", problem: "Needs attention", todo: "To do" };
@@ -52,7 +54,9 @@ export function createStartView(context: PanelContext, openSettings: () => void,
   const line = createElement("p", { className: "start-line" });
   // While FluxIQ waits for approval its sign-in page should say what it is for, so the button opens it with that purpose.
   let waitingForApproval = false;
-  const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small", purpose: () => (waitingForApproval ? "pairing" : "ask") });
+  const open = createOpenFluxIQButton(store.request, { label: OPEN_IN_PANEL, look: "small", purpose: () => (waitingForApproval ? "pairing" : "ask") });
+  // Keys are added in the FluxIQ panel, never here: the key step is that link.
+  const keyOpen = createOpenFluxIQButton(store.request, { label: KEY_LINK, look: "link", purpose: "model-key" });
   const connectButton = createElement("button", { id: "connectButton", className: "primary-button", text: "Connect", attrs: { type: "button" } });
   const addressLink = createElement("button", { className: "link-button", text: "Check the connection address", attrs: { type: "button" } });
   const changeButton = createElement("button", { className: "small-button", text: "Change", attrs: { type: "button", "aria-label": "Change the FluxIQ web address" } });
@@ -63,12 +67,13 @@ export function createStartView(context: PanelContext, openSettings: () => void,
 
   const changeActions = createElement("div", { className: "start-actions start-keep", hidden: true }, [changeButton]);
   const connectActions = createElement("div", { className: "start-actions" }, [connectButton, addressLink]);
+  const keyActions = createElement("div", { className: "start-actions" }, [keyOpen.element]);
   const openActions = createElement("div", { className: "start-actions" }, [open.element]);
   const approveBlock = createElement("div", { className: "start-approve" }, [code, createElement("div", { className: "start-actions" }, [cancelPairing])]);
   const actions: Readonly<Record<StartStepKey, readonly HTMLElement[]>> = {
     start: [changeActions],
     approve: [connectActions, openActions, approveBlock],
-    key: []
+    key: [keyActions]
   };
   const rows = KEYS.map((key) => {
     const mark = createElement("span", { className: "start-mark", text: MARKS[key], attrs: { "aria-hidden": "true" } });
@@ -178,6 +183,7 @@ export function createStartView(context: PanelContext, openSettings: () => void,
       code.textContent = guide.pairingCode ?? "";
       if (status !== undefined) {
         open.observe(status);
+        keyOpen.observe(status);
         if (error.observe(status)) drawNotice();
       }
       // FluxIQ is found and nothing has asked it yet: ask, once. The Connect button is the retry if this fails or is cancelled.

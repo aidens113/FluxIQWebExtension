@@ -632,6 +632,22 @@ test("a revoked browser asks to pair only when the person connects again, which 
   assert.equal(kept.kept(), undefined);
 });
 
+test("a second pairing request on the same socket replaces the code the browser shows (I4)", async () => {
+  const h = harness();
+  await withOpenSession(h, async (socket) => {
+    socket.deliver("server.pairing_required", { referenceCode: "REF-A", reason: "Approve this client in FluxIQ before sending data." });
+    await nextTurn();
+    assert.equal(h.session.state(), "pairing");
+    assert.equal(h.session.statusFields().pairingReferenceCode, "REF-A");
+    socket.deliver("server.pairing_required", { referenceCode: "REF-B", reason: "Approve this client in FluxIQ before sending data." });
+    await nextTurn();
+    assert.equal(h.session.state(), "pairing");
+    assert.equal(h.session.statusFields().pairingReferenceCode, "REF-B", "the renewed code replaces the old one");
+    assert.equal(socket.readyState, 1, "the same socket stays open");
+    assert.equal(h.state.pairingRequests, 2, "each request is told to the worker, which refreshes the shown status");
+  });
+});
+
 test("an expired credential is dropped and reads expired, while the pairing request the gateway raised stands", async () => {
   const kept = recordingPairingEndedStorage();
   const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, pairingEndedStorage: kept.storage });

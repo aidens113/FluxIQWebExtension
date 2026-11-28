@@ -15,6 +15,8 @@ import { assertExpectedFacts, playwrightScenarioFactProbe } from "../../scenario
 import { loadScenarioManifest } from "../../scenarios.js";
 import { assertRuntimeDebugRun, type RuntimeDebugAssertion } from "../assertions/index.js";
 import { connectExtensionForProject } from "./extension-project.js";
+import { shootAfterRun, shootExtensionFirstOpen, shotsDirectory } from "./extension-shots.js";
+import { journeyShots } from "./screenshots.js";
 import { assertProviderFreeRun, type RunModelActivity } from "./provider-free-run.js";
 import { RECORDED_TASKS, type RecordedTask, recordTaskFlow } from "./recorded-task.js";
 import { type JourneySession, withJourneyBrowser, withJourneyCore } from "./session.js";
@@ -48,7 +50,9 @@ async function firstRunJourney(session: JourneySession, recorded: DemoWorkspaceS
   const manifest = await loadScenarioManifest(config.repositoryRoot, TASK.scenarioId);
   const oracle = manifest.expected.finalState ?? [];
   if (oracle.length === 0) throw new RunnerFailure("fixture.invalid", "The task's scenario declares no final-state oracle", { details: { reasonCode: "first_run.oracle_missing" } });
+  const shots = journeyShots(shotsDirectory(config.workspaceDirectory, "first-run"));
   await connectExtensionForProject(session, recorded);
+  await shootExtensionFirstOpen(shots, session.extensionPage);
   await openProjectInPanel(panelPage, config.origin, recorded.projectName, evidence);
   await openFlowInCurrentProject(panelPage, recorded.flowName, evidence);
   const execution = await runDemoFlowFromPanel(panelPage, recorded, evidence);
@@ -56,6 +60,7 @@ async function firstRunJourney(session: JourneySession, recorded: DemoWorkspaceS
     throw new RunnerFailure("runtime.behavior", "The recorded Flow did not succeed on the page it was recorded on", { details: { reasonCode: "first_run.not_succeeded", status: execution.status } });
   }
   timeline.mark("run-succeeded");
+  await shootAfterRun(shots, session.extensionPage, panelPage);
   const runtimeDebug = await assertRuntimeDebugRun({ page: panelPage, control, projectId: recorded.projectId, runId: execution.runId });
   if (runtimeDebug.code !== "runtime_debug.verified") {
     throw new RunnerFailure("runtime.behavior", "Runtime Debug did not show the run as Core recorded it", { details: { reasonCode: runtimeDebug.code } });

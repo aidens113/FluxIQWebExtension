@@ -35,8 +35,9 @@ test("three steps, the AI key last: each has a number and a title, and Open Flux
     const steps = root.byClass("start-step");
     assert.equal(steps.length, 3);
     assert.deepEqual(root.byClass("start-step-title").map((node) => node.textContent), ["Start FluxIQ", "Connect and approve", "Add your AI key"]);
-    assert.ok(buttonNamed(fake(steps[1]), "Open FluxIQ"), "Open FluxIQ is under step two");
-    assert.equal(buttonNamed(fake(steps[2]), "Open FluxIQ"), undefined, "and not under the key step");
+    assert.ok(buttonNamed(fake(steps[1]), "Open in FluxIQ panel"), "Open in FluxIQ panel is under step two");
+    assert.equal(buttonNamed(fake(steps[2]), "Open in FluxIQ panel"), undefined, "and the key step has its own link instead");
+    assert.ok(buttonNamed(fake(steps[2]), "Add your AI key in the FluxIQ panel"), "the key step is a link into the FluxIQ panel");
     assert.ok(buttonNamed(fake(steps[1]), "Cancel approval request"), "Cancel says what it cancels");
     assert.equal(buttonNamed(fake(steps[1]), "Cancel"), undefined, "no bare Cancel under the approval");
     assert.equal(root.descendants().find((node) => node.id === "pairingReferenceCode")!.textContent, "482913", "the code shows at once");
@@ -288,8 +289,27 @@ test("Open FluxIQ asks for the pairing page while approval is waited for, and th
     const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
     const waiting = statusWith({ connectionState: "pairing", pairingReferenceCode: "482913", paired: false });
     view.render(startGuide(waiting, false), waiting);
-    buttonNamed(fake(view.element), "Open FluxIQ")!.dispatch("click");
+    buttonNamed(fake(view.element), "Open in FluxIQ panel")!.dispatch("click");
     await flush();
     assert.deepEqual(requestsOf(sent, RUNTIME_MESSAGES.panelOpenFluxIQ), [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "pairing" }]);
+  });
+});
+
+test("the key step is a link into the FluxIQ panel's keys page, never a key form", async () => {
+  await withFakeDocument(async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const store = { request: async (message: Record<string, unknown>) => {
+      sent.push(message);
+      return { ok: true, value: {} };
+    } } as unknown as PanelStore;
+    const view = createStartView({ store, surface: "popup" } as PanelContext, () => undefined);
+    const waiting = statusWith({ connectionState: "pairing", pairingReferenceCode: "482913", paired: false });
+    view.render(startGuide(waiting, false), waiting);
+    const keyStep = fake(view.element).byClass("start-step")[2]!;
+    assert.match(keyStep.textContent, /Add your AI key in the FluxIQ panel/u);
+    assert.equal(fake(keyStep).descendants().filter((node) => node.tagName === "input" || node.tagName === "INPUT").length, 0);
+    buttonNamed(fake(keyStep), "Add your AI key in the FluxIQ panel")!.dispatch("click");
+    await flush();
+    assert.deepEqual(requestsOf(sent, RUNTIME_MESSAGES.panelOpenFluxIQ), [{ type: RUNTIME_MESSAGES.panelOpenFluxIQ, purpose: "model-key" }]);
   });
 });

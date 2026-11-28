@@ -16,7 +16,7 @@ export const PROBLEM_REPORT_RUN_LIMIT = 10;
 export type RecentRunsCall = (endpoint: string, payload: Record<string, unknown>) => Promise<PanelRelayResponse>;
 
 export async function readRecentRuns(call: RecentRunsCall, projectId: string | null | undefined): Promise<ProblemReport["recentRuns"]> {
-  if (!projectId) return { available: false, reason: "FluxIQ has not said which project this browser belongs to." };
+  if (!projectId) return { available: false, reason: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one." };
   let reply: PanelRelayResponse;
   try {
     reply = await call("list-runtime-sessions", { projectId, summaries: true, limit: PROBLEM_REPORT_RUN_LIMIT });

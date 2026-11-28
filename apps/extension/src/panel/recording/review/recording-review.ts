@@ -1,6 +1,6 @@
 import type { ExtensionStatus } from "../../../shared/protocol";
 import { createElement } from "../../dom";
-import { createOpenFluxIQButton } from "../../open-fluxiq";
+import { createOpenFluxIQButton, OPEN_IN_PANEL } from "../../open-fluxiq";
 import type { PanelContext } from "../../shell";
 import "../recording.css";
 
@@ -18,7 +18,7 @@ export const NOT_ATTACHED_SENTENCE = "Couldn't find this recording to attach. Tr
 
 /** Where a recording goes next: attached to a message, where the person says what it is for. */
 export function createRecordingReview(context: PanelContext, options: RecordingReviewOptions = {}): RecordingReview {
-  const open = createOpenFluxIQButton(context.store.request, { label: "Open FluxIQ", look: "small" });
+  const open = createOpenFluxIQButton(context.store.request, { label: OPEN_IN_PANEL, look: "small" });
   const done = createElement("button", { text: "Done", className: "small-button", attrs: { type: "button" } });
   const attach = createElement("button", { text: ATTACH_NEXT_LABEL, className: "small-button", attrs: { type: "button" } });
   const attachNote = createElement("p", { attrs: { role: "status" } });

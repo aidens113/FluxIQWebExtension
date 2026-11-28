@@ -1,15 +1,20 @@
 // The open automation, compactly, above its chat: what its last run did, Run,
 // Stop while its run is in progress, the last run's data to export, its own
-// humanness behind "Humanness · N", and Open in FluxIQ for everything else. A
+// "Change in the FluxIQ panel" for its humanness (the panel owns that setting),
+// and Open in FluxIQ panel for everything else. A
 // slim strip, not a card: the chat keeps the panel, and the chat's own header
 // names the automation and leads back to the latest chat. Hidden while the chat shows no automation.
 
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createElement } from "../dom";
-import { createOpenFluxIQButton, openFluxIQWebPage, type OpenFluxIQButton } from "../open-fluxiq";
+import { createOpenFluxIQButton, OPEN_IN_PANEL, openFluxIQWebPage, type OpenFluxIQButton } from "../open-fluxiq";
 import type { PanelStore } from "../state";
 import type { AutomationRowView, AutomationsController, ExportFormat } from "./controller";
-import { createFlowHumannessSection, flowHumannessPort } from "./humanness";
+
+/** The strip's wording for the panel links: one open, one for the humanness setting, and the two pages of a run. */
+const CHANGE_IN_PANEL = "Change in the FluxIQ panel";
+const DATA_LABEL = "Open data in FluxIQ panel";
+const RUN_LABEL = "Open run in FluxIQ panel";
 
 type AutomationName = { readonly flowId: string; readonly name: string };
 
@@ -30,9 +35,11 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   let run = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
   let stop = stopButton();
   const stopStatus = createElement("span", { className: "strip-stop-status", attrs: { role: "status", "aria-live": "polite" } });
-  const open = createOpenFluxIQButton(request, { label: "Open in FluxIQ", look: "link" }, () => shown?.flowId);
+  const open = createOpenFluxIQButton(request, { label: OPEN_IN_PANEL, look: "link" }, () => shown?.flowId);
+  // The Flow's humanness is changed in the panel: the same open, with words that say what it is for.
+  const humannessLink = createOpenFluxIQButton(request, { label: CHANGE_IN_PANEL, look: "link" }, () => shown?.flowId);
   // The last run's data (or the run, when it collected none) on FluxIQ's web pages (`/data`, `/runs/<id>`).
-  const dataLink = createElement("button", { className: "link-button strip-data-link", text: "Open data in FluxIQ", hidden: true, attrs: { type: "button" } });
+  const dataLink = createElement("button", { className: "link-button strip-data-link", text: DATA_LABEL, hidden: true, attrs: { type: "button" } });
   let dataPage: { readonly runId: string } | undefined;
   dataLink.addEventListener("click", () => {
     if (dataPage === undefined || element.hidden) return;
@@ -44,13 +51,11 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   const hint = createElement("p", { className: "strip-hint", hidden: true });
   const exports = createElement("span", { className: "strip-exports", hidden: true });
   const notice = createElement("div", { className: "notice", hidden: true, attrs: { role: "status" } });
-  const humanness = createFlowHumannessSection(flowHumannessPort(request));
   const element = createElement("section", { className: "automation-strip", hidden: true, attrs: { "aria-label": "Open automation" } }, [
     createElement("div", { className: "strip-head" }, [lines, run, stop]),
     stopStatus,
     hint,
-    createElement("div", { className: "strip-links" }, [exports, dataLink, open.element]),
-    humanness.element,
+    createElement("div", { className: "strip-links" }, [exports, dataLink, open.element, humannessLink.element]),
     notice
   ]);
   let shown: AutomationName | undefined;
@@ -90,7 +95,6 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     const nextStop = stopButton();
     stop.parentNode?.insertBefore(nextStop, stop); stop.remove(); stop = nextStop; bindStop(stop, owner);
     stopStatus.textContent = "";
-    humanness.show(undefined);
     element.hidden = true;
   }
 
@@ -179,7 +183,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     exports.hidden = ordered.length === 0;
     dataPage = row !== undefined && !row.running && row.runId !== undefined ? { runId: row.runId } : undefined;
     dataLink.hidden = dataPage === undefined;
-    dataLink.textContent = row !== undefined && row.datasets.length > 0 ? "Open data in FluxIQ" : "Open run in FluxIQ";
+    dataLink.textContent = row !== undefined && row.datasets.length > 0 ? DATA_LABEL : RUN_LABEL;
     notice.hidden = row?.notice === undefined;
     noticeText.textContent = row?.notice?.sentence ?? "";
     notice.title = row?.notice?.detail ?? "";
@@ -192,7 +196,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     if (row?.notice !== undefined) {
       if (row.notice.openFluxIQ && noticeButton === undefined) {
         const noticeFlowId = row.flowId;
-        noticeButton = createOpenFluxIQButton(request, { label: "Open FluxIQ", look: "link" }, () => noticeFlowId);
+        noticeButton = createOpenFluxIQButton(request, { label: OPEN_IN_PANEL, look: "link" }, () => noticeFlowId);
         if (lastStatus !== undefined) noticeButton.observe(lastStatus);
         notice.append(noticeButton.element);
       }
@@ -217,7 +221,6 @@ export function createAutomationStrip(request: PanelStore["request"], controller
       const owner = controller.state().ownerRevision;
       if (owner !== renderedOwner) retireOwner(owner);
       shown = automation;
-      humanness.show(automation?.flowId);
       void controller.focus(automation?.flowId, renderedOwner);
       draw();
     },
@@ -229,8 +232,8 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     render(status) {
       lastStatus = status;
       open.observe(status);
+      humannessLink.observe(status);
       noticeButton?.observe(status);
-      humanness.render(status);
     }
   };
 }

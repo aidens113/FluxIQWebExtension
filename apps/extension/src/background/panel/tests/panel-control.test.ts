@@ -33,9 +33,6 @@ const PANEL_TYPES = [
   RUNTIME_MESSAGES.panelConversationRead,
   RUNTIME_MESSAGES.panelConversationSend,
   RUNTIME_MESSAGES.panelConversationAnswer,
-  RUNTIME_MESSAGES.panelConversationRename,
-  RUNTIME_MESSAGES.panelConversationDelete,
-  RUNTIME_MESSAGES.panelFlowHumannessRead,
   RUNTIME_MESSAGES.panelFlowHumannessSet,
   RUNTIME_MESSAGES.panelTaskHumannessSet,
   RUNTIME_MESSAGES.panelStopRun,
@@ -207,6 +204,30 @@ test("opening an automation uses the paired project's Core deep link and encodes
   assert.deepEqual(h.calls, [], "opening the panel makes no authenticated program call");
 });
 
+test("opening a conversation with its project opens that chat on the panel origin, both parts encoded", async (t) => {
+  installChrome(t);
+  const h = harness({ ...baseSettings, coreApiUrl: "https://core.test/old?view=stale#old" });
+  const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, conversationId: "conv/1?x", projectId: "proj&2" }, sidepanel, h.deps);
+  assert.equal(h.opened.length, 1);
+  const url = new URL(h.opened[0]!);
+  assert.equal(url.origin, "https://core.test");
+  assert.equal(url.pathname, "/chats/conv%2F1%3Fx");
+  assert.equal(url.search, "?project=proj%262");
+  assert.equal(url.hash, "");
+  assert.equal((result as { response: { ok: boolean } }).response.ok, true);
+  assert.deepEqual(h.calls, [], "opening the panel makes no authenticated program call");
+});
+
+test("a conversation without its project, or a project alone, is refused and opens nothing", async (t) => {
+  installChrome(t);
+  for (const extra of [{ conversationId: "c1" }, { projectId: "p1" }, { conversationId: "", projectId: "p1" }, { conversationId: "c1", projectId: "p1", flowId: "f1" }]) {
+    const h = harness();
+    const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, ...extra }, sidepanel, h.deps);
+    assert.equal((result as { response: { code: string } }).response.code, "invalid_request");
+    assert.deepEqual(h.opened, []);
+  }
+});
+
 test("a malformed automation ID is refused before settings or project context are read", async (t) => {
   installChrome(t);
   for (const flowId of [null, "", "  ", 1, {}, "x".repeat(2049)]) {
@@ -317,34 +338,23 @@ test("a message the person sends runs under the activity's starting status; open
   assert.deepEqual(sends, ["start", "answered"], "only the one message went under the starting status");
 });
 
-test("the thread list's rename and delete reach Core's own endpoints from the panel, and Core's payload comes back unchanged", async (t) => {
+test("the thread list's read reaches Core's own endpoint from the panel; rename and delete are no longer panel messages", async (t) => {
   installChrome(t);
   const h = harness();
-  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationRename, projectId: "project-1", conversationId: "conv-1", title: "Lamps" }, sidepanel, h.deps), {
-    handled: true, response: { ok: true, payload: { from: "rename-conversation" } }
-  });
-  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationDelete, projectId: "project-1", conversationId: "conv-1" }, popup, h.deps), {
-    handled: true, response: { ok: true, payload: { from: "delete-conversation" } }
-  });
   assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationRead, kind: "list-all", limit: 25 }, sidepanel, h.deps), {
-    handled: true, response: { ok: true, payload: { from: "list-conversations", conversations: [] } }
+    handled: true, response: { ok: true, payload: { from: "list-conversations" } }
   });
-  assert.deepEqual(h.calls, [
-    { endpoint: "rename-conversation", payload: { projectId: "project-1", conversationId: "conv-1", title: "Lamps" } },
-    { endpoint: "delete-conversation", payload: { projectId: "project-1", conversationId: "conv-1" } },
-    { endpoint: "list-conversations", payload: { projectId: null, limit: 25 } },
-    { endpoint: "list-panel-threads", payload: { limit: 25 } }
-  ]);
+  assert.deepEqual(await handlePanelControl({ type: "fluxiq.panel.conversationRename", conversationId: "c" }, sidepanel, h.deps), { handled: false });
+  assert.deepEqual(await handlePanelControl({ type: "fluxiq.panel.conversationDelete", conversationId: "c" }, sidepanel, h.deps), { handled: false });
+  assert.deepEqual(h.calls, [{ endpoint: "list-conversations", payload: { projectId: null, limit: 25 } }]);
 });
 
 test("a Flow's and a task's humanness reach Core's own endpoints from the panel, each as one call", async (t) => {
   installChrome(t);
   const h = harness();
-  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelFlowHumannessRead, flowId: "flow-1" }, sidepanel, h.deps), { handled: true, response: { ok: true, payload: {} } });
   assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelFlowHumannessSet, flowId: "flow-1", humanness: 30 }, popup, h.deps), { handled: true, response: { ok: true, payload: {} } });
   assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelTaskHumannessSet, projectId: "project-2", taskId: "task-1", humanness: null }, sidepanel, h.deps), { handled: true, response: { ok: true, payload: {} } });
   assert.deepEqual(h.calls, [
-    { endpoint: "get-flow-metadata-detail", payload: { projectId: "project-1", flowId: "flow-1" } },
     { endpoint: "update-flow-settings", payload: { projectId: "project-1", flowId: "flow-1", flow: { flowId: "flow-1", metadata: { humanness: 30 } } } },
     { endpoint: "update-task-settings", payload: { projectId: "project-2", taskId: "task-1", humanness: null } }
   ]);

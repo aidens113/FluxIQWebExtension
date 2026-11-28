@@ -6,8 +6,8 @@ import type { PanelStore } from "../state";
 const UNREADABLE = "FluxIQ's projects could not be read. Try again.";
 
 /**
- * The project switcher's port over the background: the list (`panelListProjects`) and New project
- * (`panelCreateProject`). A refusal rejects with the sentence the person reads, which the switcher shows.
+ * The project switcher's port over the background: the list (`panelListProjects`). It has no
+ * `create`: FluxIQ makes the first project when the person sends a message, and managing projects is the FluxIQ panel's. A refusal rejects with the sentence the person reads, which the switcher shows.
  */
 export function extensionProjectsPort(request: PanelStore["request"]): ProjectsPort {
   return {
@@ -15,13 +15,6 @@ export function extensionProjectsPort(request: PanelStore["request"]): ProjectsP
       const result = await request<{ projects?: unknown }>({ type: RUNTIME_MESSAGES.panelListProjects });
       if (!result.ok) throw new Error(result.sentence);
       return summariesOf(result.value.projects);
-    },
-    async create(name) {
-      const result = await request<{ project?: unknown }>({ type: RUNTIME_MESSAGES.panelCreateProject, name });
-      if (!result.ok) throw new Error(result.sentence);
-      const project = summaryOf(result.value.project);
-      if (project === undefined) throw new Error(UNREADABLE);
-      return project;
     }
   };
 }

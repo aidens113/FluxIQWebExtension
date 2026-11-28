@@ -53,6 +53,42 @@ export async function askCoreForFirstProject(credentials: CoreApiCredentials & {
   return root?.ok === true ? stringValue(objectValue(root.payload)?.projectId) : undefined;
 }
 
+/**
+ * Writes this person's current project (and, when named, Flow) to Core
+ * (`POST /api/client-gateway/automation-studio-context`), with the pairing token as the bearer
+ * credential, so the panel and every other client read the same one. A reply that says no (a client
+ * bound to another project is refused with 403 and a sentence) comes back as `refused` or `failed`
+ * with Core's own sentence; an unreachable or silent Core comes back as `unreachable` or `timed_out`,
+ * which the caller treats as "keep the browser's copy until Core can be told".
+ */
+export async function writeCoreActiveProject(
+  credentials: CoreApiCredentials,
+  context: { readonly activeProjectId: string | null; readonly activeFlowId?: string | null }
+): Promise<PanelRelayResponse> {
+  if (!credentials.token) return { ok: false, code: "not_paired", error: "This browser is not paired with FluxIQ yet." };
+  const url = new URL("/api/client-gateway/automation-studio-context", credentials.coreApiUrl || DEFAULT_CORE_API_URL);
+  let status: number;
+  let bodyText: string;
+  try {
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      credentials: "omit",
+      headers: { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${credentials.token}` },
+      body: JSON.stringify(context),
+      signal: AbortSignal.timeout(PROJECT_CONTEXT_LOOKUP_TIMEOUT_MS)
+    });
+    status = response.status;
+    bodyText = await response.text();
+  } catch (error) {
+    if (isTimeout(error)) return { ok: false, code: "timed_out", error: "FluxIQ did not answer in time." };
+    return { ok: false, code: "unreachable", error: "FluxIQ could not be reached." };
+  }
+  const body = objectValue(parseJsonBody(bodyText));
+  if (status >= 200 && status < 300 && body?.ok !== false) return { ok: true, payload: body?.payload ?? null };
+  const sentence = stringValue(body?.error) ?? `FluxIQ answered ${status}.`;
+  return { ok: false, code: status === 401 || status === 403 ? "refused" : "failed", httpStatus: status, error: sentence };
+}
+
 export async function fetchProjectFromCoreSnapshot(
   credentials: CoreApiCredentials & { token: string },
   identity: { sessionId: string | undefined; clientId: string },

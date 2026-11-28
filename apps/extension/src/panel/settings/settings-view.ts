@@ -1,7 +1,9 @@
 // Settings, opened by the gear in place of the chat, read top down by what a
-// person cares about: Connection (state, approval, project, reconnect, Disconnect),
-// AI key (the shared key card), Behaviour (the Humanness slider, status on the
-// page), Permissions (what FluxIQ may record or request), one Save, Appearance
+// person cares about: Connection (state, approval, reconnect, Disconnect), AI key
+// (the shared key card, read-only: its one action opens the FluxIQ panel), In the
+// FluxIQ panel (links for what the panel owns: projects, humanness),
+// Behaviour (status on the page), Permissions (what FluxIQ may record or request
+// in this browser), one Save for those and the addresses, Appearance
 // (theme, applied at once and kept per browser), and Report a problem. Under
 // Advanced, the two addresses and Forget this pairing behind a confirmation
 // (`advanced-section.ts`). There is no
@@ -21,6 +23,7 @@ import { defaultSettings } from "../../shared/browser";
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus, FluxIQSettings } from "../../shared/protocol";
 import { createOnPageStatusSetting } from "../chat";
+import { createOpenFluxIQButton } from "../open-fluxiq";
 import { connectionCopy } from "../copy";
 import { createElement } from "../dom";
 import type { SetupPort } from "../getting-started";
@@ -35,12 +38,15 @@ import { createForgetConfirmation } from "./forget-confirmation";
 import { createModelSection } from "./model-section";
 import { createProblemReportSection } from "./problem-report-section";
 import { forgetOutcomeWords } from "./forget-outcome-words";
-import { createHumannessControl, readHumanness, withHumanness } from "./humanness";
 import { durabilityLine } from "./durability-line";
 import { projectLine } from "./project-line";
 import { savePlan } from "./save-plan";
 import { unsavedLabels, unsavedSentence } from "./unsaved-changes";
 import "./settings.css";
+
+/** The panel links: each says what it is for, and each opens the FluxIQ panel. */
+const PROJECTS_LINK = "Manage projects in the FluxIQ panel";
+const HUMANNESS_LINK = "Change humanness in the FluxIQ panel";
 
 /** What the save action shows; its accessible name is the same words, the name the Lab presses. */
 const SAVE_LABEL = "Save changes";
@@ -51,8 +57,6 @@ export type SettingsView = { readonly element: HTMLElement; shown(): void; hidde
 /** What settings reads beside the status: the AI key, through the setup screens' one seam. Absent, the card reads the readiness message itself. */
 export type SettingsViewOptions = {
   readonly setup?: SetupPort;
-  /** Opens the header's project switcher (the Project row's Change). Absent: the row names the project and offers no button. */
-  readonly changeProject?: () => void;
 };
 
 /** Builds settings; `close` goes back to where the person was. */
@@ -69,15 +73,19 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const stateLine = createElement("p", { className: "settings-state-text", text: "Checking the connection..." });
   const approval = createElement("p", { className: "card-line" });
   const project = createElement("p", { className: "card-line settings-project-name" });
-  const changeProject = createElement("button", { id: "changeProjectButton", className: "small-button", text: "Change", hidden: true, attrs: { type: "button", "aria-label": "Change project" } });
-  changeProject.addEventListener("click", () => options.changeProject?.());
-  const projectRow = createElement("div", { className: "settings-project", attrs: { "aria-label": "Project" } }, [project, changeProject]);
+  // What the panel owns is a link into it, never a control here: projects and humanness (the AI key card says the same for the key).
+  const projectsLink = createOpenFluxIQButton(store.request, { label: PROJECTS_LINK, look: "link", purpose: "projects" });
+  const humannessLink = createOpenFluxIQButton(store.request, { label: HUMANNESS_LINK, look: "link" });
+  const panelLinks = createElement("section", { className: "settings-group", attrs: { "aria-label": "In the FluxIQ panel" } }, [
+    createElement("h3", { className: "settings-group-title", text: "In the FluxIQ panel" }),
+    project,
+    createElement("div", { className: "card-actions settings-panel-links" }, [projectsLink.element, humannessLink.element])
+  ]);
   const durability = createElement("p", { className: "card-line", hidden: true });
   const draftLine = createElement("p", { className: "card-line", text: "You have changes that aren't saved yet.", hidden: true });
   // Names what Save would save, so the bar never says only "changes".
   const unsavedLine = createElement("p", { className: "card-line field-hint", hidden: true });
   const form = createSettingsForm();
-  const humanness = createHumannessControl();
   const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: SAVE_LABEL, attrs: { type: "button" } });
   const disconnectButton = createElement("button", { id: "disconnectButton", className: "small-button", text: "Disconnect", attrs: { type: "button" } });
   // Disconnect and Connect take the same place: after Disconnect there is a way back, never a dead end.
@@ -93,7 +101,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   // Sticks to the bottom of the scroll; shows only while something is unsaved or an outcome is on screen.
   const saveBar = createElement("section", { className: "settings-save", hidden: true, attrs: { "aria-label": "Save" } }, [draftLine, unsavedLine, createElement("div", { className: "card-actions" }, [saveButton]), message, notice]);
   const syncSave = (): void => {
-    const sentence = dirty ? unsavedSentence(unsavedLabels(form.read(), savedSettings(store.current()), { current: humanness.read(), saved: readHumanness(store.current()?.settings) })) : "";
+    const sentence = dirty ? unsavedSentence(unsavedLabels(form.read(), savedSettings(store.current()))) : "";
     unsavedLine.textContent = sentence;
     unsavedLine.hidden = sentence === "";
     saveButton.hidden = !dirty;
@@ -108,14 +116,13 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
         createElement("div", { className: "settings-state" }, [dot, stateLine]),
         approval,
         durability,
-        projectRow,
         form.parts.reconnect,
         createElement("div", { className: "card-actions" }, [disconnectButton, connectButton])
       ]),
       model.element,
+      panelLinks,
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Behaviour" } }, [
         createElement("h3", { className: "settings-group-title", text: "Behaviour" }),
-        humanness.element,
         onPage.element
       ]),
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Permissions" } }, [
@@ -139,7 +146,6 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     writeConnectionDraft(form.read());
   };
   form.onEdit(edited);
-  humanness.onEdit(edited);
 
   function clearOutcome(): void {
     message.hidden = true;
@@ -171,8 +177,6 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     if (mutation !== undefined) return;
     clearOutcome();
     const plan = savePlan(form.read(), store.current());
-    // Humanness rides with the settings (interface I1); clamped and rounded here, absent elsewhere reads as 0.
-    const settings = plan.ok ? withHumanness<FluxIQSettings>(plan.settings, humanness.read()) : undefined;
     if (!plan.ok) {
       form.markInvalid(plan.field);
       advanced.reveal();
@@ -184,7 +188,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     mutation = "save";
     renderBusy();
     try {
-      const saved = await store.request({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: settings as FluxIQSettings });
+      const saved = await store.request({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: plan.settings });
       if (failed(saved)) return;
       if (submittedRevision === editRevision) {
         dirty = false;
@@ -192,7 +196,6 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
         writeConnectionDraft(undefined);
         syncSave();
         form.fill(plan.settings);
-        humanness.fill(readHumanness(settings));
         showSuccess("Saved.");
       } else showSuccess("Saved the earlier settings. Your newer changes aren't saved yet.");
       // The open socket still points at the old address; `connect` dials the stored one.
@@ -279,7 +282,8 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     stateLine.textContent = copy.sentence;
     approval.textContent = approvalLine(status);
     project.textContent = projectLine(status);
-    changeProject.hidden = options.changeProject === undefined || status.connectionState !== "connected";
+    projectsLink.observe(status);
+    humannessLink.observe(status);
     durability.textContent = durabilityLine(status);
     durability.hidden = durability.textContent === "";
     model.render(status);
@@ -287,7 +291,6 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     form.allow(status.captureAllowed);
     if (!dirty) {
       form.fill(savedSettings(status));
-      humanness.fill(readHumanness(status.settings));
     }
   }
 
@@ -301,7 +304,6 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     dirty = true;
     draftLine.hidden = false;
     form.fill(draft);
-    humanness.fill(readHumanness(store.current()?.settings));
     advanced.reveal();
     syncSave();
   });

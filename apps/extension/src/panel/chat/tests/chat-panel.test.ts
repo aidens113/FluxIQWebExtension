@@ -258,3 +258,45 @@ test("the panel shows Core's thread list as a drawer, reopens this window's reme
     });
   });
 });
+
+test("the empty chat says FluxIQ picks the project, shows no context line, and offers no rename or delete", async () => {
+  await withFakeDocument(async () => {
+    await withRuntime(async () => {
+      const core = targetCore([{ conversationId: "conv-latest", subjectKind: "project", subjectId: "project-1", turns: [] }]);
+      const control = (): OpenFluxIQControl => ({ element: document.createElement("a"), observe: () => undefined });
+      const chat = createChatPanel(core.request, control, { contextLine: false });
+      chat.render(CONNECTED);
+      await settle();
+      const root = fake(chat.element);
+      assert.match(root.textContent, /Tell FluxIQ what you want\. It picks the project and saves the Flow\./u);
+      assert.equal(root.byClass("chat-context-name").length, 0);
+      assert.equal(root.descendants().some((node) => node.tagName === "BUTTON" && (node.textContent === "Rename" || node.textContent === "Delete")), false);
+    });
+  });
+});
+
+test("what only the FluxIQ panel handles stays out of the extension: its page selection is never drawn, and its Allow card has no buttons here", async () => {
+  await withFakeDocument(async () => {
+    await withRuntime(async () => {
+      const ask = { askId: "ask.assistant.1", kind: "permission", status: "pending", parks: true, missing: ["modify_existing"], consequences: ["modify_existing"], control: { name: "Save", kind: "button" }, options: [] };
+      const core = targetCore([{
+        conversationId: "conv-latest",
+        subjectKind: "project",
+        subjectId: "project-1",
+        turns: [
+          { turnId: "t1", author: "person", text: "Tidy this up", attachment: { kind: "panel.on-screen", ref: "eyJwYWdlIjoiL2Zsb3dzIn0" } },
+          { turnId: "t2", author: "automation", text: "May I save the Flow?", ask }
+        ]
+      }]);
+      const control = (): OpenFluxIQControl => ({ element: document.createElement("a"), observe: () => undefined });
+      const chat = createChatPanel(core.request, control, { contextLine: false });
+      chat.render(CONNECTED);
+      await settle();
+      const root = fake(chat.element);
+      assert.doesNotMatch(root.textContent, /panel\.on-screen|eyJwYWdl/u);
+      assert.match(root.textContent, /Answer it in the FluxIQ panel/u);
+      const pressable = root.descendants().filter((node) => node.tagName === "BUTTON" && (node.textContent === "Allow" || node.textContent === "Don't allow"));
+      assert.equal(pressable.length, 0);
+    });
+  });
+});

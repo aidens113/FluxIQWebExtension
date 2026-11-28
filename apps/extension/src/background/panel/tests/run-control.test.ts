@@ -81,7 +81,7 @@ test("a refused listing or stop comes back as Core said it", async () => {
 test("with no project known, Stop is refused before Core is called", async () => {
   const c = context(() => ({ ok: true, payload: null }), null);
   assert.deepEqual(await stopRun({ runId: "run-1" }, c.value), {
-    ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again."
+    ok: false, code: "no_project", error: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one."
   });
   assert.deepEqual(c.calls, []);
 });
@@ -119,7 +119,7 @@ test("Take over and Hand back with no project known are refused before Core is c
   const c = context(() => ({ ok: true, payload: null }), null);
   assert.equal((await takeOverRun({ runId: "run-1" }, c.value)).ok, false);
   assert.deepEqual(await handBackRun({ runId: "run-1" }, c.value), {
-    ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again."
+    ok: false, code: "no_project", error: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one."
   });
   assert.deepEqual(c.calls, []);
 });

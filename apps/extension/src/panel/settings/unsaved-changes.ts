@@ -5,14 +5,10 @@
 import type { FluxIQSettings } from "../../shared/protocol";
 import { SETTING_FIELDS } from "./form-fields";
 
-/** The slider's name in the list; the slider is not a `SettingField`. */
-export const HUMANNESS_CHANGE_LABEL = "Starting humanness";
-
 /** The labels, in display order, of what differs between `current` and `saved`. Addresses compare trimmed, as Save stores them. */
-export function unsavedLabels(current: FluxIQSettings, saved: FluxIQSettings, humanness: { readonly current: number; readonly saved: number }): string[] {
+export function unsavedLabels(current: FluxIQSettings, saved: FluxIQSettings): string[] {
   const labels: string[] = [];
   for (const { key, label } of SETTING_FIELDS.addresses) if (current[key].trim() !== saved[key].trim()) labels.push(label);
-  if (humanness.current !== humanness.saved) labels.push(HUMANNESS_CHANGE_LABEL);
   for (const { key, label } of SETTING_FIELDS.toggles) if (current[key] !== saved[key]) labels.push(label);
   return labels;
 }

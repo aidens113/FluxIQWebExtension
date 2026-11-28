@@ -551,7 +551,7 @@ export class FluxIQConnection {
       return { ok: true, payload: { removedFrom: "queue", removedCount: dequeued } };
     }
     const projectId = this.projects.activeRecordingProject() ?? this.session.projectId;
-    if (!projectId) return { ok: false, code: "no_project", error: "FluxIQ has not said which project this recording belongs to yet." };
+    if (!projectId) return { ok: false, code: "no_project", error: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one before recording." };
     const reply = await callCoreProgram(this.coreApiCredentials(), "remove-recording-entry", { projectId, recordingId: step.recordingId, eventId: step.eventId });
     if (!reply.ok) return reply;
     const removedCount = Number((reply.payload as { removedCount?: unknown } | null)?.removedCount ?? 0);

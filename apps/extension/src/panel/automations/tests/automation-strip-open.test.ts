@@ -32,10 +32,9 @@ test("Open in FluxIQ follows the currently selected automation, including its fa
     strip.show({ flowId: "flow.two", name: "Two" });
     primary.dispatch("click");
     await Promise.resolve();
-    const fallback = fake(strip.element).byClass("open-fluxiq")[1]!.children[0]!;
+    const fallback = fake(strip.element).byClass("open-fluxiq")[2]!.children[0]!;
     fallback.dispatch("click");
     await Promise.resolve();
-    // The strip also reads each shown Flow's humanness (`humanness/`); only the opens are this test's.
     const opens = messages.filter((message) => (message as { type?: unknown }).type === RUNTIME_MESSAGES.panelOpenFluxIQ);
     assert.deepEqual(opens, [
       { type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId: "flow.one" },

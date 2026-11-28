@@ -66,15 +66,20 @@ test("a run sends only the project, the Flow and the repair intent; a test of a 
   assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation }), { ok: false, code: "invalid_request", error: "That request is missing its flowId." });
 });
 
-test("a run carries the saved humanness only when it is above 0", async () => {
-  const withSaved = harness({}, { humanness: () => 40 });
-  await withSaved.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1" });
-  assert.deepEqual(withSaved.calls[0]?.payload, { projectId: "project-1", flowId: "flow-1", runIntent: "explore_and_adapt", humanness: 40 });
-  for (const saved of [0, undefined]) {
-    const h = harness({}, { humanness: () => saved });
-    await h.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1" });
-    assert.deepEqual(h.calls[0]?.payload, { projectId: "project-1", flowId: "flow-1", runIntent: "explore_and_adapt" });
-  }
+test("a run never carries a humanness of the browser's own: Core resolves it from the Flow, the task and the person's starting value", async () => {
+  const h = harness();
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1", humanness: 40 });
+  assert.equal("humanness" in (h.calls[0]?.payload ?? {}), false);
+});
+
+test("the starting humanness is one get-my-preferences with an empty body on identity-access, answered as a number or null", async () => {
+  const h = harness({ "get-my-preferences": { ok: true, payload: { startingHumanness: 40, userId: "other" } } });
+  assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.startingHumanness }), { ok: true, payload: { startingHumanness: 40 } });
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload, call.programId]), [["get-my-preferences", {}, "identity-access"]]);
+  const none = harness({ "get-my-preferences": { ok: true, payload: { startingHumanness: null } } });
+  assert.deepEqual(await none.send({ type: AUTOMATION_PANEL_MESSAGES.startingHumanness }), { ok: true, payload: { startingHumanness: null } });
+  const refused: PanelRelayResponse = { ok: false, code: "refused", httpStatus: 403, error: "No." };
+  assert.deepEqual(await harness({ "get-my-preferences": refused }).send({ type: AUTOMATION_PANEL_MESSAGES.startingHumanness }), refused);
 });
 
 test("a run's detail reads compact, then the adaptations of the run's Flow", async () => {

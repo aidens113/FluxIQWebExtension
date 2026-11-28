@@ -8,8 +8,8 @@
 // a permission. A panel-command confirmation is the one question that takes a PIN,
 // and the extension never asks for it: the chat sends that one question to FluxIQ.
 //
-// The chat shows Core's list of threads as a drawer ("Chats"), with New chat,
-// Rename and Delete through the background's relays (`transport/`). The thread
+// The chat shows Core's list of threads as a drawer ("Chats"), with New chat
+// through the background's relays (`transport/`); Rename and Delete are the FluxIQ panel's. The thread
 // on screen is remembered per browser window for the browser's session
 // (`thread-memory/`), so a panel closed and opened again comes back to it.
 
@@ -19,6 +19,7 @@ import type { PanelStore } from "../state";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createAskPort, createWorkWatch } from "./asks";
 import { hostStatusOf } from "./host-status";
+import { EXTENSION_WELCOME } from "./extension-welcome";
 import { createChatOwnerContext } from "./owner-context";
 import { restoringThreadList, sessionThreadMemory, type ThreadMemory } from "./thread-memory";
 import { createExtensionChatTransport } from "./transport";
@@ -100,6 +101,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     }
   };
   const widget = createChatWidget(transport, {
+    welcome: EXTENSION_WELCOME,
     ...chatOptions,
     openControl,
     ownerKey: owners.capture().identity,

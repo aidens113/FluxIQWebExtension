@@ -68,12 +68,6 @@ export type FluxIQSettings = {
   captureSnapshots: boolean;
   /** On only where Core's recording-capture policy allows direct requests (`capturePolicy.directRequests.allowed`). */
   requestsEnabled: boolean;
-  /**
-   * How human the extension acts, 0-100. Absent means 0: today's path exactly, at maximum
-   * efficiency. Higher looks more human on rate-limited sites. The panel slider sets it and the
-   * background normalises it.
-   */
-  humanness?: number | undefined;
 };
 
 /**
@@ -242,22 +236,24 @@ export type ExtensionPairingEnded = {
 /** The panel's conversation requests (`panel/conversation.ts`). */
 export type {
   PanelConversationAnswerRequest,
-  PanelConversationDeleteRequest,
   PanelConversationReadRequest,
-  PanelConversationRenameRequest,
   PanelConversationSendRequest
 } from "./panel/index";
 /** The panel's project requests and the worker's change push (`panel/projects.ts`). */
-export type { PanelChangesMessage, PanelCreateProjectReply, PanelCreateProjectRequest, PanelListProjectsReply, PanelProjectSummary, PanelSelectProjectRequest } from "./panel/index";
+export type { PanelChangesMessage, PanelListProjectsReply, PanelProjectSummary, PanelSelectProjectRequest } from "./panel/index";
 /** The panel's humanness requests for one Flow or one task (`panel/humanness.ts`). */
-export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelFlowHumannessReadRequest, PanelFlowHumannessSetRequest, PanelHumannessReply, PanelTaskHumannessSetRequest } from "./panel/index";
+export type { CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelFlowHumannessSetRequest, PanelHumannessReply, PanelTaskHumannessSetRequest } from "./panel/index";
 
 /**
  * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
  * `purpose: "model-key"`, the ordinary keys configuration page; with `purpose: "projects"`, the projects page; with `purpose: "pairing"`, the home page with `?pairing=1`.
  * A purpose excludes `flowId` and `runId`, and `flowId` and `runId` exclude each other.
+ * With both `conversationId` and `projectId` (and no flow, run or purpose), that chat's page,
+ * `/chats/<conversationId>?project=<projectId>`; either one alone is refused.
  */
 export type PanelOpenFluxIQRequest = {
+  conversationId?: string | undefined;
+  projectId?: string | undefined;
   flowId?: string | undefined;
   runId?: string | undefined;
   purpose?: "model-key" | "projects" | "pairing" | undefined;
@@ -383,12 +379,8 @@ export const AUTOMATION_PANEL_MESSAGES = {
   removeTask: RUNTIME_MESSAGES.panelRemoveTask,
   /** `secret-keys` `snapshot`. Answers `{ keys: PanelModelKeySummary[] }`; metadata only, never key values. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
-  /** `secret-keys` `save-model-key` with `{ provider, value, name? }`: the person's own model key. Answers `{ modelAccess }`; the key is never echoed. */
-  modelKeySave: RUNTIME_MESSAGES.panelModelKeySave,
-  /** `secret-keys` `replace-model-key` with `{ value }`: the same key slot, a new value. Answers `{ modelAccess }`. */
-  modelKeyReplace: RUNTIME_MESSAGES.panelModelKeyReplace,
-  /** `secret-keys` `remove-model-key` with `{}`. Answers `{ modelAccess }`. */
-  modelKeyRemove: RUNTIME_MESSAGES.panelModelKeyRemove,
+  /** `identity-access` `get-my-preferences` with `{}`: the person's own starting humanness. Answers `{ startingHumanness: number | null }`; null when the person set none. Read only: changing it is the panel's. */
+  startingHumanness: RUNTIME_MESSAGES.panelStartingHumanness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,
   /** `run-runtime-session` with `{ projectId, flowId }` for the proposal's Flow: no run intent, so the test is not repaired. */

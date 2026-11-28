@@ -76,7 +76,7 @@ test("the project's own thread: a project subject with no id is given the projec
 });
 
 test("the project's own thread with no project known is refused before Core is called, never widened to every thread", async () => {
-  const noProject = { ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again." };
+  const noProject = { ok: false, code: "no_project", error: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one." };
   const c = context({}, null);
   assert.deepEqual(await relayConversation({ type: read, kind: "list", subjectKind: "project" }, c.value), noProject);
   const d = context();
@@ -94,7 +94,7 @@ test("a get reads one thread, from a turn when given", async () => {
 test("a get without a thread, or with no project, is refused before Core is called", async () => {
   const c = context({}, null);
   assert.deepEqual(await relayConversation({ type: read, kind: "get", conversationId: "c-1" }, c.value), {
-    ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again."
+    ok: false, code: "no_project", error: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one."
   });
   const d = context();
   assert.deepEqual(await relayConversation({ type: read, kind: "get" }, d.value), { ok: false, code: "invalid_request", error: "Say which conversation to read." });
@@ -111,17 +111,10 @@ test("a message into a thread is one append-turn offering the chat's six capabil
   ]);
 });
 
-test("a turn carries the saved humanness only when it is above 0", async () => {
-  const withSaved = async (saved: number | undefined) => {
-    const c = context();
-    await relayConversation({ type: send, conversationId: "c-1", text: "Go" }, { ...c.value, humanness: () => saved });
-    return c.calls[0]?.payload;
-  };
-  assert.equal((await withSaved(35))?.humanness, 35);
-  for (const saved of [0, undefined]) assert.equal("humanness" in ((await withSaved(saved)) ?? {}), false);
-  const bare = context();
-  await relayConversation({ type: send, conversationId: "c-1", text: "Go" }, bare.value);
-  assert.equal("humanness" in (bare.calls[0]?.payload ?? {}), false, "a context with no setting sends none");
+test("a turn never carries a humanness: Core resolves it, and the browser keeps none of its own", async () => {
+  const c = context();
+  await relayConversation({ type: send, conversationId: "c-1", text: "Go", humanness: 35 }, c.value);
+  assert.equal("humanness" in (c.calls[0]?.payload ?? {}), false);
 });
 
 test("the capability list is the frozen six ids Core executes", () => {
@@ -304,26 +297,17 @@ test("the thread list reads the project it names, and every project when it name
   await relayConversation({ type: read, kind: "list-all", projectId: "", limit: 0 }, c.value);
   assert.deepEqual(c.calls, [
     { endpoint: "list-conversations", payload: { projectId: null, limit: 25 } },
-    { endpoint: "list-panel-threads", payload: { limit: 25 } },
     { endpoint: "list-conversations", payload: { projectId: "project-2", limit: 50 } },
-    { endpoint: "list-conversations", payload: { projectId: null } },
-    { endpoint: "list-panel-threads", payload: {} }
+    { endpoint: "list-conversations", payload: { projectId: null } }
   ]);
 });
 
-const flat = (id: string, extra: Record<string, unknown> = {}) => ({ conversationId: id, status: "open", createdAt: 1, updatedAt: 2, subjectKind: "panel", ...extra });
-
-test("the all-chats list joins the assistant's chats to the project chats, once each, as project-shaped conversations", async () => {
-  const c = context({
-    "list-conversations": { ok: true, payload: { conversations: [{ conversationId: "p1", projectId: "project-1" }, { conversationId: "shared", projectId: "project-1" }], more: true } },
-    "list-panel-threads": { ok: true, payload: { conversations: [flat("a1", { title: " Help ", turnCount: 3 }), flat("shared"), flat("", {}), flat("bad", { status: "x" }), flat("late", { createdAt: "now" })] } }
-  });
+test("the all-chats list is Core's project conversations as they come, with no assistant thread joined in", async () => {
+  const listed = { conversations: [{ conversationId: "p1", projectId: "project-1" }, { conversationId: "p2", projectId: "project-2" }], more: true };
+  const c = context({ "list-conversations": { ok: true, payload: listed } });
   const result = await relayConversation({ type: read, kind: "list-all", limit: 25 }, c.value);
-  assert.deepEqual(result, { ok: true, payload: { more: true, conversations: [
-    { conversationId: "p1", projectId: "project-1" },
-    { conversationId: "shared", projectId: "project-1" },
-    { conversationId: "a1", projectId: "panel", subject: { kind: "project", id: "panel" }, status: "open", title: " Help ", turnCount: 3, pendingAskCount: 0, createdAt: 1, updatedAt: 2 }
-  ] } });
+  assert.deepEqual(result, { ok: true, payload: listed });
+  assert.equal(c.calls.some((call) => call.endpoint === "list-panel-threads"), false);
 });
 
 test("a project's own list does not read the assistant's chats", async () => {
@@ -332,12 +316,9 @@ test("a project's own list does not read the assistant's chats", async () => {
   assert.deepEqual(c.calls.map((call) => call.endpoint), ["list-conversations"]);
 });
 
-test("a failed read of either list is reported as Core said it, never hidden behind the other", async () => {
+test("a failed read of the list is reported as Core said it", async () => {
   const down: PanelRelayResponse = { ok: false, code: "unreachable", error: "FluxIQ is not answering." };
-  const assistantDown = context({ "list-conversations": { ok: true, payload: { conversations: [{ conversationId: "p1" }] } }, "list-panel-threads": down });
-  assert.deepEqual(await relayConversation({ type: read, kind: "list-all" }, assistantDown.value), down);
-  const projectsDown = context({ "list-conversations": down, "list-panel-threads": { ok: true, payload: { conversations: [flat("a1")] } } });
-  assert.deepEqual(await relayConversation({ type: read, kind: "list-all" }, projectsDown.value), down);
+  assert.deepEqual(await relayConversation({ type: read, kind: "list-all" }, context({ "list-conversations": down }).value), down);
 });
 
 test("New chat is open-conversation with fresh: true; a panel subject, or a project one with no id, is the project's own thread", async () => {
@@ -360,7 +341,7 @@ test("an open without fresh: true continues the subject's thread as before, and 
   assert.deepEqual(c.calls, [{ endpoint: "open-conversation", payload: { projectId: "project-session", subjectKind: "flow", subjectId: "flow-1" } }]);
   const none = context({}, null);
   assert.deepEqual(await relayConversation({ type: send, kind: "open", fresh: true, subjectKind: "panel" }, none.value), {
-    ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again."
+    ok: false, code: "no_project", error: "Make a project in the FluxIQ panel, or send a message and FluxIQ makes one."
   });
   assert.deepEqual(none.calls, []);
 });

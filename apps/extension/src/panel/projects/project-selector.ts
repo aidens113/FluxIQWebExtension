@@ -14,13 +14,11 @@ export type ProjectSelector = {
   readonly element: HTMLElement;
   /** Names the current project from `status`, only when it changed. */
   render(status: ExtensionStatus): void;
-  /** Opens the sheet, as the header's button does (Settings' Change). */
-  open(): void;
 };
 
 /** What the selector reaches beside the port. */
 export type ProjectSelectorOptions = {
-  /** "All projects in FluxIQ": opens the web panel. */
+  /** "Add or manage projects in the FluxIQ panel": opens the web panel at its projects page. */
   readonly openAll: () => void;
 };
 
@@ -62,7 +60,6 @@ export function createProjectSelector(request: PanelStore["request"], port: Proj
       // The status can name the project's id before its name (the background learns names from the list);
       // read the name from the same list the switcher shows, so the header never waits for the sheet to open.
       if (id !== undefined && name === "") void nameFromList(id, key);
-    },
-    open: () => switcher.open()
+    }
   };
 }

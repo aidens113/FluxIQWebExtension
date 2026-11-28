@@ -1,6 +1,7 @@
 // Settings > AI key: the shared AI-key card, in its full form. It reads the key's state through the setup port (the one
 // reader, `panel/getting-started`) and shows it in place: the same words and the same single action as the chat's card.
-// The extension cannot write a key yet, so its Save says to add the key in FluxIQ, with Open FluxIQ, which opens the
+// The extension only shows the key (the port's `canWrite` is false): the card says to add or change it in the FluxIQ
+// panel, and its action opens the
 // panel's Settings at AI keys. "Try now" reads again. The card follows the key as the background pushes it (no timer, no second reader). Nothing reads while the browser is not connected: the section
 // says to connect instead. The pasted value is the card's and the port's business, never kept here.
 
@@ -8,7 +9,7 @@ import { createModelKeyCard, defaultModelKeyProviders, type ModelKeyCard, type M
 import { COULD_NOT_CHECK_KEY, modelKeysPort } from "../chat/transport/ports";
 import { createElement } from "../dom";
 import type { SetupPort } from "../getting-started";
-import { createOpenFluxIQButton } from "../open-fluxiq";
+import { createOpenFluxIQButton, OPEN_IN_PANEL } from "../open-fluxiq";
 import type { PanelContext } from "../shell";
 import type { ExtensionStatus } from "../../shared/protocol";
 
@@ -22,7 +23,7 @@ export type ModelSection = { readonly element: HTMLElement; render(status: Exten
 export function createModelSection(context: PanelContext, setup?: SetupPort): ModelSection {
   const { store } = context;
   // Pressed by the card's host actions; only its failure ("Couldn't open FluxIQ") shows.
-  const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "silent", purpose: "model-key" });
+  const open = createOpenFluxIQButton(store.request, { label: OPEN_IN_PANEL, look: "silent", purpose: "model-key" });
   const notConnected = createElement("p", { className: "card-line", text: MODEL_NOT_CONNECTED, hidden: true });
   const slot = createElement("div", { className: "model-section-card", hidden: true });
   const element = createElement("section", { className: "settings-group", attrs: { "aria-label": "AI key" } }, [
